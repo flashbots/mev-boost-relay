@@ -1,5 +1,5 @@
 GIT_VER := $(shell git describe --tags --always --dirty="-dev")
-# ECR_URI := 223847889945.dkr.ecr.us-east-2.amazonaws.com/your-project-name
+ECR_URI := flashbots/boost-relay
 
 all: clean build
 
@@ -10,7 +10,7 @@ clean:
 	rm -rf your-project build/
 
 build:
-	go build -ldflags "-X main.version=${GIT_VER}" -v -o your-project main.go
+	go build -ldflags "-X main.version=${GIT_VER}" -v -o relay cmd/relay/main.go
 
 test:
 	go test ./...
@@ -31,7 +31,7 @@ cover-html:
 	unlink /tmp/go-sim-lb.cover.tmp
 
 build-for-docker:
-	CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=${GIT_VER}" -v -o your-project main.go
+	GOOS=linux go build -ldflags "-X main.version=${GIT_VER}" -v -o your-project main.go
 
 docker-image:
 	DOCKER_BUILDKIT=1 docker build . -t your-project
