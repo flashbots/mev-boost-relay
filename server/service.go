@@ -47,36 +47,28 @@ func NewDefaultHTTPServerTimeouts() HTTPServerTimeouts {
 	}
 }
 
-// BoostService TODO
-type BoostService struct {
+// RelayService TODO
+type RelayService struct {
 	listenAddr string
 	builders   []*BuilderEntry
 	log        *logrus.Entry
 	srv        *http.Server
 
 	serverTimeouts HTTPServerTimeouts
-
-	httpClient http.Client
 }
 
-// NewBoostService created a new BoostService
-func NewBoostService(listenAddr string, builders []*BuilderEntry, log *logrus.Entry, relayRequestTimeout time.Duration) (*BoostService, error) {
-	// TODO: validate builders
-	if len(builders) == 0 {
-		return nil, errors.New("no relays")
-	}
-
-	return &BoostService{
+// NewRelayService creates a new service. if builders is nil, allow any builder
+func NewRelayService(listenAddr string, log *logrus.Entry) (*RelayService, error) {
+	return &RelayService{
 		listenAddr: listenAddr,
-		builders:   builders,
+		builders:   nil,
 		log:        log.WithField("module", "service"),
 
 		serverTimeouts: NewDefaultHTTPServerTimeouts(),
-		httpClient:     http.Client{Timeout: relayRequestTimeout},
 	}, nil
 }
 
-func (m *BoostService) getRouter() http.Handler {
+func (m *RelayService) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", m.handleRoot)
 
@@ -91,7 +83,7 @@ func (m *BoostService) getRouter() http.Handler {
 }
 
 // StartHTTPServer starts the HTTP server for this boost service instance
-func (m *BoostService) StartHTTPServer() error {
+func (m *RelayService) StartHTTPServer() error {
 	if m.srv != nil {
 		return errServerAlreadyRunning
 	}
@@ -113,26 +105,26 @@ func (m *BoostService) StartHTTPServer() error {
 	return err
 }
 
-func (m *BoostService) handleRoot(w http.ResponseWriter, req *http.Request) {
+func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{}`)
 }
 
-func (m *BoostService) handleStatus(w http.ResponseWriter, req *http.Request) {
+func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{}`)
 }
 
 // RegisterValidatorV1 - returns 200 if at least one relay returns 200
-func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
+func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
 }
 
 // GetHeaderV1 TODO
-func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
+func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	slot := vars["slot"]
 	parentHashHex := vars["parent_hash"]
@@ -170,7 +162,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	}
 }
 
-func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+func (m *RelayService) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "getPayload")
 	log.Info("getPayload")
 

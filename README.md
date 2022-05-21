@@ -4,3 +4,6 @@
 [![Test status](https://github.com/flashbots/boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/boost-relay/actions?query=workflow%3A%22Checks%22)
 
 Example relay for Ethereum 2 / mev-boost
+
+* Exposes a Builder REST API
+* Exposes a JSON-RPC API to receive forkchoiceUpdated calls

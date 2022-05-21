@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/ethereum/go-ethereum v1.10.17
 	github.com/flashbots/go-boost-utils v0.1.2-0.20220521103457-f82aa61a5c2e
-	github.com/flashbots/go-utils v0.4.5-0.20220521105200-562821a631b8
+	github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30
 	github.com/gorilla/mux v1.8.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1

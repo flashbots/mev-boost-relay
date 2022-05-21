@@ -1,5 +1,12 @@
 package server
 
+import (
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
 // func TestWebserver(t *testing.T) {
 // 	t.Run("errors when webserver is already existing", func(t *testing.T) {
 // 		backend := newTestBackend(t, 1, time.Second)
@@ -26,16 +33,11 @@ package server
 // 	// })
 // }
 
-// func TestWebserverRootHandler(t *testing.T) {
-// 	backend := newTestBackend(t, 1, time.Second)
-
-// 	// Check root handler
-// 	req, _ := http.NewRequest("GET", "/", nil)
-// 	rr := httptest.NewRecorder()
-// 	backend.boost.getRouter().ServeHTTP(rr, req)
-// 	require.Equal(t, http.StatusOK, rr.Code)
-// 	require.Equal(t, "{}", rr.Body.String())
-// }
+func TestWebserverRootHandler(t *testing.T) {
+	rr := testRelayRequest(t, "GET", "/", nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "{}", rr.Body.String())
+}
 
 // // Example good registerValidator payload
 // var payloadRegisterValidator = types.SignedValidatorRegistration{

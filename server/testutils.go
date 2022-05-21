@@ -1,8 +1,18 @@
 package server
 
-import "github.com/ethereum/go-ethereum/common/hexutil"
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-// var testLog = logrus.WithField("testing", true)
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+)
+
+var testLog = logrus.WithField("testing", true)
 
 func _hexToBytes(hex string) []byte {
 	bytes, err := hexutil.Decode(hex)
@@ -10,6 +20,25 @@ func _hexToBytes(hex string) []byte {
 		panic(err)
 	}
 	return bytes
+}
+
+func testRelayRequest(t *testing.T, method string, path string, payload any) *httptest.ResponseRecorder {
+	srv, err := NewRelayService("", testLog)
+	require.NoError(t, err)
+
+	var req *http.Request
+	if payload == nil {
+		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
+	} else {
+		payloadBytes, err2 := json.Marshal(payload)
+		require.NoError(t, err2)
+		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
+	}
+
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	srv.getRouter().ServeHTTP(rr, req)
+	return rr
 }
 
 // func _HexToHash(s string) (ret types.Hash) {

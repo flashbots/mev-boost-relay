@@ -95,6 +95,8 @@ github.com/flashbots/go-boost-utils v0.1.2-0.20220521103457-f82aa61a5c2e h1:9+PF
 github.com/flashbots/go-boost-utils v0.1.2-0.20220521103457-f82aa61a5c2e/go.mod h1:EAVakJWxJS2BU8ZlamU5fwilmNVtXjPcX50gxgVtizU=
 github.com/flashbots/go-utils v0.4.5-0.20220521105200-562821a631b8 h1:a7uJULOGXlUZoc57k9Z8CVv4EjIrxoMSqp505dYwPrU=
 github.com/flashbots/go-utils v0.4.5-0.20220521105200-562821a631b8/go.mod h1:3YKyfbtetVIXuWKbZ9WmK8bSF20hSFXk0wCWDNHYFvE=
+github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30 h1:1DnDrnyKid1UEiVwZxZnldrHbu/KVcITLRbJeScf2b0=
+github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30/go.mod h1:3YKyfbtetVIXuWKbZ9WmK8bSF20hSFXk0wCWDNHYFvE=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
