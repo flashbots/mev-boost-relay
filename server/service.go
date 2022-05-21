@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -85,8 +86,8 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
-	// loggedRouter := LoggingMiddleware(r, m.log)
-	return r
+	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
+	return loggedRouter
 }
 
 // StartHTTPServer starts the HTTP server for this boost service instance
