@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/flashbots/boost-relay/apis/proposer"
+	"github.com/flashbots/boost-relay/apis/registervalidator"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 	log.Printf("boost-relay %s [registervalidator-api]", version)
 
-	srv, err := proposer.NewRelayService(*listenAddr, log)
+	srv, err := registervalidator.NewRegisterValidatorService(*listenAddr, log)
 	if err != nil {
 		log.WithError(err).Fatal("failed to create service")
 	}
