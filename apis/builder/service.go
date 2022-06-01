@@ -38,59 +38,59 @@ func NewBuilderAPIService(listenAddr string, log *logrus.Entry) (*BuilderAPIServ
 	}, nil
 }
 
-func (m *BuilderAPIService) getRouter() http.Handler {
+func (s *BuilderAPIService) getRouter() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", m.handleRoot)
-	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
-	r.HandleFunc(pathGetValidatorsForEpoch, m.handleGetValidatorsForEpoch).Methods(http.MethodGet)
-	r.HandleFunc(pathSubmitNewBlock, m.handleSubmitNewBlock).Methods(http.MethodPost)
+	r.HandleFunc("/", s.handleRoot)
+	r.HandleFunc(pathStatus, s.handleStatus).Methods(http.MethodGet)
+	r.HandleFunc(pathGetValidatorsForEpoch, s.handleGetValidatorsForEpoch).Methods(http.MethodGet)
+	r.HandleFunc(pathSubmitNewBlock, s.handleSubmitNewBlock).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
-	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
+	loggedRouter := httplogger.LoggingMiddlewareLogrus(s.log, r)
 	return loggedRouter
 }
 
 // StartHTTPServer starts the HTTP server for this boost service instance
-func (m *BuilderAPIService) StartHTTPServer() error {
-	if m.srv != nil {
+func (s *BuilderAPIService) StartHTTPServer() error {
+	if s.srv != nil {
 		return common.ErrServerAlreadyRunning
 	}
 
-	m.srv = &http.Server{
-		Addr:    m.listenAddr,
-		Handler: m.getRouter(),
+	s.srv = &http.Server{
+		Addr:    s.listenAddr,
+		Handler: s.getRouter(),
 
-		ReadTimeout:       m.serverTimeouts.Read,
-		ReadHeaderTimeout: m.serverTimeouts.ReadHeader,
-		WriteTimeout:      m.serverTimeouts.Write,
-		IdleTimeout:       m.serverTimeouts.Idle,
+		ReadTimeout:       s.serverTimeouts.Read,
+		ReadHeaderTimeout: s.serverTimeouts.ReadHeader,
+		WriteTimeout:      s.serverTimeouts.Write,
+		IdleTimeout:       s.serverTimeouts.Idle,
 	}
 
-	err := m.srv.ListenAndServe()
+	err := s.srv.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
 	}
 	return err
 }
 
-func (m *BuilderAPIService) handleRoot(w http.ResponseWriter, req *http.Request) {
+func (s *BuilderAPIService) handleRoot(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{}`)
 }
 
-func (m *BuilderAPIService) handleStatus(w http.ResponseWriter, req *http.Request) {
+func (s *BuilderAPIService) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{}`)
 }
 
-func (m *BuilderAPIService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "getValidatorsForEpoch")
+func (s *BuilderAPIService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
+	log := s.log.WithField("method", "getValidatorsForEpoch")
 	log.Info("request")
 }
 
-func (m *BuilderAPIService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "submitNewBlock")
+func (s *BuilderAPIService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
+	log := s.log.WithField("method", "submitNewBlock")
 	log.Info("request")
 }
