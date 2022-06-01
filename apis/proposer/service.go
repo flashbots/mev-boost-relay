@@ -1,5 +1,5 @@
-// Package server contains everything for the Relay server
-package server
+// Package proposer contains everything for the Relay server
+package proposer
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
@@ -21,40 +21,20 @@ var (
 	errInvalidPubkey    = errors.New("invalid pubkey")
 	errInvalidSignature = errors.New("invalid signature")
 
-	errServerAlreadyRunning = errors.New("server already running")
-
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
 	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
 	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
 )
 
-// HTTPServerTimeouts are various timeouts for requests to the mev-boost HTTP server
-type HTTPServerTimeouts struct {
-	Read       time.Duration // Timeout for body reads. None if 0.
-	ReadHeader time.Duration // Timeout for header reads. None if 0.
-	Write      time.Duration // Timeout for writes. None if 0.
-	Idle       time.Duration // Timeout to disconnect idle client connections. None if 0.
-}
-
-// NewDefaultHTTPServerTimeouts creates default server timeouts
-func NewDefaultHTTPServerTimeouts() HTTPServerTimeouts {
-	return HTTPServerTimeouts{
-		Read:       4 * time.Second,
-		ReadHeader: 2 * time.Second,
-		Write:      6 * time.Second,
-		Idle:       10 * time.Second,
-	}
-}
-
 // RelayService TODO
 type RelayService struct {
 	listenAddr string
-	builders   []*BuilderEntry
+	builders   []*common.BuilderEntry
 	log        *logrus.Entry
 	srv        *http.Server
 
-	serverTimeouts HTTPServerTimeouts
+	serverTimeouts common.HTTPServerTimeouts
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
@@ -62,16 +42,15 @@ func NewRelayService(listenAddr string, log *logrus.Entry) (*RelayService, error
 	return &RelayService{
 		listenAddr: listenAddr,
 		builders:   nil,
-		log:        log.WithField("module", "service"),
+		log:        log.WithField("module", "proposer-api"),
 
-		serverTimeouts: NewDefaultHTTPServerTimeouts(),
+		serverTimeouts: common.NewDefaultHTTPServerTimeouts(),
 	}, nil
 }
 
 func (m *RelayService) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", m.handleRoot)
-
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
@@ -85,7 +64,7 @@ func (m *RelayService) getRouter() http.Handler {
 // StartHTTPServer starts the HTTP server for this boost service instance
 func (m *RelayService) StartHTTPServer() error {
 	if m.srv != nil {
-		return errServerAlreadyRunning
+		return common.ErrServerAlreadyRunning
 	}
 
 	m.srv = &http.Server{

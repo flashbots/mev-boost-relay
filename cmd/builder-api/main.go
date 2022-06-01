@@ -3,8 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/flashbots/boost-relay/server"
-	"github.com/flashbots/go-utils/cli"
+	"github.com/flashbots/boost-relay/apis/builder"
 	"github.com/sirupsen/logrus"
 )
 
@@ -12,9 +11,9 @@ var (
 	version = "dev" // is set during build process
 
 	// defaults
-	defaultListenAddr = cli.GetEnv("RELAY_LISTEN_ADDR", "localhost:9044")
+	defaultListenAddr = "localhost:9066"
 
-	// 	// cli flags
+	// cli flags
 	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
 )
 
@@ -22,9 +21,9 @@ var log = logrus.WithField("module", "cmd/relay")
 
 func main() {
 	flag.Parse()
-	log.Printf("boost-relay %s\n", version)
+	log.Printf("boost-relay %s [builder-api]", version)
 
-	srv, err := server.NewRelayService(*listenAddr, log)
+	srv, err := builder.NewBuilderAPIService(*listenAddr, log)
 	if err != nil {
 		log.WithError(err).Fatal("failed to create service")
 	}
