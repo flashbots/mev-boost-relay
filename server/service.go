@@ -117,13 +117,11 @@ func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, `{}`)
 }
 
-// RegisterValidatorV1 - returns 200 if at least one relay returns 200
 func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
 }
 
-// GetHeaderV1 TODO
 func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	slot := vars["slot"]
