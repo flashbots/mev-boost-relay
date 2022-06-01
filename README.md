@@ -18,3 +18,11 @@ Contains three services:
 * `registerValidator` receiver: needs to handle large amounts of requests, because all validators might want to register at the same time
 * proposer API: `getHeader` and `getPayload`
 * block builder API: `getValidatorsForEpoch` and `submitNewBlock`
+
+## Getting started
+
+```bash
+# Block builder API
+go run cmd/builder-api/main.go
+curl localhost:9066/builder/v1/status
+```
