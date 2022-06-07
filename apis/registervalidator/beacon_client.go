@@ -21,7 +21,6 @@ type BeaconClientValidatorService struct {
 	validatorSet   map[PubkeyHex]struct{}
 }
 
-// TODO: should the client try to connect?
 func NewBeaconClientValidatorService(beaconEndpoint string) *BeaconClientValidatorService {
 	return &BeaconClientValidatorService{
 		beaconEndpoint: beaconEndpoint,
