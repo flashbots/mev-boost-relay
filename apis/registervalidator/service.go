@@ -18,25 +18,23 @@ var (
 
 // RegisterValidatorService TODO
 type RegisterValidatorService struct {
-	listenAddr string
-	log        *logrus.Entry
-	srv        *http.Server
+	listenAddr       string
+	validatorService ValidatorService
+	log              *logrus.Entry
+	srv              *http.Server
 
 	serverTimeouts common.HTTPServerTimeouts
 }
 
 // NewRegisterValidatorService creates a new service. if builders is nil, allow any builder
-func NewRegisterValidatorService(listenAddr string, log *logrus.Entry) (*RegisterValidatorService, error) {
+func NewRegisterValidatorService(listenAddr string, validatorService ValidatorService, log *logrus.Entry) (*RegisterValidatorService, error) {
 	return &RegisterValidatorService{
-		listenAddr: listenAddr,
-		log:        log.WithField("module", "proposer-api"),
+		listenAddr:       listenAddr,
+		validatorService: validatorService,
+		log:              log.WithField("module", "proposer-api"),
 
 		serverTimeouts: common.NewDefaultHTTPServerTimeouts(),
 	}, nil
-}
-
-func (s *RegisterValidatorService) LoadAllExistingValidators() {
-	// TODO
 }
 
 func (s *RegisterValidatorService) getRouter() http.Handler {
@@ -88,4 +86,5 @@ func (s *RegisterValidatorService) handleStatus(w http.ResponseWriter, req *http
 func (s *RegisterValidatorService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := s.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
+	// s.validatorService.IsValidator(...)
 }
