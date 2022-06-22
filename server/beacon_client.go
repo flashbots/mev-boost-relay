@@ -1,4 +1,4 @@
-package registervalidator
+package server
 
 import (
 	"encoding/json"

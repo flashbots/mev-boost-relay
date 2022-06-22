@@ -1,5 +1,5 @@
-// Package proposer contains everything for the Relay server
-package proposer
+// Package server contains the webserver serving the proposer and block-builder APIs
+package server
 
 import (
 	"encoding/json"
@@ -21,30 +21,33 @@ var (
 	errInvalidPubkey    = errors.New("invalid pubkey")
 	errInvalidSignature = errors.New("invalid signature")
 
+	// Builder-specs APIs
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
 	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
 	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+
+	// Block builder APIs
+	pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
+	pathSubmitNewBlock        = "/relay/v1/builder/blocks"
 )
 
 // RelayService TODO
 type RelayService struct {
-	listenAddr string
-	builders   []*common.BuilderEntry
-	log        *logrus.Entry
-	srv        *http.Server
-
-	serverTimeouts common.HTTPServerTimeouts
+	log              *logrus.Entry
+	listenAddr       string
+	validatorService ValidatorService
+	builders         []*common.BuilderEntry
+	srv              *http.Server
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, log *logrus.Entry) (*RelayService, error) {
+func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry) (*RelayService, error) {
 	return &RelayService{
-		listenAddr: listenAddr,
-		builders:   nil,
-		log:        log.WithField("module", "proposer-api"),
-
-		serverTimeouts: common.NewDefaultHTTPServerTimeouts(),
+		log:              log.WithField("module", "relay"),
+		listenAddr:       listenAddr,
+		validatorService: validatorService,
+		builders:         nil,
 	}, nil
 }
 
@@ -55,6 +58,9 @@ func (m *RelayService) getRouter() http.Handler {
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
+
+	r.HandleFunc(pathGetValidatorsForEpoch, m.handleGetValidatorsForEpoch).Methods(http.MethodGet)
+	r.HandleFunc(pathSubmitNewBlock, m.handleSubmitNewBlock).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
@@ -70,11 +76,6 @@ func (m *RelayService) StartHTTPServer() error {
 	m.srv = &http.Server{
 		Addr:    m.listenAddr,
 		Handler: m.getRouter(),
-
-		ReadTimeout:       m.serverTimeouts.Read,
-		ReadHeaderTimeout: m.serverTimeouts.ReadHeader,
-		WriteTimeout:      m.serverTimeouts.Write,
-		IdleTimeout:       m.serverTimeouts.Idle,
 	}
 
 	err := m.srv.ListenAndServe()
@@ -90,6 +91,9 @@ func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, `{}`)
 }
 
+// ---------------
+//  Proposer APIs
+// ---------------
 func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -99,6 +103,7 @@ func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
+	// s.validatorService.IsValidator(...)
 }
 
 func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -162,4 +167,23 @@ func (m *RelayService) handleGetPayload(w http.ResponseWriter, req *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// --------------------
+//  Block Builder APIs
+// --------------------
+func (m *RelayService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "getValidatorsForEpoch")
+	log.Info("request")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{}`)
+}
+
+func (m *RelayService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "submitNewBlock")
+	log.Info("request")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{}`)
 }
