@@ -34,20 +34,29 @@ var (
 
 // RelayService TODO
 type RelayService struct {
-	log              *logrus.Entry
-	listenAddr       string
-	validatorService ValidatorService
-	builders         []*common.BuilderEntry
-	srv              *http.Server
+	log                  *logrus.Entry
+	listenAddr           string
+	validatorService     ValidatorService
+	builders             []*common.BuilderEntry
+	srv                  *http.Server
+	datastore            Datastore
+	builderSigningDomain types.Domain
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry) (*RelayService, error) {
+func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry, genesisForkVersionHex string) (*RelayService, error) {
+	builderSigningDomain, err := common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
+	if err != nil {
+		return nil, err
+	}
+
 	return &RelayService{
-		log:              log.WithField("module", "relay"),
-		listenAddr:       listenAddr,
-		validatorService: validatorService,
-		builders:         nil,
+		log:                  log.WithField("module", "relay"),
+		listenAddr:           listenAddr,
+		validatorService:     validatorService,
+		builders:             nil,
+		datastore:            NewMemoryDatastore(),
+		builderSigningDomain: builderSigningDomain,
 	}, nil
 }
 
@@ -103,7 +112,45 @@ func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
-	// s.validatorService.IsValidator(...)
+
+	payload := []types.SignedValidatorRegistration{}
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// TODO: parallelize this
+	for _, registration := range payload {
+		if len(registration.Message.Pubkey) != 48 {
+			http.Error(w, errInvalidPubkey.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if len(registration.Signature) != 96 {
+			http.Error(w, errInvalidSignature.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Check if actually a real validator
+		// s.validatorService.IsValidator(...)
+
+		// Verify the signature
+		ok, err := types.VerifySignature(registration.Message, m.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
+		if err != nil {
+			log.WithError(err).WithField("registration", registration).Error("error verifying registerValidator signature")
+			continue
+		}
+		if !ok {
+			log.WithError(err).WithField("registration", registration).Error("failed to verify registerValidator signature")
+			continue
+		}
+
+		// Save if first time or if newer timestamp than last registration
+		lastEntry := m.datastore.GetValidatorRegistration(registration.Message.Pubkey)
+		if lastEntry == nil || lastEntry.Message.Timestamp > registration.Message.Timestamp {
+			m.datastore.SaveValidatorRegistration(registration)
+		}
+	}
 }
 
 func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
