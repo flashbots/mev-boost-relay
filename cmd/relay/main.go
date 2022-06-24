@@ -19,13 +19,13 @@ var (
 	version = "dev" // is set during build process
 
 	// defaults
-	defaultListenAddr         = "localhost:9062"
-	defaultBeaconEndpoint     = "http://localhost:5052"
+	defaultListenAddr = "localhost:9062"
+	// defaultBeaconEndpoint     = "http://localhost:5052"
 	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 
 	// cli flags
-	listenAddr     = flag.String("listen-addr", defaultListenAddr, "listen address")
-	beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
+	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
+	// beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
 
 	useGenesisForkVersionMainnet = flag.Bool("mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
 	useGenesisForkVersionKiln    = flag.Bool("kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
@@ -57,14 +57,14 @@ func main() {
 	}
 	log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
 
-	validatorService := server.NewBeaconClientValidatorService(*beaconEndpoint)
-	// TODO: should be done at the start of every epoch
-	err := validatorService.FetchValidators()
-	if err != nil {
-		log.WithError(err).Fatal("failed to fetch validators from beacon node")
-	}
+	// validatorService := server.NewBeaconClientValidatorService(*beaconEndpoint)
+	// // TODO: should be done at the start of every epoch
+	// err := validatorService.FetchValidators()
+	// if err != nil {
+	// 	log.WithError(err).Fatal("failed to fetch validators from beacon node")
+	// }
 
-	srv, err := server.NewRelayService(*listenAddr, validatorService, log, genesisForkVersionHex)
+	srv, err := server.NewRelayService(*listenAddr, nil, log, genesisForkVersionHex)
 	if err != nil {
 		log.WithError(err).Fatal("failed to create service")
 	}
