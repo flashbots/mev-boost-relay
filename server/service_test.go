@@ -1,4 +1,4 @@
-package proposer
+package server
 
 // func TestWebserver(t *testing.T) {
 // 	t.Run("errors when webserver is already existing", func(t *testing.T) {
