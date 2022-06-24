@@ -22,7 +22,6 @@ Contains three services:
 ## Getting started
 
 ```bash
-# Block builder API
-go run cmd/builder-api/main.go
-curl localhost:9066/builder/v1/status
+go run cmd/relay/main.go -kiln
+curl localhost:9062/eth/v1/builder/status
 ```
