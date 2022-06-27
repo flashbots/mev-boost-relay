@@ -50,12 +50,17 @@ func NewRelayService(listenAddr string, validatorService ValidatorService, log *
 		return nil, err
 	}
 
+	datastore, err := NewRedisService(log.WithField("module", "datastore"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &RelayService{
 		log:                  log.WithField("module", "relay"),
 		listenAddr:           listenAddr,
 		validatorService:     validatorService,
 		builders:             nil,
-		datastore:            NewMemoryDatastore(),
+		datastore:            datastore,
 		builderSigningDomain: builderSigningDomain,
 	}, nil
 }
