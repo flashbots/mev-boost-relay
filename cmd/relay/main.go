@@ -22,10 +22,14 @@ var (
 	defaultListenAddr = "localhost:9062"
 	// defaultBeaconEndpoint     = "http://localhost:5052"
 	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
+	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
+	defaultLogLevel           = getEnv("LOG_LEVEL", "info")
 
 	// cli flags
 	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
 	// beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
+	logJSON  = flag.Bool("json", defaultLogJSON, "log in JSON format instead of text")
+	logLevel = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
 	useGenesisForkVersionMainnet = flag.Bool("mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
 	useGenesisForkVersionKiln    = flag.Bool("kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
@@ -38,7 +42,26 @@ var log = logrus.WithField("module", "cmd/relay")
 
 func main() {
 	flag.Parse()
-	log.Printf("boost-relay %s [proposer-api]", version)
+	logrus.SetOutput(os.Stdout)
+
+	if *logJSON {
+		log.Logger.SetFormatter(&logrus.JSONFormatter{})
+	} else {
+		log.Logger.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp: true,
+		})
+
+	}
+
+	if *logLevel != "" {
+		lvl, err := logrus.ParseLevel(*logLevel)
+		if err != nil {
+			log.Fatalf("Invalid loglevel: %s", *logLevel)
+		}
+		logrus.SetLevel(lvl)
+	}
+
+	log.Infof("boost-relay %s", version)
 
 	// Set genesis fork version
 	genesisForkVersionHex := ""
@@ -71,4 +94,11 @@ func main() {
 
 	log.Println("listening on", *listenAddr)
 	log.Fatal(srv.StartHTTPServer())
+}
+
+func getEnv(key string, defaultValue string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return defaultValue
 }
