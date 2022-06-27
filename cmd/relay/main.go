@@ -28,7 +28,7 @@ var (
 	// cli flags
 	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
 	// beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
-	logJSON  = flag.Bool("json", defaultLogJSON, "log in JSON formate instead of text")
+	logJSON  = flag.Bool("json", defaultLogJSON, "log in JSON format instead of text")
 	logLevel = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
 	useGenesisForkVersionMainnet = flag.Bool("mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
