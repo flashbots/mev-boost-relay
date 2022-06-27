@@ -1,7 +1,6 @@
 package server
 
 import (
-	"os"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -22,10 +21,8 @@ func setupService(t *testing.T) Datastore {
 	if err != nil {
 		t.Error("error starting miniredis", err)
 	}
-	os.Setenv("REDIS_HOST", redisTestServer.Host())
-	os.Setenv("REDIS_PORT", redisTestServer.Port())
 
-	redisService, err := NewRedisService(common.TestLog)
+	redisService, err := NewRedisService(redisTestServer.Addr(), common.TestLog)
 	if err != nil {
 		t.Error("error creating new redis service", err)
 	}
