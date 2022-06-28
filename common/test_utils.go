@@ -38,7 +38,6 @@ func _HexToSignature(s string) (ret types.Signature) {
 	return
 }
 
-
 var ValidPayloadRegisterValidator = types.SignedValidatorRegistration{
 	Message: &types.RegisterValidatorRequestMessage{
 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
