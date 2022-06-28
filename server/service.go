@@ -119,7 +119,7 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		return
 	}
 
-	// TODO: parallelize this
+	// TODO: maybe parallelize this
 	for _, registration := range payload {
 		if len(registration.Message.Pubkey) != 48 {
 			http.Error(w, errInvalidPubkey.Error(), http.StatusBadRequest)
@@ -146,7 +146,12 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		}
 
 		// Save if first time or if newer timestamp than last registration
-		lastEntry := m.datastore.GetValidatorRegistration(registration.Message.Pubkey)
+		lastEntry, err := m.datastore.GetValidatorRegistration(registration.Message.Pubkey)
+		if err != nil {
+			log.WithError(err).WithField("registration", registration).Error("error getting validator registration")
+			continue
+		}
+
 		if lastEntry == nil || lastEntry.Message.Timestamp > registration.Message.Timestamp {
 			m.datastore.SaveValidatorRegistration(registration)
 		}

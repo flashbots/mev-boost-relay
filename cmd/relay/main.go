@@ -24,7 +24,7 @@ var (
 	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel           = getEnv("LOG_LEVEL", "info")
-	defaultredisURI           = getEnv("REDIS_URI", "redis-boost-relay:6379")
+	defaultredisURI           = getEnv("REDIS_URI", "localhost:6379")
 
 	// cli flags
 	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
@@ -89,8 +89,10 @@ func main() {
 	// 	log.WithError(err).Fatal("failed to fetch validators from beacon node")
 	// }
 
-	cache, err := server.NewRedisService(*redisURI, log)
-	if err != nil {
+	cache, err := server.NewRedisService(*redisURI)
+	if err == nil {
+		log.Infof("Connected to redis at %s", *redisURI)
+	} else {
 		log.WithError(err).Fatal("failed to create redis service")
 	}
 
@@ -99,7 +101,7 @@ func main() {
 		log.WithError(err).Fatal("failed to create service")
 	}
 
-	log.Println("listening on", *listenAddr)
+	log.Println("Webserver listening on", *listenAddr)
 	log.Fatal(srv.StartHTTPServer())
 }
 
