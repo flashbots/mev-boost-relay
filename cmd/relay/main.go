@@ -89,7 +89,7 @@ func main() {
 	// 	log.WithError(err).Fatal("failed to fetch validators from beacon node")
 	// }
 
-	cache, err := server.NewRedisService(*redisURI, log)
+	cache, err := server.NewRedisService(*redisURI)
 	if err != nil {
 		log.WithError(err).Fatal("failed to create redis service")
 	}

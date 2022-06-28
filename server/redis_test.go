@@ -9,23 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var redisTestServer *miniredis.Miniredis
+// var redisTestServer *miniredis.Miniredis
 
 func setupService(t *testing.T) Datastore {
 	var err error
-	if redisTestServer != nil {
-		redisTestServer.Close()
-	}
+	// if redisTestServer != nil {
+	// 	redisTestServer.Close()
+	// }
 
 	redisTestServer, err := miniredis.Run()
-	if err != nil {
-		t.Error("error starting miniredis", err)
-	}
+	require.NoError(t, err)
 
-	redisService, err := NewRedisService(redisTestServer.Addr(), common.TestLog)
-	if err != nil {
-		t.Error("error creating new redis service", err)
-	}
+	redisService, err := NewRedisService(redisTestServer.Addr())
+	require.NoError(t, err)
+
 	return redisService
 }
 
@@ -36,13 +33,15 @@ func TestRedisService(t *testing.T) {
 		key := common.ValidPayloadRegisterValidator.Message.Pubkey
 		value := common.ValidPayloadRegisterValidator
 		cache.SaveValidatorRegistration(value)
-		result := cache.GetValidatorRegistration(key)
+		result, err := cache.GetValidatorRegistration(key)
+		require.NoError(t, err)
 		require.Equal(t, *result, value)
 	})
 
 	t.Run("Returns nil if validator registration is not in cache", func(t *testing.T) {
 		key := types.PublicKey{}
-		result := cache.GetValidatorRegistration(key)
+		result, err := cache.GetValidatorRegistration(key)
+		require.NoError(t, err)
 		require.Nil(t, result)
 	})
 }

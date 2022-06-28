@@ -7,9 +7,9 @@ import (
 )
 
 type Datastore interface {
-	GetValidatorRegistration(proposerPubkey types.PublicKey) *types.SignedValidatorRegistration
-	SaveValidatorRegistration(entry types.SignedValidatorRegistration)
-	SaveValidatorRegistrations(entries []types.SignedValidatorRegistration)
+	GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error)
+	SaveValidatorRegistration(entry types.SignedValidatorRegistration) error
+	SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error
 }
 
 type MemoryDatastore struct {
@@ -17,24 +17,28 @@ type MemoryDatastore struct {
 	mu      sync.RWMutex
 }
 
-func (ds *MemoryDatastore) GetValidatorRegistration(proposerPubkey types.PublicKey) *types.SignedValidatorRegistration {
+// GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
+// there's a datastore error, then an error will be returned.
+func (ds *MemoryDatastore) GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	return ds.entries[proposerPubkey]
+	return ds.entries[proposerPubkey], nil
 }
 
-func (ds *MemoryDatastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) {
+func (ds *MemoryDatastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.entries[entry.Message.Pubkey] = &entry
+	return nil
 }
 
-func (ds *MemoryDatastore) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) {
+func (ds *MemoryDatastore) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	for _, entry := range entries {
 		ds.entries[entry.Message.Pubkey] = &entry
 	}
+	return nil
 }
 
 func NewMemoryDatastore() Datastore {
