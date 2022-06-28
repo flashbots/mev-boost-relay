@@ -4,7 +4,6 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -32,6 +31,13 @@ var (
 	pathSubmitNewBlock        = "/relay/v1/builder/blocks"
 )
 
+var nilResponse = struct{}{}
+
+type httpErrorResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 // RelayService TODO
 type RelayService struct {
 	log                  *logrus.Entry
@@ -58,6 +64,25 @@ func NewRelayService(listenAddr string, validatorService ValidatorService, log *
 		datastore:            datastore,
 		builderSigningDomain: builderSigningDomain,
 	}, nil
+}
+
+func (m *RelayService) respondError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	resp := httpErrorResp{code, message}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		m.log.WithField("response", resp).WithError(err).Error("Couldn't write error response")
+		http.Error(w, "", http.StatusInternalServerError)
+	}
+}
+
+func (m *RelayService) respondOK(w http.ResponseWriter, response any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		m.log.WithField("response", response).WithError(err).Error("Couldn't write OK response")
+		http.Error(w, "", http.StatusInternalServerError)
+	}
 }
 
 func (m *RelayService) getRouter() http.Handler {
@@ -95,18 +120,14 @@ func (m *RelayService) StartHTTPServer() error {
 }
 
 func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{}`)
+	m.respondOK(w, nilResponse)
 }
 
 // ---------------
 //  Proposer APIs
 // ---------------
 func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{}`)
+	m.respondOK(w, nilResponse)
 }
 
 func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
@@ -115,20 +136,18 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 
 	payload := []types.SignedValidatorRegistration{}
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// TODO: maybe parallelize this
 	for _, registration := range payload {
 		if len(registration.Message.Pubkey) != 48 {
-			http.Error(w, errInvalidPubkey.Error(), http.StatusBadRequest)
-			return
+			continue
 		}
 
 		if len(registration.Signature) != 96 {
-			http.Error(w, errInvalidSignature.Error(), http.StatusBadRequest)
-			return
+			continue
 		}
 
 		// Check if actually a real validator
@@ -137,11 +156,11 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		// Verify the signature
 		ok, err := types.VerifySignature(registration.Message, m.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
 		if err != nil {
-			log.WithError(err).WithField("registration", registration).Error("error verifying registerValidator signature")
+			log.WithError(err).WithField("registration", registration).Warn("error verifying registerValidator signature")
 			continue
 		}
 		if !ok {
-			log.WithError(err).WithField("registration", registration).Error("failed to verify registerValidator signature")
+			log.WithError(err).WithField("registration", registration).Warn("failed to verify registerValidator signature")
 			continue
 		}
 
@@ -156,6 +175,8 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 			m.datastore.SaveValidatorRegistration(registration)
 		}
 	}
+
+	m.respondOK(w, nilResponse)
 }
 
 func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -172,27 +193,25 @@ func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	log.Info("getHeader")
 
 	if _, err := strconv.ParseUint(slot, 10, 64); err != nil {
-		http.Error(w, errInvalidSlot.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, errInvalidSlot.Error())
 		return
 	}
 
 	if len(pubkey) != 98 {
-		http.Error(w, errInvalidPubkey.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, errInvalidPubkey.Error())
 		return
 	}
 
 	if len(parentHashHex) != 66 {
-		http.Error(w, errInvalidHash.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, errInvalidHash.Error())
 		return
 	}
 
-	result := new(types.GetHeaderResponse)
-
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	w.WriteHeader(http.StatusNoContent)
+	if err := json.NewEncoder(w).Encode(nilResponse); err != nil {
+		m.log.WithError(err).Error("Couldn't write getHeader response")
+		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
 
@@ -202,23 +221,17 @@ func (m *RelayService) handleGetPayload(w http.ResponseWriter, req *http.Request
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if len(payload.Signature) != 96 {
-		http.Error(w, errInvalidSignature.Error(), http.StatusBadRequest)
+		m.respondError(w, http.StatusBadRequest, errInvalidSignature.Error())
 		return
 	}
 
 	result := new(types.GetPayloadResponse)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	m.respondOK(w, result)
 }
 
 // --------------------
@@ -227,15 +240,11 @@ func (m *RelayService) handleGetPayload(w http.ResponseWriter, req *http.Request
 func (m *RelayService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "getValidatorsForEpoch")
 	log.Info("request")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{}`)
+	m.respondOK(w, nilResponse)
 }
 
 func (m *RelayService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "submitNewBlock")
 	log.Info("request")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{}`)
+	m.respondOK(w, nilResponse)
 }
