@@ -44,7 +44,7 @@ type RelayService struct {
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry, genesisForkVersionHex string) (*RelayService, error) {
+func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
 	builderSigningDomain, err := common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func NewRelayService(listenAddr string, validatorService ValidatorService, log *
 		listenAddr:           listenAddr,
 		validatorService:     validatorService,
 		builders:             nil,
-		datastore:            NewMemoryDatastore(),
+		datastore:            datastore,
 		builderSigningDomain: builderSigningDomain,
 	}, nil
 }

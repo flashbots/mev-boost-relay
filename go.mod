@@ -3,16 +3,21 @@ module github.com/flashbots/boost-relay
 go 1.18
 
 require (
+	github.com/alicebob/miniredis/v2 v2.21.0
 	github.com/ethereum/go-ethereum v1.10.17
 	github.com/flashbots/go-boost-utils v0.1.2
 	github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30
+	github.com/go-redis/redis/v9 v9.0.0-beta.1
 	github.com/gorilla/mux v1.8.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 )
 
 require (
+	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ferranbt/fastssz v0.1.1-0.20220303160658-88bb965b6747 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
@@ -20,6 +25,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/supranational/blst v0.3.7 // indirect
+	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
 	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
