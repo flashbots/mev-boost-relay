@@ -1,5 +1,115 @@
 package server
 
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/types"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+)
+
+var genesisForkVersionHex = "0x00000000"
+
+type testBackend struct {
+	relay *RelayService
+}
+
+func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duration) *testBackend {
+	redisTestServer, err := miniredis.Run()
+	require.NoError(t, err)
+
+	redisService, err := NewRedisService(redisTestServer.Addr())
+	require.NoError(t, err)
+	common.TestLog.Logger.SetLevel(logrus.FatalLevel)
+	service, err := NewRelayService("localhost:12345", nil, common.TestLog, genesisForkVersionHex, redisService)
+	require.NoError(t, err)
+
+	backend := testBackend{relay: service}
+	return &backend
+}
+
+func (be *testBackend) request(t require.TestingT, method string, path string, payload any) *httptest.ResponseRecorder {
+	var req *http.Request
+	var err error
+
+	if payload == nil {
+		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
+	} else {
+		payloadBytes, err2 := json.Marshal(payload)
+		require.NoError(t, err2)
+		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
+	}
+
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	be.relay.getRouter().ServeHTTP(rr, req)
+	return rr
+}
+
+func generateSignature(feeRecipient types.Address, timestamp uint64, domain types.Domain) (*types.SignedValidatorRegistration, error) {
+	sk, pk, err := bls.GenerateNewKeypair()
+	if err != nil {
+		return nil, err
+	}
+
+	var pubKey types.PublicKey
+	pubKey.FromSlice(pk.Compress())
+	msg := &types.RegisterValidatorRequestMessage{
+		FeeRecipient: feeRecipient,
+		Timestamp:    timestamp,
+		Pubkey:       pubKey,
+	}
+
+	sig, err := types.SignMessage(msg, domain, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.SignedValidatorRegistration{
+		Message:   msg,
+		Signature: sig,
+	}, nil
+}
+
+func BenchmarkHandleRegistration(b *testing.B) {
+	backend := newTestBackend(b, 1, time.Second)
+	path := "/eth/v1/builder/validators"
+	benchmarks := []struct {
+		name        string
+		payloadSize int
+	}{
+		{"payload of size 10", 10},
+		{"payload of size 100", 100},
+		{"payload of size 1000", 1000},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			payload := []types.SignedValidatorRegistration{}
+			for i := 0; i < bm.payloadSize; i++ {
+				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
+				reg, err := generateSignature(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
+				if err != nil {
+					b.Fatal(err)
+				}
+				payload = append(payload, *reg)
+			}
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				backend.request(b, http.MethodPost, path, payload)
+			}
+		})
+	}
+}
+
 // func TestWebserver(t *testing.T) {
 // 	t.Run("errors when webserver is already existing", func(t *testing.T) {
 // 		backend := newTestBackend(t, 1, time.Second)
