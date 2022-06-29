@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
 )
@@ -30,8 +29,8 @@ func TestRedisService(t *testing.T) {
 	cache := setupService(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
-		key := common.ValidPayloadRegisterValidator.Message.Pubkey
-		value := common.ValidPayloadRegisterValidator
+		key := validPayloadRegisterValidator.Message.Pubkey
+		value := validPayloadRegisterValidator
 		cache.SaveValidatorRegistration(value)
 		result, err := cache.GetValidatorRegistration(key)
 		require.NoError(t, err)

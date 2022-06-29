@@ -1,18 +1,18 @@
-package common
+package server
 
 import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 )
 
-// TestLog is used to log information in the test methods
-var TestLog = logrus.WithField("testing", true)
+// testLog is used to log information in the test methods
+var testLog = logrus.WithField("testing", true)
 
 // _HexToAddress converts a hexadecimal string to an Ethereum address
 func _HexToAddress(s string) (ret types.Address) {
 	err := ret.UnmarshalText([]byte(s))
 	if err != nil {
-		TestLog.Error(err, " _HexToAddress: ", s)
+		testLog.Error(err, " _HexToAddress: ", s)
 		panic(err)
 	}
 	return ret
@@ -22,7 +22,7 @@ func _HexToAddress(s string) (ret types.Address) {
 func _HexToPubkey(s string) (ret types.PublicKey) {
 	err := ret.UnmarshalText([]byte(s))
 	if err != nil {
-		TestLog.Error(err, " _HexToPubkey: ", s)
+		testLog.Error(err, " _HexToPubkey: ", s)
 		panic(err)
 	}
 	return
@@ -32,13 +32,13 @@ func _HexToPubkey(s string) (ret types.PublicKey) {
 func _HexToSignature(s string) (ret types.Signature) {
 	err := ret.UnmarshalText([]byte(s))
 	if err != nil {
-		TestLog.Error(err, " _HexToSignature: ", s)
+		testLog.Error(err, " _HexToSignature: ", s)
 		panic(err)
 	}
 	return
 }
 
-var ValidPayloadRegisterValidator = types.SignedValidatorRegistration{
+var validPayloadRegisterValidator = types.SignedValidatorRegistration{
 	Message: &types.RegisterValidatorRequestMessage{
 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
 		Timestamp:    1234356,
