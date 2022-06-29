@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
@@ -23,13 +21,9 @@ type testBackend struct {
 }
 
 func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duration) *testBackend {
-	redisTestServer, err := miniredis.Run()
-	require.NoError(t, err)
-
-	redisService, err := NewRedisService(redisTestServer.Addr())
-	require.NoError(t, err)
-	common.TestLog.Logger.SetLevel(logrus.FatalLevel)
-	service, err := NewRelayService("localhost:12345", nil, common.TestLog, genesisForkVersionHex, redisService)
+	ds := NewMemoryDatastore()
+	testLog.Logger.SetLevel(logrus.FatalLevel)
+	service, err := NewRelayService("localhost:12345", nil, testLog, genesisForkVersionHex, ds)
 	require.NoError(t, err)
 
 	backend := testBackend{relay: service}
@@ -95,7 +89,7 @@ func BenchmarkHandleRegistration(b *testing.B) {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
 			for i := 0; i < bm.payloadSize; i++ {
-				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
+				feeRecipient := validPayloadRegisterValidator.Message.FeeRecipient
 				reg, err := generateSignature(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
 				if err != nil {
 					b.Fatal(err)
