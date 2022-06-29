@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
@@ -101,11 +102,20 @@ func (m *RelayService) getRouter() http.Handler {
 	return loggedRouter
 }
 
-// StartHTTPServer starts the HTTP server for this boost service instance
-func (m *RelayService) StartHTTPServer() error {
+// StartServer starts the HTTP server for this instance
+func (m *RelayService) StartServer() error {
 	if m.srv != nil {
 		return common.ErrServerAlreadyRunning
 	}
+
+	if m.validatorService == nil {
+		err := errors.New("no validator service")
+		m.log.WithError(err).Error("cannot run without validator service")
+		return err
+	}
+
+	// start regular
+	go m.startBeaconNodeValidatorUpdates()
 
 	m.srv = &http.Server{
 		Addr:    m.listenAddr,
@@ -117,6 +127,21 @@ func (m *RelayService) StartHTTPServer() error {
 		return nil
 	}
 	return err
+}
+
+func (m *RelayService) startBeaconNodeValidatorUpdates() {
+	for {
+		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
+		time.Sleep(common.DurationPerEpoch)
+
+		// Load validators from BN
+		m.log.Info("Querying validators from beacon node... (this may")
+		err := m.validatorService.FetchValidators()
+		if err != nil {
+			m.log.WithError(err).Fatal("failed to fetch validators from beacon node")
+		}
+		m.log.Infof("Got %d validators from BN", m.validatorService.NumValidators())
+	}
 }
 
 func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
@@ -151,7 +176,10 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		}
 
 		// Check if actually a real validator
-		// s.validatorService.IsValidator(...)
+		if !m.validatorService.IsValidator(registration.Message.Pubkey.String()) {
+			log.WithField("registration", registration).Warn("not a known validator")
+			continue
+		}
 
 		// Verify the signature
 		ok, err := types.VerifySignature(registration.Message, m.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])

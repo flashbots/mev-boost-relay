@@ -19,19 +19,19 @@ var (
 	version = "dev" // is set during build process
 
 	// defaults
-	defaultListenAddr = "localhost:9062"
-	// defaultBeaconEndpoint     = "http://localhost:5052"
+	defaultListenAddr         = "localhost:9062"
+	defaultBeaconEndpoint     = "http://localhost:5052"
 	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel           = getEnv("LOG_LEVEL", "info")
 	defaultredisURI           = getEnv("REDIS_URI", "localhost:6379")
 
 	// cli flags
-	listenAddr = flag.String("listen-addr", defaultListenAddr, "listen address")
-	// beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
-	logJSON  = flag.Bool("json", defaultLogJSON, "log in JSON format instead of text")
-	logLevel = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
-	redisURI = flag.String("redis", defaultredisURI, "Redis URI")
+	listenAddr     = flag.String("listen-addr", defaultListenAddr, "listen address")
+	beaconEndpoint = flag.String("beacon-endpoint", defaultBeaconEndpoint, "beacon endpoint")
+	logJSON        = flag.Bool("json", defaultLogJSON, "log in JSON format instead of text")
+	logLevel       = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
+	redisURI       = flag.String("redis", defaultredisURI, "Redis URI")
 
 	useGenesisForkVersionMainnet = flag.Bool("mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
 	useGenesisForkVersionKiln    = flag.Bool("kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
@@ -82,13 +82,7 @@ func main() {
 	}
 	log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
 
-	// validatorService := server.NewBeaconClientValidatorService(*beaconEndpoint)
-	// // TODO: should be done at the start of every epoch
-	// err := validatorService.FetchValidators()
-	// if err != nil {
-	// 	log.WithError(err).Fatal("failed to fetch validators from beacon node")
-	// }
-
+	// Connect to Redis
 	cache, err := server.NewRedisService(*redisURI)
 	if err == nil {
 		log.Infof("Connected to redis at %s", *redisURI)
@@ -96,13 +90,30 @@ func main() {
 		log.WithError(err).Fatal("failed to create redis service")
 	}
 
-	srv, err := server.NewRelayService(*listenAddr, nil, log, genesisForkVersionHex, cache)
+	// Connect to Beacon Node, and fetch all validators
+	if *beaconEndpoint == "" {
+		log.Fatal("Please specify a beacon endpoint (using the -beacon-endpoint flag)")
+	}
+
+	log.Infof("Using beacon endpoint: %s", *beaconEndpoint)
+	validatorService := server.NewBeaconClientValidatorService(*beaconEndpoint)
+
+	log.Info("Querying validators from beacon node... (this may take a while)")
+	err = validatorService.FetchValidators()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to fetch validators from beacon node")
+	}
+	log.Infof("Got %d validators from beacon node", validatorService.NumValidators())
+
+	// Create the relay service
+	srv, err := server.NewRelayService(*listenAddr, validatorService, log, genesisForkVersionHex, cache)
 	if err != nil {
 		log.WithError(err).Fatal("failed to create service")
 	}
 
+	// Start the server
 	log.Println("Webserver listening on", *listenAddr)
-	log.Fatal(srv.StartHTTPServer())
+	log.Fatal(srv.StartServer())
 }
 
 func getEnv(key string, defaultValue string) string {

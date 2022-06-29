@@ -6,33 +6,64 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 )
 
-type PubkeyHex string
-
 type ValidatorService interface {
-	IsValidator(PubkeyHex) bool
+	IsValidator(string) bool
+	NumValidators() uint64
+	FetchValidators() error
 }
+
+// type DevValidatorService struct {
+// 	mu           sync.RWMutex
+// 	validatorSet map[string]validatorResponseEntry
+// }
+
+// func (d *DevValidatorService) IsValidator(pubkey string) bool {
+// 	d.mu.RLock()
+// 	pkLower := strings.ToLower(pubkey)
+// 	_, found := d.validatorSet[pkLower]
+// 	d.mu.RUnlock()
+// 	return found
+// }
+
+// func (d *DevValidatorService) NumValidators() uint64 {
+// 	d.mu.RLock()
+// 	defer d.mu.RUnlock()
+// 	return uint64(len(d.validatorSet))
+// }
+
+// func (d *DevValidatorService) FetchValidators() error {
+// 	return nil
+// }
 
 type BeaconClientValidatorService struct {
 	beaconEndpoint string
 	mu             sync.RWMutex
-	validatorSet   map[PubkeyHex]struct{}
+	validatorSet   map[string]validatorResponseEntry
 }
 
 func NewBeaconClientValidatorService(beaconEndpoint string) *BeaconClientValidatorService {
 	return &BeaconClientValidatorService{
 		beaconEndpoint: beaconEndpoint,
-		validatorSet:   make(map[PubkeyHex]struct{}),
+		validatorSet:   make(map[string]validatorResponseEntry),
 	}
 }
 
-func (b *BeaconClientValidatorService) IsValidator(pubkey PubkeyHex) bool {
+func (b *BeaconClientValidatorService) IsValidator(pubkey string) bool {
 	b.mu.RLock()
-	_, found := b.validatorSet[pubkey]
+	pkLower := strings.ToLower(pubkey)
+	_, found := b.validatorSet[pkLower]
 	b.mu.RUnlock()
 	return found
+}
+
+func (b *BeaconClientValidatorService) NumValidators() uint64 {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return uint64(len(b.validatorSet))
 }
 
 func (b *BeaconClientValidatorService) FetchValidators() error {
@@ -41,9 +72,10 @@ func (b *BeaconClientValidatorService) FetchValidators() error {
 		return err
 	}
 
-	newValidatorSet := make(map[PubkeyHex]struct{})
+	newValidatorSet := make(map[string]validatorResponseEntry)
 	for _, vs := range vd.Data {
-		newValidatorSet[PubkeyHex(vs.Validator.Pubkey)] = struct{}{}
+		pkLower := strings.ToLower(vs.Validator.Pubkey)
+		newValidatorSet[pkLower] = vs
 	}
 
 	b.mu.Lock()
@@ -52,19 +84,21 @@ func (b *BeaconClientValidatorService) FetchValidators() error {
 	return nil
 }
 
-type validatorData struct {
-	Data []struct {
-		Validator struct {
-			Pubkey string `json:"pubkey"`
-		} `json:"validator"`
-	}
+type validatorResponseEntry struct {
+	Validator struct {
+		Pubkey string `json:"pubkey"`
+	} `json:"validator"`
 }
 
-func fetchAllValidators(endpoint string) (*validatorData, error) {
+type allValidatorsResponse struct {
+	Data []validatorResponseEntry
+}
+
+func fetchAllValidators(endpoint string) (*allValidatorsResponse, error) {
 	uri := endpoint + "/eth/v1/beacon/states/head/validators?status=active,pending"
 
 	// https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
-	vd := new(validatorData)
+	vd := new(allValidatorsResponse)
 	err := fetchBeacon(uri, "GET", vd)
 	return vd, err
 }
