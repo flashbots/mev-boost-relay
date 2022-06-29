@@ -21,6 +21,14 @@ Contains three services:
 
 ## Getting started
 
+This uses redis to store validator registrations. First run redis with docker:
+
+```bash
+docker run -d -p 6379:6379 redis:7
+```
+
+To run on kiln testnet:
+
 ```bash
 go run cmd/relay/main.go -kiln
 curl localhost:9062/eth/v1/builder/status
