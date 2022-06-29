@@ -176,7 +176,7 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		}
 
 		// Check if actually a real validator
-		if !m.validatorService.IsValidator(registration.Message.Pubkey.String()) {
+		if !m.validatorService.IsValidator(NewPubkeyHex(registration.Message.Pubkey.String())) {
 			log.WithField("registration", registration).Warn("not a known validator")
 			continue
 		}

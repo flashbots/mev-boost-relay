@@ -10,8 +10,18 @@ import (
 	"sync"
 )
 
+type PubkeyHex string
+
+func NewPubkeyHex(pk string) PubkeyHex {
+	return PubkeyHex(strings.ToLower(pk))
+}
+
+func (pk PubkeyHex) ToLower() PubkeyHex {
+	return PubkeyHex(strings.ToLower(string(pk)))
+}
+
 type ValidatorService interface {
-	IsValidator(string) bool
+	IsValidator(PubkeyHex) bool
 	NumValidators() uint64
 	FetchValidators() error
 }
@@ -42,20 +52,19 @@ type ValidatorService interface {
 type BeaconClientValidatorService struct {
 	beaconEndpoint string
 	mu             sync.RWMutex
-	validatorSet   map[string]validatorResponseEntry
+	validatorSet   map[PubkeyHex]validatorResponseEntry
 }
 
 func NewBeaconClientValidatorService(beaconEndpoint string) *BeaconClientValidatorService {
 	return &BeaconClientValidatorService{
 		beaconEndpoint: beaconEndpoint,
-		validatorSet:   make(map[string]validatorResponseEntry),
+		validatorSet:   make(map[PubkeyHex]validatorResponseEntry),
 	}
 }
 
-func (b *BeaconClientValidatorService) IsValidator(pubkey string) bool {
+func (b *BeaconClientValidatorService) IsValidator(pubkey PubkeyHex) bool {
 	b.mu.RLock()
-	pkLower := strings.ToLower(pubkey)
-	_, found := b.validatorSet[pkLower]
+	_, found := b.validatorSet[pubkey.ToLower()]
 	b.mu.RUnlock()
 	return found
 }
@@ -72,10 +81,9 @@ func (b *BeaconClientValidatorService) FetchValidators() error {
 		return err
 	}
 
-	newValidatorSet := make(map[string]validatorResponseEntry)
+	newValidatorSet := make(map[PubkeyHex]validatorResponseEntry)
 	for _, vs := range vd.Data {
-		pkLower := strings.ToLower(vs.Validator.Pubkey)
-		newValidatorSet[pkLower] = vs
+		newValidatorSet[NewPubkeyHex(vs.Validator.Pubkey)] = vs
 	}
 
 	b.mu.Lock()
