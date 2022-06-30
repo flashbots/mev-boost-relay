@@ -26,28 +26,33 @@ type ValidatorService interface {
 	FetchValidators() error
 }
 
-// type DevValidatorService struct {
-// 	mu           sync.RWMutex
-// 	validatorSet map[string]validatorResponseEntry
-// }
+type MockValidatorService struct {
+	mu           sync.RWMutex
+	validatorSet map[PubkeyHex]validatorResponseEntry
+}
 
-// func (d *DevValidatorService) IsValidator(pubkey string) bool {
-// 	d.mu.RLock()
-// 	pkLower := strings.ToLower(pubkey)
-// 	_, found := d.validatorSet[pkLower]
-// 	d.mu.RUnlock()
-// 	return found
-// }
+func (d *MockValidatorService) IsValidator(pubkey PubkeyHex) bool {
+	d.mu.RLock()
+	_, found := d.validatorSet[pubkey]
+	d.mu.RUnlock()
+	return found
+}
 
-// func (d *DevValidatorService) NumValidators() uint64 {
-// 	d.mu.RLock()
-// 	defer d.mu.RUnlock()
-// 	return uint64(len(d.validatorSet))
-// }
+func (d *MockValidatorService) NumValidators() uint64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return uint64(len(d.validatorSet))
+}
 
-// func (d *DevValidatorService) FetchValidators() error {
-// 	return nil
-// }
+func (d *MockValidatorService) FetchValidators() error {
+	return nil
+}
+
+func NewMockValidatorService(validatorSet map[PubkeyHex]validatorResponseEntry) *MockValidatorService {
+	return &MockValidatorService{
+		validatorSet: validatorSet,
+	}
+}
 
 type BeaconClientValidatorService struct {
 	beaconEndpoint string
@@ -93,9 +98,11 @@ func (b *BeaconClientValidatorService) FetchValidators() error {
 }
 
 type validatorResponseEntry struct {
-	Validator struct {
-		Pubkey string `json:"pubkey"`
-	} `json:"validator"`
+	Validator validatorPubKeyEntry `json:"validator"`
+}
+
+type validatorPubKeyEntry struct {
+	Pubkey string `json:"pubkey"`
 }
 
 type allValidatorsResponse struct {

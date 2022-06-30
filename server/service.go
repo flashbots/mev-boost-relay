@@ -198,7 +198,7 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 			log.WithError(err).WithField("registration", registration).Error("error getting validator registration")
 			continue
 		}
-
+		log.Info("Got validator registration", lastEntry)
 		if lastEntry == nil || lastEntry.Message.Timestamp > registration.Message.Timestamp {
 			m.datastore.SaveValidatorRegistration(registration)
 		}
