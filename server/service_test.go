@@ -129,12 +129,16 @@ func TestWebserver(t *testing.T) {
 
 	t.Run("webserver starts and closes normally", func(t *testing.T) {
 		backend := newTestBackend(t, validatorSet)
+		connectionClosed := make(chan struct{})
 		go func() {
 			err := backend.relay.StartServer()
 			require.NoError(t, err)
+			close(connectionClosed)
 		}()
 		time.Sleep(time.Millisecond * 100)
-		backend.relay.srv.Close()
+		err := backend.relay.srv.Close()
+		require.NoError(t, err)
+		<-connectionClosed
 	})
 }
 
