@@ -140,7 +140,7 @@ func TestWebserver(t *testing.T) {
 
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, validatorSet)
-	rr := backend.request(t, "GET", "/", nil)
+	rr := backend.request(t, http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "{}\n", rr.Body.String())
 }
