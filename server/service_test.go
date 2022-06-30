@@ -127,7 +127,7 @@ func TestWebserver(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("webserver starts normally", func(t *testing.T) {
+	t.Run("webserver starts and closes normally", func(t *testing.T) {
 		backend := newTestBackend(t, validatorSet)
 		go func() {
 			err := backend.relay.StartServer()
