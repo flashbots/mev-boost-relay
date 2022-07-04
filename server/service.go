@@ -2,104 +2,87 @@
 package server
 
 import (
-	"encoding/json"
-	"errors"
 	"net/http"
-	"strconv"
 
+	"github.com/flashbots/boost-relay/apis/proposer"
 	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	errInvalidSlot      = errors.New("invalid slot")
-	errInvalidHash      = errors.New("invalid hash")
-	errInvalidPubkey    = errors.New("invalid pubkey")
-	errInvalidSignature = errors.New("invalid signature")
-
-	// Builder-specs APIs
-	pathStatus            = "/eth/v1/builder/status"
-	pathRegisterValidator = "/eth/v1/builder/validators"
-	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+	// Status API
+	pathStatus = "/eth/v1/builder/status"
 
 	// Block builder APIs
-	pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
-	pathSubmitNewBlock        = "/relay/v1/builder/blocks"
+	// pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
+	// pathSubmitNewBlock        = "/relay/v1/builder/blocks"
 )
 
-var nilResponse = struct{}{}
+// RelayServiceOpts contains the options for a relay
+type RelayServiceOpts struct {
+	Log *logrus.Entry
 
-type httpErrorResp struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	ListenAddr string
+	BeaconURI  string
+	Datastore  common.Datastore
+
+	// // Whitelisted Builders
+	// builders []*common.BuilderEntry
+
+	// GenesisForkVersion for validating signatures
+	GenesisForkVersionHex string
+
+	// Which APIs and services to spin up
+	ApiProposer         bool
+	ApiGetHeaderPayload bool
+	SrvValidatorHub     bool
 }
 
-// RelayService TODO
+// RelayService represents a single Relay instance
 type RelayService struct {
-	log                  *logrus.Entry
-	listenAddr           string
-	validatorService     common.BeaconNodeClient
-	builders             []*common.BuilderEntry
-	srv                  *http.Server
-	datastore            Datastore
-	builderSigningDomain types.Domain
+	common.BaseAPI
 
-	slotCurrent uint64
+	opts          RelayServiceOpts
+	apiComponents []common.APIComponent
+
+	srv *http.Server
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, validatorService common.BeaconNodeClient, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
-	builderSigningDomain, err := common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
-	if err != nil {
-		return nil, err
+func NewRelayService(opts RelayServiceOpts) (*RelayService, error) {
+	rs := RelayService{
+		opts:          opts,
+		apiComponents: make([]common.APIComponent, 0),
 	}
 
-	return &RelayService{
-		log:                  log.WithField("module", "relay"),
-		listenAddr:           listenAddr,
-		validatorService:     validatorService,
-		builders:             nil,
-		datastore:            datastore,
-		builderSigningDomain: builderSigningDomain,
-	}, nil
-}
+	rs.Log = opts.Log.WithField("module", "relay")
 
-func (m *RelayService) respondError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	resp := httpErrorResp{code, message}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		m.log.WithField("response", resp).WithError(err).Error("Couldn't write error response")
-		http.Error(w, "", http.StatusInternalServerError)
+	if opts.ApiProposer {
+		api, err := proposer.NewProposerAPI(opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
+		if err != nil {
+			return nil, err
+		}
+		rs.apiComponents = append(rs.apiComponents, api)
 	}
-}
-
-func (m *RelayService) respondOK(w http.ResponseWriter, response any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		m.log.WithField("response", response).WithError(err).Error("Couldn't write OK response")
-		http.Error(w, "", http.StatusInternalServerError)
-	}
+	return &rs, nil
 }
 
 func (m *RelayService) getRouter() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", m.handleRoot)
+	r.HandleFunc("/", m.handleRoot).Methods(http.MethodGet)
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
-	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
-	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
-	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
-	r.HandleFunc(pathGetValidatorsForEpoch, m.handleGetValidatorsForEpoch).Methods(http.MethodGet)
-	r.HandleFunc(pathSubmitNewBlock, m.handleSubmitNewBlock).Methods(http.MethodPost)
+	for _, api := range m.apiComponents {
+		api.RegisterHandlers(r)
+	}
 
-	r.Use(mux.CORSMethodMiddleware(r))
-	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
+	// r.HandleFunc(pathGetValidatorsForEpoch, m.handleGetValidatorsForEpoch).Methods(http.MethodGet)
+	// r.HandleFunc(pathSubmitNewBlock, m.handleSubmitNewBlock).Methods(http.MethodPost)
+
+	// r.Use(mux.CORSMethodMiddleware(r))
+	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.Log, r)
 	return loggedRouter
 }
 
@@ -109,29 +92,33 @@ func (m *RelayService) StartServer() (err error) {
 		return common.ErrServerAlreadyRunning
 	}
 
-	if m.validatorService == nil {
-		err := errors.New("no validator service")
-		m.log.WithError(err).Error("cannot run without validator service")
-		return err
+	for _, api := range m.apiComponents {
+		api.Start()
 	}
 
-	// start everyting up
-	syncStatus, err := m.validatorService.SyncStatus()
-	if err != nil {
-		return err
-	}
-	if syncStatus.IsSyncing {
-		m.log.Error("Beacon node is syncing!")
-		return errors.New("beacon node is syncing")
-	}
-	m.slotCurrent = syncStatus.HeadSlot
-	m.log.WithField("slot", m.slotCurrent).Info("current slot")
+	// if m.validatorService == nil {
+	// 	err := errors.New("no validator service")
+	// 	m.log.WithError(err).Error("cannot run without validator service")
+	// 	return err
+	// }
 
-	go m.startBeaconNodeSlotUpdates()
-	// go m.startBeaconNodeValidatorUpdates()
+	// // start everyting up
+	// syncStatus, err := m.validatorService.SyncStatus()
+	// if err != nil {
+	// 	return err
+	// }
+	// if syncStatus.IsSyncing {
+	// 	m.log.Error("Beacon node is syncing!")
+	// 	return errors.New("beacon node is syncing")
+	// }
+	// m.slotCurrent = syncStatus.HeadSlot
+	// m.log.WithField("slot", m.slotCurrent).Info("current slot")
+
+	// go m.startBeaconNodeSlotUpdates()
+	// // go m.startBeaconNodeValidatorUpdates()
 
 	m.srv = &http.Server{
-		Addr:    m.listenAddr,
+		Addr:    m.opts.ListenAddr,
 		Handler: m.getRouter(),
 	}
 
@@ -142,14 +129,14 @@ func (m *RelayService) StartServer() (err error) {
 	return err
 }
 
-func (m *RelayService) startBeaconNodeSlotUpdates() {
-	c := make(chan uint64)
-	go m.validatorService.SubscribeToHeadEvents(c)
-	for {
-		m.slotCurrent = <-c
-		m.log.WithField("slot", m.slotCurrent).Info("new slot")
-	}
-}
+// func (m *RelayService) startBeaconNodeSlotUpdates() {
+// 	c := make(chan uint64)
+// 	go m.validatorService.SubscribeToHeadEvents(c)
+// 	for {
+// 		m.slotCurrent = <-c
+// 		m.log.WithField("slot", m.slotCurrent).Info("new slot")
+// 	}
+// }
 
 // func (m *RelayService) startBeaconNodeValidatorUpdates() {
 // 	for {
@@ -167,134 +154,27 @@ func (m *RelayService) startBeaconNodeSlotUpdates() {
 // }
 
 func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
-	m.respondOK(w, nilResponse)
+	m.RespondOKEmpty(w)
 }
 
 // ---------------
 //  Proposer APIs
 // ---------------
 func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
-	m.respondOK(w, nilResponse)
+	m.RespondOKEmpty(w)
 }
 
-func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "registerValidator")
-	log.Info("registerValidator")
+// // --------------------
+// //  Block Builder APIs
+// // --------------------
+// func (m *RelayService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
+// 	log := m.log.WithField("method", "getValidatorsForEpoch")
+// 	log.Info("request")
+// 	m.respondOK(w, nilResponse)
+// }
 
-	payload := []types.SignedValidatorRegistration{}
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		m.respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// TODO: maybe parallelize this
-	for _, registration := range payload {
-		if len(registration.Message.Pubkey) != 48 {
-			continue
-		}
-
-		if len(registration.Signature) != 96 {
-			continue
-		}
-
-		// Check if actually a real validator
-		if !m.validatorService.IsValidator(common.NewPubkeyHex(registration.Message.Pubkey.String())) {
-			log.WithField("registration", registration).Warn("not a known validator")
-			continue
-		}
-
-		// Verify the signature
-		ok, err := types.VerifySignature(registration.Message, m.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
-		if err != nil {
-			log.WithError(err).WithField("registration", registration).Warn("error verifying registerValidator signature")
-			continue
-		}
-		if !ok {
-			log.WithError(err).WithField("registration", registration).Warn("failed to verify registerValidator signature")
-			continue
-		}
-
-		// Save if first time or if newer timestamp than last registration
-		lastEntry, err := m.datastore.GetValidatorRegistration(registration.Message.Pubkey)
-		if err != nil {
-			log.WithError(err).WithField("registration", registration).Error("error getting validator registration")
-			continue
-		}
-		
-		if lastEntry == nil || lastEntry.Message.Timestamp > registration.Message.Timestamp {
-			m.datastore.SaveValidatorRegistration(registration)
-		}
-	}
-
-	m.respondOK(w, nilResponse)
-}
-
-func (m *RelayService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	slot := vars["slot"]
-	parentHashHex := vars["parent_hash"]
-	pubkey := vars["pubkey"]
-	log := m.log.WithFields(logrus.Fields{
-		"method":     "getHeader",
-		"slot":       slot,
-		"parentHash": parentHashHex,
-		"pubkey":     pubkey,
-	})
-	log.Info("getHeader")
-
-	if _, err := strconv.ParseUint(slot, 10, 64); err != nil {
-		m.respondError(w, http.StatusBadRequest, errInvalidSlot.Error())
-		return
-	}
-
-	if len(pubkey) != 98 {
-		m.respondError(w, http.StatusBadRequest, errInvalidPubkey.Error())
-		return
-	}
-
-	if len(parentHashHex) != 66 {
-		m.respondError(w, http.StatusBadRequest, errInvalidHash.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
-	if err := json.NewEncoder(w).Encode(nilResponse); err != nil {
-		m.log.WithError(err).Error("Couldn't write getHeader response")
-		http.Error(w, "", http.StatusInternalServerError)
-	}
-}
-
-func (m *RelayService) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "getPayload")
-	log.Info("getPayload")
-
-	payload := new(types.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		m.respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if len(payload.Signature) != 96 {
-		m.respondError(w, http.StatusBadRequest, errInvalidSignature.Error())
-		return
-	}
-
-	result := new(types.GetPayloadResponse)
-	m.respondOK(w, result)
-}
-
-// --------------------
-//  Block Builder APIs
-// --------------------
-func (m *RelayService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "getValidatorsForEpoch")
-	log.Info("request")
-	m.respondOK(w, nilResponse)
-}
-
-func (m *RelayService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-	log := m.log.WithField("method", "submitNewBlock")
-	log.Info("request")
-	m.respondOK(w, nilResponse)
-}
+// func (m *RelayService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
+// 	log := m.log.WithField("method", "submitNewBlock")
+// 	log.Info("request")
+// 	m.respondOK(w, nilResponse)
+// }

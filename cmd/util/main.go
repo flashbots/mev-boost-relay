@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/boost-relay/server"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,7 +19,7 @@ var (
 
 	// cli flags
 	redisUpdateValidators = flag.Bool("redis-update-validators", false, "Update redis with all current validators known by the BN")
-	beaconEndpoint        = flag.String("beacon-endpoint", defaultBeaconURI, "beacon endpoint")
+	beaconNodeURI         = flag.String("beacon-endpoint", defaultBeaconURI, "beacon endpoint")
 	redisURI              = flag.String("redis", defaultredisURI, "Redis URI")
 	logJSON               = flag.Bool("json", defaultLogJSON, "log in JSON format instead of text")
 	logLevel              = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
@@ -33,7 +32,7 @@ func main() {
 	logrus.Infof("boost-relay util %s", version)
 
 	if *redisUpdateValidators {
-		taskRedisUpdateValidators(*redisURI, *beaconEndpoint)
+		taskRedisUpdateValidators(*redisURI, *beaconNodeURI)
 	} else {
 		logrus.Warn("No task specified")
 	}
@@ -43,7 +42,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 	log := logrus.WithField("task", "redisUpdateValidators")
 	log.Info("updating redis with validators...")
 
-	redis, err := server.NewRedisService(redisURI)
+	redis, err := common.NewRedisService(redisURI)
 	if err == nil {
 		log.Infof("Connected to redis at %s", redisURI)
 	} else {

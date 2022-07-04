@@ -8,22 +8,38 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
+var genesisForkVersionHex = "0x00000000"
+
 type testBackend struct {
-	relay *RelayService
-	validatorService *MockValidatorService
-	datastore        *MemoryDatastore
+	relay            *RelayService
+	validatorService *common.MockValidatorService
+	datastore        *common.MemoryDatastore
 }
 
-func newTestBackend(t require.TestingT, validatorSet map[PubkeyHex]validatorResponseEntry) *testBackend {
-	ds := NewMemoryDatastore()
-	vs := NewMockValidatorService(validatorSet)
-	service, err := NewRelayService("localhost:12345", vs, testLog, genesisForkVersionHex, ds)
+func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duration) *testBackend {
+	// validatorSet map[PubkeyHex]validatorResponseEntry
+	vs := common.NewMockValidatorService(validatorSet)
+	ds := common.NewMemoryDatastore()
+	// common.TestLog.Logger.SetLevel(logrus.FatalLevel)
+	opts := RelayServiceOpts{
+		Log:                   common.TestLog,
+		ListenAddr:            "localhost:12345",
+		BeaconURI:             "",
+		Datastore:             ds,
+		GenesisForkVersionHex: genesisForkVersionHex,
+		ApiProposer:           true,
+		ApiGetHeaderPayload:   true,
+		SrvValidatorHub:       true,
+	}
+
+	service, err := NewRelayService(opts)
 	require.NoError(t, err)
 
 	backend := testBackend{relay: service}
@@ -76,7 +92,7 @@ func generateSignedRegistration(feeRecipient types.Address, timestamp uint64, do
 }
 
 func BenchmarkHandleRegistration(b *testing.B) {
-	testLog.Logger.SetLevel(logrus.FatalLevel)
+	common.TestLog.Logger.SetLevel(logrus.FatalLevel)
 	backend := newTestBackend(b, validatorSet)
 	path := "/eth/v1/builder/validators"
 	benchmarks := []struct {
@@ -91,9 +107,9 @@ func BenchmarkHandleRegistration(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
-			validators := make(map[PubkeyHex]validatorResponseEntry)
+			validators := make(map[common.PubkeyHex]common.ValidatorResponseEntry)
 			for i := 0; i < bm.payloadSize; i++ {
-				feeRecipient := validPayloadRegisterValidator.Message.FeeRecipient
+				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
 				reg, err := generateSignedRegistration(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
 				if err != nil {
 					b.Fatal(err)

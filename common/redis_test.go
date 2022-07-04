@@ -1,4 +1,4 @@
-package server
+package common
 
 import (
 	"testing"
@@ -29,8 +29,8 @@ func TestRedisService(t *testing.T) {
 	cache := setupService(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
-		key := validPayloadRegisterValidator.Message.Pubkey
-		value := validPayloadRegisterValidator
+		key := ValidPayloadRegisterValidator.Message.Pubkey
+		value := ValidPayloadRegisterValidator
 		cache.SaveValidatorRegistration(value)
 		result, err := cache.GetValidatorRegistration(key)
 		require.NoError(t, err)

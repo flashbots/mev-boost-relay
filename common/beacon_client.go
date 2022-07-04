@@ -28,12 +28,12 @@ type BeaconNodeClient interface {
 	SubscribeToHeadEvents(slotC chan uint64)
 	IsValidator(PubkeyHex) bool
 	NumValidators() uint64
-	FetchValidators() (map[PubkeyHex]validatorResponseEntry, error)
+	FetchValidators() (map[PubkeyHex]ValidatorResponseEntry, error)
 }
 
 type MockValidatorService struct {
 	mu           sync.RWMutex
-	validatorSet map[PubkeyHex]validatorResponseEntry
+	validatorSet map[PubkeyHex]ValidatorResponseEntry
 }
 
 func (d *MockValidatorService) IsValidator(pubkey PubkeyHex) bool {
@@ -53,7 +53,7 @@ func (d *MockValidatorService) FetchValidators() error {
 	return nil
 }
 
-func NewMockValidatorService(validatorSet map[PubkeyHex]validatorResponseEntry) *MockValidatorService {
+func NewMockValidatorService(validatorSet map[PubkeyHex]ValidatorResponseEntry) *MockValidatorService {
 	return &MockValidatorService{
 		validatorSet: validatorSet,
 	}
@@ -62,13 +62,13 @@ func NewMockValidatorService(validatorSet map[PubkeyHex]validatorResponseEntry) 
 type ProdBeaconNodeService struct {
 	beaconEndpoint string
 	mu             sync.RWMutex
-	validatorSet   map[PubkeyHex]validatorResponseEntry
+	validatorSet   map[PubkeyHex]ValidatorResponseEntry
 }
 
 func NewBeaconClientService(beaconEndpoint string) *ProdBeaconNodeService {
 	return &ProdBeaconNodeService{
 		beaconEndpoint: beaconEndpoint,
-		validatorSet:   make(map[PubkeyHex]validatorResponseEntry),
+		validatorSet:   make(map[PubkeyHex]ValidatorResponseEntry),
 	}
 }
 
@@ -106,13 +106,13 @@ func (b *ProdBeaconNodeService) NumValidators() uint64 {
 	return uint64(len(b.validatorSet))
 }
 
-func (b *ProdBeaconNodeService) FetchValidators() (map[PubkeyHex]validatorResponseEntry, error) {
+func (b *ProdBeaconNodeService) FetchValidators() (map[PubkeyHex]ValidatorResponseEntry, error) {
 	vd, err := fetchAllValidators(b.beaconEndpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	newValidatorSet := make(map[PubkeyHex]validatorResponseEntry)
+	newValidatorSet := make(map[PubkeyHex]ValidatorResponseEntry)
 	for _, vs := range vd.Data {
 		newValidatorSet[NewPubkeyHex(vs.Validator.Pubkey)] = vs
 	}
@@ -123,23 +123,23 @@ func (b *ProdBeaconNodeService) FetchValidators() (map[PubkeyHex]validatorRespon
 	return newValidatorSet, nil
 }
 
-type validatorResponseEntry struct {
-	Validator validatorPubKeyEntry `json:"validator"`
+type ValidatorResponseEntry struct {
+	Validator ValidatorResponseValidatorData `json:"validator"`
 }
 
-type validatorPubKeyEntry struct {
+type ValidatorResponseValidatorData struct {
 	Pubkey string `json:"pubkey"`
 }
 
-type allValidatorsResponse struct {
-	Data []validatorResponseEntry
+type AllValidatorsResponse struct {
+	Data []ValidatorResponseEntry
 }
 
-func fetchAllValidators(endpoint string) (*allValidatorsResponse, error) {
+func fetchAllValidators(endpoint string) (*AllValidatorsResponse, error) {
 	uri := endpoint + "/eth/v1/beacon/states/head/validators?status=active,pending"
 
 	// https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
-	vd := new(allValidatorsResponse)
+	vd := new(AllValidatorsResponse)
 	err := fetchBeacon(uri, "GET", vd)
 	return vd, err
 }
