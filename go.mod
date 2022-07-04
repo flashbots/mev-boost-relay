@@ -9,6 +9,7 @@ require (
 	github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30
 	github.com/go-redis/redis/v9 v9.0.0-beta.1
 	github.com/gorilla/mux v1.8.0
+	github.com/r3labs/sse v0.0.0-20210224172625-26fe804710bc
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 )
@@ -27,7 +28,9 @@ require (
 	github.com/supranational/blst v0.3.7 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
+	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
+	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

@@ -20,7 +20,7 @@ var (
 
 	// defaults
 	defaultListenAddr         = "localhost:9062"
-	defaultBeaconEndpoint     = "http://localhost:5052"
+	defaultBeaconEndpoint     = "http://localhost:3500"
 	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel           = getEnv("LOG_LEVEL", "info")
@@ -94,16 +94,8 @@ func main() {
 	if *beaconEndpoint == "" {
 		log.Fatal("Please specify a beacon endpoint (using the -beacon-endpoint flag)")
 	}
-
 	log.Infof("Using beacon endpoint: %s", *beaconEndpoint)
-	validatorService := server.NewBeaconClientValidatorService(*beaconEndpoint)
-
-	log.Info("Querying validators from beacon node... (this may take a while)")
-	err = validatorService.FetchValidators()
-	if err != nil {
-		log.WithError(err).Fatal("Failed to fetch validators from beacon node")
-	}
-	log.Infof("Got %d validators from beacon node", validatorService.NumValidators())
+	validatorService := server.NewBeaconClientService(*beaconEndpoint)
 
 	// Create the relay service
 	srv, err := server.NewRelayService(*listenAddr, validatorService, log, genesisForkVersionHex, cache)

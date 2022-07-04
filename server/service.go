@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
@@ -43,15 +42,17 @@ type httpErrorResp struct {
 type RelayService struct {
 	log                  *logrus.Entry
 	listenAddr           string
-	validatorService     ValidatorService
+	validatorService     BeaconNodeService
 	builders             []*common.BuilderEntry
 	srv                  *http.Server
 	datastore            Datastore
 	builderSigningDomain types.Domain
+
+	slotCurrent uint64
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, validatorService ValidatorService, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
+func NewRelayService(listenAddr string, validatorService BeaconNodeService, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
 	builderSigningDomain, err := common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
 	if err != nil {
 		return nil, err
@@ -103,7 +104,7 @@ func (m *RelayService) getRouter() http.Handler {
 }
 
 // StartServer starts the HTTP server for this instance
-func (m *RelayService) StartServer() error {
+func (m *RelayService) StartServer() (err error) {
 	if m.srv != nil {
 		return common.ErrServerAlreadyRunning
 	}
@@ -114,35 +115,56 @@ func (m *RelayService) StartServer() error {
 		return err
 	}
 
-	// start regular
-	go m.startBeaconNodeValidatorUpdates()
+	// start everyting up
+	syncStatus, err := m.validatorService.SyncStatus()
+	if err != nil {
+		return err
+	}
+	if syncStatus.IsSyncing {
+		m.log.Error("Beacon node is syncing!")
+		return errors.New("beacon node is syncing")
+	}
+	m.slotCurrent = syncStatus.HeadSlot
+	m.log.WithField("slot", m.slotCurrent).Info("current slot")
+
+	go m.startBeaconNodeSlotUpdates()
+	// go m.startBeaconNodeValidatorUpdates()
 
 	m.srv = &http.Server{
 		Addr:    m.listenAddr,
 		Handler: m.getRouter(),
 	}
 
-	err := m.srv.ListenAndServe()
+	err = m.srv.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
 	}
 	return err
 }
 
-func (m *RelayService) startBeaconNodeValidatorUpdates() {
+func (m *RelayService) startBeaconNodeSlotUpdates() {
+	c := make(chan uint64)
+	go m.validatorService.SubscribeToHeadEvents(c)
 	for {
-		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
-		time.Sleep(common.DurationPerEpoch)
-
-		// Load validators from BN
-		m.log.Info("Querying validators from beacon node... (this may")
-		err := m.validatorService.FetchValidators()
-		if err != nil {
-			m.log.WithError(err).Fatal("failed to fetch validators from beacon node")
-		}
-		m.log.Infof("Got %d validators from BN", m.validatorService.NumValidators())
+		m.slotCurrent = <-c
+		m.log.WithField("slot", m.slotCurrent).Info("new slot")
 	}
 }
+
+// func (m *RelayService) startBeaconNodeValidatorUpdates() {
+// 	for {
+// 		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
+// 		time.Sleep(common.DurationPerEpoch)
+
+// 		// Load validators from BN
+// 		m.log.Info("Querying validators from beacon node... (this may")
+// 		err := m.validatorService.FetchValidators()
+// 		if err != nil {
+// 			m.log.WithError(err).Fatal("failed to fetch validators from beacon node")
+// 		}
+// 		m.log.Infof("Got %d validators from BN", m.validatorService.NumValidators())
+// 	}
+// }
 
 func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
 	m.respondOK(w, nilResponse)

@@ -27,6 +27,13 @@ This uses redis to store validator registrations. First run redis with docker:
 docker run -d -p 6379:6379 redis:7
 ```
 
+
+Have access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port)
+
+```bash
+ssh -L 3500:localhost:3500 fb-builder-kilndev
+```
+
 To run on kiln testnet:
 
 ```bash
