@@ -11,10 +11,12 @@ import (
 )
 
 var (
-	RedisPrefix               = "boost-relay:"
-	RedisPrefixKnownValidator = RedisPrefix + "known-validator:"
+	redisPrefix                      = "boost-relay:"
+	redisPrefixValidatorKnown        = redisPrefix + "validator-known:"
+	redisPrefixValidatorRegistration = redisPrefix + "validator-registration:"
 
-	defaultExpirationTime = time.Duration(0) // never expires
+	expirationTimeValidatorRegistration = time.Duration(0) // never expires
+	expirationTimeKnownValidators       = time.Duration(0) // never expires
 )
 
 func connectRedis(redisURI string) (*redis.Client, error) {
@@ -42,20 +44,38 @@ func NewRedisService(redisURI string) (Datastore, error) {
 }
 
 func RedisKeyKnownValidator(pubKey string) string {
-	return RedisPrefixKnownValidator + strings.ToLower(pubKey)
+	return redisPrefixValidatorKnown + strings.ToLower(pubKey)
+}
+
+func RedisKeyValidatorRegistration(pubKey string) string {
+	return redisPrefixValidatorRegistration + strings.ToLower(pubKey)
 }
 
 func (r *RedisService) GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
-	err := r.GetObj(RedisKeyKnownValidator(proposerPubkey.String()), &registration)
+	err := r.GetObj(RedisKeyValidatorRegistration(proposerPubkey.String()), &registration)
 	if err == redis.Nil {
 		return nil, nil
 	}
 	return registration, err
 }
 
+func (r *RedisService) IsKnwonValidator(pubkeyHex string) (bool, error) {
+	_, err := r.client.Get(context.Background(), RedisKeyKnownValidator(pubkeyHex)).Result()
+	if err == redis.Nil {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *RedisService) SetKnownValidator(pubkeyHex string) error {
+	return r.client.Set(context.Background(), RedisKeyKnownValidator(pubkeyHex), true, expirationTimeKnownValidators).Err()
+}
+
 func (r *RedisService) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	return r.SetObj(RedisKeyKnownValidator(entry.Message.Pubkey.String()), entry)
+	return r.SetObj(RedisKeyValidatorRegistration(entry.Message.Pubkey.String()), entry)
 }
 
 func (r *RedisService) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
@@ -83,5 +103,5 @@ func (r *RedisService) SetObj(key string, value any) (err error) {
 		return err
 	}
 
-	return r.client.Set(context.Background(), key, marshalledValue, defaultExpirationTime).Err()
+	return r.client.Set(context.Background(), key, marshalledValue, expirationTimeValidatorRegistration).Err()
 }

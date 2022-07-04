@@ -1,4 +1,4 @@
-package server
+package common
 
 import (
 	"net/http"
@@ -38,7 +38,8 @@ func TestBeaconValidators(t *testing.T) {
 		w.Write(resp)
 	})
 
-	require.NoError(t, bc.FetchValidators())
+	_, err := bc.FetchValidators()
+	require.NoError(t, err)
 	require.Equal(t, uint64(1), bc.NumValidators())
 	require.True(t, bc.IsValidator(PubkeyHex("0x93247F2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")))
 	require.Contains(t, bc.validatorSet, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))

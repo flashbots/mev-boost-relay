@@ -1,4 +1,4 @@
-package server
+package common
 
 import (
 	"encoding/json"
@@ -22,13 +22,13 @@ func (pk PubkeyHex) ToLower() PubkeyHex {
 	return PubkeyHex(strings.ToLower(string(pk)))
 }
 
-type BeaconNodeService interface {
+type BeaconNodeClient interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	CurrentSlot() (uint64, error)
 	SubscribeToHeadEvents(slotC chan uint64)
 	IsValidator(PubkeyHex) bool
 	NumValidators() uint64
-	FetchValidators() error
+	FetchValidators() (map[PubkeyHex]validatorResponseEntry, error)
 }
 
 type MockValidatorService struct {
@@ -106,10 +106,10 @@ func (b *ProdBeaconNodeService) NumValidators() uint64 {
 	return uint64(len(b.validatorSet))
 }
 
-func (b *ProdBeaconNodeService) FetchValidators() error {
+func (b *ProdBeaconNodeService) FetchValidators() (map[PubkeyHex]validatorResponseEntry, error) {
 	vd, err := fetchAllValidators(b.beaconEndpoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	newValidatorSet := make(map[PubkeyHex]validatorResponseEntry)
@@ -120,7 +120,7 @@ func (b *ProdBeaconNodeService) FetchValidators() error {
 	b.mu.Lock()
 	b.validatorSet = newValidatorSet
 	b.mu.Unlock()
-	return nil
+	return newValidatorSet, nil
 }
 
 type validatorResponseEntry struct {

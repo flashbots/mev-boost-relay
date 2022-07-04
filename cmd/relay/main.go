@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/server"
 	"github.com/sirupsen/logrus"
 )
@@ -21,10 +22,10 @@ var (
 	// defaults
 	defaultListenAddr         = "localhost:9062"
 	defaultBeaconEndpoint     = "http://localhost:3500"
-	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
+	defaultredisURI           = getEnv("REDIS_URI", "localhost:6379")
 	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel           = getEnv("LOG_LEVEL", "info")
-	defaultredisURI           = getEnv("REDIS_URI", "localhost:6379")
+	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 
 	// cli flags
 	listenAddr     = flag.String("listen-addr", defaultListenAddr, "listen address")
@@ -33,6 +34,7 @@ var (
 	logLevel       = flag.String("loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 	redisURI       = flag.String("redis", defaultredisURI, "Redis URI")
 
+	// network helper flags
 	useGenesisForkVersionMainnet = flag.Bool("mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
 	useGenesisForkVersionKiln    = flag.Bool("kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
 	useGenesisForkVersionRopsten = flag.Bool("ropsten", false, "use Ropsten genesis fork version 0x80000069 (for signature validation)")
@@ -40,29 +42,11 @@ var (
 	useCustomGenesisForkVersion  = flag.String("genesis-fork-version", defaultGenesisForkVersion, "use a custom genesis fork version (for signature validation)")
 )
 
-var log = logrus.WithField("module", "cmd/relay")
-
 func main() {
 	flag.Parse()
-	logrus.SetOutput(os.Stdout)
 
-	if *logJSON {
-		log.Logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
-		log.Logger.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp: true,
-		})
-
-	}
-
-	if *logLevel != "" {
-		lvl, err := logrus.ParseLevel(*logLevel)
-		if err != nil {
-			log.Fatalf("Invalid loglevel: %s", *logLevel)
-		}
-		logrus.SetLevel(lvl)
-	}
-
+	common.LogSetup(*logJSON, *logLevel)
+	log := logrus.WithField("module", "cmd/relay")
 	log.Infof("boost-relay %s", version)
 
 	// Set genesis fork version
@@ -95,7 +79,7 @@ func main() {
 		log.Fatal("Please specify a beacon endpoint (using the -beacon-endpoint flag)")
 	}
 	log.Infof("Using beacon endpoint: %s", *beaconEndpoint)
-	validatorService := server.NewBeaconClientService(*beaconEndpoint)
+	validatorService := common.NewBeaconClientService(*beaconEndpoint)
 
 	// Create the relay service
 	srv, err := server.NewRelayService(*listenAddr, validatorService, log, genesisForkVersionHex, cache)

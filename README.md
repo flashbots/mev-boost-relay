@@ -40,3 +40,9 @@ To run on kiln testnet:
 go run cmd/relay/main.go -kiln
 curl localhost:9062/eth/v1/builder/status
 ```
+
+## TODO
+
+registerValidator check if actually a validator
+
+* pull validations from redis

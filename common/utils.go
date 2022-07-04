@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -60,4 +61,11 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	var forkVersion [4]byte
 	copy(forkVersion[:], forkVersionBytes[:4])
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
+}
+
+func GetEnv(key string, defaultValue string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return defaultValue
 }

@@ -42,7 +42,7 @@ type httpErrorResp struct {
 type RelayService struct {
 	log                  *logrus.Entry
 	listenAddr           string
-	validatorService     BeaconNodeService
+	validatorService     common.BeaconNodeClient
 	builders             []*common.BuilderEntry
 	srv                  *http.Server
 	datastore            Datastore
@@ -52,7 +52,7 @@ type RelayService struct {
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
-func NewRelayService(listenAddr string, validatorService BeaconNodeService, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
+func NewRelayService(listenAddr string, validatorService common.BeaconNodeClient, log *logrus.Entry, genesisForkVersionHex string, datastore Datastore) (*RelayService, error) {
 	builderSigningDomain, err := common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (m *RelayService) handleRegisterValidator(w http.ResponseWriter, req *http.
 		}
 
 		// Check if actually a real validator
-		if !m.validatorService.IsValidator(NewPubkeyHex(registration.Message.Pubkey.String())) {
+		if !m.validatorService.IsValidator(common.NewPubkeyHex(registration.Message.Pubkey.String())) {
 			log.WithField("registration", registration).Warn("not a known validator")
 			continue
 		}
