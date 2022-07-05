@@ -14,19 +14,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var genesisForkVersionHex = "0x00000000"
-
 type testBackend struct {
 	relay *RelayService
+	validatorService *MockValidatorService
+	datastore        *MemoryDatastore
 }
 
-func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duration) *testBackend {
+func newTestBackend(t require.TestingT, validatorSet map[PubkeyHex]validatorResponseEntry) *testBackend {
 	ds := NewMemoryDatastore()
-	testLog.Logger.SetLevel(logrus.FatalLevel)
-	service, err := NewRelayService("localhost:12345", nil, testLog, genesisForkVersionHex, ds)
+	vs := NewMockValidatorService(validatorSet)
+	service, err := NewRelayService("localhost:12345", vs, testLog, genesisForkVersionHex, ds)
 	require.NoError(t, err)
 
 	backend := testBackend{relay: service}
+	backend.validatorService = vs
+	backend.datastore = ds
 	return &backend
 }
 
@@ -48,7 +50,7 @@ func (be *testBackend) request(t require.TestingT, method string, path string, p
 	return rr
 }
 
-func generateSignature(feeRecipient types.Address, timestamp uint64, domain types.Domain) (*types.SignedValidatorRegistration, error) {
+func generateSignedRegistration(feeRecipient types.Address, timestamp uint64, domain types.Domain) (*types.SignedValidatorRegistration, error) {
 	sk, pk, err := bls.GenerateNewKeypair()
 	if err != nil {
 		return nil, err
@@ -74,7 +76,8 @@ func generateSignature(feeRecipient types.Address, timestamp uint64, domain type
 }
 
 func BenchmarkHandleRegistration(b *testing.B) {
-	backend := newTestBackend(b, 1, time.Second)
+	testLog.Logger.SetLevel(logrus.FatalLevel)
+	backend := newTestBackend(b, validatorSet)
 	path := "/eth/v1/builder/validators"
 	benchmarks := []struct {
 		name        string
@@ -88,14 +91,19 @@ func BenchmarkHandleRegistration(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
+			validators := make(map[PubkeyHex]validatorResponseEntry)
 			for i := 0; i < bm.payloadSize; i++ {
 				feeRecipient := validPayloadRegisterValidator.Message.FeeRecipient
-				reg, err := generateSignature(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
+				reg, err := generateSignedRegistration(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
 				if err != nil {
 					b.Fatal(err)
 				}
 				payload = append(payload, *reg)
+				validators[PubkeyHex(reg.Message.Pubkey.String())] = validatorResponseEntry{
+					Validator: validatorPubKeyEntry{reg.Message.Pubkey.String()},
+				}
 			}
+			backend.validatorService.validatorSet = validators
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				backend.request(b, http.MethodPost, path, payload)
@@ -104,110 +112,73 @@ func BenchmarkHandleRegistration(b *testing.B) {
 	}
 }
 
-// func TestWebserver(t *testing.T) {
-// 	t.Run("errors when webserver is already existing", func(t *testing.T) {
-// 		backend := newTestBackend(t, 1, time.Second)
-// 		backend.boost.srv = &http.Server{}
-// 		err := backend.boost.StartHTTPServer()
-// 		require.Error(t, err)
-// 	})
+func TestWebserver(t *testing.T) {
+	t.Run("errors when webserver is already existing", func(t *testing.T) {
+		backend := newTestBackend(t, validatorSet)
+		backend.relay.srv = &http.Server{}
+		err := backend.relay.StartServer()
+		require.Error(t, err)
+	})
 
-// 	t.Run("webserver error on invalid listenAddr", func(t *testing.T) {
-// 		backend := newTestBackend(t, 1, time.Second)
-// 		backend.boost.listenAddr = "localhost:876543"
-// 		err := backend.boost.StartHTTPServer()
-// 		require.Error(t, err)
-// 	})
+	t.Run("webserver error on invalid listenAddr", func(t *testing.T) {
+		backend := newTestBackend(t, validatorSet)
+		backend.relay.listenAddr = "localhost:876543"
+		err := backend.relay.StartServer()
+		require.Error(t, err)
+	})
 
-// 	// t.Run("webserver starts normally", func(t *testing.T) {
-// 	// 	backend := newTestBackend(t, 1, time.Second)
-// 	// 	go func() {
-// 	// 		err := backend.boost.StartHTTPServer()
-// 	// 		require.NoError(t, err)
-// 	// 	}()
-// 	// 	time.Sleep(time.Millisecond * 100)
-// 	// 	backend.boost.srv.Close()
-// 	// })
-// }
+	t.Run("webserver starts and closes normally", func(t *testing.T) {
+		backend := newTestBackend(t, validatorSet)
+		connectionClosed := make(chan struct{})
+		go func() {
+			err := backend.relay.StartServer()
+			require.NoError(t, err)
+			close(connectionClosed)
+		}()
+		time.Sleep(time.Millisecond * 100)
+		err := backend.relay.srv.Close()
+		require.NoError(t, err)
+		<-connectionClosed
+	})
+}
 
-// func TestWebserverRootHandler(t *testing.T) {
-// 	rr := testRelayRequest(t, "GET", "/", nil)
-// 	require.Equal(t, http.StatusOK, rr.Code)
-// 	require.Equal(t, "{}", rr.Body.String())
-// }
+func TestWebserverRootHandler(t *testing.T) {
+	backend := newTestBackend(t, validatorSet)
+	rr := backend.request(t, http.MethodGet, "/", nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "{}\n", rr.Body.String())
+}
 
-// // Example good registerValidator payload
-// var payloadRegisterValidator = types.SignedValidatorRegistration{
-// 	Message: &types.RegisterValidatorRequestMessage{
-// 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
-// 		Timestamp:    1234356,
-// 		GasLimit:     278234191203,
-// 		Pubkey:       _HexToPubkey("0xf9716c94aab536227804e859d15207aa7eaaacd839f39dcbdb5adc942842a8d2fb730f9f49fc719fdb86f1873e0ed1c2"),
-// 	},
-// 	Signature: _HexToSignature("0x8682789b16da95ba437a5b51c14ba4e112b50ceacd9730f697c4839b91405280e603fc4367283aa0866af81a21c536c4c452ace2f4146267c5cf6e959955964f4c35f0cedaf80ed99ffc32fe2d28f9390bb30269044fcf20e2dd734c7b287d14"),
-// }
+func TestStatus(t *testing.T) {
+	backend := newTestBackend(t, validatorSet)
+	path := "/eth/v1/builder/status"
+	rr := backend.request(t, http.MethodGet, path, validPayloadRegisterValidator)
+	require.Equal(t, http.StatusOK, rr.Code)
+}
 
-// func TestStatus(t *testing.T) {
-// 	backend := newTestBackend(t, 1, time.Second)
-// 	path := "/eth/v1/builder/status"
-// 	rr := backend.request(t, http.MethodGet, path, payloadRegisterValidator)
-// 	require.Equal(t, http.StatusOK, rr.Code)
-// 	require.Equal(t, 0, backend.relays[0].getRequestCount(path))
-// }
+func TestRegisterValidator(t *testing.T) {
+	path := "/eth/v1/builder/validators"
 
-// func TestRegisterValidator(t *testing.T) {
-// 	path := "/eth/v1/builder/validators"
-// 	payload := types.SignedValidatorRegistration{
-// 		Message: &types.RegisterValidatorRequestMessage{
-// 			FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
-// 			Timestamp:    1234356,
-// 			Pubkey:       _HexToPubkey("0xf9716c94aab536227804e859d15207aa7eaaacd839f39dcbdb5adc942842a8d2fb730f9f49fc719fdb86f1873e0ed1c2"),
-// 		},
-// 		Signature: _HexToSignature("0x8682789b16da95ba437a5b51c14ba4e112b50ceacd9730f697c4839b91405280e603fc4367283aa0866af81a21c536c4c452ace2f4146267c5cf6e959955964f4c35f0cedaf80ed99ffc32fe2d28f9390bb30269044fcf20e2dd734c7b287d14"),
-// 	}
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, validatorSet)
+		rr := backend.request(t, http.MethodPost, path, []types.SignedValidatorRegistration{validPayloadRegisterValidator})
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.datastore.GetRequestCount("GetValidatorRegistration"))
+		require.Equal(t, 1, backend.datastore.GetRequestCount("SaveValidatorRegistration"))
+	})
 
-// 	t.Run("Normal function", func(t *testing.T) {
-// 		backend := newTestBackend(t, 1, time.Second)
-// 		rr := backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusOK, rr.Code)
-// 		require.Equal(t, 1, backend.relays[0].getRequestCount(path))
-// 	})
+	t.Run("Validator not in validator set", func(t *testing.T) {
+		backend := newTestBackend(t, validatorSet)
+		reg, err := generateSignedRegistration(types.Address{}, 0, backend.relay.builderSigningDomain)
+		require.NoError(t, err)
+		payload := []types.SignedValidatorRegistration{*reg}
 
-// 	t.Run("Relay error response", func(t *testing.T) {
-// 		backend := newTestBackend(t, 2, time.Second)
-
-// 		rr := backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusOK, rr.Code)
-// 		require.Equal(t, 1, backend.relays[0].getRequestCount(path))
-// 		require.Equal(t, 1, backend.relays[1].getRequestCount(path))
-
-// 		// Now make one relay return an error
-// 		backend.relays[0].HandlerOverride = func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadRequest) }
-// 		rr = backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusOK, rr.Code)
-// 		require.Equal(t, 2, backend.relays[0].getRequestCount(path))
-// 		require.Equal(t, 2, backend.relays[1].getRequestCount(path))
-
-// 		// Now make both relays return an error - which should cause the request to fail
-// 		backend.relays[1].HandlerOverride = func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadRequest) }
-// 		rr = backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusBadGateway, rr.Code)
-// 		require.Equal(t, 3, backend.relays[0].getRequestCount(path))
-// 		require.Equal(t, 3, backend.relays[1].getRequestCount(path))
-// 	})
-
-// 	t.Run("mev-boost relay timeout works with slow relay", func(t *testing.T) {
-// 		backend := newTestBackend(t, 1, 5*time.Millisecond) // 10ms max
-// 		rr := backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusOK, rr.Code)
-
-// 		// Now make the relay return slowly, mev-boost should return an error
-// 		backend.relays[0].ResponseDelay = 10 * time.Millisecond
-// 		rr = backend.request(t, http.MethodPost, path, payload)
-// 		require.Equal(t, http.StatusBadGateway, rr.Code)
-// 		require.Equal(t, 2, backend.relays[0].getRequestCount(path))
-// 	})
-// }
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 0, backend.datastore.GetRequestCount("GetValidatorRegistration"))
+		require.Equal(t, 0, backend.datastore.GetRequestCount("SaveValidatorRegistration"))
+	})
+}
 
 // func TestGetHeader(t *testing.T) {
 // 	getPath := func(slot uint64, parentHash types.Hash, pubkey types.PublicKey) string {
