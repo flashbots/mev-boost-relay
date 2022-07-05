@@ -12,7 +12,7 @@ import (
 func TestBeaconValidators(t *testing.T) {
 	r := mux.NewRouter()
 	srv := httptest.NewServer(r)
-	bc := NewBeaconClientValidatorService(srv.URL)
+	bc := NewBeaconClientService(srv.URL)
 
 	r.HandleFunc("/eth/v1/beacon/states/head/validators", func(w http.ResponseWriter, _ *http.Request) {
 		resp := []byte(`{
