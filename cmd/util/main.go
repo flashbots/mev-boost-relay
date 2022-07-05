@@ -4,7 +4,9 @@ import (
 	"flag"
 	"os"
 
+	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/datastore"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,7 +47,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 	log := logrus.WithField("task", "redisUpdateValidators")
 	log.Info("updating redis with validators...")
 
-	redis, err := common.NewRedisService(redisURI)
+	redis, err := datastore.NewProposerRedisDatastore(redisURI)
 	if err == nil {
 		log.Infof("Connected to redis at %s", redisURI)
 	} else {
@@ -57,7 +59,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 		log.Fatal("Please specify a beacon endpoint (using the -beacon-endpoint flag)")
 	}
 	log.Infof("Using beacon endpoint: %s", beaconURI)
-	beaconClient := common.NewBeaconClientService(beaconURI)
+	beaconClient := beaconclient.NewProdBeaconClient(log, beaconURI)
 
 	log.Info("Querying validators from beacon node... (this may take a while)")
 	validators, err := beaconClient.FetchValidators()

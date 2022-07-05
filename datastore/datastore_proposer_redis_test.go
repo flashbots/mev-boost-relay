@@ -1,16 +1,17 @@
-package common
+package datastore
 
 import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
 )
 
 // var redisTestServer *miniredis.Miniredis
 
-func setupService(t *testing.T) Datastore {
+func setupService(t *testing.T) ProposerDatastore {
 	var err error
 	// if redisTestServer != nil {
 	// 	redisTestServer.Close()
@@ -19,7 +20,7 @@ func setupService(t *testing.T) Datastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisService, err := NewRedisService(redisTestServer.Addr())
+	redisService, err := NewProposerRedisDatastore(redisTestServer.Addr())
 	require.NoError(t, err)
 
 	return redisService
@@ -29,8 +30,8 @@ func TestRedisService(t *testing.T) {
 	cache := setupService(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
-		key := ValidPayloadRegisterValidator.Message.Pubkey
-		value := ValidPayloadRegisterValidator
+		key := common.ValidPayloadRegisterValidator.Message.Pubkey
+		value := common.ValidPayloadRegisterValidator
 		cache.SaveValidatorRegistration(value)
 		result, err := cache.GetValidatorRegistration(key)
 		require.NoError(t, err)

@@ -5,7 +5,9 @@ import (
 	"net/http"
 
 	"github.com/flashbots/boost-relay/apis/proposer"
+	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -24,9 +26,9 @@ var (
 type RelayServiceOpts struct {
 	Log *logrus.Entry
 
-	ListenAddr string
-	BeaconURI  string
-	Datastore  common.Datastore
+	ListenAddr   string
+	BeaconClient beaconclient.BeaconNodeClient
+	Datastore    datastore.ProposerDatastore
 
 	// // Whitelisted Builders
 	// builders []*common.BuilderEntry

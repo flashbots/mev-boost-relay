@@ -1,4 +1,4 @@
-package common
+package beaconclient
 
 import (
 	"encoding/json"
@@ -6,70 +6,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-	"sync"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/r3labs/sse"
+	"github.com/sirupsen/logrus"
 )
 
-type PubkeyHex string
-
-func NewPubkeyHex(pk string) PubkeyHex {
-	return PubkeyHex(strings.ToLower(pk))
+type ProdBeaconClient struct {
+	log       *logrus.Entry
+	beaconURI string
 }
 
-func (pk PubkeyHex) ToLower() PubkeyHex {
-	return PubkeyHex(strings.ToLower(string(pk)))
-}
-
-type BeaconNodeClient interface {
-	SyncStatus() (*SyncStatusPayloadData, error)
-	CurrentSlot() (uint64, error)
-	SubscribeToHeadEvents(slotC chan uint64)
-	IsValidator(PubkeyHex) bool
-	NumValidators() uint64
-	FetchValidators() (map[PubkeyHex]ValidatorResponseEntry, error)
-}
-
-type MockValidatorService struct {
-	mu           sync.RWMutex
-	validatorSet map[PubkeyHex]ValidatorResponseEntry
-}
-
-func (d *MockValidatorService) IsValidator(pubkey PubkeyHex) bool {
-	d.mu.RLock()
-	_, found := d.validatorSet[pubkey]
-	d.mu.RUnlock()
-	return found
-}
-
-func (d *MockValidatorService) NumValidators() uint64 {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return uint64(len(d.validatorSet))
-}
-
-func (d *MockValidatorService) FetchValidators() error {
-	return nil
-}
-
-func NewMockValidatorService(validatorSet map[PubkeyHex]ValidatorResponseEntry) *MockValidatorService {
-	return &MockValidatorService{
-		validatorSet: validatorSet,
-	}
-}
-
-type ProdBeaconNodeService struct {
-	beaconEndpoint string
-	mu             sync.RWMutex
-	validatorSet   map[PubkeyHex]ValidatorResponseEntry
-}
-
-func NewBeaconClientService(beaconEndpoint string) *ProdBeaconNodeService {
-	return &ProdBeaconNodeService{
-		beaconEndpoint: beaconEndpoint,
-		validatorSet:   make(map[PubkeyHex]ValidatorResponseEntry),
-	}
+func NewProdBeaconClient(log *logrus.Entry, beaconURI string) *ProdBeaconClient {
+	_log := log.WithFields(logrus.Fields{
+		"module":    "beaconClient",
+		"beaconURI": beaconURI,
+	})
+	return &ProdBeaconClient{_log, beaconURI}
 }
 
 // HeadEventData represents the data of a head event
@@ -78,48 +31,31 @@ type HeadEventData struct {
 	Slot uint64 `json:",string"`
 }
 
-func (b *ProdBeaconNodeService) SubscribeToHeadEvents(slotC chan uint64) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint)
+func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
+	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	client := sse.NewClient(eventsURL)
 	client.SubscribeRaw(func(msg *sse.Event) {
 		var data HeadEventData
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
-			fmt.Println(err)
+			c.log.WithError(err).Error("could not unmarshal head event")
 		} else {
 			slotC <- data.Slot
 		}
 	})
-
 }
 
-func (b *ProdBeaconNodeService) IsValidator(pubkey PubkeyHex) bool {
-	b.mu.RLock()
-	_, found := b.validatorSet[pubkey.ToLower()]
-	b.mu.RUnlock()
-	return found
-}
-
-func (b *ProdBeaconNodeService) NumValidators() uint64 {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return uint64(len(b.validatorSet))
-}
-
-func (b *ProdBeaconNodeService) FetchValidators() (map[PubkeyHex]ValidatorResponseEntry, error) {
-	vd, err := fetchAllValidators(b.beaconEndpoint)
+func (c *ProdBeaconClient) FetchValidators() (map[common.PubkeyHex]ValidatorResponseEntry, error) {
+	vd, err := fetchAllValidators(c.beaconURI)
 	if err != nil {
 		return nil, err
 	}
 
-	newValidatorSet := make(map[PubkeyHex]ValidatorResponseEntry)
+	newValidatorSet := make(map[common.PubkeyHex]ValidatorResponseEntry)
 	for _, vs := range vd.Data {
-		newValidatorSet[NewPubkeyHex(vs.Validator.Pubkey)] = vs
+		newValidatorSet[common.NewPubkeyHex(vs.Validator.Pubkey)] = vs
 	}
 
-	b.mu.Lock()
-	b.validatorSet = newValidatorSet
-	b.mu.Unlock()
 	return newValidatorSet, nil
 }
 
@@ -157,8 +93,8 @@ type SyncStatusPayloadData struct {
 
 // SyncStatus returns the current node sync-status
 // https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
-func (b *ProdBeaconNodeService) SyncStatus() (*SyncStatusPayloadData, error) {
-	uri := b.beaconEndpoint + "/eth/v1/node/syncing"
+func (c *ProdBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
+	uri := c.beaconURI + "/eth/v1/node/syncing"
 	resp := new(SyncStatusPayload)
 	err := fetchBeacon(uri, "GET", resp)
 	if err != nil {
@@ -167,8 +103,8 @@ func (b *ProdBeaconNodeService) SyncStatus() (*SyncStatusPayloadData, error) {
 	return &resp.Data, nil
 }
 
-func (b *ProdBeaconNodeService) CurrentSlot() (uint64, error) {
-	syncStatus, err := b.SyncStatus()
+func (c *ProdBeaconClient) CurrentSlot() (uint64, error) {
+	syncStatus, err := c.SyncStatus()
 	if err != nil {
 		return 0, err
 	}

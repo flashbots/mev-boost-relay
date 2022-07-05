@@ -34,3 +34,13 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 	err = entry.Pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
 	return entry, err
 }
+
+type PubkeyHex string
+
+func NewPubkeyHex(pk string) PubkeyHex {
+	return PubkeyHex(strings.ToLower(pk))
+}
+
+func (pk PubkeyHex) ToLower() PubkeyHex {
+	return PubkeyHex(strings.ToLower(string(pk)))
+}

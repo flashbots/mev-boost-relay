@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -22,13 +23,13 @@ var (
 type ProposerAPI struct {
 	common.BaseAPI
 
-	datastore            common.Datastore
+	datastore            datastore.ProposerDatastore
 	builderSigningDomain types.Domain
 }
 
 func NewProposerAPI(
 	log *logrus.Entry,
-	datastore common.Datastore,
+	datastore datastore.ProposerDatastore,
 	genesisForkVersionHex string,
 ) (ret common.APIComponent, err error) {
 	if log == nil {
@@ -72,7 +73,6 @@ func (api *ProposerAPI) handleRegisterValidator(w http.ResponseWriter, req *http
 		return
 	}
 
-	// TODO: maybe parallelize this
 	for _, registration := range payload {
 		if len(registration.Message.Pubkey) != 48 {
 			continue

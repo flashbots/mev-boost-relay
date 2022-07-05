@@ -4,7 +4,9 @@ import (
 	"flag"
 	"os"
 
+	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/boost-relay/server"
 	"github.com/sirupsen/logrus"
 )
@@ -47,6 +49,7 @@ var (
 )
 
 func main() {
+	var err error
 	flag.Parse()
 
 	common.LogSetup(*logJSON, *logLevel)
@@ -70,24 +73,34 @@ func main() {
 	}
 	log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
 
-	// // Connect to Beacon Node, and fetch all validators
-	// if *beaconEndpoint == "" {
-	// 	log.Fatal("Please specify a beacon endpoint (using the -beacon-endpoint flag)")
-	// }
-	// log.Infof("Using beacon endpoint: %s", *beaconEndpoint)
-	// validatorService := common.NewBeaconClientService(*beaconEndpoint)
+	// Create beacon client
+	var beaconClient beaconclient.BeaconNodeClient
+	if *beaconNodeURI != "" {
+		log.Infof("Using beacon endpoint: %s", *beaconNodeURI)
+		beaconClient = beaconclient.NewProdBeaconClient(log, *beaconNodeURI)
 
-	datastore, err := common.NewRedisService(*redisURI)
-	if err == nil {
-		log.Fatalf("failed to connect to Redis at %s", *redisURI)
+		// Check beacon node status
+		_, err := beaconClient.SyncStatus()
+		if err != nil {
+			log.WithError(err).Fatal("Beacon node is syncing")
+		}
 	}
-	log.Infof("Connected to Redis at %s", *redisURI)
+
+	// Connect to Redis
+	var ds datastore.ProposerDatastore
+	if *redisURI != "" {
+		ds, err = datastore.NewProposerRedisDatastore(*redisURI)
+		if err == nil {
+			log.Fatalf("Failed to connect to Redis at %s", *redisURI)
+		}
+		log.Infof("Connected to Redis at %s", *redisURI)
+	}
 
 	opts := server.RelayServiceOpts{
 		Log:                   log,
 		ListenAddr:            *listenAddr,
-		BeaconURI:             *beaconNodeURI,
-		Datastore:             datastore,
+		BeaconClient:          beaconClient,
+		Datastore:             ds,
 		GenesisForkVersionHex: genesisForkVersionHex,
 		ProposerAPI:           *apiProposer,
 		BuilderAPI:            *apiBuilder,

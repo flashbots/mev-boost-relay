@@ -8,46 +8,54 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-var genesisForkVersionHex = "0x00000000"
+var (
+	genesisForkVersionHex = "0x00000000"
+	builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+)
 
 type testBackend struct {
-	relay            *RelayService
-	validatorService *common.MockValidatorService
-	datastore        *common.MemoryDatastore
+	t            require.TestingT
+	relay        *RelayService
+	beaconClient *beaconclient.MockBeaconClient
+	datastore    *datastore.ProposerMemoryDatastore
 }
 
-func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duration) *testBackend {
-	// validatorSet map[PubkeyHex]validatorResponseEntry
-	vs := common.NewMockValidatorService(validatorSet)
-	ds := common.NewMemoryDatastore()
-	// common.TestLog.Logger.SetLevel(logrus.FatalLevel)
+func newTestBackend(t require.TestingT) *testBackend {
+	bc := beaconclient.NewMockBeaconClient()
+	ds := datastore.NewProposerMemoryDatastore()
+
 	opts := RelayServiceOpts{
 		Log:                   common.TestLog,
 		ListenAddr:            "localhost:12345",
-		BeaconURI:             "",
+		BeaconClient:          bc,
 		Datastore:             ds,
 		GenesisForkVersionHex: genesisForkVersionHex,
 		ProposerAPI:           true,
 		BuilderAPI:            true,
 	}
 
-	service, err := NewRelayService(opts)
+	relay, err := NewRelayService(opts)
 	require.NoError(t, err)
 
-	backend := testBackend{relay: service}
-	backend.validatorService = vs
-	backend.datastore = ds
+	backend := testBackend{
+		t:            t,
+		relay:        relay,
+		beaconClient: bc,
+		datastore:    ds,
+	}
 	return &backend
 }
 
-func (be *testBackend) request(t require.TestingT, method string, path string, payload any) *httptest.ResponseRecorder {
+func (be *testBackend) request(method string, path string, payload any) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -55,11 +63,11 @@ func (be *testBackend) request(t require.TestingT, method string, path string, p
 		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
 	} else {
 		payloadBytes, err2 := json.Marshal(payload)
-		require.NoError(t, err2)
+		require.NoError(be.t, err2)
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
 
-	require.NoError(t, err)
+	require.NoError(be.t, err)
 	rr := httptest.NewRecorder()
 	be.relay.getRouter().ServeHTTP(rr, req)
 	return rr
@@ -75,7 +83,15 @@ func (be *testBackend) request(t require.TestingT, method string, path string, p
 // 	pubKey.FromSlice(pk.Compress())
 // }
 
-func generateSignedValidatorRegistration(sk *bls.SecretKey, domain types.Domain, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+	var err error
+	if sk == nil {
+		sk, _, err = bls.GenerateNewKeypair()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	blsPubKey := bls.PublicKeyFromSecretKey(sk)
 
 	var pubKey types.PublicKey
@@ -86,7 +102,7 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, domain types.Domain,
 		Pubkey:       pubKey,
 	}
 
-	sig, err := types.SignMessage(msg, domain, sk)
+	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +115,7 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, domain types.Domain,
 
 func BenchmarkHandleRegistration(b *testing.B) {
 	common.TestLog.Logger.SetLevel(logrus.FatalLevel)
-	backend := newTestBackend(b, validatorSet)
+	backend := newTestBackend(b)
 	path := "/eth/v1/builder/validators"
 	benchmarks := []struct {
 		name        string
@@ -110,28 +126,25 @@ func BenchmarkHandleRegistration(b *testing.B) {
 		{"payload of size 1000", 1000},
 	}
 
-	builderSigningDomain, err := common.ComputerBuilderSigningDomain(genesisForkVersionHex)
-	require.NoError(b, err)
-
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
-			validators := make(map[common.PubkeyHex]common.ValidatorResponseEntry)
+			validators := make(map[common.PubkeyHex]beaconclient.ValidatorResponseEntry)
 			for i := 0; i < bm.payloadSize; i++ {
 				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
-				sk, _, err := bls.GenerateNewKeypair()
-				require.NoError(b, err)
-				reg, err := generateSignedValidatorRegistration(sk, builderSigningDomain, feeRecipient, uint64(i))
+				reg, err := generateSignedValidatorRegistration(nil, feeRecipient, uint64(i))
 				require.NoError(b, err)
 				payload = append(payload, *reg)
-				validators[common.PubkeyHex(reg.Message.Pubkey.String())] = common.ValidatorResponseEntry{
-					Validator: common.ValidatorResponseValidatorData{reg.Message.Pubkey.String()},
+				validators[common.PubkeyHex(reg.Message.Pubkey.String())] = beaconclient.ValidatorResponseEntry{
+					Validator: beaconclient.ValidatorResponseValidatorData{
+						Pubkey: reg.Message.Pubkey.String(),
+					},
 				}
 			}
-			backend.validatorService.validatorSet = validators
+			backend.beaconClient.SetValidators(validators)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				backend.request(b, http.MethodPost, path, payload)
+				backend.request(http.MethodPost, path, payload)
 			}
 		})
 	}
@@ -139,21 +152,21 @@ func BenchmarkHandleRegistration(b *testing.B) {
 
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
-		backend := newTestBackend(t, validatorSet)
+		backend := newTestBackend(t)
 		backend.relay.srv = &http.Server{}
 		err := backend.relay.StartServer()
 		require.Error(t, err)
 	})
 
 	t.Run("webserver error on invalid listenAddr", func(t *testing.T) {
-		backend := newTestBackend(t, validatorSet)
-		backend.relay.listenAddr = "localhost:876543"
+		backend := newTestBackend(t)
+		backend.relay.opts.ListenAddr = "localhost:876543"
 		err := backend.relay.StartServer()
 		require.Error(t, err)
 	})
 
 	t.Run("webserver starts and closes normally", func(t *testing.T) {
-		backend := newTestBackend(t, validatorSet)
+		backend := newTestBackend(t)
 		connectionClosed := make(chan struct{})
 		go func() {
 			err := backend.relay.StartServer()
@@ -168,16 +181,16 @@ func TestWebserver(t *testing.T) {
 }
 
 func TestWebserverRootHandler(t *testing.T) {
-	backend := newTestBackend(t, validatorSet)
-	rr := backend.request(t, http.MethodGet, "/", nil)
+	backend := newTestBackend(t)
+	rr := backend.request(http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "{}\n", rr.Body.String())
 }
 
 func TestStatus(t *testing.T) {
-	backend := newTestBackend(t, validatorSet)
+	backend := newTestBackend(t)
 	path := "/eth/v1/builder/status"
-	rr := backend.request(t, http.MethodGet, path, validPayloadRegisterValidator)
+	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -185,20 +198,20 @@ func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
 	t.Run("Normal function", func(t *testing.T) {
-		backend := newTestBackend(t, validatorSet)
-		rr := backend.request(t, http.MethodPost, path, []types.SignedValidatorRegistration{validPayloadRegisterValidator})
+		backend := newTestBackend(t)
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 1, backend.datastore.GetRequestCount("GetValidatorRegistration"))
 		require.Equal(t, 1, backend.datastore.GetRequestCount("SaveValidatorRegistration"))
 	})
 
 	t.Run("Validator not in validator set", func(t *testing.T) {
-		backend := newTestBackend(t, validatorSet)
-		reg, err := generateSignedRegistration(types.Address{}, 0, backend.relay.builderSigningDomain)
+		backend := newTestBackend(t)
+		reg, err := generateSignedValidatorRegistration(nil, types.Address{}, 0)
 		require.NoError(t, err)
 		payload := []types.SignedValidatorRegistration{*reg}
 
-		rr := backend.request(t, http.MethodPost, path, payload)
+		rr := backend.request(http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 0, backend.datastore.GetRequestCount("GetValidatorRegistration"))
 		require.Equal(t, 0, backend.datastore.GetRequestCount("SaveValidatorRegistration"))

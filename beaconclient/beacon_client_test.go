@@ -1,10 +1,11 @@
-package common
+package beaconclient
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +13,7 @@ import (
 func TestBeaconValidators(t *testing.T) {
 	r := mux.NewRouter()
 	srv := httptest.NewServer(r)
-	bc := NewBeaconClientService(srv.URL)
+	bc := NewProdBeaconClient(common.TestLog, srv.URL)
 
 	r.HandleFunc("/eth/v1/beacon/states/head/validators", func(w http.ResponseWriter, _ *http.Request) {
 		resp := []byte(`{
@@ -38,12 +39,8 @@ func TestBeaconValidators(t *testing.T) {
 		w.Write(resp)
 	})
 
-	_, err := bc.FetchValidators()
+	vals, err := bc.FetchValidators()
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), bc.NumValidators())
-	require.True(t, bc.IsValidator(PubkeyHex("0x93247F2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")))
-	require.Contains(t, bc.validatorSet, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
-
-	entry := bc.validatorSet[PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")]
-	require.Equal(t, entry.Validator.Pubkey, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")
+	require.Equal(t, 1, len(vals))
+	require.Contains(t, vals, common.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
 }
