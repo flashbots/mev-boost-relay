@@ -2,10 +2,12 @@
 package proposer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
@@ -23,30 +25,35 @@ var (
 type ProposerAPI struct {
 	common.BaseAPI
 
+	ctx                  context.Context
 	datastore            datastore.ProposerDatastore
 	builderSigningDomain types.Domain
+	knownValidators      map[common.PubkeyHex]bool
 }
 
 func NewProposerAPI(
+	ctx context.Context,
 	log *logrus.Entry,
-	datastore datastore.ProposerDatastore,
+	ds datastore.ProposerDatastore,
 	genesisForkVersionHex string,
 ) (ret common.APIComponent, err error) {
 	if log == nil {
 		return nil, errors.New("log parameter is nil")
 	}
 
-	api := new(ProposerAPI)
-	api.Log = log.WithField("module", "apiRegisterValidator")
-	api.datastore = datastore
+	if ds == nil {
+		return nil, errors.New("proposer API datastore parameter is nil")
+	}
+	api := &ProposerAPI{
+		ctx:             ctx,
+		datastore:       ds,
+		knownValidators: make(map[common.PubkeyHex]bool),
+	}
+	api.Log = log.WithField("module", "api/proposer")
 
 	// Setup the signing domain
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(genesisForkVersionHex)
-	if err != nil {
-		return nil, err
-	}
-
-	return api, nil
+	return api, err
 }
 
 func (api *ProposerAPI) RegisterHandlers(r *mux.Router) {
@@ -55,11 +62,40 @@ func (api *ProposerAPI) RegisterHandlers(r *mux.Router) {
 	r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 }
 
-func (api *ProposerAPI) Start() error {
+func (api *ProposerAPI) Start() (err error) {
+	api.knownValidators, err = api.datastore.GetKnownValidators()
+	if err != nil {
+		return err
+	}
+	if len(api.knownValidators) == 0 {
+		api.Log.WithField("n", len(api.knownValidators)).Warn("updated known validators, but have not received any")
+	} else {
+		api.Log.WithField("n", len(api.knownValidators)).Info("updated known validators")
+	}
+
+	// Start periodic updates of known validators
+	go func() {
+		select {
+		case <-api.ctx.Done():
+			return
+		case <-time.NewTicker(common.DurationPerEpoch).C:
+			api.knownValidators, err = api.datastore.GetKnownValidators()
+			if err != nil {
+				api.Log.WithError(err).Error("error getting known validators")
+			} else {
+				if len(api.knownValidators) == 0 {
+					api.Log.WithField("n", len(api.knownValidators)).Warn("updated known validators, but have not received any")
+				} else {
+					api.Log.WithField("n", len(api.knownValidators)).Info("updated known validators")
+				}
+			}
+		}
+	}()
 	return nil
 }
 
 func (api *ProposerAPI) Stop() error {
+	api.ctx.Done()
 	return nil
 }
 

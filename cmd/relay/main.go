@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -23,7 +24,7 @@ var (
 
 	// defaults
 	defaultListenAddr         = "localhost:9062"
-	defaultBeaconURI          = common.GetEnv("BEACON_URI", "http://localhost:3500")
+	defaultBeaconURI          = common.GetEnv("BEACON_URI", "")
 	defaultredisURI           = common.GetEnv("REDIS_URI", "localhost:6379")
 	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel           = common.GetEnv("LOG_LEVEL", "info")
@@ -90,13 +91,14 @@ func main() {
 	var ds datastore.ProposerDatastore
 	if *redisURI != "" {
 		ds, err = datastore.NewProposerRedisDatastore(*redisURI)
-		if err == nil {
+		if err != nil {
 			log.Fatalf("Failed to connect to Redis at %s", *redisURI)
 		}
 		log.Infof("Connected to Redis at %s", *redisURI)
 	}
 
 	opts := server.RelayServiceOpts{
+		Ctx:                   context.Background(),
 		Log:                   log,
 		ListenAddr:            *listenAddr,
 		BeaconClient:          beaconClient,

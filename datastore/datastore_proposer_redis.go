@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/go-redis/redis/v9"
 )
@@ -16,7 +17,7 @@ var (
 	redisPrefixValidatorRegistration = redisPrefix + "validator-registration:"
 
 	expirationTimeValidatorRegistration = time.Duration(0) // never expires
-	expirationTimeKnownValidators       = time.Duration(0) // never expires
+	expirationTimeKnownValidators       = time.Hour * 24 * 7
 )
 
 func connectRedis(redisURI string) (*redis.Client, error) {
@@ -34,7 +35,7 @@ type ProposerRedisDatastore struct {
 	client *redis.Client
 }
 
-func NewProposerRedisDatastore(redisURI string) (*ProposerRedisDatastore, error) {
+func NewProposerRedisDatastore(redisURI string) (ProposerDatastore, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
@@ -43,24 +44,28 @@ func NewProposerRedisDatastore(redisURI string) (*ProposerRedisDatastore, error)
 	return &ProposerRedisDatastore{client: client}, nil
 }
 
-func RedisKeyKnownValidator(pubKey string) string {
-	return redisPrefixValidatorKnown + strings.ToLower(pubKey)
+func RedisKeyKnownValidator(pubKey common.PubkeyHex) string {
+	return redisPrefixValidatorKnown + strings.ToLower(string(pubKey))
 }
 
 func RedisKeyValidatorRegistration(pubKey string) string {
 	return redisPrefixValidatorRegistration + strings.ToLower(pubKey)
 }
 
-func (r *ProposerRedisDatastore) GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error) {
-	registration := new(types.SignedValidatorRegistration)
-	err := r.GetObj(RedisKeyValidatorRegistration(proposerPubkey.String()), &registration)
-	if err == redis.Nil {
-		return nil, nil
+func (r *ProposerRedisDatastore) GetKnownValidators() (map[common.PubkeyHex]bool, error) {
+	validators := make(map[common.PubkeyHex]bool)
+	keys, err := r.client.Keys(context.Background(), redisPrefixValidatorKnown+"*").Result()
+	if err != nil {
+		return nil, err
 	}
-	return registration, err
+	for _, key := range keys {
+		pubkey := strings.TrimPrefix(key, redisPrefixValidatorKnown)
+		validators[common.PubkeyHex(pubkey)] = true
+	}
+	return validators, nil
 }
 
-func (r *ProposerRedisDatastore) IsKnownValidator(pubkeyHex string) (bool, error) {
+func (r *ProposerRedisDatastore) IsKnownValidator(pubkeyHex common.PubkeyHex) (bool, error) {
 	_, err := r.client.Get(context.Background(), RedisKeyKnownValidator(pubkeyHex)).Result()
 	if err == redis.Nil {
 		return false, nil
@@ -70,8 +75,17 @@ func (r *ProposerRedisDatastore) IsKnownValidator(pubkeyHex string) (bool, error
 	return true, nil
 }
 
-func (r *ProposerRedisDatastore) SetKnownValidator(pubkeyHex string) error {
+func (r *ProposerRedisDatastore) SetKnownValidator(pubkeyHex common.PubkeyHex) error {
 	return r.client.Set(context.Background(), RedisKeyKnownValidator(pubkeyHex), true, expirationTimeKnownValidators).Err()
+}
+
+func (r *ProposerRedisDatastore) GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error) {
+	registration := new(types.SignedValidatorRegistration)
+	err := r.GetObj(RedisKeyValidatorRegistration(proposerPubkey.String()), &registration)
+	if err == redis.Nil {
+		return nil, nil
+	}
+	return registration, err
 }
 
 func (r *ProposerRedisDatastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {

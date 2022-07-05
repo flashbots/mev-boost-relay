@@ -4,12 +4,13 @@ package datastore
 import (
 	"sync"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
 type ProposerMemoryDatastore struct {
 	registrations   map[types.PublicKey]*types.SignedValidatorRegistration
-	knownValidators map[string]bool
+	knownValidators map[common.PubkeyHex]bool
 	requestCount    map[string]int
 	mu              sync.RWMutex
 }
@@ -17,7 +18,7 @@ type ProposerMemoryDatastore struct {
 func NewProposerMemoryDatastore() *ProposerMemoryDatastore {
 	return &ProposerMemoryDatastore{
 		registrations:   make(map[types.PublicKey]*types.SignedValidatorRegistration),
-		knownValidators: make(map[string]bool),
+		knownValidators: make(map[common.PubkeyHex]bool),
 		requestCount:    make(map[string]int),
 	}
 }
@@ -56,14 +57,19 @@ func (ds *ProposerMemoryDatastore) GetRequestCount(method string) int {
 	return ds.requestCount[method]
 }
 
-func (ds *ProposerMemoryDatastore) IsKnownValidator(pubkeyHex string) (bool, error) {
+func (ds *ProposerMemoryDatastore) IsKnownValidator(pubkeyHex common.PubkeyHex) (bool, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	_, ok := ds.knownValidators[pubkeyHex]
-	return ok, nil
+	return ds.knownValidators[pubkeyHex], nil
 }
 
-func (ds *ProposerMemoryDatastore) SetKnownValidator(pubkeyHex string) error {
+func (ds *ProposerMemoryDatastore) GetKnownValidators() (map[common.PubkeyHex]bool, error) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	return ds.knownValidators, nil
+}
+
+func (ds *ProposerMemoryDatastore) SetKnownValidator(pubkeyHex common.PubkeyHex) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.knownValidators[pubkeyHex] = true

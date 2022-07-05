@@ -71,7 +71,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 	// Update redis with validators
 	log.Info("Writing to Redis...")
 	for _, v := range validators {
-		redis.SetKnownValidator(v.Validator.Pubkey)
+		redis.SetKnownValidator(common.PubkeyHex(v.Validator.Pubkey))
 	}
 	log.Info("Updated Redis")
 }

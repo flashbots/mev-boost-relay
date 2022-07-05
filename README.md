@@ -37,7 +37,7 @@ ssh -L 3500:localhost:3500 fb-builder-kilndev
 To run on kiln testnet:
 
 ```bash
-go run cmd/relay/main.go -kiln
+go run cmd/relay/main.go -kiln -api-proposer
 curl localhost:9062/eth/v1/builder/status
 ```
 

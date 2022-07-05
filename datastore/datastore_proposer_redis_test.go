@@ -26,7 +26,7 @@ func setupService(t *testing.T) ProposerDatastore {
 	return redisService
 }
 
-func TestRedisService(t *testing.T) {
+func TestRedisValidatorRegistration(t *testing.T) {
 	cache := setupService(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
@@ -43,5 +43,26 @@ func TestRedisService(t *testing.T) {
 		result, err := cache.GetValidatorRegistration(key)
 		require.NoError(t, err)
 		require.Nil(t, result)
+	})
+}
+
+func TestRedisKnownValidators(t *testing.T) {
+	cache := setupService(t)
+
+	t.Run("Can save and get known validators", func(t *testing.T) {
+		key1 := common.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		key2 := common.NewPubkeyHex("0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		require.NoError(t, cache.SetKnownValidator(key1))
+		require.NoError(t, cache.SetKnownValidator(key2))
+
+		result, err := cache.IsKnownValidator(key1)
+		require.NoError(t, err)
+		require.True(t, result)
+
+		knownVals, err := cache.GetKnownValidators()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(knownVals))
+		require.Contains(t, knownVals, key1)
+		require.Contains(t, knownVals, key2)
 	})
 }

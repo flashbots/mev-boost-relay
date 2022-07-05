@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/flashbots/boost-relay/apis/proposer"
@@ -24,6 +25,7 @@ var (
 
 // RelayServiceOpts contains the options for a relay
 type RelayServiceOpts struct {
+	Ctx context.Context
 	Log *logrus.Entry
 
 	ListenAddr   string
@@ -60,7 +62,7 @@ func NewRelayService(opts RelayServiceOpts) (*RelayService, error) {
 	rs.Log = opts.Log.WithField("module", "relay")
 
 	if opts.ProposerAPI {
-		api, err := proposer.NewProposerAPI(opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
+		api, err := proposer.NewProposerAPI(opts.Ctx, opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
 		if err != nil {
 			return nil, err
 		}
