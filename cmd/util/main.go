@@ -28,6 +28,9 @@ var (
 func main() {
 	flag.Parse()
 
+	// signingDomain, _ := common.ComputeDomain(types.DomainTypeAppBuilder, "0x00000000", types.Root{}.String())
+	// fmt.Println("xxx", signingDomain)
+
 	common.LogSetup(*logJSON, *logLevel)
 	logrus.Infof("boost-relay util %s", version)
 

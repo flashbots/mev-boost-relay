@@ -1,4 +1,4 @@
-// package proposer contains APIs for the proposer as per builder-specs
+// Package proposer contains APIs for the proposer as per builder-specs
 package proposer
 
 import (
@@ -26,7 +26,11 @@ type ProposerAPI struct {
 	builderSigningDomain types.Domain
 }
 
-func NewProposerAPI(log *logrus.Entry, datastore common.Datastore, genesisForkVersionHex string) (ret common.APIComponent, err error) {
+func NewProposerAPI(
+	log *logrus.Entry,
+	datastore common.Datastore,
+	genesisForkVersionHex string,
+) (ret common.APIComponent, err error) {
 	if log == nil {
 		return nil, errors.New("log parameter is nil")
 	}
@@ -36,7 +40,7 @@ func NewProposerAPI(log *logrus.Entry, datastore common.Datastore, genesisForkVe
 	api.datastore = datastore
 
 	// Setup the signing domain
-	api.builderSigningDomain, err = common.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
+	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(genesisForkVersionHex)
 	if err != nil {
 		return nil, err
 	}

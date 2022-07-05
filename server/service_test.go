@@ -34,9 +34,8 @@ func newTestBackend(t require.TestingT, numRelays int, relayTimeout time.Duratio
 		BeaconURI:             "",
 		Datastore:             ds,
 		GenesisForkVersionHex: genesisForkVersionHex,
-		ApiProposer:           true,
-		ApiGetHeaderPayload:   true,
-		SrvValidatorHub:       true,
+		ProposerAPI:           true,
+		BuilderAPI:            true,
 	}
 
 	service, err := NewRelayService(opts)
@@ -66,14 +65,21 @@ func (be *testBackend) request(t require.TestingT, method string, path string, p
 	return rr
 }
 
-func generateSignedRegistration(feeRecipient types.Address, timestamp uint64, domain types.Domain) (*types.SignedValidatorRegistration, error) {
-	sk, pk, err := bls.GenerateNewKeypair()
-	if err != nil {
-		return nil, err
-	}
+// func createKey() {
+// 	sk, pk, err := bls.GenerateNewKeypair()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	var pubKey types.PublicKey
+// 	pubKey.FromSlice(pk.Compress())
+// }
+
+func generateSignedValidatorRegistration(sk *bls.SecretKey, domain types.Domain, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+	blsPubKey := bls.PublicKeyFromSecretKey(sk)
 
 	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
+	pubKey.FromSlice(blsPubKey.Compress())
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: feeRecipient,
 		Timestamp:    timestamp,
@@ -104,19 +110,22 @@ func BenchmarkHandleRegistration(b *testing.B) {
 		{"payload of size 1000", 1000},
 	}
 
+	builderSigningDomain, err := common.ComputerBuilderSigningDomain(genesisForkVersionHex)
+	require.NoError(b, err)
+
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
 			validators := make(map[common.PubkeyHex]common.ValidatorResponseEntry)
 			for i := 0; i < bm.payloadSize; i++ {
 				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
-				reg, err := generateSignedRegistration(feeRecipient, uint64(i), backend.relay.builderSigningDomain)
-				if err != nil {
-					b.Fatal(err)
-				}
+				sk, _, err := bls.GenerateNewKeypair()
+				require.NoError(b, err)
+				reg, err := generateSignedValidatorRegistration(sk, builderSigningDomain, feeRecipient, uint64(i))
+				require.NoError(b, err)
 				payload = append(payload, *reg)
-				validators[PubkeyHex(reg.Message.Pubkey.String())] = validatorResponseEntry{
-					Validator: validatorPubKeyEntry{reg.Message.Pubkey.String()},
+				validators[common.PubkeyHex(reg.Message.Pubkey.String())] = common.ValidatorResponseEntry{
+					Validator: common.ValidatorResponseValidatorData{reg.Message.Pubkey.String()},
 				}
 			}
 			backend.validatorService.validatorSet = validators

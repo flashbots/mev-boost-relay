@@ -65,6 +65,10 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
+func ComputerBuilderSigningDomain(genesisForkVersionHex string) (types.Domain, error) {
+	return ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
+}
+
 func GetEnv(key string, defaultValue string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value

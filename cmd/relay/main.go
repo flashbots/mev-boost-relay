@@ -42,8 +42,8 @@ var (
 	useCustomGenesisForkVersion  = flag.String("genesis-fork-version", defaultGenesisForkVersion, "use a custom genesis fork version (for signature validation)")
 
 	// apis and services to start
-	apiProposer     = flag.Bool("api-proposer", false, "start proposer API")
-	srvValidatorHub = flag.Bool("srv-validator-hub", false, "start validator-hub service")
+	apiProposer = flag.Bool("api-proposer", false, "start proposer API")
+	apiBuilder  = flag.Bool("api-builder", false, "start builder API")
 )
 
 func main() {
@@ -79,9 +79,9 @@ func main() {
 
 	datastore, err := common.NewRedisService(*redisURI)
 	if err == nil {
-		log.Fatalf("failed to connect to Redis at %s", redisURI)
+		log.Fatalf("failed to connect to Redis at %s", *redisURI)
 	}
-	log.Infof("Connected to Redis at %s", redisURI)
+	log.Infof("Connected to Redis at %s", *redisURI)
 
 	opts := server.RelayServiceOpts{
 		Log:                   log,
@@ -89,8 +89,8 @@ func main() {
 		BeaconURI:             *beaconNodeURI,
 		Datastore:             datastore,
 		GenesisForkVersionHex: genesisForkVersionHex,
-		ApiProposer:           *apiProposer,
-		SrvValidatorHub:       *srvValidatorHub,
+		ProposerAPI:           *apiProposer,
+		BuilderAPI:            *apiBuilder,
 	}
 
 	// Create the relay service

@@ -35,36 +35,34 @@ type RelayServiceOpts struct {
 	GenesisForkVersionHex string
 
 	// Which APIs and services to spin up
-	ApiProposer         bool
-	ApiGetHeaderPayload bool
-	SrvValidatorHub     bool
+	ProposerAPI bool
+	BuilderAPI  bool
 }
 
 // RelayService represents a single Relay instance
 type RelayService struct {
 	common.BaseAPI
 
-	opts          RelayServiceOpts
-	apiComponents []common.APIComponent
-
-	srv *http.Server
+	opts RelayServiceOpts
+	srv  *http.Server
+	apis []common.APIComponent
 }
 
 // NewRelayService creates a new service. if builders is nil, allow any builder
 func NewRelayService(opts RelayServiceOpts) (*RelayService, error) {
 	rs := RelayService{
-		opts:          opts,
-		apiComponents: make([]common.APIComponent, 0),
+		opts: opts,
+		apis: make([]common.APIComponent, 0),
 	}
 
 	rs.Log = opts.Log.WithField("module", "relay")
 
-	if opts.ApiProposer {
+	if opts.ProposerAPI {
 		api, err := proposer.NewProposerAPI(opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
 		if err != nil {
 			return nil, err
 		}
-		rs.apiComponents = append(rs.apiComponents, api)
+		rs.apis = append(rs.apis, api)
 	}
 	return &rs, nil
 }
@@ -74,7 +72,7 @@ func (m *RelayService) getRouter() http.Handler {
 	r.HandleFunc("/", m.handleRoot).Methods(http.MethodGet)
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 
-	for _, api := range m.apiComponents {
+	for _, api := range m.apis {
 		api.RegisterHandlers(r)
 	}
 
@@ -92,7 +90,7 @@ func (m *RelayService) StartServer() (err error) {
 		return common.ErrServerAlreadyRunning
 	}
 
-	for _, api := range m.apiComponents {
+	for _, api := range m.apis {
 		api.Start()
 	}
 
