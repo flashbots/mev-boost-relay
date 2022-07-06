@@ -3,10 +3,10 @@ package cmd
 import (
 	"os"
 
+	"github.com/flashbots/boost-relay/api"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
-	"github.com/flashbots/boost-relay/server"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -111,7 +111,7 @@ var apiCmd = &cobra.Command{
 			log.Infof("Connected to Redis at %s", redisURI)
 		}
 
-		opts := server.RelayAPIOpts{
+		opts := api.RelayAPIOpts{
 			Log:                   log,
 			ListenAddr:            listenAddr,
 			BeaconClient:          beaconClient,
@@ -122,7 +122,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		// Create the relay service
-		srv, err := server.NewRelayAPI(opts)
+		srv, err := api.NewRelayAPI(opts)
 		if err != nil {
 			log.WithError(err).Fatal("failed to create service")
 		}

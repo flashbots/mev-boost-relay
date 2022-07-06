@@ -1,5 +1,5 @@
-// Package server contains the webserver serving the proposer and block-builder APIs
-package server
+// Package api contains the API webserver for the proposer and block-builder APIs
+package api
 
 import (
 	"encoding/json"
