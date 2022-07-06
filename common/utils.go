@@ -15,8 +15,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-var NilResponse = struct{}{}
-
 func makeRequest(ctx context.Context, client http.Client, method, url string, payload any) (*http.Response, error) {
 	var req *http.Request
 	var err error

@@ -24,7 +24,7 @@ var (
 
 type testBackend struct {
 	t            require.TestingT
-	relay        *RelayService
+	relay        *RelayAPI
 	beaconClient *beaconclient.MockBeaconClient
 	datastore    *datastore.ProposerMemoryDatastore
 }
@@ -33,7 +33,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 	bc := beaconclient.NewMockBeaconClient()
 	ds := datastore.NewProposerMemoryDatastore()
 
-	opts := RelayServiceOpts{
+	opts := RelayAPIOpts{
 		Log:                   common.TestLog,
 		ListenAddr:            "localhost:12345",
 		BeaconClient:          bc,
@@ -43,7 +43,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 		BuilderAPI:            true,
 	}
 
-	relay, err := NewRelayService(opts)
+	relay, err := NewRelayAPI(opts)
 	require.NoError(t, err)
 
 	backend := testBackend{
