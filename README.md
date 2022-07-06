@@ -24,7 +24,7 @@ Contains three services:
 This uses redis to store validator registrations. First run redis with docker:
 
 ```bash
-docker run -d -p 6379:6379 redis:7
+docker run --name redis -d -p 6379:6379 redis:7
 ```
 
 
@@ -37,7 +37,11 @@ ssh -L 3500:localhost:3500 fb-builder-kilndev
 To run on kiln testnet:
 
 ```bash
-go run cmd/relay/main.go -kiln -api-proposer
+# Sync known validators from BN to Redis
+go run . known-validator-update
+
+# Run Proposer API for Kiln
+go run . api --kiln --api-proposer
 curl localhost:9062/eth/v1/builder/status
 ```
 

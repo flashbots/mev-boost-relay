@@ -5,7 +5,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/flashbots/boost-relay/apis/proposer"
+	"github.com/flashbots/boost-relay/api/builderapi"
+	"github.com/flashbots/boost-relay/api/proposerapi"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
@@ -17,10 +18,6 @@ import (
 var (
 	// Status API
 	pathStatus = "/eth/v1/builder/status"
-
-	// Block builder APIs
-	// pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
-	// pathSubmitNewBlock        = "/relay/v1/builder/blocks"
 )
 
 // RelayServiceOpts contains the options for a relay
@@ -62,7 +59,15 @@ func NewRelayService(opts RelayServiceOpts) (*RelayService, error) {
 	rs.Log = opts.Log.WithField("module", "relay")
 
 	if opts.ProposerAPI {
-		api, err := proposer.NewProposerAPI(opts.Ctx, opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
+		api, err := proposerapi.NewProposerAPI(opts.Ctx, opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
+		if err != nil {
+			return nil, err
+		}
+		rs.apis = append(rs.apis, api)
+	}
+
+	if opts.BuilderAPI {
+		api, err := builderapi.NewBuilderAPI(opts.Ctx, opts.Log, opts.Datastore, opts.GenesisForkVersionHex)
 		if err != nil {
 			return nil, err
 		}
@@ -79,9 +84,6 @@ func (m *RelayService) getRouter() http.Handler {
 	for _, api := range m.apis {
 		api.RegisterHandlers(r)
 	}
-
-	// r.HandleFunc(pathGetValidatorsForEpoch, m.handleGetValidatorsForEpoch).Methods(http.MethodGet)
-	// r.HandleFunc(pathSubmitNewBlock, m.handleSubmitNewBlock).Methods(http.MethodPost)
 
 	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.Log, r)
@@ -109,12 +111,6 @@ func (m *RelayService) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
-
-	// if m.validatorService == nil {
-	// 	err := errors.New("no validator service")
-	// 	m.log.WithError(err).Error("cannot run without validator service")
-	// 	return err
-	// }
 
 	// // start everyting up
 	// syncStatus, err := m.validatorService.SyncStatus()
@@ -171,24 +167,6 @@ func (m *RelayService) handleRoot(w http.ResponseWriter, req *http.Request) {
 	m.RespondOKEmpty(w)
 }
 
-// ---------------
-//  Proposer APIs
-// ---------------
 func (m *RelayService) handleStatus(w http.ResponseWriter, req *http.Request) {
 	m.RespondOKEmpty(w)
 }
-
-// // --------------------
-// //  Block Builder APIs
-// // --------------------
-// func (m *RelayService) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
-// 	log := m.log.WithField("method", "getValidatorsForEpoch")
-// 	log.Info("request")
-// 	m.respondOK(w, nilResponse)
-// }
-
-// func (m *RelayService) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-// 	log := m.log.WithField("method", "submitNewBlock")
-// 	log.Info("request")
-// 	m.respondOK(w, nilResponse)
-// }

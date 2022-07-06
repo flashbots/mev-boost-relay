@@ -96,15 +96,25 @@ func (r *RedisDatastore) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
 	return r.client.Set(context.Background(), RedisKeyKnownValidator(pubkeyHex), true, expirationTimeKnownValidators).Err()
 }
 
-func (r *RedisDatastore) SetKnownValidators(knownValidators map[types.PubkeyHex]bool) (err error) {
-	for pubkeyHex := range knownValidators {
-		err = r.client.Set(context.Background(), RedisKeyKnownValidator(pubkeyHex), true, expirationTimeKnownValidators).Err()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// // SetKnownValidators is a batch version of SetKnownValidator (much faster)
+// func (r *RedisDatastore) SetKnownValidators(knownValidators map[types.PubkeyHex]beaconclient.ValidatorResponseEntry) (err error) {
+// 	m := make(map[string]int)
+// 	for pubkeyHex := range knownValidators {
+// 		m[RedisKeyKnownValidator(pubkeyHex)] = 1
+// 	}
+// 	fmt.Println("xxx", len(m))
+// 	err = r.client.MSet(context.Background(), m).Err()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	for pubkeyHex := range knownValidators {
+// 		err = r.client.Expire(context.Background(), RedisKeyKnownValidator(pubkeyHex), expirationTimeKnownValidators).Err()
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (r *RedisDatastore) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)

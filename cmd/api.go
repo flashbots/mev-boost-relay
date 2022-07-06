@@ -69,7 +69,7 @@ var apiCmd = &cobra.Command{
 		var err error
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "cmd/relay")
+		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", version)
 
 		// Set genesis fork version

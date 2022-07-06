@@ -1,5 +1,5 @@
-// Package proposer contains APIs for the proposer as per builder-specs
-package proposer
+// Package proposerapi contains APIs for the proposer as per builder-specs
+package proposerapi
 
 import (
 	"context"
