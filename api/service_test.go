@@ -199,23 +199,27 @@ func TestRegisterValidator(t *testing.T) {
 
 	t.Run("Normal function", func(t *testing.T) {
 		backend := newTestBackend(t)
-		backend.datastore.SetKnownValidator(types.PubkeyHex(common.ValidPayloadRegisterValidator.Message.Pubkey.String()))
+		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
+		backend.datastore.SetKnownValidator(pubkeyHex)
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
-		// require.Equal(t, 1, backend.datastore.GetRequestCount("GetValidatorRegistration"))
-		// require.Equal(t, 1, backend.datastore.GetRequestCount("SaveValidatorRegistration"))
+
+		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
+		require.NoError(t, err)
+		require.NotNil(t, req)
+		require.Equal(t, pubkeyHex, req.Message.Pubkey.PubkeyHex())
 	})
 
 	t.Run("Validator not in validator set", func(t *testing.T) {
 		backend := newTestBackend(t)
-		reg, err := generateSignedValidatorRegistration(nil, types.Address{}, 0)
-		require.NoError(t, err)
-		payload := []types.SignedValidatorRegistration{*reg}
 
-		rr := backend.request(http.MethodPost, path, payload)
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
-		// require.Equal(t, 0, backend.datastore.GetRequestCount("GetValidatorRegistration"))
-		// require.Equal(t, 0, backend.datastore.GetRequestCount("SaveValidatorRegistration"))
+
+		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
+		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
+		require.NoError(t, err)
+		require.Nil(t, req)
 	})
 }
 

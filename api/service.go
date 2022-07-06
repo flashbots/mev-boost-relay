@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -22,8 +21,8 @@ var (
 	// Proposer API (builder-specs)
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
-	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+	// pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
+	// pathGetPayload        = "/eth/v1/builder/blinded_blocks"
 
 	// Block builder API
 	pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
@@ -107,8 +106,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.ProposerAPI {
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
-		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
-		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+		// r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
+		// r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 	}
 
 	if api.opts.BuilderAPI {
@@ -267,59 +266,59 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	api.RespondOK(w, NilResponse)
 }
 
-func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	slot := vars["slot"]
-	parentHashHex := vars["parent_hash"]
-	pubkey := vars["pubkey"]
-	log := api.log.WithFields(logrus.Fields{
-		"method":     "getHeader",
-		"slot":       slot,
-		"parentHash": parentHashHex,
-		"pubkey":     pubkey,
-	})
-	log.Info("getHeader")
+// func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
+// 	vars := mux.Vars(req)
+// 	slot := vars["slot"]
+// 	parentHashHex := vars["parent_hash"]
+// 	pubkey := vars["pubkey"]
+// 	log := api.log.WithFields(logrus.Fields{
+// 		"method":     "getHeader",
+// 		"slot":       slot,
+// 		"parentHash": parentHashHex,
+// 		"pubkey":     pubkey,
+// 	})
+// 	log.Info("getHeader")
 
-	if _, err := strconv.ParseUint(slot, 10, 64); err != nil {
-		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
-		return
-	}
+// 	if _, err := strconv.ParseUint(slot, 10, 64); err != nil {
+// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
+// 		return
+// 	}
 
-	if len(pubkey) != 98 {
-		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
-		return
-	}
+// 	if len(pubkey) != 98 {
+// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
+// 		return
+// 	}
 
-	if len(parentHashHex) != 66 {
-		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidHash.Error())
-		return
-	}
+// 	if len(parentHashHex) != 66 {
+// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidHash.Error())
+// 		return
+// 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
-	if err := json.NewEncoder(w).Encode(NilResponse); err != nil {
-		api.log.WithError(err).Error("Couldn't write getHeader response")
-		http.Error(w, "", http.StatusInternalServerError)
-	}
-}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	w.WriteHeader(http.StatusNoContent)
+// 	if err := json.NewEncoder(w).Encode(NilResponse); err != nil {
+// 		api.log.WithError(err).Error("Couldn't write getHeader response")
+// 		http.Error(w, "", http.StatusInternalServerError)
+// 	}
+// }
 
-func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	log := api.log.WithField("method", "getPayload")
-	log.Info("getPayload")
+// func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+// 	log := api.log.WithField("method", "getPayload")
+// 	log.Info("getPayload")
 
-	payload := new(types.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
+// 	payload := new(types.SignedBlindedBeaconBlock)
+// 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
+// 		api.RespondError(w, http.StatusBadRequest, err.Error())
+// 		return
+// 	}
 
-	if len(payload.Signature) != 96 {
-		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSignature.Error())
-		return
-	}
+// 	if len(payload.Signature) != 96 {
+// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSignature.Error())
+// 		return
+// 	}
 
-	api.RespondOKEmpty(w)
-}
+// 	api.RespondOKEmpty(w)
+// }
 
 func (api *RelayAPI) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "getValidatorsForEpoch")
