@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 )
@@ -42,5 +43,5 @@ func TestBeaconValidators(t *testing.T) {
 	vals, err := bc.FetchValidators()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(vals))
-	require.Contains(t, vals, common.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
+	require.Contains(t, vals, types.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
 }

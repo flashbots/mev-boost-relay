@@ -7,6 +7,7 @@ import (
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,7 +48,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 	log := logrus.WithField("task", "redisUpdateValidators")
 	log.Info("updating redis with validators...")
 
-	redis, err := datastore.NewProposerRedisDatastore(redisURI)
+	redis, err := datastore.NewRedisDatastore(redisURI)
 	if err == nil {
 		log.Infof("Connected to redis at %s", redisURI)
 	} else {
@@ -71,7 +72,7 @@ func taskRedisUpdateValidators(redisURI, beaconURI string) {
 	// Update redis with validators
 	log.Info("Writing to Redis...")
 	for _, v := range validators {
-		redis.SetKnownValidator(common.PubkeyHex(v.Validator.Pubkey))
+		redis.SetKnownValidator(types.PubkeyHex(v.Validator.Pubkey))
 	}
 	log.Info("Updated Redis")
 }

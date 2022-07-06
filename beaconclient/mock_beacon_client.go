@@ -3,33 +3,33 @@ package beaconclient
 import (
 	"sync"
 
-	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/go-boost-utils/types"
 )
 
 type MockBeaconClient struct {
 	mu           sync.RWMutex
-	validatorSet map[common.PubkeyHex]ValidatorResponseEntry
+	validatorSet map[types.PubkeyHex]ValidatorResponseEntry
 }
 
 func NewMockBeaconClient() *MockBeaconClient {
 	return &MockBeaconClient{
-		validatorSet: make(map[common.PubkeyHex]ValidatorResponseEntry),
+		validatorSet: make(map[types.PubkeyHex]ValidatorResponseEntry),
 	}
 }
 
 func (c *MockBeaconClient) AddValidator(entry ValidatorResponseEntry) {
 	c.mu.Lock()
-	c.validatorSet[common.NewPubkeyHex(entry.Validator.Pubkey)] = entry
+	c.validatorSet[types.NewPubkeyHex(entry.Validator.Pubkey)] = entry
 	c.mu.Unlock()
 }
 
-func (c *MockBeaconClient) SetValidators(validatorSet map[common.PubkeyHex]ValidatorResponseEntry) {
+func (c *MockBeaconClient) SetValidators(validatorSet map[types.PubkeyHex]ValidatorResponseEntry) {
 	c.mu.Lock()
 	c.validatorSet = validatorSet
 	c.mu.Unlock()
 }
 
-func (c *MockBeaconClient) IsValidator(pubkey common.PubkeyHex) bool {
+func (c *MockBeaconClient) IsValidator(pubkey types.PubkeyHex) bool {
 	c.mu.RLock()
 	_, found := c.validatorSet[pubkey]
 	c.mu.RUnlock()
@@ -42,7 +42,7 @@ func (c *MockBeaconClient) NumValidators() uint64 {
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconClient) FetchValidators() (map[common.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	return c.validatorSet, nil
 }
 

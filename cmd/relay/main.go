@@ -90,7 +90,7 @@ func main() {
 	// Connect to Redis
 	var ds datastore.ProposerDatastore
 	if *redisURI != "" {
-		ds, err = datastore.NewProposerRedisDatastore(*redisURI)
+		ds, err = datastore.NewProdProposerDatastore(*redisURI)
 		if err != nil {
 			log.Fatalf("Failed to connect to Redis at %s", *redisURI)
 		}

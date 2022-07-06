@@ -88,14 +88,26 @@ func (m *RelayService) getRouter() http.Handler {
 	return loggedRouter
 }
 
+// StartComponents starts all the components
+func (m *RelayService) StartComponents() (err error) {
+	for _, api := range m.apis {
+		err := api.Start()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // StartServer starts the HTTP server for this instance
 func (m *RelayService) StartServer() (err error) {
 	if m.srv != nil {
 		return common.ErrServerAlreadyRunning
 	}
 
-	for _, api := range m.apis {
-		api.Start()
+	err = m.StartComponents()
+	if err != nil {
+		return err
 	}
 
 	// if m.validatorService == nil {

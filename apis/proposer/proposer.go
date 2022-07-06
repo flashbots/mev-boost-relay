@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -28,7 +29,6 @@ type ProposerAPI struct {
 	ctx                  context.Context
 	datastore            datastore.ProposerDatastore
 	builderSigningDomain types.Domain
-	knownValidators      map[common.PubkeyHex]bool
 }
 
 func NewProposerAPI(
@@ -37,6 +37,10 @@ func NewProposerAPI(
 	ds datastore.ProposerDatastore,
 	genesisForkVersionHex string,
 ) (ret common.APIComponent, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	if log == nil {
 		return nil, errors.New("log parameter is nil")
 	}
@@ -44,14 +48,14 @@ func NewProposerAPI(
 	if ds == nil {
 		return nil, errors.New("proposer API datastore parameter is nil")
 	}
-	api := &ProposerAPI{
-		ctx:             ctx,
-		datastore:       ds,
-		knownValidators: make(map[common.PubkeyHex]bool),
-	}
-	api.Log = log.WithField("module", "api/proposer")
 
-	// Setup the signing domain
+	api := &ProposerAPI{
+		ctx:       ctx,
+		datastore: ds,
+	}
+
+	// Setup the remaining fields
+	api.Log = log.WithField("module", "api/proposer")
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(genesisForkVersionHex)
 	return api, err
 }
@@ -63,14 +67,15 @@ func (api *ProposerAPI) RegisterHandlers(r *mux.Router) {
 }
 
 func (api *ProposerAPI) Start() (err error) {
-	api.knownValidators, err = api.datastore.GetKnownValidators()
+	cnt, err := api.datastore.RefreshKnownValidators()
 	if err != nil {
 		return err
 	}
-	if len(api.knownValidators) == 0 {
-		api.Log.WithField("n", len(api.knownValidators)).Warn("updated known validators, but have not received any")
+
+	if cnt == 0 {
+		api.Log.WithField("cnt", cnt).Warn("updated known validators, but have not received any")
 	} else {
-		api.Log.WithField("n", len(api.knownValidators)).Info("updated known validators")
+		api.Log.WithField("cnt", cnt).Info("updated known validators")
 	}
 
 	// Start periodic updates of known validators
@@ -79,14 +84,14 @@ func (api *ProposerAPI) Start() (err error) {
 		case <-api.ctx.Done():
 			return
 		case <-time.NewTicker(common.DurationPerEpoch).C:
-			api.knownValidators, err = api.datastore.GetKnownValidators()
+			cnt, err = api.datastore.RefreshKnownValidators()
 			if err != nil {
 				api.Log.WithError(err).Error("error getting known validators")
 			} else {
-				if len(api.knownValidators) == 0 {
-					api.Log.WithField("n", len(api.knownValidators)).Warn("updated known validators, but have not received any")
+				if cnt == 0 {
+					api.Log.WithField("cnt", cnt).Warn("updated known validators, but have not received any")
 				} else {
-					api.Log.WithField("n", len(api.knownValidators)).Info("updated known validators")
+					api.Log.WithField("cnt", cnt).Info("updated known validators")
 				}
 			}
 		}
@@ -119,31 +124,24 @@ func (api *ProposerAPI) handleRegisterValidator(w http.ResponseWriter, req *http
 		}
 
 		// Check if actually a real validator
-		// if !api.validatorService.IsValidator(common.NewPubkeyHex(registration.Message.Pubkey.String())) {
-		// 	log.WithField("registration", registration).Warn("not a known validator")
-		// 	continue
-		// }
+		isKnownValidator := api.datastore.IsKnownValidator(types.NewPubkeyHex(registration.Message.Pubkey.String()))
+		if !isKnownValidator {
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("not a known validator")
+			continue
+		}
 
 		// Verify the signature
 		ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
-		if err != nil {
-			log.WithError(err).WithField("registration", registration).Warn("error verifying registerValidator signature")
-			continue
-		}
-		if !ok {
-			log.WithError(err).WithField("registration", registration).Warn("failed to verify registerValidator signature")
+		if err != nil || !ok {
+			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
 			continue
 		}
 
-		// Save if first time or if newer timestamp than last registration
-		lastEntry, err := api.datastore.GetValidatorRegistration(registration.Message.Pubkey)
+		// Save or update (if newer timestamp than previous registration)
+		err = api.datastore.UpdateValidatorRegistration(registration)
 		if err != nil {
-			log.WithError(err).WithField("registration", registration).Error("error getting validator registration")
+			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 			continue
-		}
-
-		if lastEntry == nil || lastEntry.Message.Timestamp > registration.Message.Timestamp {
-			api.datastore.SaveValidatorRegistration(registration)
 		}
 	}
 

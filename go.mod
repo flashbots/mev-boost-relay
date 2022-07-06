@@ -5,10 +5,12 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.21.0
 	github.com/ethereum/go-ethereum v1.10.17
-	github.com/flashbots/go-boost-utils v0.1.2
+	github.com/flashbots/go-boost-utils v0.2.1-0.20220706101617-c610db350fe5
 	github.com/flashbots/go-utils v0.4.5-0.20220521110404-6c14563e9f30
 	github.com/go-redis/redis/v9 v9.0.0-beta.1
 	github.com/gorilla/mux v1.8.0
+	github.com/jinzhu/copier v0.3.5
+	github.com/pkg/errors v0.9.1
 	github.com/r3labs/sse v0.0.0-20210224172625-26fe804710bc
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1

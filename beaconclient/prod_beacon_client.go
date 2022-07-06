@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/r3labs/sse"
 	"github.com/sirupsen/logrus"
 )
@@ -45,15 +45,15 @@ func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
 	})
 }
 
-func (c *ProdBeaconClient) FetchValidators() (map[common.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *ProdBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	vd, err := fetchAllValidators(c.beaconURI)
 	if err != nil {
 		return nil, err
 	}
 
-	newValidatorSet := make(map[common.PubkeyHex]ValidatorResponseEntry)
+	newValidatorSet := make(map[types.PubkeyHex]ValidatorResponseEntry)
 	for _, vs := range vd.Data {
-		newValidatorSet[common.NewPubkeyHex(vs.Validator.Pubkey)] = vs
+		newValidatorSet[types.NewPubkeyHex(vs.Validator.Pubkey)] = vs
 	}
 
 	return newValidatorSet, nil
