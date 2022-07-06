@@ -54,7 +54,7 @@ func NewProposerAPI(
 		datastore: ds,
 	}
 
-	// Setup the remaining fields
+	// Setup the remaining properties
 	api.Log = log.WithField("module", "api/proposer")
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(genesisForkVersionHex)
 	return api, err
@@ -116,10 +116,12 @@ func (api *ProposerAPI) handleRegisterValidator(w http.ResponseWriter, req *http
 
 	for _, registration := range payload {
 		if len(registration.Message.Pubkey) != 48 {
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("invalid pubkey length")
 			continue
 		}
 
 		if len(registration.Signature) != 96 {
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("invalid signature length")
 			continue
 		}
 

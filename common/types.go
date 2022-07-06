@@ -7,6 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+const (
+	GenesisForkVersionMainnet = "0x00000000"
+	GenesisForkVersionKiln    = "0x70000069"
+	GenesisForkVersionRopsten = "0x80000069"
+	GenesisForkVersionSepolia = "0x90000069"
+)
+
 // BuilderEntry represents a builder that is allowed to send blocks
 // Address will be schema://hostname:port
 type BuilderEntry struct {
