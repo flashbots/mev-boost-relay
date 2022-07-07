@@ -28,6 +28,13 @@ func (ds *ProposerMemoryDatastore) GetValidatorRegistration(pubkeyHex types.Pubk
 	return ds.registrations[pubkeyHex], nil
 }
 
+func (ds *ProposerMemoryDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.registrations[entry.Message.Pubkey.PubkeyHex()] = &entry
+	return nil
+}
+
 func (ds *ProposerMemoryDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (bool, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()

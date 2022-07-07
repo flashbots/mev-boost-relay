@@ -34,6 +34,7 @@ var (
 
 	apiProposer bool
 	apiBuilder  bool
+	apiPprof    bool
 
 	// // apis and services to start
 	// apiProposer = flag.Bool("api-proposer", false, "start proposer API")
@@ -47,6 +48,7 @@ func init() {
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
 	apiCmd.Flags().BoolVar(&apiProposer, "api-proposer", false, "start proposer API")
 	apiCmd.Flags().BoolVar(&apiBuilder, "api-builder", false, "start builder API")
+	apiCmd.Flags().BoolVar(&apiPprof, "pprof", false, "enable pprof API")
 
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
@@ -119,6 +121,7 @@ var apiCmd = &cobra.Command{
 			GenesisForkVersionHex: genesisForkVersionHex,
 			ProposerAPI:           apiProposer,
 			BuilderAPI:            apiBuilder,
+			PprofAPI:              apiPprof,
 		}
 
 		// Create the relay service

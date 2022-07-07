@@ -16,6 +16,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/atomic"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -44,6 +46,7 @@ type RelayAPIOpts struct {
 	// Which APIs and services to spin up
 	ProposerAPI bool
 	BuilderAPI  bool
+	PprofAPI    bool
 }
 
 // RelayAPI represents a single Relay instance
@@ -110,6 +113,10 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.BuilderAPI {
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		// r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodGet)
+	}
+
+	if api.opts.PprofAPI {
+		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
 	}
 
 	// r.Use(mux.CORSMethodMiddleware(r))
@@ -304,14 +311,14 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			continue
 		}
 
-		// Get a previous registration
+		// Check for a previous registration
 		lastEntry, err := api.datastore.GetValidatorRegistration(registration.Message.Pubkey.PubkeyHex())
 		if err != nil {
 			log.WithError(err).Infof("error getting last registration for %s", registration.Message.Pubkey.PubkeyHex())
 		}
 
 		// Do nothing if the registration is already the latest
-		if lastEntry != nil && lastEntry.Message != nil && registration.Message.Timestamp <= lastEntry.Message.Timestamp {
+		if lastEntry != nil && lastEntry.Message != nil && lastEntry.Message.Timestamp >= registration.Message.Timestamp {
 			continue
 		}
 
@@ -323,12 +330,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Save or update (if newer timestamp than previous registration)
-		wasUpdated, err := api.datastore.UpdateValidatorRegistration(registration)
+		err = api.datastore.SetValidatorRegistration(registration)
 		if err != nil {
 			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 			continue
-		} else if wasUpdated {
-			// log.WithField("proposerPubkey", registration.Message.Pubkey.String()).Info("updated validator registration")
 		}
 	}
 
