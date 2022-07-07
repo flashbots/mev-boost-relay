@@ -22,20 +22,21 @@ func NewProposerMemoryDatastore() *ProposerMemoryDatastore {
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
 // there's a datastore error, then an error will be returned.
-func (ds *ProposerMemoryDatastore) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+func (ds *ProposerMemoryDatastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	return ds.registrations[proposerPubkey], nil
+	return ds.registrations[pubkeyHex], nil
 }
 
-func (ds *ProposerMemoryDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) error {
+func (ds *ProposerMemoryDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (bool, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	lastEntry, ok := ds.registrations[entry.Message.Pubkey.PubkeyHex()]
 	if !ok || entry.Message.Timestamp > lastEntry.Message.Timestamp {
 		ds.registrations[entry.Message.Pubkey.PubkeyHex()] = &entry
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // func (ds *ProposerMemoryDatastore) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error {

@@ -2,10 +2,7 @@ package beaconclient
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/r3labs/sse"
@@ -111,41 +108,20 @@ func (c *ProdBeaconClient) CurrentSlot() (uint64, error) {
 	return syncStatus.HeadSlot, nil
 }
 
-// CurrentSlot() uint64
+type ProposerDutiesResponse struct {
+	Data []ProposerDutiesResponseData
+}
 
-func fetchBeacon(url string, method string, dst any) error {
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return fmt.Errorf("invalid reqest for %s: %w", url, err)
-	}
-	req.Header.Set("accept", "application/json")
+type ProposerDutiesResponseData struct {
+	Pubkey string `json:"pubkey"`
+	Slot   uint64 `json:"slot,string"`
+}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("client refused for %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("could not read response body for %s: %w", url, err)
-	}
-
-	if resp.StatusCode >= 300 {
-		ec := &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{}
-		if err = json.Unmarshal(bodyBytes, ec); err != nil {
-			return fmt.Errorf("could not unmarshal error response from beacon node for %s from %s: %w", url, string(bodyBytes), err)
-		}
-		return errors.New(ec.Message)
-	}
-
-	err = json.Unmarshal(bodyBytes, dst)
-	if err != nil {
-		return fmt.Errorf("could not unmarshal response for %s from %s: %w", url, string(bodyBytes), err)
-	}
-
-	return nil
+// GetProposerDuties returns proposer duties for every slot in this epoch
+// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
+func (c *ProdBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", c.beaconURI, epoch)
+	resp := new(ProposerDutiesResponse)
+	err := fetchBeacon(uri, "GET", resp)
+	return resp, err
 }

@@ -50,21 +50,25 @@ func (ds *ProdProposerDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) boo
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
 // there's a datastore error, then an error will be returned.
-// func (ds *ProdProposerDatastore) GetValidatorRegistration(proposerPubkey types.PublicKey) (*types.SignedValidatorRegistration, error) {
-// 	return ds.mem.GetValidatorRegistration(proposerPubkey)
-// }
+func (ds *ProdProposerDatastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+	return ds.redis.GetValidatorRegistration(pubkeyHex)
+}
 
-func (ds *ProdProposerDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) error {
+func (ds *ProdProposerDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (bool, error) {
+	if entry.Message == nil {
+		return false, errors.New("message is nil")
+	}
+
 	lastEntry, err := ds.redis.GetValidatorRegistration(entry.Message.Pubkey.PubkeyHex())
 	if err != nil {
-		return errors.Wrap(err, "failed to get validator registration")
+		return false, errors.Wrap(err, "failed to get validator registration")
 	}
 
-	if lastEntry == nil || entry.Message.Timestamp > lastEntry.Message.Timestamp {
-		return ds.redis.SetValidatorRegistration(entry)
+	if lastEntry == nil || lastEntry.Message == nil || entry.Message.Timestamp > lastEntry.Message.Timestamp {
+		return true, ds.redis.SetValidatorRegistration(entry)
 	}
 
-	return nil
+	return false, nil
 }
 
 // func (ds *ProdProposerDatastore) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error {

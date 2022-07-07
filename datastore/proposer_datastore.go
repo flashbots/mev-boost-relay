@@ -9,5 +9,6 @@ type ProposerDatastore interface {
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
 	RefreshKnownValidators() (cnt int, err error)
 
-	UpdateValidatorRegistration(entry types.SignedValidatorRegistration) error
+	GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error)
+	UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (wasUpdated bool, err error)
 }

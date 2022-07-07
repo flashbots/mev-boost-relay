@@ -15,6 +15,7 @@ import (
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/atomic"
 )
 
 var (
@@ -25,16 +26,9 @@ var (
 	// pathGetPayload        = "/eth/v1/builder/blinded_blocks"
 
 	// Block builder API
-	pathGetValidatorsForEpoch = "/relay/v1/builder/validators"
+	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	// pathSubmitNewBlock        = "/relay/v1/builder/blocks"
 )
-
-type HTTPErrorResp struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-var NilResponse = struct{}{}
 
 // RelayAPIOpts contains the options for a relay
 type RelayAPIOpts struct {
@@ -43,9 +37,6 @@ type RelayAPIOpts struct {
 	ListenAddr   string
 	BeaconClient beaconclient.BeaconNodeClient
 	Datastore    datastore.ProposerDatastore
-
-	// // Whitelisted Builders
-	// builders []*common.BuilderEntry
 
 	// GenesisForkVersion for validating signatures
 	GenesisForkVersionHex string
@@ -57,16 +48,21 @@ type RelayAPIOpts struct {
 
 // RelayAPI represents a single Relay instance
 type RelayAPI struct {
-	log *logrus.Entry
-
 	opts RelayAPIOpts
-	srv  *http.Server
+	log  *logrus.Entry
 
-	datastore    datastore.ProposerDatastore
-	beaconClient beaconclient.BeaconNodeClient
+	srv        *http.Server
+	srvStarted atomic.Bool
 
+	datastore            datastore.ProposerDatastore
+	beaconClient         beaconclient.BeaconNodeClient
 	builderSigningDomain types.Domain
-	currentSlot          uint64
+
+	currentSlot  uint64
+	currentEpoch uint64
+
+	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
+	proposerDutiesResponse []BuilderGetValidatorsResponseEntry
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -85,12 +81,13 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	}
 
 	rs := RelayAPI{
-		opts:         opts,
-		datastore:    opts.Datastore,
-		beaconClient: opts.BeaconClient,
+		opts:                   opts,
+		log:                    opts.Log.WithField("module", "api"),
+		datastore:              opts.Datastore,
+		beaconClient:           opts.BeaconClient,
+		proposerDutiesResponse: []BuilderGetValidatorsResponseEntry{},
 	}
 
-	rs.log = opts.Log.WithField("module", "relay")
 	rs.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
 	if err != nil {
 		return nil, err
@@ -111,7 +108,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	}
 
 	if api.opts.BuilderAPI {
-		r.HandleFunc(pathGetValidatorsForEpoch, api.handleGetValidatorsForEpoch).Methods(http.MethodPost)
+		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		// r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodGet)
 	}
 
@@ -122,8 +119,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
-	if api.srv != nil {
-		return common.ErrServerAlreadyRunning
+	if api.srvStarted.Swap(true) {
+		return errors.New("server was already started")
 	}
 
 	// Check beacon-node sync status, set current slot and start update loop
@@ -135,7 +132,16 @@ func (api *RelayAPI) StartServer() (err error) {
 		return errors.New("beacon node is syncing")
 	}
 	api.currentSlot = syncStatus.HeadSlot
-	api.log.WithField("slot", api.currentSlot).Info("updated current slot")
+	api.currentEpoch = api.currentSlot / uint64(common.SlotsPerEpoch)
+	api.log.WithField("slot", api.currentSlot).WithField("epoch", api.currentEpoch).Info("updated current slot")
+
+	// Get proposer duties for current and next epoch
+	err = api.updateProposerDuties()
+	if err != nil {
+		return err
+	}
+
+	// Start regular slot updates
 	go api.startSlotUpdates()
 
 	// Update list of known validators, and start refresh loop
@@ -161,13 +167,58 @@ func (api *RelayAPI) StartServer() (err error) {
 	return err
 }
 
+// Stop: TODO: use context everywhere to quit background tasks as well
+// func (api *RelayAPI) Stop() error {
+// 	if !api.srvStarted.Load() {
+// 		return nil
+// 	}
+// 	defer api.srvStarted.Store(false)
+// 	return api.srv.Close()
+// }
+
 func (api *RelayAPI) startSlotUpdates() {
 	c := make(chan uint64)
 	go api.beaconClient.SubscribeToHeadEvents(c)
 	for {
 		api.currentSlot = <-c
-		api.log.WithField("slot", api.currentSlot).Info("updated current slot")
+		api.currentEpoch = api.currentSlot / uint64(common.SlotsPerEpoch)
+		api.log.WithField("slot", api.currentSlot).WithField("epoch", api.currentEpoch).Info("updated current slot")
+
+		err := api.updateProposerDuties()
+		if err != nil {
+			api.log.WithError(err).WithField("epoch", api.currentEpoch).Error("failed to update proposer duties")
+		}
 	}
+}
+
+func (api *RelayAPI) updateProposerDuties() error {
+	// Do nothing if already checked this epoch
+	if api.currentEpoch == api.proposerDutiesEpoch {
+		return nil
+	}
+
+	api.log.WithField("epoch", api.currentEpoch).Debug("updating proposer duties...")
+	r, err := api.beaconClient.GetProposerDuties(api.currentEpoch)
+	if err != nil {
+		return err
+	}
+
+	proposerDutiesResponse := make([]BuilderGetValidatorsResponseEntry, len(r.Data))
+	for idx, duty := range r.Data {
+		reg, err := api.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
+		if err != nil {
+			return err
+		}
+		proposerDutiesResponse[idx] = BuilderGetValidatorsResponseEntry{
+			Slot:  duty.Slot,
+			Entry: reg,
+		}
+	}
+
+	api.proposerDutiesEpoch = api.currentEpoch
+	api.proposerDutiesResponse = proposerDutiesResponse
+	api.log.WithField("epoch", api.currentEpoch).Infof("proposer duties set for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
+	return nil
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
@@ -231,6 +282,11 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	for _, registration := range payload {
+		if registration.Message == nil {
+			log.Warn("registration without message")
+			continue
+		}
+
 		if len(registration.Message.Pubkey) != 48 {
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("invalid pubkey length")
 			continue
@@ -256,14 +312,16 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Save or update (if newer timestamp than previous registration)
-		err = api.datastore.UpdateValidatorRegistration(registration)
+		wasUpdated, err := api.datastore.UpdateValidatorRegistration(registration)
 		if err != nil {
 			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 			continue
+		} else if wasUpdated {
+			log.WithField("proposerPubkey", registration.Message.Pubkey.String()).Info("updated validator registration")
 		}
 	}
 
-	api.RespondOK(w, NilResponse)
+	api.RespondOKEmpty(w)
 }
 
 // func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -320,10 +378,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 // 	api.RespondOKEmpty(w)
 // }
 
-func (api *RelayAPI) handleGetValidatorsForEpoch(w http.ResponseWriter, req *http.Request) {
+func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "getValidatorsForEpoch")
 	log.Info("request")
-	api.RespondOKEmpty(w)
+	api.RespondOK(w, api.proposerDutiesResponse)
 }
 
 // func (m *ProposerAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {

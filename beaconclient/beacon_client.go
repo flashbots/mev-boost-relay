@@ -8,4 +8,5 @@ type BeaconNodeClient interface {
 	CurrentSlot() (uint64, error)
 	SubscribeToHeadEvents(slotC chan uint64)
 	FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error)
+	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 }

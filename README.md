@@ -5,48 +5,35 @@
 
 Flashbots internal PBS/[mev-boost](https://github.com/flashbots/mev-boost/) relay.
 
-* Exposes a Builder REST API for mev-boost (proposers)
-* Exposes an API for builders to send blocks
+* Exposes a Builder REST API for mev-boost (proposer-api, conforming with [builder-specs](https://ethereum.github.io/builder-specs/#/Builder))
+* Exposes an API for builders to send blocks (builder-api)
 
 More information:
 
 * https://www.notion.so/flashbots/Relay-API-Brainstorms-cf5edd57360140668c6d6b78fd04f312
 * https://www.notion.so/flashbots/Relay-Design-Docs-623487c51b92423fabeb8da9c54af7f4
 
-Contains three services:
-
-* `registerValidator` receiver: needs to handle large amounts of requests, because all validators might want to register at the same time
-* proposer API: `getHeader` and `getPayload`
-* block builder API: `getValidatorsForEpoch` and `submitNewBlock`
-
 ## Getting started
 
-This uses redis to store validator registrations. First run redis with docker:
+Redis is used to store known validators and validator registrations. You can start Redis with Docker like this:
 
 ```bash
 docker run --name redis -d -p 6379:6379 redis:7
 ```
 
-
-Have access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port)
+The API needs access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
 
 ```bash
 ssh -L 3500:localhost:3500 fb-builder-kilndev
 ```
 
-To run on kiln testnet:
+Run the API for Kiln (and update known validators first):
 
 ```bash
 # Sync known validators from BN to Redis
 go run . known-validator-update
 
-# Run Proposer API for Kiln
-go run . api --kiln --api-proposer
+# Run APIs for Kiln
+go run . api --kiln --api-proposer --api-builder
 curl localhost:9062/eth/v1/builder/status
 ```
-
-## TODO
-
-registerValidator check if actually a validator
-
-* pull validations from redis
