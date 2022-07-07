@@ -10,6 +10,10 @@ type ProposerDatastore interface {
 	RefreshKnownValidators() (cnt int, err error)
 
 	GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error)
+
+	// GetValidatorRegistrationTimestamp returns the timestamp of a previous registration. If none found, timestamp is 0 and err is nil.
+	GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error)
+
 	SetValidatorRegistration(entry types.SignedValidatorRegistration) error
 	UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (wasUpdated bool, err error)
 }

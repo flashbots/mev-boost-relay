@@ -281,8 +281,12 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "registerValidator")
 	log.Info("registerValidator")
+	start := time.Now()
 
 	payload := []types.SignedValidatorRegistration{}
+	lastChangedPubkey := ""
+	numUpdated := 0
+
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -311,14 +315,14 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			continue
 		}
 
-		// Check for a previous registration
-		lastEntry, err := api.datastore.GetValidatorRegistration(registration.Message.Pubkey.PubkeyHex())
+		// Check for a previous registration timestamp
+		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
 		if err != nil {
-			log.WithError(err).Infof("error getting last registration for %s", registration.Message.Pubkey.PubkeyHex())
+			log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
 		}
 
 		// Do nothing if the registration is already the latest
-		if lastEntry != nil && lastEntry.Message != nil && lastEntry.Message.Timestamp >= registration.Message.Timestamp {
+		if prevTimestamp >= registration.Message.Timestamp {
 			continue
 		}
 
@@ -335,9 +339,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 			continue
 		}
+
+		numUpdated++
+		lastChangedPubkey = registration.Message.Pubkey.String()
 	}
 
-	log.WithField("numRegistrations", len(payload)).Info("handled validator registrations")
+	log.WithFields(logrus.Fields{
+		"numRegistrations": len(payload),
+		"numUpdated":       numUpdated,
+		"lastChanged":      lastChangedPubkey,
+		"timeNeeded":       time.Since(start),
+	}).Info("handled validator registrations")
 	api.RespondOKEmpty(w)
 }
 

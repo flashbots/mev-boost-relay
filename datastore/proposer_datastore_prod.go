@@ -54,6 +54,10 @@ func (ds *ProdProposerDatastore) GetValidatorRegistration(pubkeyHex types.Pubkey
 	return ds.redis.GetValidatorRegistration(pubkeyHex)
 }
 
+func (ds *ProdProposerDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
+	return ds.redis.GetValidatorRegistrationTimestamp(pubkeyHex)
+}
+
 func (ds *ProdProposerDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	return ds.redis.SetValidatorRegistration(entry)
 }
