@@ -54,6 +54,10 @@ func (ds *ProdProposerDatastore) GetValidatorRegistration(pubkeyHex types.Pubkey
 	return ds.redis.GetValidatorRegistration(pubkeyHex)
 }
 
+func (ds *ProdProposerDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
+	return ds.redis.SetValidatorRegistration(entry)
+}
+
 func (ds *ProdProposerDatastore) UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (bool, error) {
 	if entry.Message == nil {
 		return false, errors.New("message is nil")

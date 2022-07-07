@@ -15,7 +15,7 @@ More information:
 
 ## Getting started
 
-Redis is used to store known validators and validator registrations. You can start Redis with Docker like this:
+Redis (v6+) is used to store known validators and validator registrations. You can start Redis with Docker like this:
 
 ```bash
 docker run --name redis -d -p 6379:6379 redis:7

@@ -106,7 +106,7 @@ var apiCmd = &cobra.Command{
 		if redisURI != "" {
 			ds, err = datastore.NewProdProposerDatastore(redisURI)
 			if err != nil {
-				log.Fatalf("Failed to connect to Redis at %s", redisURI)
+				log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 			}
 			log.Infof("Connected to Redis at %s", redisURI)
 		}

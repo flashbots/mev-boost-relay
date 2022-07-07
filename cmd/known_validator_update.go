@@ -52,7 +52,7 @@ var knownValidatorUpdateCmd = &cobra.Command{
 		}
 		redis, err := datastore.NewRedisDatastore(redisURI)
 		if err != nil {
-			log.Fatalf("Failed to connect to Redis at %s", redisURI)
+			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 		log.Infof("Connected to Redis at %s", redisURI)
 

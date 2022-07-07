@@ -298,9 +298,20 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Check if actually a real validator
-		isKnownValidator := api.datastore.IsKnownValidator(types.NewPubkeyHex(registration.Message.Pubkey.String()))
+		isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
 		if !isKnownValidator {
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("not a known validator")
+			continue
+		}
+
+		// Get a previous registration
+		lastEntry, err := api.datastore.GetValidatorRegistration(registration.Message.Pubkey.PubkeyHex())
+		if err != nil {
+			log.WithError(err).Infof("error getting last registration for %s", registration.Message.Pubkey.PubkeyHex())
+		}
+
+		// Do nothing if the registration is already the latest
+		if lastEntry != nil && lastEntry.Message != nil && registration.Message.Timestamp <= lastEntry.Message.Timestamp {
 			continue
 		}
 
@@ -317,10 +328,11 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 			continue
 		} else if wasUpdated {
-			log.WithField("proposerPubkey", registration.Message.Pubkey.String()).Info("updated validator registration")
+			// log.WithField("proposerPubkey", registration.Message.Pubkey.String()).Info("updated validator registration")
 		}
 	}
 
+	log.WithField("numRegistrations", len(payload)).Info("handled validator registrations")
 	api.RespondOKEmpty(w)
 }
 
