@@ -11,6 +11,9 @@ type ProposerMemoryDatastore struct {
 	registrations   map[types.PubkeyHex]*types.SignedValidatorRegistration
 	knownValidators map[types.PubkeyHex]bool
 	mu              sync.RWMutex
+
+	AlwaysKnowValidator     bool
+	SkipSavingRegistrations bool
 }
 
 func NewProposerMemoryDatastore() *ProposerMemoryDatastore {
@@ -26,6 +29,16 @@ func (ds *ProposerMemoryDatastore) GetValidatorRegistration(pubkeyHex types.Pubk
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 	return ds.registrations[pubkeyHex], nil
+}
+
+func (ds *ProposerMemoryDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	reg, ok := ds.registrations[pubkeyHex]
+	if !ok {
+		return 0, nil
+	}
+	return reg.Message.Timestamp, nil
 }
 
 func (ds *ProposerMemoryDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
@@ -56,6 +69,10 @@ func (ds *ProposerMemoryDatastore) UpdateValidatorRegistration(entry types.Signe
 // }
 
 func (ds *ProposerMemoryDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
+	if ds.AlwaysKnowValidator {
+		return true
+	}
+
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	return ds.knownValidators[pubkeyHex]
@@ -68,6 +85,9 @@ func (ds *ProposerMemoryDatastore) RefreshKnownValidators() (cnt int, err error)
 }
 
 func (ds *ProposerMemoryDatastore) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
+	if ds.SkipSavingRegistrations {
+		return nil
+	}
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.knownValidators[pubkeyHex] = true
@@ -75,6 +95,9 @@ func (ds *ProposerMemoryDatastore) SetKnownValidator(pubkeyHex types.PubkeyHex) 
 }
 
 func (ds *ProposerMemoryDatastore) SetKnownValidators(knownValidators map[types.PubkeyHex]bool) error {
+	if ds.SkipSavingRegistrations {
+		return nil
+	}
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	ds.knownValidators = knownValidators

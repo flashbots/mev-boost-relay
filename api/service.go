@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -61,9 +62,10 @@ type RelayAPI struct {
 	beaconClient         beaconclient.BeaconNodeClient
 	builderSigningDomain types.Domain
 
-	currentSlot  uint64
-	currentEpoch uint64
+	// currentSlot  uint64
+	// currentEpoch uint64
 
+	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []BuilderGetValidatorsResponseEntry
 }
@@ -138,12 +140,12 @@ func (api *RelayAPI) StartServer() (err error) {
 	if syncStatus.IsSyncing {
 		return errors.New("beacon node is syncing")
 	}
-	api.currentSlot = syncStatus.HeadSlot
-	api.currentEpoch = api.currentSlot / uint64(common.SlotsPerEpoch)
-	api.log.WithField("slot", api.currentSlot).WithField("epoch", api.currentEpoch).Info("updated current slot")
+	currentSlot := syncStatus.HeadSlot
+	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	api.log.WithField("slot", currentSlot).WithField("epoch", currentEpoch).Info("updated current slot")
 
 	// Get proposer duties for current and next epoch
-	err = api.updateProposerDuties()
+	err = api.updateProposerDuties(currentEpoch)
 	if err != nil {
 		return err
 	}
@@ -187,25 +189,28 @@ func (api *RelayAPI) startSlotUpdates() {
 	c := make(chan uint64)
 	go api.beaconClient.SubscribeToHeadEvents(c)
 	for {
-		api.currentSlot = <-c
-		api.currentEpoch = api.currentSlot / uint64(common.SlotsPerEpoch)
-		api.log.WithField("slot", api.currentSlot).WithField("epoch", api.currentEpoch).Info("updated current slot")
+		currentSlot := <-c
+		currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+		api.log.WithField("slot", currentSlot).WithField("epoch", currentEpoch).Info("updated current slot")
 
-		err := api.updateProposerDuties()
-		if err != nil {
-			api.log.WithError(err).WithField("epoch", api.currentEpoch).Error("failed to update proposer duties")
-		}
+		// Update proposer duties in the background
+		go func() {
+			err := api.updateProposerDuties(currentEpoch)
+			if err != nil {
+				api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
+			}
+		}()
 	}
 }
 
-func (api *RelayAPI) updateProposerDuties() error {
+func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	// Do nothing if already checked this epoch
-	if api.currentEpoch == api.proposerDutiesEpoch {
+	if epoch == api.proposerDutiesEpoch {
 		return nil
 	}
 
-	api.log.WithField("epoch", api.currentEpoch).Debug("updating proposer duties...")
-	r, err := api.beaconClient.GetProposerDuties(api.currentEpoch)
+	api.log.WithField("epoch", epoch).Debug("updating proposer duties...")
+	r, err := api.beaconClient.GetProposerDuties(epoch)
 	if err != nil {
 		return err
 	}
@@ -222,16 +227,18 @@ func (api *RelayAPI) updateProposerDuties() error {
 		}
 	}
 
-	api.proposerDutiesEpoch = api.currentEpoch
+	api.proposerDutiesLock.Lock()
+	api.proposerDutiesEpoch = epoch
 	api.proposerDutiesResponse = proposerDutiesResponse
-	api.log.WithField("epoch", api.currentEpoch).Infof("proposer duties set for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
+	api.proposerDutiesLock.Unlock()
+	api.log.WithField("epoch", epoch).Infof("proposer duties set for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
 	return nil
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
 	for {
 		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
-		time.Sleep(common.DurationPerEpoch)
+		time.Sleep(common.DurationPerEpoch / 2)
 
 		// Refresh known validators
 		cnt, err := api.datastore.RefreshKnownValidators()
@@ -292,6 +299,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		return
 	}
 
+	// Possible optimisations:
+	// - GetValidatorRegistrationTimestamp could keep a cache in memory for some time and check memory first before going to Redis
+	// - Do multiple loops and filter down set of registrations, and batch checks for all registrations instead of locking for each individually:
+	//   (1) sanity checks, (2) IsKnownValidator, (3) CheckTimestamp, (4) Batch SetValidatorRegistration
 	for _, registration := range payload {
 		if registration.Message == nil {
 			log.Warn("registration without message")
@@ -410,6 +421,9 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "getValidatorsForEpoch")
 	log.Info("request")
+
+	api.proposerDutiesLock.RLock()
+	defer api.proposerDutiesLock.RUnlock()
 	api.RespondOK(w, api.proposerDutiesResponse)
 }
 

@@ -125,25 +125,23 @@ func BenchmarkHandleRegistration(b *testing.B) {
 		{"payload of size 1000", 1000},
 	}
 
+	backend.datastore.AlwaysKnowValidator = true
+	backend.datastore.SkipSavingRegistrations = true
+
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			payload := []types.SignedValidatorRegistration{}
-			validators := make(map[types.PubkeyHex]beaconclient.ValidatorResponseEntry)
 			for i := 0; i < bm.payloadSize; i++ {
 				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
 				reg, err := generateSignedValidatorRegistration(nil, feeRecipient, uint64(i))
 				require.NoError(b, err)
 				payload = append(payload, *reg)
-				validators[types.PubkeyHex(reg.Message.Pubkey.String())] = beaconclient.ValidatorResponseEntry{
-					Validator: beaconclient.ValidatorResponseValidatorData{
-						Pubkey: reg.Message.Pubkey.String(),
-					},
-				}
 			}
-			backend.beaconClient.SetValidators(validators)
+
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				backend.request(http.MethodPost, path, payload)
+				rr := backend.request(http.MethodPost, path, payload)
+				require.Equal(b, http.StatusOK, rr.Code)
 			}
 		})
 	}
@@ -221,6 +219,10 @@ func TestRegisterValidator(t *testing.T) {
 		require.Nil(t, req)
 	})
 }
+
+// func BenchmarkRegisterValidator(t *testing.T) {
+
+// }
 
 func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"
