@@ -209,21 +209,39 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 		return nil
 	}
 
+	// Get the proposers with duty in this epoch (TODO: and next, but Prysm doesn't support it yet, Terence is on it)
 	api.log.WithField("epoch", epoch).Debug("updating proposer duties...")
 	r, err := api.beaconClient.GetProposerDuties(epoch)
 	if err != nil {
 		return err
 	}
 
+	// Result for parallel Redis requests
+	type result struct {
+		val BuilderGetValidatorsResponseEntry
+		err error
+	}
+
+	// Scatter requests to Redis to get registrations
+	c := make(chan result, len(r.Data))
+	for i := 0; i < cap(c); i++ {
+		go func(duty beaconclient.ProposerDutiesResponseData) {
+			reg, err := api.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
+			c <- result{BuilderGetValidatorsResponseEntry{
+				Slot:  duty.Slot,
+				Entry: reg,
+			}, err}
+		}(r.Data[i])
+	}
+
+	// Gather results
 	proposerDutiesResponse := make([]BuilderGetValidatorsResponseEntry, len(r.Data))
-	for idx, duty := range r.Data {
-		reg, err := api.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
-		if err != nil {
-			return err
-		}
-		proposerDutiesResponse[idx] = BuilderGetValidatorsResponseEntry{
-			Slot:  duty.Slot,
-			Entry: reg,
+	for i := 0; i < cap(c); i++ {
+		res := <-c
+		if res.err != nil {
+			return res.err
+		} else {
+			proposerDutiesResponse[i] = res.val
 		}
 	}
 
@@ -231,7 +249,7 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	api.proposerDutiesEpoch = epoch
 	api.proposerDutiesResponse = proposerDutiesResponse
 	api.proposerDutiesLock.Unlock()
-	api.log.WithField("epoch", epoch).Infof("proposer duties set for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
+	api.log.WithField("epoch", epoch).Infof("proposer duties updated for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
 	return nil
 }
 
