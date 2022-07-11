@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -72,4 +73,15 @@ func GetEnv(key string, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func GetIPXForwardedFor(r *http.Request) string {
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		if strings.Contains(forwarded, ",") { // return first entry of list of IPs
+			return strings.Split(forwarded, ",")[0]
+		}
+		return forwarded
+	}
+	return r.RemoteAddr
 }

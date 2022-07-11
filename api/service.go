@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -37,9 +39,10 @@ var (
 type RelayAPIOpts struct {
 	Log *logrus.Entry
 
-	ListenAddr   string
-	BeaconClient beaconclient.BeaconNodeClient
-	Datastore    datastore.ProposerDatastore
+	ListenAddr    string
+	RegValWorkers int // number of workers for validator registration processing
+	BeaconClient  beaconclient.BeaconNodeClient
+	Datastore     datastore.ProposerDatastore
 
 	// GenesisForkVersion for validating signatures
 	GenesisForkVersionHex string
@@ -58,6 +61,9 @@ type RelayAPI struct {
 	srv        *http.Server
 	srvStarted atomic.Bool
 
+	regValEntriesC       chan types.SignedValidatorRegistration
+	regValWorkersStarted atomic.Bool
+
 	datastore            datastore.ProposerDatastore
 	beaconClient         beaconclient.BeaconNodeClient
 	builderSigningDomain types.Domain
@@ -68,6 +74,8 @@ type RelayAPI struct {
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []BuilderGetValidatorsResponseEntry
+
+	debugDisableValidatorRegistrationChecks bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -85,20 +93,26 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, errors.New("proposer datastore is nil")
 	}
 
-	rs := RelayAPI{
+	api := RelayAPI{
 		opts:                   opts,
 		log:                    opts.Log.WithField("module", "api"),
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []BuilderGetValidatorsResponseEntry{},
+		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	rs.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
+	if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
+		api.log.Warn("DEBUG: validator registration checks are disabled")
+		api.debugDisableValidatorRegistrationChecks = true
+	}
+
+	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
 	if err != nil {
 		return nil, err
 	}
 
-	return &rs, nil
+	return &api, nil
 }
 
 func (api *RelayAPI) getRouter() http.Handler {
@@ -126,6 +140,45 @@ func (api *RelayAPI) getRouter() http.Handler {
 	return loggedRouter
 }
 
+func (api *RelayAPI) startValidatorRegistrationWorkers() error {
+	if api.regValWorkersStarted.Swap(true) {
+		return errors.New("validator registration workers already started")
+	}
+
+	numWorkers := api.opts.RegValWorkers
+	if numWorkers == 0 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	api.log.Infof("Starting %d registerValidator workers", numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			var err error
+			for {
+				registration := <-api.regValEntriesC
+
+				// Verify the signature
+				if api.debugDisableValidatorRegistrationChecks {
+					ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
+					if err != nil || !ok {
+						api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
+						continue
+					}
+				}
+
+				// Save or update (if newer timestamp than previous registration)
+				err = api.datastore.SetValidatorRegistration(registration)
+				if err != nil {
+					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
+					continue
+				}
+			}
+		}()
+	}
+	return nil
+}
+
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
@@ -143,6 +196,9 @@ func (api *RelayAPI) StartServer() (err error) {
 	currentSlot := syncStatus.HeadSlot
 	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithField("slot", currentSlot).WithField("epoch", currentEpoch).Info("updated current slot")
+
+	// Start worker pool for validator registration processing
+	api.startValidatorRegistrationWorkers()
 
 	// Get proposer duties for current and next epoch
 	err = api.updateProposerDuties(currentEpoch)
@@ -191,7 +247,11 @@ func (api *RelayAPI) startSlotUpdates() {
 	for {
 		currentSlot := <-c
 		currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
-		api.log.WithField("slot", currentSlot).WithField("epoch", currentEpoch).Info("updated current slot")
+		api.log.WithFields(logrus.Fields{
+			"slot":            currentSlot,
+			"epoch":           currentEpoch,
+			"slotLastInEpoch": (currentEpoch+1)*32 - 1,
+		}).Info("updated current slot")
 
 		// Update proposer duties in the background
 		go func() {
@@ -235,13 +295,13 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	}
 
 	// Gather results
-	proposerDutiesResponse := make([]BuilderGetValidatorsResponseEntry, len(r.Data))
+	proposerDutiesResponse := make([]BuilderGetValidatorsResponseEntry, 0)
 	for i := 0; i < cap(c); i++ {
 		res := <-c
 		if res.err != nil {
 			return res.err
-		} else {
-			proposerDutiesResponse[i] = res.val
+		} else if res.val.Entry != nil {
+			proposerDutiesResponse = append(proposerDutiesResponse, res.val)
 		}
 	}
 
@@ -249,7 +309,8 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	api.proposerDutiesEpoch = epoch
 	api.proposerDutiesResponse = proposerDutiesResponse
 	api.proposerDutiesLock.Unlock()
-	api.log.WithField("epoch", epoch).Infof("proposer duties updated for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
+	// api.log.WithField("epoch", epoch).Infof("proposer duties updated for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
+	api.log.WithField("epoch", epoch).Info("proposer duties updated")
 	return nil
 }
 
@@ -305,12 +366,13 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "registerValidator")
-	log.Info("registerValidator")
+	// log.Info("registerValidator")
 	start := time.Now()
 
 	payload := []types.SignedValidatorRegistration{}
 	lastChangedPubkey := ""
-	numUpdated := 0
+	errorResp := ""
+	numSentToC := 0
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -328,58 +390,58 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		if len(registration.Message.Pubkey) != 48 {
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("invalid pubkey length")
+			errorResp := "invalid pubkey length"
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
 			continue
 		}
 
 		if len(registration.Signature) != 96 {
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("invalid signature length")
+			errorResp = "invalid signature length"
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
 			continue
 		}
 
 		// Check if actually a real validator
-		isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
-		if !isKnownValidator {
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn("not a known validator")
-			continue
+		if api.debugDisableValidatorRegistrationChecks {
+			isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
+			if !isKnownValidator {
+				errorResp := "not a known validator"
+				log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+				continue
+			}
+
+			// Check for a previous registration timestamp
+			prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
+			if err != nil {
+				log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
+			}
+
+			// Do nothing if the registration is already the latest
+			if prevTimestamp >= registration.Message.Timestamp {
+				continue
+			}
 		}
 
-		// Check for a previous registration timestamp
-		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
-		if err != nil {
-			log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
-		}
-
-		// Do nothing if the registration is already the latest
-		if prevTimestamp >= registration.Message.Timestamp {
-			continue
-		}
-
-		// Verify the signature
-		ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
-		if err != nil || !ok {
-			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
-			continue
-		}
-
-		// Save or update (if newer timestamp than previous registration)
-		err = api.datastore.SetValidatorRegistration(registration)
-		if err != nil {
-			log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
-			continue
-		}
-
-		numUpdated++
+		// Send to workers for signature verification and saving
+		api.regValEntriesC <- registration
+		numSentToC++
 		lastChangedPubkey = registration.Message.Pubkey.String()
 	}
 
 	log.WithFields(logrus.Fields{
 		"numRegistrations": len(payload),
-		"numUpdated":       numUpdated,
+		"numSentToC":       numSentToC,
 		"lastChanged":      lastChangedPubkey,
-		"timeNeeded":       time.Since(start),
-	}).Info("handled validator registrations")
-	api.RespondOKEmpty(w)
+		"timeNeededSec":    time.Since(start).Seconds(),
+		"error":            errorResp,
+		"IP":               common.GetIPXForwardedFor(req),
+	}).Info("validator registrations done")
+
+	if errorResp != "" {
+		api.RespondError(w, http.StatusBadRequest, errorResp)
+	} else {
+		api.RespondOKEmpty(w)
+	}
 }
 
 // func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -437,9 +499,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 // }
 
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
-	log := api.log.WithField("method", "getValidatorsForEpoch")
-	log.Info("request")
-
+	// log := api.log.WithField("method", "getValidatorsForEpoch")
 	api.proposerDutiesLock.RLock()
 	defer api.proposerDutiesLock.RUnlock()
 	api.RespondOK(w, api.proposerDutiesResponse)

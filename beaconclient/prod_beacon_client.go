@@ -40,6 +40,7 @@ func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
 			slotC <- data.Slot
 		}
 	})
+	c.log.Warn("beaconclient SubscribeToHeadEvents: end of function!")
 }
 
 func (c *ProdBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {
