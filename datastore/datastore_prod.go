@@ -9,24 +9,17 @@ import (
 
 // ProdProposerDatastore provides a local memory cache with a Redis and DB backend
 type ProdProposerDatastore struct {
-	redis *RedisDatastore
+	redis *RedisCache
 
 	knownValidators map[types.PubkeyHex]bool
 	mu              sync.RWMutex
 }
 
-func NewProdProposerDatastore(redisURI string) (*ProdProposerDatastore, error) {
-	redisDs, err := NewRedisDatastore(redisURI)
-	if err != nil {
-		return nil, err
-	}
-
-	ds := &ProdProposerDatastore{
-		redis:           redisDs,
+func NewProdProposerDatastore(redisCache *RedisCache) *ProdProposerDatastore {
+	return &ProdProposerDatastore{
+		redis:           redisCache,
 		knownValidators: make(map[types.PubkeyHex]bool),
 	}
-
-	return ds, nil
 }
 
 // RefreshKnownValidators loads known validators from Redis into memory

@@ -11,7 +11,7 @@ import (
 
 // var redisTestServer *miniredis.Miniredis
 
-func setupService(t *testing.T) *RedisDatastore {
+func setupService(t *testing.T) *RedisCache {
 	var err error
 	// if redisTestServer != nil {
 	// 	redisTestServer.Close()
@@ -20,7 +20,7 @@ func setupService(t *testing.T) *RedisDatastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisService, err := NewRedisDatastore(redisTestServer.Addr())
+	redisService, err := NewRedisCache(redisTestServer.Addr())
 	require.NoError(t, err)
 
 	return redisService

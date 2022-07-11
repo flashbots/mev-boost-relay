@@ -90,28 +90,21 @@ var apiCmd = &cobra.Command{
 		}
 		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
 
-		// Connect beacon client to node
-		var beaconClient beaconclient.BeaconNodeClient
-		if beaconNodeURI != "" {
-			log.Infof("Using beacon endpoint: %s", beaconNodeURI)
-			beaconClient = beaconclient.NewProdBeaconClient(log, beaconNodeURI)
-
-			// Check beacon node status
-			_, err := beaconClient.SyncStatus()
-			if err != nil {
-				log.WithError(err).Fatal("Beacon node is syncing")
-			}
+		// Connect to beacon client and ensure it's synced
+		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
+		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
+		_, err = beaconClient.SyncStatus()
+		if err != nil {
+			log.WithError(err).Fatal("Beacon node is syncing")
 		}
 
-		// Connect to Redis
-		var ds datastore.ProposerDatastore
-		if redisURI != "" {
-			ds, err = datastore.NewProdProposerDatastore(redisURI)
-			if err != nil {
-				log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
-			}
-			log.Infof("Connected to Redis at %s", redisURI)
+		// Connect to Redis and setup the datastore
+		redis, err := datastore.NewRedisCache(redisURI)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
+		log.Infof("Connected to Redis at %s", redisURI)
+		ds := datastore.NewProdProposerDatastore(redis)
 
 		opts := api.RelayAPIOpts{
 			Log:                   log,

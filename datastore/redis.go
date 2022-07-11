@@ -29,17 +29,17 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-type RedisDatastore struct {
+type RedisCache struct {
 	client *redis.Client
 }
 
-func NewRedisDatastore(redisURI string) (*RedisDatastore, error) {
+func NewRedisCache(redisURI string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
 	}
 
-	return &RedisDatastore{client: client}, nil
+	return &RedisCache{client: client}, nil
 }
 
 func RedisKeyValidatorRegistration(pubKey types.PubkeyHex) string {
@@ -58,7 +58,7 @@ func RedisKeyValidatorRegistrationFeeRecipient(pubKey types.PubkeyHex) string {
 	return redisPrefixValidatorRegistration + strings.ToLower(string(pubKey)) + "/feeRecipient"
 }
 
-func (r *RedisDatastore) GetObj(key string, obj any) (err error) {
+func (r *RedisCache) GetObj(key string, obj any) (err error) {
 	value, err := r.client.Get(context.Background(), key).Result()
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (r *RedisDatastore) GetObj(key string, obj any) (err error) {
 	return json.Unmarshal([]byte(value), &obj)
 }
 
-func (r *RedisDatastore) SetObj(key string, value any, expiration time.Duration) (err error) {
+func (r *RedisCache) SetObj(key string, value any, expiration time.Duration) (err error) {
 	marshalledValue, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -76,21 +76,11 @@ func (r *RedisDatastore) SetObj(key string, value any, expiration time.Duration)
 	return r.client.Set(context.Background(), key, marshalledValue, expiration).Err()
 }
 
-// func (r *RedisDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) (bool, error) {
-// 	_, err := r.client.Get(context.Background(), RedisKeyKnownValidator(pubkeyHex)).Result()
-// 	if err == redis.Nil {
-// 		return false, nil
-// 	} else if err != nil {
-// 		return false, err
-// 	}
-// 	return true, nil
-// }
-
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
 
-func (r *RedisDatastore) GetKnownValidators() (map[types.PubkeyHex]bool, error) {
+func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]bool, error) {
 	validators := make(map[types.PubkeyHex]bool)
 	keys, err := r.client.HKeys(context.Background(), redisSetKeyValidatorKnown).Result()
 	if err != nil {
@@ -102,11 +92,11 @@ func (r *RedisDatastore) GetKnownValidators() (map[types.PubkeyHex]bool, error) 
 	return validators, nil
 }
 
-func (r *RedisDatastore) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
+func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
 	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
 }
 
-func (r *RedisDatastore) SetKnownValidators(pubkeys []types.PubkeyHex) error {
+func (r *RedisCache) SetKnownValidators(pubkeys []types.PubkeyHex) error {
 	pkMap := make(map[string]string)
 	for _, key := range pubkeys {
 		pkMap[PubkeyHexToLowerStr(key)] = "1"
@@ -114,27 +104,7 @@ func (r *RedisDatastore) SetKnownValidators(pubkeys []types.PubkeyHex) error {
 	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, pkMap).Err()
 }
 
-// // SetKnownValidators is a batch version of SetKnownValidator (much faster)
-// func (r *RedisDatastore) SetKnownValidators(knownValidators map[types.PubkeyHex]beaconclient.ValidatorResponseEntry) (err error) {
-// 	m := make(map[string]int)
-// 	for pubkeyHex := range knownValidators {
-// 		m[RedisKeyKnownValidator(pubkeyHex)] = 1
-// 	}
-// 	fmt.Println("xxx", len(m))
-// 	err = r.client.MSet(context.Background(), m).Err()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	for pubkeyHex := range knownValidators {
-// 		err = r.client.Expire(context.Background(), RedisKeyKnownValidator(pubkeyHex), expirationTimeKnownValidators).Err()
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
-
-func (r *RedisDatastore) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
 	err := r.GetObj(RedisKeyValidatorRegistration(proposerPubkey), &registration)
 	if err == redis.Nil {
@@ -143,7 +113,7 @@ func (r *RedisDatastore) GetValidatorRegistration(proposerPubkey types.PubkeyHex
 	return registration, err
 }
 
-func (r *RedisDatastore) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
+func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
 	timestamp, err := r.client.Get(context.Background(), RedisKeyValidatorRegistrationTimestamp(proposerPubkey)).Uint64()
 	if err == redis.Nil {
 		return 0, nil
@@ -151,7 +121,7 @@ func (r *RedisDatastore) GetValidatorRegistrationTimestamp(proposerPubkey types.
 	return timestamp, err
 }
 
-func (r *RedisDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
+func (r *RedisCache) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	err := r.client.Set(context.Background(), RedisKeyValidatorRegistrationTimestamp(entry.Message.Pubkey.PubkeyHex()), entry.Message.Timestamp, expirationTimeValidatorRegistration).Err()
 	if err != nil {
 		return err
@@ -161,7 +131,7 @@ func (r *RedisDatastore) SetValidatorRegistration(entry types.SignedValidatorReg
 	return err
 }
 
-func (r *RedisDatastore) SetValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
+func (r *RedisCache) SetValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
 	for _, entry := range entries {
 		err := r.SetValidatorRegistration(entry)
 		if err != nil {

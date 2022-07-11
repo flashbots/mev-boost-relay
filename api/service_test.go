@@ -6,31 +6,40 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
 var (
 	genesisForkVersionHex = "0x00000000"
-	builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+	// builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
 )
 
 type testBackend struct {
 	t            require.TestingT
 	relay        *RelayAPI
 	beaconClient *beaconclient.MockBeaconClient
-	datastore    *datastore.ProposerMemoryDatastore
+	datastore    datastore.ProposerDatastore
+	redis        *datastore.RedisCache
 }
 
 func newTestBackend(t require.TestingT) *testBackend {
 	bc := beaconclient.NewMockBeaconClient()
-	ds := datastore.NewProposerMemoryDatastore()
+
+	redisClient, err := miniredis.Run()
+	require.NoError(t, err)
+
+	redisCache, err := datastore.NewRedisCache(redisClient.Addr())
+	require.NoError(t, err)
+
+	ds := datastore.NewProdProposerDatastore(redisCache)
+	require.NoError(t, err)
 
 	opts := RelayAPIOpts{
 		Log:                   common.TestLog,
@@ -50,6 +59,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 		relay:        relay,
 		beaconClient: bc,
 		datastore:    ds,
+		redis:        redisCache,
 	}
 	return &backend
 }
@@ -82,70 +92,35 @@ func (be *testBackend) request(method string, path string, payload any) *httptes
 // 	pubKey.FromSlice(pk.Compress())
 // }
 
-func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
-	var err error
-	if sk == nil {
-		sk, _, err = bls.GenerateNewKeypair()
-		if err != nil {
-			return nil, err
-		}
-	}
+// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+// 	var err error
+// 	if sk == nil {
+// 		sk, _, err = bls.GenerateNewKeypair()
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
 
-	blsPubKey := bls.PublicKeyFromSecretKey(sk)
+// 	blsPubKey := bls.PublicKeyFromSecretKey(sk)
 
-	var pubKey types.PublicKey
-	pubKey.FromSlice(blsPubKey.Compress())
-	msg := &types.RegisterValidatorRequestMessage{
-		FeeRecipient: feeRecipient,
-		Timestamp:    timestamp,
-		Pubkey:       pubKey,
-	}
+// 	var pubKey types.PublicKey
+// 	pubKey.FromSlice(blsPubKey.Compress())
+// 	msg := &types.RegisterValidatorRequestMessage{
+// 		FeeRecipient: feeRecipient,
+// 		Timestamp:    timestamp,
+// 		Pubkey:       pubKey,
+// 	}
 
-	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
-	if err != nil {
-		return nil, err
-	}
+// 	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return &types.SignedValidatorRegistration{
-		Message:   msg,
-		Signature: sig,
-	}, nil
-}
-
-func BenchmarkHandleRegistration(b *testing.B) {
-	common.TestLog.Logger.SetLevel(logrus.FatalLevel)
-	backend := newTestBackend(b)
-	path := "/eth/v1/builder/validators"
-	benchmarks := []struct {
-		name        string
-		payloadSize int
-	}{
-		{"payload of size 10", 10},
-		{"payload of size 100", 100},
-		{"payload of size 1000", 1000},
-	}
-
-	backend.datastore.AlwaysKnowValidator = true
-	backend.datastore.SkipSavingRegistrations = true
-
-	for _, bm := range benchmarks {
-		b.Run(bm.name, func(b *testing.B) {
-			payload := []types.SignedValidatorRegistration{}
-			for i := 0; i < bm.payloadSize; i++ {
-				feeRecipient := common.ValidPayloadRegisterValidator.Message.FeeRecipient
-				reg, err := generateSignedValidatorRegistration(nil, feeRecipient, uint64(i))
-				require.NoError(b, err)
-				payload = append(payload, *reg)
-			}
-
-			b.ResetTimer()
-			for n := 0; n < b.N; n++ {
-				rr := backend.request(http.MethodPost, path, payload)
-				require.Equal(b, http.StatusOK, rr.Code)
-			}
-		})
-	}
-}
+// 	return &types.SignedValidatorRegistration{
+// 		Message:   msg,
+// 		Signature: sig,
+// 	}, nil
+// }
 
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
@@ -196,10 +171,12 @@ func TestRegisterValidator(t *testing.T) {
 
 	t.Run("Normal function", func(t *testing.T) {
 		backend := newTestBackend(t)
+		backend.relay.startValidatorRegistrationWorkers()
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
-		backend.datastore.SetKnownValidator(pubkeyHex)
+		backend.redis.SetKnownValidator(pubkeyHex)
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
+		time.Sleep(10 * time.Millisecond) // registrations are processed asynchronously
 
 		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
 		require.NoError(t, err)

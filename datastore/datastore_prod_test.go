@@ -16,7 +16,10 @@ func setupTestProdProposerDatastore(t *testing.T) *ProdProposerDatastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	ds, err := NewProdProposerDatastore(redisTestServer.Addr())
+	redisDs, err := NewRedisCache(redisTestServer.Addr())
+	require.NoError(t, err)
+
+	ds := NewProdProposerDatastore(redisDs)
 	require.NoError(t, err)
 
 	return ds
