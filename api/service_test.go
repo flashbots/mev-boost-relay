@@ -12,13 +12,14 @@ import (
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
 )
 
 var (
 	genesisForkVersionHex = "0x00000000"
-	// builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+	builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
 )
 
 type testBackend struct {
@@ -92,35 +93,35 @@ func (be *testBackend) request(method string, path string, payload any) *httptes
 // 	pubKey.FromSlice(pk.Compress())
 // }
 
-// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
-// 	var err error
-// 	if sk == nil {
-// 		sk, _, err = bls.GenerateNewKeypair()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
+func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+	var err error
+	if sk == nil {
+		sk, _, err = bls.GenerateNewKeypair()
+		if err != nil {
+			return nil, err
+		}
+	}
 
-// 	blsPubKey := bls.PublicKeyFromSecretKey(sk)
+	blsPubKey := bls.PublicKeyFromSecretKey(sk)
 
-// 	var pubKey types.PublicKey
-// 	pubKey.FromSlice(blsPubKey.Compress())
-// 	msg := &types.RegisterValidatorRequestMessage{
-// 		FeeRecipient: feeRecipient,
-// 		Timestamp:    timestamp,
-// 		Pubkey:       pubKey,
-// 	}
+	var pubKey types.PublicKey
+	pubKey.FromSlice(blsPubKey.Compress())
+	msg := &types.RegisterValidatorRequestMessage{
+		FeeRecipient: feeRecipient,
+		Timestamp:    timestamp,
+		Pubkey:       pubKey,
+	}
 
-// 	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
+	if err != nil {
+		return nil, err
+	}
 
-// 	return &types.SignedValidatorRegistration{
-// 		Message:   msg,
-// 		Signature: sig,
-// 	}, nil
-// }
+	return &types.SignedValidatorRegistration{
+		Message:   msg,
+		Signature: sig,
+	}, nil
+}
 
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
@@ -194,6 +195,26 @@ func TestRegisterValidator(t *testing.T) {
 		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
 		require.NoError(t, err)
 		require.Nil(t, req)
+	})
+
+	t.Run("Reject registration for +10sec into the future", func(t *testing.T) {
+		backend := newTestBackend(t)
+
+		// Allow +10 sec
+		td := uint64(time.Now().Unix())
+		payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
+		require.NoError(t, err)
+		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		// Disallow +11 sec
+		td = uint64(time.Now().Unix())
+		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
+		require.NoError(t, err)
+		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }
 

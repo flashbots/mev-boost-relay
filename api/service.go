@@ -140,6 +140,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 	return loggedRouter
 }
 
+// startValidatorRegistrationWorkers starts a number of worker goroutines to handle the expensive part
+// of (already sanity-checked) validator registrations: the signature verification and updating in Redis.
 func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 	if api.regValWorkersStarted.Swap(true) {
 		return errors.New("validator registration workers already started")
@@ -167,12 +169,13 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 					}
 				}
 
-				// Save or update (if newer timestamp than previous registration)
-				err = api.datastore.SetValidatorRegistration(registration)
-				if err != nil {
-					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
-					continue
-				}
+				// Save the registration
+				go func() {
+					err = api.datastore.SetValidatorRegistration(registration)
+					if err != nil {
+						api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
+					}
+				}()
 			}
 		}()
 	}
@@ -367,7 +370,9 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "registerValidator")
 	// log.Info("registerValidator")
+
 	start := time.Now()
+	startTimestamp := start.Unix()
 
 	payload := []types.SignedValidatorRegistration{}
 	lastChangedPubkey := ""
@@ -397,6 +402,13 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		if len(registration.Signature) != 96 {
 			errorResp = "invalid signature length"
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			continue
+		}
+
+		td := int64(registration.Message.Timestamp) - startTimestamp
+		if td > 10 {
+			errorResp = "timestamp too far in the future"
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
 			continue
 		}
