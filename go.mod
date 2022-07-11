@@ -25,7 +25,6 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ferranbt/fastssz v0.1.1-0.20220303160658-88bb965b6747 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect

@@ -9,8 +9,8 @@ v:
 #clean:
 #	rm -rf your-project build/
 
-#build:
-#	go build -ldflags "-X main.version=${GIT_VER}" -v -o relay cmd/relay/main.go
+build:
+	go build -ldflags "-X main.version=${GIT_VER}" -v .
 
 test:
 	go test ./...
