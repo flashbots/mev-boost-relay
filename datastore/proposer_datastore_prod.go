@@ -29,7 +29,7 @@ func NewProdProposerDatastore(redisURI string) (*ProdProposerDatastore, error) {
 	return ds, nil
 }
 
-// RefreshKnownValidators loads known validators from Redis into Memory
+// RefreshKnownValidators loads known validators from Redis into memory
 func (ds *ProdProposerDatastore) RefreshKnownValidators() (cnt int, err error) {
 	knownValidators, err := ds.redis.GetKnownValidators()
 	if err != nil {

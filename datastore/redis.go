@@ -12,11 +12,10 @@ import (
 
 var (
 	redisPrefix                      = "boost-relay:"
-	redisPrefixValidatorKnown        = redisPrefix + "validator-known:"
+	redisSetKeyValidatorKnown        = redisPrefix + "known-validators"
 	redisPrefixValidatorRegistration = redisPrefix + "validator-registration:"
 
 	expirationTimeValidatorRegistration = time.Duration(0) // never expires
-	expirationTimeKnownValidators       = time.Hour * 24 * 7
 )
 
 func connectRedis(redisURI string) (*redis.Client, error) {
@@ -41,10 +40,6 @@ func NewRedisDatastore(redisURI string) (*RedisDatastore, error) {
 	}
 
 	return &RedisDatastore{client: client}, nil
-}
-
-func RedisKeyKnownValidator(pubKey types.PubkeyHex) string {
-	return redisPrefixValidatorKnown + strings.ToLower(string(pubKey))
 }
 
 func RedisKeyValidatorRegistration(pubKey types.PubkeyHex) string {
@@ -91,21 +86,32 @@ func (r *RedisDatastore) SetObj(key string, value any, expiration time.Duration)
 // 	return true, nil
 // }
 
+func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
+	return strings.ToLower(string(pk))
+}
+
 func (r *RedisDatastore) GetKnownValidators() (map[types.PubkeyHex]bool, error) {
 	validators := make(map[types.PubkeyHex]bool)
-	keys, err := r.client.Keys(context.Background(), redisPrefixValidatorKnown+"*").Result()
+	keys, err := r.client.HKeys(context.Background(), redisSetKeyValidatorKnown).Result()
 	if err != nil {
 		return nil, err
 	}
 	for _, key := range keys {
-		pubkey := strings.TrimPrefix(key, redisPrefixValidatorKnown)
-		validators[types.PubkeyHex(pubkey)] = true
+		validators[types.PubkeyHex(key)] = true
 	}
 	return validators, nil
 }
 
 func (r *RedisDatastore) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
-	return r.client.Set(context.Background(), RedisKeyKnownValidator(pubkeyHex), true, expirationTimeKnownValidators).Err()
+	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
+}
+
+func (r *RedisDatastore) SetKnownValidators(pubkeys []types.PubkeyHex) error {
+	pkMap := make(map[string]string)
+	for _, key := range pubkeys {
+		pkMap[PubkeyHexToLowerStr(key)] = "1"
+	}
+	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, pkMap).Err()
 }
 
 // // SetKnownValidators is a batch version of SetKnownValidator (much faster)
