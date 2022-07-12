@@ -247,16 +247,16 @@ func (api *RelayAPI) StartServer() (err error) {
 	go api.startKnownValidatorUpdates()
 
 	// Process current slot
-	currentSlot := syncStatus.HeadSlot
-	api.processNewSlot(currentSlot)
+	headSlot := syncStatus.HeadSlot
+	api.processNewSlot(headSlot)
 
 	// Start regular slot updates
 	go func() {
 		c := make(chan uint64)
 		go api.beaconClient.SubscribeToHeadEvents(c)
 		for {
-			currentSlot := <-c
-			api.processNewSlot(currentSlot)
+			headSlot := <-c
+			api.processNewSlot(headSlot)
 		}
 	}()
 
@@ -281,28 +281,28 @@ func (api *RelayAPI) StartServer() (err error) {
 // 	return api.srv.Close()
 // }
 
-func (api *RelayAPI) processNewSlot(currentSlot uint64) {
-	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+func (api *RelayAPI) processNewSlot(headSlot uint64) {
+	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
-		"slot":            currentSlot,
+		"slot":            headSlot,
 		"epoch":           currentEpoch,
 		"slotLastInEpoch": (currentEpoch+1)*32 - 1,
-	}).Info("updated current slot")
+	}).Info("updated headSlot")
 
-	if currentSlot%10 == 0 {
+	if headSlot%10 == 0 {
 		// Remove expired headers
 		numBidsRemoved := 0
 		numBidsRemaining := 0
 
 		api.bidLock.Lock()
 		for key := range api.bids {
-			if key.slot < currentSlot-10 {
+			if key.slot < headSlot-10 {
 				delete(api.bids, key)
 				numBidsRemoved++
 			}
 		}
 		for key := range api.blocks {
-			if key.slot < currentSlot-10 {
+			if key.slot < headSlot-10 {
 				delete(api.blocks, key)
 				numBidsRemoved++
 			}
