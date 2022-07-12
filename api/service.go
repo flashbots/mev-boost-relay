@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ var (
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
 	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	// pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
@@ -147,7 +148,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
-		// r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 	}
 
 	if api.opts.BuilderAPI {
@@ -209,7 +210,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		return errors.New("server was already started")
 	}
 
-	// Check beacon-node sync status, set current slot and start update loop
+	// Check beacon-node sync status, process current slot and start slot updates
 	syncStatus, err := api.beaconClient.SyncStatus()
 	if err != nil {
 		return err
@@ -217,21 +218,9 @@ func (api *RelayAPI) StartServer() (err error) {
 	if syncStatus.IsSyncing {
 		return errors.New("beacon node is syncing")
 	}
-	currentSlot := syncStatus.HeadSlot
-	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
-	api.log.WithField("slot", currentSlot).WithField("epoch", currentEpoch).Info("updated current slot")
 
 	// Start worker pool for validator registration processing
 	api.startValidatorRegistrationWorkers()
-
-	// Get proposer duties for current and next epoch
-	err = api.updateProposerDuties(currentEpoch)
-	if err != nil {
-		return err
-	}
-
-	// Start regular slot updates
-	go api.startSlotUpdates()
 
 	// Update list of known validators, and start refresh loop
 	cnt, err := api.datastore.RefreshKnownValidators()
@@ -243,6 +232,20 @@ func (api *RelayAPI) StartServer() (err error) {
 		api.log.WithField("cnt", cnt).Info("updated known validators")
 	}
 	go api.startKnownValidatorUpdates()
+
+	// Process current slot
+	currentSlot := syncStatus.HeadSlot
+	api.processNewSlot(currentSlot)
+
+	// Start regular slot updates
+	go func() {
+		c := make(chan uint64)
+		go api.beaconClient.SubscribeToHeadEvents(c)
+		for {
+			currentSlot := <-c
+			api.processNewSlot(currentSlot)
+		}
+	}()
 
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
@@ -265,31 +268,26 @@ func (api *RelayAPI) StartServer() (err error) {
 // 	return api.srv.Close()
 // }
 
-func (api *RelayAPI) startSlotUpdates() {
-	c := make(chan uint64)
-	go api.beaconClient.SubscribeToHeadEvents(c)
-	for {
-		currentSlot := <-c
-		currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
-		api.log.WithFields(logrus.Fields{
-			"slot":            currentSlot,
-			"epoch":           currentEpoch,
-			"slotLastInEpoch": (currentEpoch+1)*32 - 1,
-		}).Info("updated current slot")
+func (api *RelayAPI) processNewSlot(currentSlot uint64) {
+	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	api.log.WithFields(logrus.Fields{
+		"slot":            currentSlot,
+		"epoch":           currentEpoch,
+		"slotLastInEpoch": (currentEpoch+1)*32 - 1,
+	}).Info("updated current slot")
 
-		// Update proposer duties in the background
-		go func() {
-			err := api.updateProposerDuties(currentEpoch)
-			if err != nil {
-				api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
-			}
-		}()
-	}
+	// Update proposer duties in the background
+	go func() {
+		err := api.updateProposerDuties(currentEpoch)
+		if err != nil {
+			api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
+		}
+	}()
 }
 
 func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	// Do nothing if already checked this epoch
-	if epoch == api.proposerDutiesEpoch {
+	if epoch <= api.proposerDutiesEpoch {
 		return nil
 	}
 
@@ -334,7 +332,10 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	api.proposerDutiesResponse = proposerDutiesResponse
 	api.proposerDutiesLock.Unlock()
 	// api.log.WithField("epoch", epoch).Infof("proposer duties updated for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
-	api.log.WithField("epoch", epoch).Info("proposer duties updated")
+	api.log.WithFields(logrus.Fields{
+		"epoch":  epoch,
+		"duties": len(proposerDutiesResponse),
+	}).Info("proposer duties updated")
 	return nil
 }
 
@@ -507,8 +508,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	api.bidLock.RLock()
 	bid := api.bids[bidKey{
 		slot:           slot,
-		parentHash:     parentHashHex,
-		proposerPubkey: pubkey,
+		parentHash:     strings.ToLower(parentHashHex),
+		proposerPubkey: strings.ToLower(pubkey),
 	}]
 	api.bidLock.RUnlock()
 
@@ -521,26 +522,42 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-// 	log := api.log.WithField("method", "getPayload")
-// 	log.Info("getPayload")
+func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+	log := api.log.WithField("method", "getPayload")
+	log.Info("getPayload")
 
-// 	payload := new(types.SignedBlindedBeaconBlock)
-// 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-// 		api.RespondError(w, http.StatusBadRequest, err.Error())
-// 		return
-// 	}
+	payload := new(types.SignedBlindedBeaconBlock)
+	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-// 	if len(payload.Signature) != 96 {
-// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSignature.Error())
-// 		return
-// 	}
+	if len(payload.Signature) != 96 {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSignature.Error())
+		return
+	}
 
-// 	api.RespondOKEmpty(w)
-// }
+	api.bidLock.RLock()
+	block := api.blocks[blockKey{
+		slot:      payload.Message.Slot,
+		blockHash: strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+	}]
+	api.bidLock.RUnlock()
+
+	if block == nil {
+		log.WithFields(logrus.Fields{
+			"slot":      payload.Message.Slot,
+			"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+		}).Error("don't have the execution payload!")
+		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
+		return
+	} else {
+		api.RespondOK(w, block)
+		return
+	}
+}
 
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
-	// log := api.log.WithField("method", "getValidatorsForEpoch")
 	api.proposerDutiesLock.RLock()
 	defer api.proposerDutiesLock.RUnlock()
 	api.RespondOK(w, api.proposerDutiesResponse)
@@ -565,12 +582,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
+		Version: VersionBellatrix,
 		Data:    signedBuilderBid,
 	}
 
 	getPayloadResponse := types.GetPayloadResponse{
-		Version: "bellatrix",
+		Version: VersionBellatrix,
 		Data:    &payload.ExecutionPayload,
 	}
 
@@ -581,12 +598,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	api.bidLock.Lock()
 	api.bids[bidKey{
 		slot:           payload.Message.Slot,
-		parentHash:     payload.Message.ParentHash.String(),
-		proposerPubkey: payload.Message.ProposerPubkey.String(),
+		parentHash:     strings.ToLower(payload.Message.ParentHash.String()),
+		proposerPubkey: strings.ToLower(payload.Message.ProposerPubkey.String()),
 	}] = &getHeaderResponse
 	api.blocks[blockKey{
 		slot:      payload.Message.Slot,
-		blockHash: payload.Message.BlockHash.String(),
+		blockHash: strings.ToLower(payload.Message.BlockHash.String()),
 	}] = &getPayloadResponse
 	api.bidLock.Unlock()
 
@@ -595,8 +612,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"parentHash":     payload.Message.ParentHash,
 		"proposerPubkey": payload.Message.ProposerPubkey,
 		"blockHash":      payload.Message.BlockHash,
-		"value":          payload.Message.Value,
+		"value":          payload.Message.Value.String(),
 	}).Info("Got a new block!")
 
-	api.RespondError(w, http.StatusNotImplemented, "not yet implemented")
+	api.RespondOKEmpty(w)
 }

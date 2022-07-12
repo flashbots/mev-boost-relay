@@ -17,6 +17,8 @@ type BuilderGetValidatorsResponseEntry struct {
 	Entry *types.SignedValidatorRegistration `json:"entry"`
 }
 
+var VersionBellatrix = "bellatrix"
+
 type BuilderSubmitBlockRequestMessage struct {
 	Slot                 uint64          `json:"slot,string"`
 	ParentHash           types.Hash      `json:"parent_hash" ssz-size:"32"`
