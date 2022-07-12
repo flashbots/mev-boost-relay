@@ -37,3 +37,7 @@ go run . known-validator-update
 go run . api --kiln --api-proposer --api-builder
 curl localhost:9062/eth/v1/builder/status
 ```
+
+Env vars:
+
+* `DEBUG_ALLOW_ZERO_VALUE_BLOCKS` - set to 1 to send out blocks with 0 value

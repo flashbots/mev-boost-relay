@@ -65,6 +65,8 @@ type RelayAPIOpts struct {
 	ProposerAPI bool
 	BuilderAPI  bool
 	PprofAPI    bool
+
+	GetHeaderWaitTime time.Duration
 }
 
 // RelayAPI represents a single Relay instance
@@ -93,7 +95,7 @@ type RelayAPI struct {
 	blocks  map[blockKey]*types.GetPayloadResponse
 
 	// debugDisableValidatorRegistrationChecks bool
-	debugBuilderAcceptZeroValueBlocks bool
+	debugAllowZeroValueBlocks bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -134,9 +136,13 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	// 	api.debugDisableValidatorRegistrationChecks = true
 	// }
 
-	if os.Getenv("DEBUG_ALLOW_BUILDER_SUBMIT_ZERO_VALUE") != "" {
-		api.log.Warn("DEBUG_ALLOW_BUILDER_SUBMIT_ZERO_VALUE: blocks with zero value are accepted")
-		api.debugBuilderAcceptZeroValueBlocks = true
+	if os.Getenv("DEBUG_ALLOW_ZERO_VALUE_BLOCKS") != "" {
+		api.log.Warn("DEBUG_ALLOW_ZERO_VALUE_BLOCKS: sending blocks with zero value")
+		api.debugAllowZeroValueBlocks = true
+	}
+
+	if opts.GetHeaderWaitTime > 0 {
+		api.log.Infof("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
 
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
@@ -535,6 +541,11 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Give builders some time...
+	if api.opts.GetHeaderWaitTime > 0 {
+		time.Sleep(api.opts.GetHeaderWaitTime)
+	}
+
 	api.bidLock.RLock()
 	bid := api.bids[bidKey{
 		slot:           slot,
@@ -614,7 +625,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// By default, don't accept blocks with 0 value
-	if !api.debugBuilderAcceptZeroValueBlocks {
+	if !api.debugAllowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
 			api.RespondOKEmpty(w)
 			return
@@ -667,6 +678,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"proposerPubkey": payload.Message.ProposerPubkey.String(),
 		"blockHash":      payload.Message.BlockHash.String(),
 		"value":          payload.Message.Value.String(),
+		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("Received a new block from builder")
 	api.RespondOKEmpty(w)
 }

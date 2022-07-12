@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"time"
 
 	"github.com/flashbots/boost-relay/api"
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -36,6 +37,7 @@ var (
 	apiBuilder  bool
 	apiPprof    bool
 
+	getHeaderWaitTimeMs int64
 	// // apis and services to start
 	// apiProposer = flag.Bool("api-proposer", false, "start proposer API")
 	// apiBuilder  = flag.Bool("api-builder", false, "start builder API")
@@ -49,6 +51,7 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiProposer, "api-proposer", false, "start proposer API")
 	apiCmd.Flags().BoolVar(&apiBuilder, "api-builder", false, "start builder API")
 	apiCmd.Flags().BoolVar(&apiPprof, "pprof", false, "enable pprof API")
+	apiCmd.Flags().Int64Var(&getHeaderWaitTimeMs, "getheader-wait-ms", 500, "ms to wait on getHeader requests")
 
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
@@ -115,6 +118,7 @@ var apiCmd = &cobra.Command{
 			ProposerAPI:           apiProposer,
 			BuilderAPI:            apiBuilder,
 			PprofAPI:              apiPprof,
+			GetHeaderWaitTime:     time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
 		}
 
 		// Create the relay service
