@@ -227,14 +227,16 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"
 
 	backend := newTestBackend(t)
-	backend.relay.proposerDutiesResponse = []BuilderGetValidatorsResponseEntry{
-		BuilderGetValidatorsResponseEntry{1, &common.ValidPayloadRegisterValidator},
+	backend.relay.proposerDutiesResponse = []types.BuilderGetValidatorsResponseEntry{
+		types.BuilderGetValidatorsResponseEntry{
+			Slot:  1,
+			Entry: &common.ValidPayloadRegisterValidator},
 	}
 
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	resp := []BuilderGetValidatorsResponseEntry{}
+	resp := []types.BuilderGetValidatorsResponseEntry{}
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(resp))
