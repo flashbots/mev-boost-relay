@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
@@ -26,13 +28,24 @@ var (
 	// Proposer API (builder-specs)
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
-	// pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
+	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
 	// pathGetPayload        = "/eth/v1/builder/blinded_blocks"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
-	// pathSubmitNewBlock        = "/relay/v1/builder/blocks"
+	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
 )
+
+type bidKey struct {
+	slot           uint64
+	parentHash     string
+	proposerPubkey string
+}
+
+type blockKey struct {
+	slot      uint64
+	blockHash string
+}
 
 // RelayAPIOpts contains the options for a relay
 type RelayAPIOpts struct {
@@ -57,6 +70,8 @@ type RelayAPI struct {
 	opts RelayAPIOpts
 	log  *logrus.Entry
 
+	sk *bls.SecretKey
+
 	srv        *http.Server
 	srvStarted atomic.Bool
 
@@ -70,6 +85,10 @@ type RelayAPI struct {
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []BuilderGetValidatorsResponseEntry
+
+	bidLock sync.RWMutex // lock for both bids and blocks
+	bids    map[bidKey]*types.GetHeaderResponse
+	blocks  map[blockKey]*types.GetPayloadResponse
 
 	// debugDisableValidatorRegistrationChecks bool
 }
@@ -89,13 +108,22 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, errors.New("proposer datastore is nil")
 	}
 
+	sk, _, err := bls.GenerateNewKeypair()
+	if err != nil {
+		return nil, err
+	}
+
 	api := RelayAPI{
 		opts:                   opts,
 		log:                    opts.Log.WithField("module", "api"),
+		sk:                     sk,
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
+
+		bids:   make(map[bidKey]*types.GetHeaderResponse),
+		blocks: make(map[blockKey]*types.GetPayloadResponse),
 	}
 
 	// if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
@@ -118,13 +146,13 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.ProposerAPI {
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
-		// r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
+		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
 		// r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 	}
 
 	if api.opts.BuilderAPI {
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
-		// r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodGet)
+		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 	}
 
 	if api.opts.PprofAPI {
@@ -447,41 +475,51 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 }
 
-// func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-// 	vars := mux.Vars(req)
-// 	slot := vars["slot"]
-// 	parentHashHex := vars["parent_hash"]
-// 	pubkey := vars["pubkey"]
-// 	log := api.log.WithFields(logrus.Fields{
-// 		"method":     "getHeader",
-// 		"slot":       slot,
-// 		"parentHash": parentHashHex,
-// 		"pubkey":     pubkey,
-// 	})
-// 	log.Info("getHeader")
+func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	slotStr := vars["slot"]
+	parentHashHex := vars["parent_hash"]
+	pubkey := vars["pubkey"]
+	log := api.log.WithFields(logrus.Fields{
+		"method":     "getHeader",
+		"slot":       slotStr,
+		"parentHash": parentHashHex,
+		"pubkey":     pubkey,
+	})
+	log.Info("getHeader")
 
-// 	if _, err := strconv.ParseUint(slot, 10, 64); err != nil {
-// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
-// 		return
-// 	}
+	slot, err := strconv.ParseUint(slotStr, 10, 64)
+	if err != nil {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
+		return
+	}
 
-// 	if len(pubkey) != 98 {
-// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
-// 		return
-// 	}
+	if len(pubkey) != 98 {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
+		return
+	}
 
-// 	if len(parentHashHex) != 66 {
-// 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidHash.Error())
-// 		return
-// 	}
+	if len(parentHashHex) != 66 {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidHash.Error())
+		return
+	}
 
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusNoContent)
-// 	if err := json.NewEncoder(w).Encode(NilResponse); err != nil {
-// 		api.log.WithError(err).Error("Couldn't write getHeader response")
-// 		http.Error(w, "", http.StatusInternalServerError)
-// 	}
-// }
+	api.bidLock.RLock()
+	bid := api.bids[bidKey{
+		slot:           slot,
+		parentHash:     parentHashHex,
+		proposerPubkey: pubkey,
+	}]
+	api.bidLock.RUnlock()
+
+	if bid == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	} else {
+		api.RespondOK(w, bid)
+		return
+	}
+}
 
 // func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 // 	log := api.log.WithField("method", "getPayload")
@@ -508,8 +546,57 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	api.RespondOK(w, api.proposerDutiesResponse)
 }
 
-// func (m *ProposerAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-// 	log := m.Log.WithField("method", "submitNewBlock")
-// 	log.Info("request")
-// 	m.RespondOKEmpty(w)
-// }
+func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
+	log := api.log.WithField("method", "submitNewBlock")
+	log.Info("request")
+
+	payload := new(BuilderSubmitBlockRequest)
+	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
+		log.WithError(err).Error("could not decode payload")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, api.sk, api.builderSigningDomain)
+	if err != nil {
+		log.WithError(err).Error("could not sign builder bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	getHeaderResponse := types.GetHeaderResponse{
+		Version: "bellatrix",
+		Data:    signedBuilderBid,
+	}
+
+	getPayloadResponse := types.GetPayloadResponse{
+		Version: "bellatrix",
+		Data:    &payload.ExecutionPayload,
+	}
+
+	// TODO:
+	// - accept new block only if greater valur
+	// - save to Redis
+	// - expire
+	api.bidLock.Lock()
+	api.bids[bidKey{
+		slot:           payload.Message.Slot,
+		parentHash:     payload.Message.ParentHash.String(),
+		proposerPubkey: payload.Message.ProposerPubkey.String(),
+	}] = &getHeaderResponse
+	api.blocks[blockKey{
+		slot:      payload.Message.Slot,
+		blockHash: payload.Message.BlockHash.String(),
+	}] = &getPayloadResponse
+	api.bidLock.Unlock()
+
+	log.WithFields(logrus.Fields{
+		"slot":           payload.Message.Slot,
+		"parentHash":     payload.Message.ParentHash,
+		"proposerPubkey": payload.Message.ProposerPubkey,
+		"blockHash":      payload.Message.BlockHash,
+		"value":          payload.Message.Value,
+	}).Info("Got a new block!")
+
+	api.RespondError(w, http.StatusNotImplemented, "not yet implemented")
+}
