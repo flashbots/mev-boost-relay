@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -68,14 +67,11 @@ type RelayAPI struct {
 	beaconClient         beaconclient.BeaconNodeClient
 	builderSigningDomain types.Domain
 
-	// currentSlot  uint64
-	// currentEpoch uint64
-
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []BuilderGetValidatorsResponseEntry
 
-	debugDisableValidatorRegistrationChecks bool
+	// debugDisableValidatorRegistrationChecks bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -102,10 +98,10 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
-		api.log.Warn("DEBUG: validator registration checks are disabled")
-		api.debugDisableValidatorRegistrationChecks = true
-	}
+	// if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
+	// 	api.log.Warn("DEBUG: validator registration checks are disabled")
+	// 	api.debugDisableValidatorRegistrationChecks = true
+	// }
 
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
 	if err != nil {
@@ -156,17 +152,14 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 
 	for i := 0; i < numWorkers; i++ {
 		go func() {
-			var err error
 			for {
 				registration := <-api.regValEntriesC
 
 				// Verify the signature
-				if api.debugDisableValidatorRegistrationChecks {
-					ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
-					if err != nil || !ok {
-						api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
-						continue
-					}
+				ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
+				if err != nil || !ok {
+					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
+					continue
 				}
 
 				// Save the registration
@@ -395,7 +388,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		if len(registration.Message.Pubkey) != 48 {
-			errorResp := "invalid pubkey length"
+			errorResp = "invalid pubkey length"
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
 			continue
 		}
@@ -414,24 +407,22 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Check if actually a real validator
-		if api.debugDisableValidatorRegistrationChecks {
-			isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
-			if !isKnownValidator {
-				errorResp := "not a known validator"
-				log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
-				continue
-			}
+		isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
+		if !isKnownValidator {
+			errorResp = fmt.Sprintf("not a known validator: %s", registration.Message.Pubkey.PubkeyHex())
+			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			continue
+		}
 
-			// Check for a previous registration timestamp
-			prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
-			if err != nil {
-				log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
-			}
+		// Check for a previous registration timestamp
+		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
+		if err != nil {
+			log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
+		}
 
-			// Do nothing if the registration is already the latest
-			if prevTimestamp >= registration.Message.Timestamp {
-				continue
-			}
+		// Do nothing if the registration is already the latest
+		if prevTimestamp >= registration.Message.Timestamp {
+			continue
 		}
 
 		// Send to workers for signature verification and saving

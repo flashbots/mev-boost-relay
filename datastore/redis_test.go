@@ -9,13 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// var redisTestServer *miniredis.Miniredis
-
-func setupService(t *testing.T) *RedisCache {
+func setupTestRedis(t *testing.T) *RedisCache {
 	var err error
-	// if redisTestServer != nil {
-	// 	redisTestServer.Close()
-	// }
 
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
@@ -27,7 +22,7 @@ func setupService(t *testing.T) *RedisCache {
 }
 
 func TestRedisValidatorRegistration(t *testing.T) {
-	cache := setupService(t)
+	cache := setupTestRedis(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
 		key := common.ValidPayloadRegisterValidator.Message.Pubkey
@@ -47,17 +42,13 @@ func TestRedisValidatorRegistration(t *testing.T) {
 }
 
 func TestRedisKnownValidators(t *testing.T) {
-	cache := setupService(t)
+	cache := setupTestRedis(t)
 
 	t.Run("Can save and get known validators", func(t *testing.T) {
 		key1 := types.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
 		key2 := types.NewPubkeyHex("0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
 		require.NoError(t, cache.SetKnownValidator(key1))
 		require.NoError(t, cache.SetKnownValidator(key2))
-
-		// result, err := cache.IsKnownValidator(key1)
-		// require.NoError(t, err)
-		// require.True(t, result)
 
 		knownVals, err := cache.GetKnownValidators()
 		require.NoError(t, err)
@@ -71,11 +62,6 @@ func TestRedisKnownValidators(t *testing.T) {
 		key2 := types.NewPubkeyHex("0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
 		keys := []types.PubkeyHex{key1, key2}
 		require.NoError(t, cache.SetKnownValidators(keys))
-		// require.NoError(t, cache.SetKnownValidator(key2))
-
-		// result, err := cache.IsKnownValidator(key1)
-		// require.NoError(t, err)
-		// require.True(t, result)
 
 		knownVals, err := cache.GetKnownValidators()
 		require.NoError(t, err)

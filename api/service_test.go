@@ -175,6 +175,11 @@ func TestRegisterValidator(t *testing.T) {
 		backend.relay.startValidatorRegistrationWorkers()
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
 		backend.redis.SetKnownValidator(pubkeyHex)
+
+		// Update datastore
+		backend.datastore.RefreshKnownValidators()
+		require.True(t, backend.datastore.IsKnownValidator(pubkeyHex))
+
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
 		time.Sleep(10 * time.Millisecond) // registrations are processed asynchronously
@@ -185,19 +190,14 @@ func TestRegisterValidator(t *testing.T) {
 		require.Equal(t, pubkeyHex, req.Message.Pubkey.PubkeyHex())
 	})
 
-	t.Run("Validator not in validator set", func(t *testing.T) {
+	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t)
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
-		require.Equal(t, http.StatusOK, rr.Code)
-
-		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
-		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
-		require.NoError(t, err)
-		require.Nil(t, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("Reject registration for +10sec into the future", func(t *testing.T) {
+	t.Run("Reject registration for >10sec into the future", func(t *testing.T) {
 		backend := newTestBackend(t)
 
 		// Allow +10 sec
@@ -205,6 +205,8 @@ func TestRegisterValidator(t *testing.T) {
 		payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
 		require.NoError(t, err)
 		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		backend.datastore.RefreshKnownValidators()
+
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusOK, rr.Code)
 
@@ -213,14 +215,13 @@ func TestRegisterValidator(t *testing.T) {
 		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
 		require.NoError(t, err)
 		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		backend.datastore.RefreshKnownValidators()
+
 		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	})
 }
-
-// func BenchmarkRegisterValidator(t *testing.T) {
-
-// }
 
 func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"
