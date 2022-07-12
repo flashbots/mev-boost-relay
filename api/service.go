@@ -11,8 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
@@ -98,6 +100,9 @@ type RelayAPI struct {
 	bids    map[bidKey]*types.GetHeaderResponse
 	blocks  map[blockKey]*types.GetPayloadResponse
 
+	indexTemplate  *template.Template
+	statusHtmlData StatusHtmlData
+
 	// debugDisableValidatorRegistrationChecks bool
 	debugAllowZeroValueBlocks bool
 }
@@ -149,11 +154,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.debugAllowZeroValueBlocks = true
 	}
 
-	// if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
-	// 	api.log.Warn("DEBUG: validator registration checks are disabled")
-	// 	api.debugDisableValidatorRegistrationChecks = true
-	// }
+	api.indexTemplate, err = parseIndexTemplate()
+	if err != nil {
+		return nil, err
+	}
 
+	api.updateStatusHTMLData()
 	return &api, nil
 }
 
@@ -421,8 +427,23 @@ func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
 	api.RespondOK(w, NilResponse)
 }
 
+func (api *RelayAPI) updateStatusHTMLData() {
+	api.statusHtmlData = StatusHtmlData{
+		Pubkey:               api.publicKey.String(),
+		ValidatorsStats:      "Registered Validators: 17505",
+		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
+		BuilderSigningDomain: hexutil.Encode(api.builderSigningDomain[:]),
+		Header:               "",
+		Block:                "",
+	}
+}
+
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
-	api.RespondOKEmpty(w)
+	if err := api.indexTemplate.Execute(w, api.statusHtmlData); err != nil {
+		api.log.WithError(err).Error("error rendering index template")
+		api.RespondError(w, http.StatusInternalServerError, "error rendering index template")
+		return
+	}
 }
 
 func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {

@@ -48,3 +48,12 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 		Signature: sig,
 	}, nil
 }
+
+type StatusHtmlData struct {
+	Pubkey               string
+	ValidatorsStats      string
+	GenesisForkVersion   string
+	BuilderSigningDomain string
+	Header               string
+	Block                string
+}
