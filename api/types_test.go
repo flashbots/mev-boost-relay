@@ -17,7 +17,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 	require.NoError(t, err)
 
 	reqPayload := types.BuilderSubmitBlockRequest{
-		ExecutionPayload: types.ExecutionPayload{
+		ExecutionPayload: &types.ExecutionPayload{
 			ParentHash:    types.Hash{0x01},
 			FeeRecipient:  types.Address{0x02},
 			StateRoot:     types.Root{0x03},
@@ -33,7 +33,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			BlockHash:     types.Hash{0x09},
 			Transactions:  []hexutil.Bytes{},
 		},
-		Message: types.BidTraceMessage{
+		Message: &types.BidTraceMessage{
 			Slot:                 1,
 			ParentHash:           types.Hash{0x01},
 			BlockHash:            types.Hash{0x09},
@@ -47,7 +47,10 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 
 	sk, _, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(&reqPayload, sk, builderSigningDomain)
+
+	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk))
+
+	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(&reqPayload, sk, &publicKey, builderSigningDomain)
 	require.NoError(t, err)
 
 	require.Equal(t, 0, signedBuilderBid.Message.Value.Cmp(&reqPayload.Message.Value))

@@ -42,6 +42,9 @@ func newTestBackend(t require.TestingT) *testBackend {
 	ds := datastore.NewProdProposerDatastore(redisCache)
 	require.NoError(t, err)
 
+	sk, _, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+
 	opts := RelayAPIOpts{
 		Log:                   common.TestLog,
 		ListenAddr:            "localhost:12345",
@@ -50,6 +53,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 		GenesisForkVersionHex: genesisForkVersionHex,
 		ProposerAPI:           true,
 		BuilderAPI:            true,
+		SecretKey:             sk,
 	}
 
 	relay, err := NewRelayAPI(opts)

@@ -4,10 +4,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/api"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +39,7 @@ var (
 	apiBuilder  bool
 	apiPprof    bool
 
+	secretKey           string
 	getHeaderWaitTimeMs int64
 	// // apis and services to start
 	// apiProposer = flag.Bool("api-proposer", false, "start proposer API")
@@ -52,6 +55,7 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiBuilder, "api-builder", false, "start builder API")
 	apiCmd.Flags().BoolVar(&apiPprof, "pprof", false, "enable pprof API")
 	apiCmd.Flags().Int64Var(&getHeaderWaitTimeMs, "getheader-wait-ms", 500, "ms to wait on getHeader requests")
+	apiCmd.Flags().StringVar(&secretKey, "secret-key", "", "secret key for signing bids")
 
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
@@ -109,6 +113,16 @@ var apiCmd = &cobra.Command{
 		log.Infof("Connected to Redis at %s", redisURI)
 		ds := datastore.NewProdProposerDatastore(redis)
 
+		// Decode the private key
+		envSkBytes, err := hexutil.Decode(secretKey)
+		if err != nil {
+			log.WithError(err).Fatal("incorrect secret key provided")
+		}
+		sk, err := bls.SecretKeyFromBytes(envSkBytes[:])
+		if err != nil {
+			log.WithError(err).Fatal("incorrect builder API secret key provided")
+		}
+
 		opts := api.RelayAPIOpts{
 			Log:                   log,
 			ListenAddr:            listenAddr,
@@ -119,6 +133,7 @@ var apiCmd = &cobra.Command{
 			BuilderAPI:            apiBuilder,
 			PprofAPI:              apiPprof,
 			GetHeaderWaitTime:     time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
+			SecretKey:             sk,
 		}
 
 		// Create the relay service

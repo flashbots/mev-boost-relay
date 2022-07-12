@@ -18,7 +18,7 @@ var VersionBellatrix = "bellatrix"
 
 var ZeroU256 = types.IntToU256(0)
 
-func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, domain types.Domain) (*types.SignedBuilderBid, error) {
+func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
 	if req == nil {
 		return nil, errors.New("req is nil")
 	}
@@ -27,7 +27,7 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 		return nil, errors.New("secret key is nil")
 	}
 
-	header, err := types.PayloadToPayloadHeader(&req.ExecutionPayload)
+	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 	builderBid := types.BuilderBid{
 		Value:  req.Message.Value,
 		Header: header,
-		Pubkey: types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk)),
+		Pubkey: *pubkey,
 	}
 
 	sig, err := types.SignMessage(&builderBid, domain, sk)

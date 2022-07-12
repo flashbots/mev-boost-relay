@@ -61,6 +61,9 @@ type RelayAPIOpts struct {
 	// GenesisForkVersion for validating signatures
 	GenesisForkVersionHex string
 
+	// Secret key to sign builder bids
+	SecretKey *bls.SecretKey
+
 	// Which APIs and services to spin up
 	ProposerAPI bool
 	BuilderAPI  bool
@@ -74,7 +77,8 @@ type RelayAPI struct {
 	opts RelayAPIOpts
 	log  *logrus.Entry
 
-	sk *bls.SecretKey
+	blsSk     *bls.SecretKey
+	publicKey *types.PublicKey
 
 	srv        *http.Server
 	srvStarted atomic.Bool
@@ -113,15 +117,13 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, errors.New("proposer datastore is nil")
 	}
 
-	sk, _, err := bls.GenerateNewKeypair()
-	if err != nil {
-		return nil, err
-	}
+	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
 
 	api := RelayAPI{
 		opts:                   opts,
 		log:                    opts.Log.WithField("module", "api"),
-		sk:                     sk,
+		blsSk:                  opts.SecretKey,
+		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
@@ -131,24 +133,26 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		blocks: make(map[blockKey]*types.GetPayloadResponse),
 	}
 
-	// if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
-	// 	api.log.Warn("DEBUG: validator registration checks are disabled")
-	// 	api.debugDisableValidatorRegistrationChecks = true
-	// }
+	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
+	if err != nil {
+		return nil, err
+	}
+
+	api.log.Infof("Using BLS key: %s", publicKey.String())
+
+	if opts.GetHeaderWaitTime > 0 {
+		api.log.Infof("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
+	}
 
 	if os.Getenv("DEBUG_ALLOW_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("DEBUG_ALLOW_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.debugAllowZeroValueBlocks = true
 	}
 
-	if opts.GetHeaderWaitTime > 0 {
-		api.log.Infof("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
-	}
-
-	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
-	if err != nil {
-		return nil, err
-	}
+	// if os.Getenv("DEBUG_ENABLE_ANY_VALREG") != "" {
+	// 	api.log.Warn("DEBUG: validator registration checks are disabled")
+	// 	api.debugDisableValidatorRegistrationChecks = true
+	// }
 
 	return &api, nil
 }
@@ -644,7 +648,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Prepare the response data types
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.sk, api.builderSigningDomain)
+	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.builderSigningDomain)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -658,7 +662,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	getPayloadResponse := types.GetPayloadResponse{
 		Version: VersionBellatrix,
-		Data:    &payload.ExecutionPayload,
+		Data:    payload.ExecutionPayload,
 	}
 
 	// TODO:
