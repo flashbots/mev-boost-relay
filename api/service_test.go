@@ -182,7 +182,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
-		time.Sleep(10 * time.Millisecond) // registrations are processed asynchronously
+		time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
 
 		req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
 		require.NoError(t, err)
