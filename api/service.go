@@ -567,14 +567,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	log := api.log.WithField("method", "submitNewBlock")
 	log.Info("request")
 
-	payload := new(BuilderSubmitBlockRequest)
+	payload := new(types.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
 		log.WithError(err).Error("could not decode payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, api.sk, api.builderSigningDomain)
+	signedBuilderBid, err := types.BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.sk, api.builderSigningDomain)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
