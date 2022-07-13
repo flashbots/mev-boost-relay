@@ -90,7 +90,7 @@ type RelayAPI struct {
 	statusHTMLDataLock sync.RWMutex
 
 	// debugDisableValidatorRegistrationChecks bool
-	debugAllowZeroValueBlocks bool
+	allowZeroValueBlocks bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -134,7 +134,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 	if os.Getenv("DEBUG_ALLOW_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("DEBUG_ALLOW_ZERO_VALUE_BLOCKS: sending blocks with zero value")
-		api.debugAllowZeroValueBlocks = true
+		api.allowZeroValueBlocks = true
 	}
 
 	api.indexTemplate, err = parseIndexTemplate()
@@ -552,15 +552,16 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// By default, bids with 0 value are not returned
-	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.debugAllowZeroValueBlocks {
-		bid = nil
-	}
-
-	if bid == nil {
+	if bid == nil || bid.Data == nil || bid.Data.Message == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	} else {
+		// If 0-value bid, only return if explicitly allowed
+		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.allowZeroValueBlocks {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		api.RespondOK(w, bid)
 		return
 	}
@@ -622,7 +623,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// By default, don't accept blocks with 0 value
-	if !api.debugAllowZeroValueBlocks {
+	if !api.allowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
 			api.RespondOKEmpty(w)
 			return
