@@ -16,12 +16,11 @@ import (
 
 var (
 	// defaults
-	defaultListenAddr         = "localhost:9062"
-	defaultBeaconURI          = common.GetEnv("BEACON_URI", "")
-	defaultredisURI           = common.GetEnv("REDIS_URI", "localhost:6379")
-	defaultLogJSON            = os.Getenv("LOG_JSON") != ""
-	defaultLogLevel           = common.GetEnv("LOG_LEVEL", "info")
-	defaultGenesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
+	defaultListenAddr = "localhost:9062"
+	defaultBeaconURI  = common.GetEnv("BEACON_URI", "")
+	defaultredisURI   = common.GetEnv("REDIS_URI", "localhost:6379")
+	defaultLogJSON    = os.Getenv("LOG_JSON") != ""
+	defaultLogLevel   = common.GetEnv("LOG_LEVEL", "info")
 
 	listenAddr    string
 	beaconNodeURI string
@@ -29,11 +28,10 @@ var (
 	logJSON       bool
 	logLevel      string
 
-	useGenesisForkVersionMainnet bool
-	useGenesisForkVersionKiln    bool
-	useGenesisForkVersionRopsten bool
-	useGenesisForkVersionSepolia bool
-	useCustomGenesisForkVersion  string
+	networkMainnet bool
+	networkKiln    bool
+	networkRopsten bool
+	networkSepolia bool
 
 	apiPprof bool
 
@@ -53,12 +51,11 @@ func init() {
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	apiCmd.Flags().BoolVar(&useGenesisForkVersionMainnet, "mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
-	apiCmd.Flags().BoolVar(&useGenesisForkVersionKiln, "kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
-	apiCmd.Flags().BoolVar(&useGenesisForkVersionRopsten, "ropsten", false, "use Ropsten genesis fork version 0x80000069 (for signature validation)")
-	apiCmd.Flags().BoolVar(&useGenesisForkVersionSepolia, "sepolia", false, "use Sepolia genesis fork version 0x90000069 (for signature validation)")
-	apiCmd.Flags().StringVar(&useCustomGenesisForkVersion, "genesis-fork-version", defaultGenesisForkVersion, "use a custom genesis fork version (for signature validation)")
-	apiCmd.MarkFlagsMutuallyExclusive("mainnet", "kiln", "ropsten", "sepolia", "genesis-fork-version")
+	apiCmd.Flags().BoolVar(&networkMainnet, "mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
+	apiCmd.Flags().BoolVar(&networkKiln, "kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
+	apiCmd.Flags().BoolVar(&networkRopsten, "ropsten", false, "use Ropsten genesis fork version 0x80000069 (for signature validation)")
+	apiCmd.Flags().BoolVar(&networkSepolia, "sepolia", false, "use Sepolia genesis fork version 0x90000069 (for signature validation)")
+	apiCmd.MarkFlagsMutuallyExclusive("mainnet", "kiln", "ropsten", "sepolia")
 
 	apiCmd.Flags().SortFlags = false
 }
@@ -75,20 +72,27 @@ var apiCmd = &cobra.Command{
 
 		// Set genesis fork version
 		genesisForkVersionHex := ""
-		if useCustomGenesisForkVersion != "" {
-			genesisForkVersionHex = useCustomGenesisForkVersion
-		} else if useGenesisForkVersionMainnet {
+		genesisValidatorsRootHex := ""
+		// if useCustomGenesisForkVersion != "" {
+		// genesisForkVersionHex = useCustomGenesisForkVersion
+		// } else if networkMainnet {
+		if networkMainnet {
 			genesisForkVersionHex = common.GenesisForkVersionMainnet
-		} else if useGenesisForkVersionKiln {
+			genesisValidatorsRootHex = common.GenesisValidatorsRootMainnet
+		} else if networkKiln {
 			genesisForkVersionHex = common.GenesisForkVersionKiln
-		} else if useGenesisForkVersionRopsten {
+			genesisValidatorsRootHex = common.GenesisValidatorsRootKiln
+		} else if networkRopsten {
 			genesisForkVersionHex = common.GenesisForkVersionRopsten
-		} else if useGenesisForkVersionSepolia {
+			genesisValidatorsRootHex = common.GenesisValidatorsRootRopsten
+		} else if networkSepolia {
 			genesisForkVersionHex = common.GenesisForkVersionSepolia
+			genesisValidatorsRootHex = common.GenesisValidatorsRootSepolia
 		} else {
 			log.Fatal("Please specify a genesis fork version (eg. -mainnet or -kiln or -ropsten or -genesis-fork-version flags)")
 		}
 		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
+		log.Infof("Using genesis validators root: %s", genesisValidatorsRootHex)
 
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
@@ -117,14 +121,15 @@ var apiCmd = &cobra.Command{
 		}
 
 		opts := api.RelayAPIOpts{
-			Log:                   log,
-			ListenAddr:            listenAddr,
-			BeaconClient:          beaconClient,
-			Datastore:             ds,
-			GenesisForkVersionHex: genesisForkVersionHex,
-			PprofAPI:              apiPprof,
-			GetHeaderWaitTime:     time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
-			SecretKey:             sk,
+			Log:                      log,
+			ListenAddr:               listenAddr,
+			BeaconClient:             beaconClient,
+			Datastore:                ds,
+			GenesisForkVersionHex:    genesisForkVersionHex,
+			GenesisValidatorsRootHex: genesisValidatorsRootHex,
+			PprofAPI:                 apiPprof,
+			GetHeaderWaitTime:        time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
+			SecretKey:                sk,
 		}
 
 		// Create the relay service

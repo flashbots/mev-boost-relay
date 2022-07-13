@@ -90,8 +90,9 @@ func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, hea
 	}
 
 	blockKey := BlockKey{
-		Slot:      slot,
-		BlockHash: strings.ToLower(headerResp.Data.Message.Header.BlockHash.String()),
+		Slot:           slot,
+		ProposerPubkey: strings.ToLower(proposerPubkey),
+		BlockHash:      strings.ToLower(headerResp.Data.Message.Header.BlockHash.String()),
 	}
 
 	ds.bidLock.Lock()
@@ -138,10 +139,11 @@ func (ds *ProdDatastore) GetBid(slot uint64, parentHash string, proposerPubkey s
 	return bid, nil
 }
 
-func (ds *ProdDatastore) GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error) {
+func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash string) (*types.GetPayloadResponse, error) {
 	blockKey := BlockKey{
-		Slot:      slot,
-		BlockHash: strings.ToLower(blockHash),
+		Slot:           slot,
+		ProposerPubkey: strings.ToLower(proposerPubkey),
+		BlockHash:      strings.ToLower(blockHash),
 	}
 
 	ds.blockLock.RLock()

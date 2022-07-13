@@ -12,6 +12,11 @@ const (
 	GenesisForkVersionKiln    = "0x70000069"
 	GenesisForkVersionRopsten = "0x80000069"
 	GenesisForkVersionSepolia = "0x90000069"
+
+	GenesisValidatorsRootKiln    = "0x99b09fcd43e5905236c370f184056bec6e6638cfc31a323b304fc4aa789cb4ad"
+	GenesisValidatorsRootRopsten = "0x44f1e56283ca88b35c789f7f449e52339bc1fefe3a45913a43a6d16edcd33cf1"
+	GenesisValidatorsRootSepolia = "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"
+	GenesisValidatorsRootMainnet = ""
 )
 
 // BuilderEntry represents a builder that is allowed to send blocks

@@ -49,8 +49,9 @@ type RelayAPIOpts struct {
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
 
-	// GenesisForkVersion for validating signatures
-	GenesisForkVersionHex string
+	// GenesisForkVersion and GenesisValidatorsRoot for validating signatures
+	GenesisForkVersionHex    string
+	GenesisValidatorsRootHex string
 
 	// Secret key to sign builder bids
 	SecretKey *bls.SecretKey
@@ -77,9 +78,11 @@ type RelayAPI struct {
 	regValEntriesC       chan types.SignedValidatorRegistration
 	regValWorkersStarted atomic.Bool
 
-	datastore            datastore.Datastore
-	beaconClient         beaconclient.BeaconNodeClient
-	builderSigningDomain types.Domain
+	datastore    datastore.Datastore
+	beaconClient beaconclient.BeaconNodeClient
+
+	domainBuilder        types.Domain
+	domainBeaconProposer types.Domain
 
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
@@ -123,7 +126,14 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
+	api.log.Debugf("genesis fork version: %s", opts.GenesisForkVersionHex)
+	api.domainBuilder, err = common.ComputeBuilderSigningDomain(opts.GenesisForkVersionHex)
+	if err != nil {
+		return nil, err
+	}
+
+	api.log.Debugf("genesis validators root: %s", opts.GenesisValidatorsRootHex)
+	api.domainBeaconProposer, err = common.ComputeBeaconProposerSigningDomain(opts.GenesisForkVersionHex, opts.GenesisValidatorsRootHex)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +211,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 				registration := <-api.regValEntriesC
 
 				// Verify the signature
-				ok, err := types.VerifySignature(registration.Message, api.builderSigningDomain, registration.Message.Pubkey[:], registration.Signature[:])
+				ok, err := types.VerifySignature(registration.Message, api.domainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 				if err != nil || !ok {
 					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
 					continue
@@ -432,7 +442,7 @@ func (api *RelayAPI) updateStatusHTMLData() {
 		Pubkey:               api.publicKey.String(),
 		ValidatorsStats:      "Registered Validators: 17505",
 		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
-		BuilderSigningDomain: hexutil.Encode(api.builderSigningDomain[:]),
+		BuilderSigningDomain: hexutil.Encode(api.domainBuilder[:]),
 		Header:               "",
 		Block:                "",
 	}
@@ -623,33 +633,39 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	if api.enableGetPayloadVerifications {
-		pubkeyFromIndex, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
-		if !found {
-			log.Warnf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
-			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
-			return
-		}
+	pubkeyFromIndex, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
+	if !found {
+		log.Warnf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
+		// api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+		return
+	}
 
+	log = log.WithField("pubkeyFromIndex", pubkeyFromIndex)
+
+	checkPayload := func() {
 		// Get the proposer pubkey based on the validator index from the payload
 		pk, err := types.HexToPubkey(pubkeyFromIndex.String())
 		if err != nil {
 			log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
-			api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
+			// api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
 			return
 		}
 
 		// Verify the signature
-		ok, err := types.VerifySignature(payload.Message, api.builderSigningDomain, pk[:], payload.Signature[:])
+		ok, err := types.VerifySignature(payload.Message, api.domainBeaconProposer, pk[:], payload.Signature[:])
 		if !ok || err != nil {
 			log.WithError(err).Warn("could not verify payload signature")
-			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+			// api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 			return
 		}
 	}
 
+	if api.enableGetPayloadVerifications {
+		checkPayload()
+	}
+
 	// Get the block
-	block, err := api.datastore.GetBlock(payload.Message.Slot, payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	block, err := api.datastore.GetBlock(payload.Message.Slot, pubkeyFromIndex.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
 	if err != nil {
 		log.WithError(err).Error("could not get block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -719,7 +735,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Prepare the response data
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.builderSigningDomain)
+	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.domainBuilder)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())

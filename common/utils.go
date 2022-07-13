@@ -64,8 +64,12 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func ComputerBuilderSigningDomain(genesisForkVersionHex string) (types.Domain, error) {
+func ComputeBuilderSigningDomain(genesisForkVersionHex string) (types.Domain, error) {
 	return ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersionHex, types.Root{}.String())
+}
+
+func ComputeBeaconProposerSigningDomain(genesisForkVersionHex, genesisValidatorsRoot string) (types.Domain, error) {
+	return ComputeDomain(types.DomainTypeBeaconProposer, genesisForkVersionHex, genesisValidatorsRoot)
 }
 
 func GetEnv(key string, defaultValue string) string {

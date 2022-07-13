@@ -2,6 +2,17 @@ package api
 
 import "text/template"
 
+type StatusHTMLData struct {
+	Pubkey                      string
+	ValidatorsStats             string
+	GenesisForkVersion          string
+	GenesisValidatorsRoot       string
+	BuilderSigningDomain        string
+	BeaconProposerSigningDomain string
+	Header                      string
+	Block                       string
+}
+
 func parseIndexTemplate() (*template.Template, error) {
 	return template.New("index").Parse(`
 <!DOCTYPE html>
@@ -53,8 +64,10 @@ func parseIndexTemplate() (*template.Template, error) {
 			<p>
             <ul>
 				<li>Pubkey: <tt>{{ .Pubkey }}</tt></li>
-                <li>Genesis fork version <tt>{{ .GenesisForkVersion }}</tt></li>
-                <li>Builder signing domain <tt>{{ .BuilderSigningDomain }}</tt></li>
+                <li>Genesis fork version: <tt>{{ .GenesisForkVersion }}</tt></li>
+                <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
+                <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
+                <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
             </ul>
             </p>
 

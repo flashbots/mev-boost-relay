@@ -12,8 +12,9 @@ type BidKey struct {
 }
 
 type BlockKey struct {
-	Slot      uint64
-	BlockHash string
+	Slot           uint64
+	ProposerPubkey string
+	BlockHash      string
 }
 
 type Datastore interface {
@@ -29,7 +30,7 @@ type Datastore interface {
 	SetValidatorRegistration(entry types.SignedValidatorRegistration) error
 
 	GetBid(slot uint64, parentHash string, proposerPubkeyHex string) (*types.GetHeaderResponse, error)
-	GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error)
+	GetBlock(slot uint64, proposerPubkey string, blockHash string) (*types.GetPayloadResponse, error)
 	SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
 	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)
 }
