@@ -90,7 +90,8 @@ type RelayAPI struct {
 	statusHTMLDataLock sync.RWMutex
 
 	// debugDisableValidatorRegistrationChecks bool
-	allowZeroValueBlocks bool
+	allowZeroValueBlocks                  bool
+	enableQueryProposerDutiesForNextEpoch bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -135,6 +136,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if os.Getenv("DEBUG_ALLOW_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("DEBUG_ALLOW_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.allowZeroValueBlocks = true
+	}
+
+	if os.Getenv("ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH") != "" {
+		api.log.Warn("env: ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH - querying proposer duties for current + next epoch")
+		api.enableQueryProposerDutiesForNextEpoch = true
 	}
 
 	api.indexTemplate, err = parseIndexTemplate()
@@ -307,10 +313,31 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	}
 
 	// Get the proposers with duty in this epoch (TODO: and next, but Prysm doesn't support it yet, Terence is on it)
-	api.log.WithField("epoch", epoch).Debug("updating proposer duties...")
+	epochFrom := epoch
+	epochTo := epoch
+	if api.enableQueryProposerDutiesForNextEpoch {
+		epochTo = epoch + 1
+	}
+
+	log := api.log.WithFields(logrus.Fields{
+		"epochFrom": epochFrom,
+		"epochTo":   epochTo,
+	})
+	log.Debug("updating proposer duties...")
+
 	r, err := api.beaconClient.GetProposerDuties(epoch)
 	if err != nil {
 		return err
+	}
+
+	entries := r.Data
+
+	if api.enableQueryProposerDutiesForNextEpoch {
+		r2, err := api.beaconClient.GetProposerDuties(epoch + 1)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, r2.Data...)
 	}
 
 	// Result for parallel Redis requests
@@ -320,7 +347,7 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	}
 
 	// Scatter requests to Redis to get registrations
-	c := make(chan result, len(r.Data))
+	c := make(chan result, len(entries))
 	for i := 0; i < cap(c); i++ {
 		go func(duty beaconclient.ProposerDutiesResponseData) {
 			reg, err := api.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
@@ -328,7 +355,7 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 				Slot:  duty.Slot,
 				Entry: reg,
 			}, err}
-		}(r.Data[i])
+		}(entries[i])
 	}
 
 	// Gather results
@@ -346,11 +373,7 @@ func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
 	api.proposerDutiesEpoch = epoch
 	api.proposerDutiesResponse = proposerDutiesResponse
 	api.proposerDutiesLock.Unlock()
-	// api.log.WithField("epoch", epoch).Infof("proposer duties updated for slots %d-%d", proposerDutiesResponse[0].Slot, proposerDutiesResponse[len(proposerDutiesResponse)-1].Slot)
-	api.log.WithFields(logrus.Fields{
-		"epoch":  epoch,
-		"duties": len(proposerDutiesResponse),
-	}).Info("proposer duties updated")
+	log.WithField("duties", len(proposerDutiesResponse)).Info("proposer duties updated")
 	return nil
 }
 
@@ -599,7 +622,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
 		return
 	} else {
-		log.Info("delivered the execution payload!")
+		log.WithField("tx", len(block.Data.Transactions)).Info("delivered the execution payload!")
 		api.RespondOK(w, block)
 		return
 	}
