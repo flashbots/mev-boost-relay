@@ -35,15 +35,10 @@ var (
 	useGenesisForkVersionSepolia bool
 	useCustomGenesisForkVersion  string
 
-	// apiProposer bool
-	// apiBuilder  bool
 	apiPprof bool
 
 	secretKey           string
 	getHeaderWaitTimeMs int64
-	// // apis and services to start
-	// apiProposer = flag.Bool("api-proposer", false, "start proposer API")
-	// apiBuilder  = flag.Bool("api-builder", false, "start builder API")
 )
 
 func init() {
@@ -51,8 +46,6 @@ func init() {
 	apiCmd.Flags().StringVar(&listenAddr, "listen-addr", defaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	// apiCmd.Flags().BoolVar(&apiProposer, "api-proposer", false, "start proposer API")
-	// apiCmd.Flags().BoolVar(&apiBuilder, "api-builder", false, "start builder API")
 	apiCmd.Flags().BoolVar(&apiPprof, "pprof", false, "enable pprof API")
 	apiCmd.Flags().Int64Var(&getHeaderWaitTimeMs, "getheader-wait-ms", 500, "ms to wait on getHeader requests")
 	apiCmd.Flags().StringVar(&secretKey, "secret-key", "", "secret key for signing bids")
@@ -129,11 +122,9 @@ var apiCmd = &cobra.Command{
 			BeaconClient:          beaconClient,
 			Datastore:             ds,
 			GenesisForkVersionHex: genesisForkVersionHex,
-			// ProposerAPI:           apiProposer,
-			// BuilderAPI:            apiBuilder,
-			PprofAPI:          apiPprof,
-			GetHeaderWaitTime: time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
-			SecretKey:         sk,
+			PprofAPI:              apiPprof,
+			GetHeaderWaitTime:     time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
+			SecretKey:             sk,
 		}
 
 		// Create the relay service
@@ -143,7 +134,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		// Start the server
-		log.Println("Webserver listening on", listenAddr)
+		log.Infof("Webserver starting on %s ...", listenAddr)
 		log.Fatal(srv.StartServer())
 	},
 }
