@@ -16,7 +16,7 @@ type BlockKey struct {
 	BlockHash string
 }
 
-type ProposerDatastore interface {
+type Datastore interface {
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
 	RefreshKnownValidators() (cnt int, err error)
 

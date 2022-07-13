@@ -104,7 +104,7 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 		log.Infof("Connected to Redis at %s", redisURI)
-		ds := datastore.NewProdProposerDatastore(redis)
+		ds := datastore.NewProdDatastore(redis)
 
 		// Decode the private key
 		envSkBytes, err := hexutil.Decode(secretKey)

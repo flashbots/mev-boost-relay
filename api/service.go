@@ -47,7 +47,7 @@ type RelayAPIOpts struct {
 	ListenAddr    string
 	RegValWorkers int // number of workers for validator registration processing
 	BeaconClient  beaconclient.BeaconNodeClient
-	Datastore     datastore.ProposerDatastore
+	Datastore     datastore.Datastore
 
 	// GenesisForkVersion for validating signatures
 	GenesisForkVersionHex string
@@ -77,7 +77,7 @@ type RelayAPI struct {
 	regValEntriesC       chan types.SignedValidatorRegistration
 	regValWorkersStarted atomic.Bool
 
-	datastore            datastore.ProposerDatastore
+	datastore            datastore.Datastore
 	beaconClient         beaconclient.BeaconNodeClient
 	builderSigningDomain types.Domain
 

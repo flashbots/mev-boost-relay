@@ -26,7 +26,7 @@ type testBackend struct {
 	t            require.TestingT
 	relay        *RelayAPI
 	beaconClient *beaconclient.MockBeaconClient
-	datastore    datastore.ProposerDatastore
+	datastore    datastore.Datastore
 	redis        *datastore.RedisCache
 }
 
@@ -39,7 +39,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 	redisCache, err := datastore.NewRedisCache(redisClient.Addr())
 	require.NoError(t, err)
 
-	ds := datastore.NewProdProposerDatastore(redisCache)
+	ds := datastore.NewProdDatastore(redisCache)
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()

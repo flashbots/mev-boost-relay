@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestProdProposerDatastore(t *testing.T) *ProdProposerDatastore {
+func setupTestDatastore(t *testing.T) *ProdDatastore {
 	var err error
 
 	redisTestServer, err := miniredis.Run()
@@ -19,14 +19,14 @@ func setupTestProdProposerDatastore(t *testing.T) *ProdProposerDatastore {
 	redisDs, err := NewRedisCache(redisTestServer.Addr())
 	require.NoError(t, err)
 
-	ds := NewProdProposerDatastore(redisDs)
+	ds := NewProdDatastore(redisDs)
 	require.NoError(t, err)
 
 	return ds
 }
 
 func TestProdProposerValidatorRegistration(t *testing.T) {
-	ds := setupTestProdProposerDatastore(t)
+	ds := setupTestDatastore(t)
 
 	var reg1 types.SignedValidatorRegistration
 	copier.Copy(&reg1, &common.ValidPayloadRegisterValidator)

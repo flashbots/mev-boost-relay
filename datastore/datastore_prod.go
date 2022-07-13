@@ -7,8 +7,8 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-// ProdProposerDatastore provides a local memory cache with a Redis and DB backend
-type ProdProposerDatastore struct {
+// ProdDatastore provides a local memory cache with a Redis and DB backend
+type ProdDatastore struct {
 	redis *RedisCache
 
 	knownValidators     map[types.PubkeyHex]bool
@@ -24,8 +24,8 @@ type ProdProposerDatastore struct {
 	blocks    map[BlockKey]*types.GetPayloadResponse
 }
 
-func NewProdProposerDatastore(redisCache *RedisCache) *ProdProposerDatastore {
-	return &ProdProposerDatastore{
+func NewProdDatastore(redisCache *RedisCache) *ProdDatastore {
+	return &ProdDatastore{
 		redis:           redisCache,
 		knownValidators: make(map[types.PubkeyHex]bool),
 		bids:            make(map[BidKey]*types.GetHeaderResponse),
@@ -34,7 +34,7 @@ func NewProdProposerDatastore(redisCache *RedisCache) *ProdProposerDatastore {
 }
 
 // RefreshKnownValidators loads known validators from Redis into memory
-func (ds *ProdProposerDatastore) RefreshKnownValidators() (cnt int, err error) {
+func (ds *ProdDatastore) RefreshKnownValidators() (cnt int, err error) {
 	knownValidators, err := ds.redis.GetKnownValidators()
 	if err != nil {
 		return 0, err
@@ -46,7 +46,7 @@ func (ds *ProdProposerDatastore) RefreshKnownValidators() (cnt int, err error) {
 	return len(knownValidators), nil
 }
 
-func (ds *ProdProposerDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
+func (ds *ProdDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
 	ds.knownValidatorsLock.RLock()
 	defer ds.knownValidatorsLock.RUnlock()
 	return ds.knownValidators[pubkeyHex]
@@ -54,19 +54,19 @@ func (ds *ProdProposerDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) boo
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
 // there's a datastore error, then an error will be returned.
-func (ds *ProdProposerDatastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+func (ds *ProdDatastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	return ds.redis.GetValidatorRegistration(pubkeyHex)
 }
 
-func (ds *ProdProposerDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
+func (ds *ProdDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
 	return ds.redis.GetValidatorRegistrationTimestamp(pubkeyHex)
 }
 
-func (ds *ProdProposerDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
+func (ds *ProdDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	return ds.redis.SetValidatorRegistration(entry)
 }
 
-func (ds *ProdProposerDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
+func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
 	bidKey := BidKey{
 		Slot:           slot,
 		ParentHash:     strings.ToLower(headerResp.Data.Message.Header.ParentHash.String()),
@@ -88,7 +88,7 @@ func (ds *ProdProposerDatastore) SaveBidAndBlock(slot uint64, proposerPubkey str
 	return nil
 }
 
-func (ds *ProdProposerDatastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, numRemaining int) {
+func (ds *ProdDatastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, numRemaining int) {
 	ds.bidLock.Lock()
 	for key := range ds.bids {
 		if key.Slot < headSlot-10 {
@@ -109,7 +109,7 @@ func (ds *ProdProposerDatastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRe
 	return
 }
 
-func (ds *ProdProposerDatastore) GetBid(slot uint64, parentHash string, proposerPubkey string) (*types.GetHeaderResponse, error) {
+func (ds *ProdDatastore) GetBid(slot uint64, parentHash string, proposerPubkey string) (*types.GetHeaderResponse, error) {
 	bidKey := BidKey{
 		Slot:           slot,
 		ParentHash:     strings.ToLower(parentHash),
@@ -122,7 +122,7 @@ func (ds *ProdProposerDatastore) GetBid(slot uint64, parentHash string, proposer
 	return bid, nil
 }
 
-func (ds *ProdProposerDatastore) GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error) {
+func (ds *ProdDatastore) GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error) {
 	blockKey := BlockKey{
 		Slot:      slot,
 		BlockHash: strings.ToLower(blockHash),
