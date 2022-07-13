@@ -545,7 +545,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"parentHash": parentHashHex,
 		"pubkey":     proposerPubkeyHex,
 	})
-	log.Info("getHeader")
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
@@ -584,6 +583,11 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+
+		log.WithFields(logrus.Fields{
+			"value":     bid.Data.Message.Value.String(),
+			"blockHash": bid.Data.Message.Header.BlockHash.String(),
+		}).Info("bid delivered")
 
 		api.RespondOK(w, bid)
 		return
