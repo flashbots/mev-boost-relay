@@ -34,7 +34,7 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	key := types.NewPubkeyHex(reg1.Message.Pubkey.String())
 
 	// Set known validator and save registration
-	err := ds.redis.SetKnownValidator(key)
+	err := ds.redis.SetKnownValidator(key, 1)
 	require.NoError(t, err)
 	err = ds.redis.SetValidatorRegistration(reg1)
 	require.NoError(t, err)

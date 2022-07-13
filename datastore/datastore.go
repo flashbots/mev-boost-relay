@@ -17,8 +17,9 @@ type BlockKey struct {
 }
 
 type Datastore interface {
+	RefreshKnownValidators() (cnt int, err error) // Updates local cache of known validators
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
-	RefreshKnownValidators() (cnt int, err error)
+	GetKnownValidatorPubkeyByIndex(index uint64) (types.PubkeyHex, bool)
 
 	GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error)
 
@@ -27,7 +28,7 @@ type Datastore interface {
 
 	SetValidatorRegistration(entry types.SignedValidatorRegistration) error
 
-	GetBid(slot uint64, parentHash string, proposerPubkey string) (*types.GetHeaderResponse, error)
+	GetBid(slot uint64, parentHash string, proposerPubkeyHex string) (*types.GetHeaderResponse, error)
 	GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error)
 	SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
 	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)

@@ -178,11 +178,15 @@ func TestRegisterValidator(t *testing.T) {
 		backend := newTestBackend(t)
 		backend.relay.startValidatorRegistrationWorkers()
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
-		backend.redis.SetKnownValidator(pubkeyHex)
+		index := uint64(17)
+		backend.redis.SetKnownValidator(pubkeyHex, index)
 
 		// Update datastore
 		backend.datastore.RefreshKnownValidators()
 		require.True(t, backend.datastore.IsKnownValidator(pubkeyHex))
+		pkH, ok := backend.datastore.GetKnownValidatorPubkeyByIndex(index)
+		require.True(t, ok)
+		require.Equal(t, pubkeyHex, pkH)
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
@@ -208,7 +212,7 @@ func TestRegisterValidator(t *testing.T) {
 		td := uint64(time.Now().Unix())
 		payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
 		require.NoError(t, err)
-		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 		backend.datastore.RefreshKnownValidators()
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
@@ -218,7 +222,7 @@ func TestRegisterValidator(t *testing.T) {
 		td = uint64(time.Now().Unix())
 		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
 		require.NoError(t, err)
-		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex())
+		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 		backend.datastore.RefreshKnownValidators()
 
 		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})

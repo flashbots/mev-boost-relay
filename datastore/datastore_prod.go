@@ -11,8 +11,9 @@ import (
 type ProdDatastore struct {
 	redis *RedisCache
 
-	knownValidators     map[types.PubkeyHex]bool
-	knownValidatorsLock sync.RWMutex
+	knownValidatorsByPubkey map[types.PubkeyHex]uint64
+	knownValidatorsByIndex  map[uint64]types.PubkeyHex
+	knownValidatorsLock     sync.RWMutex
 
 	// validatorRegistrations     map[types.PubkeyHex]types.SignedValidatorRegistration
 	// validatorRegistrationsLock sync.RWMutex
@@ -26,10 +27,11 @@ type ProdDatastore struct {
 
 func NewProdDatastore(redisCache *RedisCache) *ProdDatastore {
 	return &ProdDatastore{
-		redis:           redisCache,
-		knownValidators: make(map[types.PubkeyHex]bool),
-		bids:            make(map[BidKey]*types.GetHeaderResponse),
-		blocks:          make(map[BlockKey]*types.GetPayloadResponse),
+		redis:                   redisCache,
+		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
+		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
+		bids:                    make(map[BidKey]*types.GetHeaderResponse),
+		blocks:                  make(map[BlockKey]*types.GetPayloadResponse),
 	}
 }
 
@@ -40,16 +42,30 @@ func (ds *ProdDatastore) RefreshKnownValidators() (cnt int, err error) {
 		return 0, err
 	}
 
+	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
+	for pubkey, index := range knownValidators {
+		knownValidatorsByIndex[index] = pubkey
+	}
+
 	ds.knownValidatorsLock.Lock()
 	defer ds.knownValidatorsLock.Unlock()
-	ds.knownValidators = knownValidators
+	ds.knownValidatorsByPubkey = knownValidators
+	ds.knownValidatorsByIndex = knownValidatorsByIndex
 	return len(knownValidators), nil
 }
 
 func (ds *ProdDatastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
 	ds.knownValidatorsLock.RLock()
 	defer ds.knownValidatorsLock.RUnlock()
-	return ds.knownValidators[pubkeyHex]
+	_, found := ds.knownValidatorsByPubkey[pubkeyHex]
+	return found
+}
+
+func (ds *ProdDatastore) GetKnownValidatorPubkeyByIndex(index uint64) (types.PubkeyHex, bool) {
+	ds.knownValidatorsLock.RLock()
+	defer ds.knownValidatorsLock.RUnlock()
+	pk, found := ds.knownValidatorsByIndex[index]
+	return pk, found
 }
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If

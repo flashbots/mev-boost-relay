@@ -68,12 +68,14 @@ var knownValidatorUpdateCmd = &cobra.Command{
 		log.Info("Writing to Redis...")
 
 		// redis.SetKnownValidators(validators)
+		var last beaconclient.ValidatorResponseEntry
 		for _, v := range validators {
-			err = redis.SetKnownValidator(types.PubkeyHex(v.Validator.Pubkey))
+			last = v
+			err = redis.SetKnownValidator(types.PubkeyHex(v.Validator.Pubkey), v.Index)
 			if err != nil {
 				log.WithError(err).WithField("pubkey", v.Validator.Pubkey).Fatal("failed to set known validator in Redis")
 			}
 		}
-		log.Info("Updated Redis")
+		log.Info("Updated Redis ", last.Index, " ", last.Validator.Pubkey)
 	},
 }

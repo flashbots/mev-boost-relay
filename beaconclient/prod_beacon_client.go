@@ -58,6 +58,9 @@ func (c *ProdBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorRespo
 }
 
 type ValidatorResponseEntry struct {
+	Index     uint64                         `json:"index,string"` // Index of validator in validator registry.
+	Balance   string                         `json:"balance"`      // Current validator balance in gwei.
+	Status    string                         `json:"status"`
 	Validator ValidatorResponseValidatorData `json:"validator"`
 }
 

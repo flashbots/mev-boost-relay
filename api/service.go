@@ -92,6 +92,7 @@ type RelayAPI struct {
 	// debugDisableValidatorRegistrationChecks bool
 	allowZeroValueBlocks                  bool
 	enableQueryProposerDutiesForNextEpoch bool
+	enableGetPayloadVerifications         bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -133,14 +134,19 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.log.Infof("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
 
-	if os.Getenv("DEBUG_ALLOW_ZERO_VALUE_BLOCKS") != "" {
-		api.log.Warn("DEBUG_ALLOW_ZERO_VALUE_BLOCKS: sending blocks with zero value")
+	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
+		api.log.Warn("ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.allowZeroValueBlocks = true
 	}
 
 	if os.Getenv("ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH") != "" {
 		api.log.Warn("env: ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH - querying proposer duties for current + next epoch")
 		api.enableQueryProposerDutiesForNextEpoch = true
+	}
+
+	if os.Getenv("ENABLE_GETPAYLOAD_VERIFICATIONS") != "" {
+		api.log.Warn("env: ENABLE_GETPAYLOAD_VERIFICATIONS - strict getPayload request verification enabled")
+		api.enableGetPayloadVerifications = true
 	}
 
 	api.indexTemplate, err = parseIndexTemplate()
@@ -447,6 +453,10 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	api.RespondOKEmpty(w)
 }
 
+// ---------------
+//  PROPOSER APIS
+// ---------------
+
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "registerValidator")
 	// log.Info("registerValidator")
@@ -613,6 +623,32 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	if api.enableGetPayloadVerifications {
+		pubkeyFromIndex, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
+		if !found {
+			log.Warnf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
+			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+			return
+		}
+
+		// Get the proposer pubkey based on the validator index from the payload
+		pk, err := types.HexToPubkey(pubkeyFromIndex.String())
+		if err != nil {
+			log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
+			api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
+			return
+		}
+
+		// Verify the signature
+		ok, err := types.VerifySignature(payload.Message, api.builderSigningDomain, pk[:], payload.Signature[:])
+		if !ok || err != nil {
+			log.WithError(err).Warn("could not verify payload signature")
+			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+			return
+		}
+	}
+
+	// Get the block
 	block, err := api.datastore.GetBlock(payload.Message.Slot, payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
 	if err != nil {
 		log.WithError(err).Error("could not get block")
@@ -622,14 +658,17 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	if block == nil {
 		log.Error("requested execution payload was not found")
-		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
-		return
-	} else {
-		log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered!")
-		api.RespondOK(w, block)
+		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 		return
 	}
+
+	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered!")
+	api.RespondOK(w, block)
 }
+
+// --------------------
+//  BLOCK BUILDER APIS
+// --------------------
 
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	api.proposerDutiesLock.RLock()
@@ -639,7 +678,6 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "submitNewBlock")
-	log.Info("request")
 
 	payload := new(types.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
@@ -659,12 +697,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Sanity check the submission
 	err := VerifyBuilderBlockSubmission(payload)
 	if err != nil {
-		log.WithError(err).Warn("block submission error")
+		log.WithError(err).Warn("block submission verification failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Get existing bid
+	// Check if there's already a bid
 	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
 	if err != nil {
 		log.WithError(err).Error("could not get best bid")
@@ -672,7 +710,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Only proceed if new bid has higher value
+	// If existing bid has same or higher value, do nothing
 	if prevBid != nil {
 		if payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
 			api.RespondOKEmpty(w)
@@ -680,7 +718,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	// Prepare the response data types
+	// Prepare the response data
 	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.builderSigningDomain)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")

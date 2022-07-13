@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -80,29 +81,33 @@ func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
 
-func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]bool, error) {
-	validators := make(map[types.PubkeyHex]bool)
-	keys, err := r.client.HKeys(context.Background(), redisSetKeyValidatorKnown).Result()
+func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
+	validators := make(map[types.PubkeyHex]uint64)
+	entries, err := r.client.HGetAll(context.Background(), redisSetKeyValidatorKnown).Result()
 	if err != nil {
 		return nil, err
 	}
-	for _, key := range keys {
-		validators[types.PubkeyHex(key)] = true
+	for pubkey, proposerIndexStr := range entries {
+		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
+		// TODO: log on error
+		if err == nil {
+			validators[types.PubkeyHex(pubkey)] = proposerIndex
+		}
 	}
 	return validators, nil
 }
 
-func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex) error {
-	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
+func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
+	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
-func (r *RedisCache) SetKnownValidators(pubkeys []types.PubkeyHex) error {
-	pkMap := make(map[string]string)
-	for _, key := range pubkeys {
-		pkMap[PubkeyHexToLowerStr(key)] = "1"
-	}
-	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, pkMap).Err()
-}
+// func (r *RedisCache) SetKnownValidators(pubkeys []types.PubkeyHex) error {
+// 	pkMap := make(map[string]string)
+// 	for _, key := range pubkeys {
+// 		pkMap[PubkeyHexToLowerStr(key)] = "1"
+// 	}
+// 	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, pkMap).Err()
+// }
 
 func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
