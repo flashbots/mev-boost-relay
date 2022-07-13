@@ -5,6 +5,17 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+type BidKey struct {
+	Slot           uint64
+	ParentHash     string
+	ProposerPubkey string
+}
+
+type BlockKey struct {
+	Slot      uint64
+	BlockHash string
+}
+
 type ProposerDatastore interface {
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
 	RefreshKnownValidators() (cnt int, err error)
@@ -15,5 +26,9 @@ type ProposerDatastore interface {
 	GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error)
 
 	SetValidatorRegistration(entry types.SignedValidatorRegistration) error
-	UpdateValidatorRegistration(entry types.SignedValidatorRegistration) (wasUpdated bool, err error)
+
+	GetBid(slot uint64, parentHash string, proposerPubkey string) (*types.GetHeaderResponse, error)
+	GetBlock(slot uint64, blockHash string) (*types.GetPayloadResponse, error)
+	SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
+	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)
 }

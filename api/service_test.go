@@ -161,7 +161,7 @@ func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t)
 	rr := backend.request(http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, "{}\n", rr.Body.String())
+	require.Equal(t, "text/html; charset=utf-8", rr.Header().Get("Content-Type"))
 }
 
 func TestStatus(t *testing.T) {

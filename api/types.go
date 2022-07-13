@@ -49,11 +49,24 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 	}, nil
 }
 
-type StatusHtmlData struct {
+type StatusHTMLData struct {
 	Pubkey               string
 	ValidatorsStats      string
 	GenesisForkVersion   string
 	BuilderSigningDomain string
 	Header               string
 	Block                string
+}
+
+func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
+	// TODO: simulate the block
+	if payload.Message.BlockHash != payload.ExecutionPayload.BlockHash {
+		return errors.New("blockHash mismatch")
+	}
+
+	if payload.Message.ParentHash != payload.ExecutionPayload.ParentHash {
+		return errors.New("parentHash mismatch")
+	}
+
+	return nil
 }

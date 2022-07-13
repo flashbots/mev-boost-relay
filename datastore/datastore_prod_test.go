@@ -49,28 +49,28 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	var reg2 types.SignedValidatorRegistration
 	copier.Copy(&reg2, &reg1)
 
-	// Ensure it's not updated with the same timestamp
-	reg2.Message.GasLimit = 7
-	ds.UpdateValidatorRegistration(reg2)
-	reg, err := ds.redis.GetValidatorRegistration(key)
-	require.NoError(t, err)
-	require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
+	// // Ensure it's not updated with the same timestamp
+	// reg2.Message.GasLimit = 7
+	// ds.UpdateValidatorRegistration(reg2)
+	// reg, err := ds.redis.GetValidatorRegistration(key)
+	// require.NoError(t, err)
+	// require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
 
-	// Ensure it's not updated with an older timestamp
-	reg2.Message.Timestamp -= 1
-	ds.UpdateValidatorRegistration(reg2)
-	reg, err = ds.redis.GetValidatorRegistration(key)
-	require.NoError(t, err)
-	require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
+	// // Ensure it's not updated with an older timestamp
+	// reg2.Message.Timestamp -= 1
+	// ds.UpdateValidatorRegistration(reg2)
+	// reg, err = ds.redis.GetValidatorRegistration(key)
+	// require.NoError(t, err)
+	// require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
 
-	// Ensure it's updated with a newer timestamp
-	reg2.Message.Timestamp += 2
-	ds.UpdateValidatorRegistration(reg2)
-	reg, err = ds.redis.GetValidatorRegistration(key)
-	require.NoError(t, err)
-	require.Equal(t, reg2.Message.Timestamp, reg.Message.Timestamp)
-	require.NotEqual(t, reg1.Message.GasLimit, reg.Message.GasLimit)
-	require.Equal(t, reg2.Message.GasLimit, reg.Message.GasLimit)
+	// // Ensure it's updated with a newer timestamp
+	// reg2.Message.Timestamp += 2
+	// ds.UpdateValidatorRegistration(reg2)
+	// reg, err = ds.redis.GetValidatorRegistration(key)
+	// require.NoError(t, err)
+	// require.Equal(t, reg2.Message.Timestamp, reg.Message.Timestamp)
+	// require.NotEqual(t, reg1.Message.GasLimit, reg.Message.GasLimit)
+	// require.Equal(t, reg2.Message.GasLimit, reg.Message.GasLimit)
 }
 
 // func TestRedisKnownValidators(t *testing.T) {

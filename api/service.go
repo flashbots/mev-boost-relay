@@ -40,17 +40,6 @@ var (
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
 )
 
-type bidKey struct {
-	slot           uint64
-	parentHash     string
-	proposerPubkey string
-}
-
-type blockKey struct {
-	slot      uint64
-	blockHash string
-}
-
 // RelayAPIOpts contains the options for a relay
 type RelayAPIOpts struct {
 	Log *logrus.Entry
@@ -96,12 +85,8 @@ type RelayAPI struct {
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
 
-	bidLock sync.RWMutex // lock for both bids and blocks
-	bids    map[bidKey]*types.GetHeaderResponse
-	blocks  map[blockKey]*types.GetPayloadResponse
-
 	indexTemplate  *template.Template
-	statusHtmlData StatusHtmlData
+	statusHTMLData StatusHTMLData
 
 	// debugDisableValidatorRegistrationChecks bool
 	debugAllowZeroValueBlocks bool
@@ -133,9 +118,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
-
-		bids:   make(map[bidKey]*types.GetHeaderResponse),
-		blocks: make(map[blockKey]*types.GetPayloadResponse),
 	}
 
 	api.builderSigningDomain, err = common.ComputerBuilderSigningDomain(opts.GenesisForkVersionHex)
@@ -273,6 +255,11 @@ func (api *RelayAPI) StartServer() (err error) {
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
+
+		ReadTimeout:       600 * time.Millisecond,
+		ReadHeaderTimeout: 400 * time.Millisecond,
+		WriteTimeout:      3 * time.Second,
+		IdleTimeout:       3 * time.Second,
 	}
 
 	err = api.srv.ListenAndServe()
@@ -294,32 +281,15 @@ func (api *RelayAPI) StartServer() (err error) {
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
-		"slot":            headSlot,
-		"epoch":           currentEpoch,
-		"slotLastInEpoch": (currentEpoch+1)*32 - 1,
+		"epoch":              currentEpoch,
+		"slotHead":           headSlot,
+		"slotStartNextEpoch": (currentEpoch + 1) * 32,
 	}).Info("updated headSlot")
 
 	if headSlot%10 == 0 {
 		// Remove expired headers
-		numBidsRemoved := 0
-		numBidsRemaining := 0
-
-		api.bidLock.Lock()
-		for key := range api.bids {
-			if key.slot < headSlot-10 {
-				delete(api.bids, key)
-				numBidsRemoved++
-			}
-		}
-		for key := range api.blocks {
-			if key.slot < headSlot-10 {
-				delete(api.blocks, key)
-				numBidsRemoved++
-			}
-		}
-		numBidsRemaining = len(api.bids)
-		api.bidLock.Unlock()
-		api.log.Infof("Removed %d old bids. remaining: %d", numBidsRemoved, numBidsRemaining)
+		numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(headSlot)
+		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
 
 	// Update proposer duties in the background
@@ -428,7 +398,7 @@ func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
 }
 
 func (api *RelayAPI) updateStatusHTMLData() {
-	api.statusHtmlData = StatusHtmlData{
+	api.statusHTMLData = StatusHTMLData{
 		Pubkey:               api.publicKey.String(),
 		ValidatorsStats:      "Registered Validators: 17505",
 		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
@@ -439,7 +409,7 @@ func (api *RelayAPI) updateStatusHTMLData() {
 }
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
-	if err := api.indexTemplate.Execute(w, api.statusHtmlData); err != nil {
+	if err := api.indexTemplate.Execute(w, api.statusHTMLData); err != nil {
 		api.log.WithError(err).Error("error rendering index template")
 		api.RespondError(w, http.StatusInternalServerError, "error rendering index template")
 		return
@@ -541,12 +511,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	slotStr := vars["slot"]
 	parentHashHex := vars["parent_hash"]
-	pubkey := vars["pubkey"]
+	proposerPubkeyHex := vars["pubkey"]
 	log := api.log.WithFields(logrus.Fields{
 		"method":     "getHeader",
 		"slot":       slotStr,
 		"parentHash": parentHashHex,
-		"pubkey":     pubkey,
+		"pubkey":     proposerPubkeyHex,
 	})
 	log.Info("getHeader")
 
@@ -556,7 +526,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if len(pubkey) != 98 {
+	if len(proposerPubkeyHex) != 98 {
 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
 		return
 	}
@@ -571,13 +541,17 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		time.Sleep(api.opts.GetHeaderWaitTime)
 	}
 
-	api.bidLock.RLock()
-	bid := api.bids[bidKey{
-		slot:           slot,
-		parentHash:     strings.ToLower(parentHashHex),
-		proposerPubkey: strings.ToLower(pubkey),
-	}]
-	api.bidLock.RUnlock()
+	bid, err := api.datastore.GetBid(slot, parentHashHex, proposerPubkeyHex)
+	if err != nil {
+		log.WithError(err).Error("could not get bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// By default, bids with 0 value are not returned
+	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.debugAllowZeroValueBlocks {
+		bid = nil
+	}
 
 	if bid == nil {
 		w.WriteHeader(http.StatusNoContent)
@@ -608,12 +582,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	api.bidLock.RLock()
-	block := api.blocks[blockKey{
-		slot:      payload.Message.Slot,
-		blockHash: strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
-	}]
-	api.bidLock.RUnlock()
+	block, err := api.datastore.GetBlock(payload.Message.Slot, payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	if err != nil {
+		log.WithError(err).Error("could not get bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	if block == nil {
 		log.Error("don't have the execution payload!")
@@ -643,12 +617,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	bidKey := bidKey{
-		slot:           payload.Message.Slot,
-		parentHash:     strings.ToLower(payload.Message.ParentHash.String()),
-		proposerPubkey: strings.ToLower(payload.Message.ProposerPubkey.String()),
-	}
-
 	// By default, don't accept blocks with 0 value
 	if !api.debugAllowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
@@ -657,11 +625,24 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	// Check if we have a previous bid with same or higher value. If so then return now
-	api.bidLock.RLock()
-	prevBid, ok := api.bids[bidKey]
-	api.bidLock.RUnlock()
-	if ok && prevBid != nil {
+	// Sanity check the submission
+	err := VerifyBuilderBlockSubmission(payload)
+	if err != nil {
+		log.WithError(err).Warn("block submission error")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Get existing bid
+	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
+	if err != nil {
+		log.WithError(err).Error("could not get best bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Only proceed if new bid has higher value
+	if prevBid != nil {
 		if payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
 			api.RespondOKEmpty(w)
 			return
@@ -686,15 +667,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Data:    payload.ExecutionPayload,
 	}
 
-	// TODO:
-	// - save to Redis
-	api.bidLock.Lock()
-	api.bids[bidKey] = &getHeaderResponse
-	api.blocks[blockKey{
-		slot:      payload.Message.Slot,
-		blockHash: strings.ToLower(payload.Message.BlockHash.String()),
-	}] = &getPayloadResponse
-	api.bidLock.Unlock()
+	err = api.datastore.SaveBidAndBlock(payload.Message.Slot, payload.Message.ProposerPubkey.String(), &getHeaderResponse, &getPayloadResponse)
+	if err != nil {
+		log.WithError(err).Error("could not save bid and block")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	log.WithFields(logrus.Fields{
 		"slot":           payload.Message.Slot,
