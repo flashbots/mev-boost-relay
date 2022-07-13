@@ -596,7 +596,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "getPayload")
-	log.Info("getPayload")
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
@@ -626,7 +625,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
 		return
 	} else {
-		log.WithField("tx", len(block.Data.Transactions)).Info("delivered the execution payload!")
+		log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered!")
 		api.RespondOK(w, block)
 		return
 	}
