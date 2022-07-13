@@ -12,9 +12,6 @@ var rootCmd = &cobra.Command{
 	Use:   "relay",
 	Short: "mev-boost relay",
 	Long:  `https://github.com/flashbots/boost-relay`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Do Stuff Here
-	},
 }
 
 func Execute() {

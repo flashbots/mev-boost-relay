@@ -71,7 +71,7 @@ var apiCmd = &cobra.Command{
 
 		common.LogSetup(logJSON, logLevel)
 		log := logrus.WithField("module", "cmd/api")
-		log.Infof("boost-relay %s", version)
+		log.Infof("boost-relay %s", Version)
 
 		// Set genesis fork version
 		genesisForkVersionHex := ""

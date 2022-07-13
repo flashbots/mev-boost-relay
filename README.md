@@ -34,7 +34,7 @@ Run the API for Kiln (and update known validators first):
 go run . known-validator-update
 
 # Run APIs for Kiln
-go run . api --kiln --api-proposer --api-builder
+go run . api --kiln
 curl localhost:9062/eth/v1/builder/status
 ```
 

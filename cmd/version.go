@@ -6,9 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	version = "dev" // is set during build process
-)
+var Version = "dev" // is set during build process
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
@@ -19,6 +17,6 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number the relay application",
 	Long:  `All software has versions. This is the boost relay's`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("boost-relay %s\n", version)
+		fmt.Printf("boost-relay %s\n", Version)
 	},
 }

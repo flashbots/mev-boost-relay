@@ -10,7 +10,7 @@ v:
 #	rm -rf your-project build/
 
 build:
-	go build -ldflags "-X main.version=${GIT_VER}" -v .
+	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v .
 
 test:
 	go test ./...
