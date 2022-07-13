@@ -710,6 +710,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"proposerPubkey": payload.Message.ProposerPubkey.String(),
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
-	}).Info("Received a new block from builder")
+	}).Info("received block from builder")
 	api.RespondOKEmpty(w)
 }

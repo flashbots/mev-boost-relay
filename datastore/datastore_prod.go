@@ -14,6 +14,9 @@ type ProdProposerDatastore struct {
 	knownValidators     map[types.PubkeyHex]bool
 	knownValidatorsLock sync.RWMutex
 
+	// validatorRegistrations     map[types.PubkeyHex]types.SignedValidatorRegistration
+	// validatorRegistrationsLock sync.RWMutex
+
 	bidLock sync.RWMutex
 	bids    map[BidKey]*types.GetHeaderResponse
 
