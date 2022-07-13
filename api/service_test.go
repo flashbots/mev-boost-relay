@@ -51,9 +51,9 @@ func newTestBackend(t require.TestingT) *testBackend {
 		BeaconClient:          bc,
 		Datastore:             ds,
 		GenesisForkVersionHex: genesisForkVersionHex,
-		ProposerAPI:           true,
-		BuilderAPI:            true,
-		SecretKey:             sk,
+		// ProposerAPI:           true,
+		// BuilderAPI:            true,
+		SecretKey: sk,
 	}
 
 	relay, err := NewRelayAPI(opts)

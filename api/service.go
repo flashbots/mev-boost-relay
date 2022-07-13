@@ -56,9 +56,9 @@ type RelayAPIOpts struct {
 	SecretKey *bls.SecretKey
 
 	// Which APIs and services to spin up
-	ProposerAPI bool
-	BuilderAPI  bool
-	PprofAPI    bool
+	// ProposerAPI bool
+	// BuilderAPI  bool
+	PprofAPI bool
 
 	GetHeaderWaitTime time.Duration
 }
@@ -85,8 +85,9 @@ type RelayAPI struct {
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
 
-	indexTemplate  *template.Template
-	statusHTMLData StatusHTMLData
+	indexTemplate      *template.Template
+	statusHTMLData     StatusHTMLData
+	statusHTMLDataLock sync.RWMutex
 
 	// debugDisableValidatorRegistrationChecks bool
 	debugAllowZeroValueBlocks bool
@@ -149,17 +150,15 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
 
-	if api.opts.ProposerAPI {
-		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
-		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
-		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
-		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
-	}
+	// Proposer API
+	r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
+	r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
+	r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
+	r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 
-	if api.opts.BuilderAPI {
-		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
-		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
-	}
+	// Builder API
+	r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
+	r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
@@ -398,6 +397,8 @@ func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
 }
 
 func (api *RelayAPI) updateStatusHTMLData() {
+	api.statusHTMLDataLock.Lock()
+	defer api.statusHTMLDataLock.Unlock()
 	api.statusHTMLData = StatusHTMLData{
 		Pubkey:               api.publicKey.String(),
 		ValidatorsStats:      "Registered Validators: 17505",
@@ -409,6 +410,9 @@ func (api *RelayAPI) updateStatusHTMLData() {
 }
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
+	api.statusHTMLDataLock.RLock()
+	defer api.statusHTMLDataLock.RUnlock()
+
 	if err := api.indexTemplate.Execute(w, api.statusHTMLData); err != nil {
 		api.log.WithError(err).Error("error rendering index template")
 		api.RespondError(w, http.StatusInternalServerError, "error rendering index template")
@@ -584,13 +588,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	block, err := api.datastore.GetBlock(payload.Message.Slot, payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
 	if err != nil {
-		log.WithError(err).Error("could not get bid")
+		log.WithError(err).Error("could not get block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if block == nil {
-		log.Error("don't have the execution payload!")
+		log.Error("requested execution payload was not found")
 		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
 		return
 	} else {
@@ -676,10 +680,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log.WithFields(logrus.Fields{
 		"slot":           payload.Message.Slot,
-		"builderPubkey":  payload.Message.BuilderPubkey.String(),
-		"parentHash":     payload.Message.ParentHash.String(),
-		"proposerPubkey": payload.Message.ProposerPubkey.String(),
 		"blockHash":      payload.Message.BlockHash.String(),
+		"parentHash":     payload.Message.ParentHash.String(),
+		"builderPubkey":  payload.Message.BuilderPubkey.String(),
+		"proposerPubkey": payload.Message.ProposerPubkey.String(),
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("Received a new block from builder")
