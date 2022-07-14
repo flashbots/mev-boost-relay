@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/r3labs/sse"
+	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
 
