@@ -3,8 +3,10 @@ package api
 import "text/template"
 
 type StatusHTMLData struct {
-	Pubkey                      string
-	ValidatorsStats             string
+	RelayPubkey                 string
+	ValidatorsTotal             string
+	ValidatorsRegistered        string
+	BellatrixForkVersion        string
 	GenesisForkVersion          string
 	GenesisValidatorsRoot       string
 	BuilderSigningDomain        string
@@ -63,7 +65,8 @@ func parseIndexTemplate() (*template.Template, error) {
 
 			<p>
             <ul>
-				<li>Pubkey: <tt>{{ .Pubkey }}</tt></li>
+				<li>Relay Pubkey: <tt>{{ .RelayPubkey }}</tt></li>
+                <li>Bellatrix fork version: <tt>{{ .BellatrixForkVersion }}</tt></li>
                 <li>Genesis fork version: <tt>{{ .GenesisForkVersion }}</tt></li>
                 <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
                 <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
@@ -88,7 +91,7 @@ func parseIndexTemplate() (*template.Template, error) {
 
             <p>
             <h2>
-				{{ .ValidatorsStats }}
+				Validators: {{ .ValidatorsRegistered }} / {{ .ValidatorsTotal }}
             </h2>
             </p>
 

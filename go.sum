@@ -19,6 +19,8 @@ github.com/ferranbt/fastssz v0.1.1 h1:hBYNxKu51wjPC9sQYCjicmy5wtJqubENp3IiRVcdJB
 github.com/ferranbt/fastssz v0.1.1/go.mod h1:U2ZsxlYyvGeQGmadhz8PlEqwkBzDIhHwd3xuKrg2JIs=
 github.com/flashbots/go-boost-utils v0.3.1-0.20220714122824-a8ee811523a7 h1:8G04IZFHz098RM1VgEZdVW94dzb28CFvgfL0XAggljY=
 github.com/flashbots/go-boost-utils v0.3.1-0.20220714122824-a8ee811523a7/go.mod h1:7pAZp9AHt06uHUY+Avob0H88IN2La22uPZUpS3seXR0=
+github.com/flashbots/go-boost-utils v0.3.1-0.20220714150540-5c513c726d8c h1:UN6ygwxzK8jtm405aQN9ek31uJlRYQhsIP9Dc3/c/xU=
+github.com/flashbots/go-boost-utils v0.3.1-0.20220714150540-5c513c726d8c/go.mod h1:7pAZp9AHt06uHUY+Avob0H88IN2La22uPZUpS3seXR0=
 github.com/flashbots/go-utils v0.4.7 h1:Xxx8OgjUeSOZqQ0peazBRNDy3OAshCtJmxb54+/9YRI=
 github.com/flashbots/go-utils v0.4.7/go.mod h1:AGyHG5g3nEFzRp5rqSZzzxMmMsGlPsRRka3kJ+hg49w=
 github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=

@@ -52,13 +52,12 @@ type RelayAPIOpts struct {
 	// GenesisForkVersion and GenesisValidatorsRoot for validating signatures
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
+	BellatrixForkVersionHex  string
 
 	// Secret key to sign builder bids
 	SecretKey *bls.SecretKey
 
 	// Which APIs and services to spin up
-	// ProposerAPI bool
-	// BuilderAPI  bool
 	PprofAPI bool
 
 	GetHeaderWaitTime time.Duration
@@ -126,14 +125,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	api.log.Debugf("genesis fork version: %s", opts.GenesisForkVersionHex)
-	api.domainBuilder, err = common.ComputeBuilderSigningDomain(opts.GenesisForkVersionHex)
+	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.GenesisForkVersionHex, types.Root{}.String())
 	if err != nil {
 		return nil, err
 	}
 
-	api.log.Debugf("genesis validators root: %s", opts.GenesisValidatorsRootHex)
-	api.domainBeaconProposer, err = common.ComputeBeaconProposerSigningDomain(opts.GenesisForkVersionHex, opts.GenesisValidatorsRootHex)
+	api.domainBeaconProposer, err = common.ComputeDomain(types.DomainTypeBeaconProposer, opts.BellatrixForkVersionHex, opts.GenesisValidatorsRootHex)
 	if err != nil {
 		return nil, err
 	}
@@ -439,8 +436,9 @@ func (api *RelayAPI) updateStatusHTMLData() {
 	api.statusHTMLDataLock.Lock()
 	defer api.statusHTMLDataLock.Unlock()
 	api.statusHTMLData = StatusHTMLData{
-		Pubkey:               api.publicKey.String(),
-		ValidatorsStats:      "Registered Validators: 17505",
+		RelayPubkey:          api.publicKey.String(),
+		ValidatorsTotal:      "17505",
+		ValidatorsRegistered: "17505",
 		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
 		BuilderSigningDomain: hexutil.Encode(api.domainBuilder[:]),
 		Header:               "",

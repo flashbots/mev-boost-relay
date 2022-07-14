@@ -10,6 +10,7 @@ import (
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -73,26 +74,26 @@ var apiCmd = &cobra.Command{
 		// Set genesis fork version
 		genesisForkVersionHex := ""
 		genesisValidatorsRootHex := ""
-		// if useCustomGenesisForkVersion != "" {
-		// genesisForkVersionHex = useCustomGenesisForkVersion
-		// } else if networkMainnet {
-		if networkMainnet {
-			genesisForkVersionHex = common.GenesisForkVersionMainnet
-			genesisValidatorsRootHex = common.GenesisValidatorsRootMainnet
-		} else if networkKiln {
-			genesisForkVersionHex = common.GenesisForkVersionKiln
-			genesisValidatorsRootHex = common.GenesisValidatorsRootKiln
+		bellatrixForkVersionHex := ""
+
+		if networkKiln {
+			genesisForkVersionHex = types.GenesisForkVersionKiln
+			genesisValidatorsRootHex = types.GenesisValidatorsRootKiln
+			bellatrixForkVersionHex = types.BellatrixForkVersionKiln
 		} else if networkRopsten {
-			genesisForkVersionHex = common.GenesisForkVersionRopsten
-			genesisValidatorsRootHex = common.GenesisValidatorsRootRopsten
+			genesisForkVersionHex = types.GenesisForkVersionRopsten
+			genesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
+			bellatrixForkVersionHex = types.BellatrixForkVersionRopsten
 		} else if networkSepolia {
-			genesisForkVersionHex = common.GenesisForkVersionSepolia
-			genesisValidatorsRootHex = common.GenesisValidatorsRootSepolia
+			genesisForkVersionHex = types.GenesisForkVersionSepolia
+			genesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
+			bellatrixForkVersionHex = types.BellatrixForkVersionSepolia
 		} else {
 			log.Fatal("Please specify a genesis fork version (eg. -mainnet or -kiln or -ropsten or -genesis-fork-version flags)")
 		}
-		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
 		log.Infof("Using genesis validators root: %s", genesisValidatorsRootHex)
+		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
+		log.Infof("Using bellatrix fork version: %s", bellatrixForkVersionHex)
 
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
@@ -127,6 +128,7 @@ var apiCmd = &cobra.Command{
 			Datastore:                ds,
 			GenesisForkVersionHex:    genesisForkVersionHex,
 			GenesisValidatorsRootHex: genesisValidatorsRootHex,
+			BellatrixForkVersionHex:  bellatrixForkVersionHex,
 			PprofAPI:                 apiPprof,
 			GetHeaderWaitTime:        time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
 			SecretKey:                sk,

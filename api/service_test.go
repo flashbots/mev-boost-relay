@@ -46,11 +46,12 @@ func newTestBackend(t require.TestingT) *testBackend {
 	require.NoError(t, err)
 
 	opts := RelayAPIOpts{
-		Log:                   common.TestLog,
-		ListenAddr:            "localhost:12345",
-		BeaconClient:          bc,
-		Datastore:             ds,
-		GenesisForkVersionHex: genesisForkVersionHex,
+		Log:                     common.TestLog,
+		ListenAddr:              "localhost:12345",
+		BeaconClient:            bc,
+		Datastore:               ds,
+		GenesisForkVersionHex:   genesisForkVersionHex,
+		BellatrixForkVersionHex: "0x00000000",
 		// ProposerAPI:           true,
 		// BuilderAPI:            true,
 		SecretKey: sk,
