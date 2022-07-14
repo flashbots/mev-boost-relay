@@ -91,10 +91,10 @@ type RelayAPI struct {
 	statusHTMLData     StatusHTMLData
 	statusHTMLDataLock sync.RWMutex
 
-	// debugDisableValidatorRegistrationChecks bool
+	// feature flag options
 	allowZeroValueBlocks                  bool
 	enableQueryProposerDutiesForNextEpoch bool
-	enableGetPayloadVerifications         bool
+	// disableGetPayloadVerifications        bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -142,7 +142,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	}
 
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
-		api.log.Warn("ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
+		api.log.Warn("env: ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.allowZeroValueBlocks = true
 	}
 
@@ -151,10 +151,10 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.enableQueryProposerDutiesForNextEpoch = true
 	}
 
-	if os.Getenv("ENABLE_GETPAYLOAD_VERIFICATIONS") != "" {
-		api.log.Warn("env: ENABLE_GETPAYLOAD_VERIFICATIONS - strict getPayload request verification enabled")
-		api.enableGetPayloadVerifications = true
-	}
+	// if os.Getenv("DISABLE_SIGNATURE_VERIFICATIONS") != "" {
+	// 	api.log.Warn("env: DISABLE_SIGNATURE_VERIFICATIONS - signature verifications disabled for registraterValidator and getPayload calls")
+	// 	api.disableGetPayloadVerifications = true
+	// }
 
 	api.indexTemplate, err = parseIndexTemplate()
 	if err != nil {
@@ -216,7 +216,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 
 				// Save the registration
 				go func() {
-					err = api.datastore.SetValidatorRegistration(registration)
+					err := api.datastore.SetValidatorRegistration(registration)
 					if err != nil {
 						api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
 					}
@@ -640,26 +640,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	log = log.WithField("pubkeyFromIndex", pubkeyFromIndex)
 
-	checkPayload := func() {
-		// Get the proposer pubkey based on the validator index from the payload
-		pk, err := types.HexToPubkey(pubkeyFromIndex.String())
-		if err != nil {
-			log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
-			// api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
-			return
-		}
-
-		// Verify the signature
-		ok, err := types.VerifySignature(payload.Message, api.domainBeaconProposer, pk[:], payload.Signature[:])
-		if !ok || err != nil {
-			log.WithError(err).Warn("could not verify payload signature")
-			// api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
-			return
-		}
+	// Get the proposer pubkey based on the validator index from the payload
+	pk, err := types.HexToPubkey(pubkeyFromIndex.String())
+	if err != nil {
+		log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
+		api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
+		return
 	}
 
-	if api.enableGetPayloadVerifications {
-		checkPayload()
+	// Verify the signature
+	ok, err := types.VerifySignature(payload.Message, api.domainBeaconProposer, pk[:], payload.Signature[:])
+	if !ok || err != nil {
+		log.WithError(err).Warn("could not verify payload signature")
+		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+		return
 	}
 
 	// Get the block
@@ -676,7 +670,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered!")
+	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
 	api.RespondOK(w, block)
 }
 
