@@ -318,6 +318,9 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
 
+	// Update HTML data once per slot
+	go api.updateStatusHTMLData()
+
 	// Update proposer duties in the background
 	go func() {
 		err := api.updateProposerDuties(currentEpoch)
@@ -443,12 +446,20 @@ func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
 }
 
 func (api *RelayAPI) updateStatusHTMLData() {
+	_numRegistered, err := api.datastore.NumRegisteredValidators()
+	if err != nil {
+		api.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
+	}
+
+	numRegistered := printer.Sprintf("%d", _numRegistered)
+	numKnown := printer.Sprintf("%d", api.datastore.NumKnownValidators())
+
 	api.statusHTMLDataLock.Lock()
 	defer api.statusHTMLDataLock.Unlock()
 	api.statusHTMLData = StatusHTMLData{
 		RelayPubkey:          api.publicKey.String(),
-		ValidatorsTotal:      printer.Sprintf("%d", api.datastore.NumKnownValidators()),
-		ValidatorsRegistered: "17505",
+		ValidatorsTotal:      numKnown,
+		ValidatorsRegistered: numRegistered,
 
 		BellatrixForkVersion:  api.opts.BellatrixForkVersionHex,
 		GenesisForkVersion:    api.opts.GenesisForkVersionHex,
@@ -775,5 +786,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("received block from builder")
+
+	// Update HTML data
+	go api.updateStatusHTMLData()
+
+	// Respond with OK (TODO: proper response format)
 	api.RespondOKEmpty(w)
 }

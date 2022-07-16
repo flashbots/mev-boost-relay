@@ -75,10 +75,8 @@ func (ds *ProdDatastore) NumKnownValidators() int {
 	return len(ds.knownValidatorsByIndex)
 }
 
-func (ds *ProdDatastore) NumRegisteredValidators() int {
-	ds.knownValidatorsLock.RLock()
-	defer ds.knownValidatorsLock.RUnlock()
-	return len(ds.knownValidatorsByIndex)
+func (ds *ProdDatastore) NumRegisteredValidators() (int64, error) {
+	return ds.redis.NumRegisteredValidators()
 }
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If

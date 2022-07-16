@@ -36,6 +36,9 @@ go run . known-validator-update
 # Run APIs for Kiln
 go run . api --kiln
 curl localhost:9062/eth/v1/builder/status
+
+# Send test validator registrations
+curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 ```
 
 Env vars:
