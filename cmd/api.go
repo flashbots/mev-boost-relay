@@ -71,20 +71,24 @@ var apiCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", Version)
 
-		// Set genesis fork version
+		// Set network specific parameters
+		networkName := "Mainnet"
 		genesisForkVersionHex := ""
 		genesisValidatorsRootHex := ""
 		bellatrixForkVersionHex := ""
 
 		if networkKiln {
+			networkName = "Kiln"
 			genesisForkVersionHex = types.GenesisForkVersionKiln
 			genesisValidatorsRootHex = types.GenesisValidatorsRootKiln
 			bellatrixForkVersionHex = types.BellatrixForkVersionKiln
 		} else if networkRopsten {
+			networkName = "Ropsten"
 			genesisForkVersionHex = types.GenesisForkVersionRopsten
 			genesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
 			bellatrixForkVersionHex = types.BellatrixForkVersionRopsten
 		} else if networkSepolia {
+			networkName = "Sepolia"
 			genesisForkVersionHex = types.GenesisForkVersionSepolia
 			genesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
 			bellatrixForkVersionHex = types.BellatrixForkVersionSepolia
@@ -98,10 +102,6 @@ var apiCmd = &cobra.Command{
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
-		_, err = beaconClient.SyncStatus()
-		if err != nil {
-			log.WithError(err).Fatal("Beacon node is syncing")
-		}
 
 		// Connect to Redis and setup the datastore
 		redis, err := datastore.NewRedisCache(redisURI)
@@ -126,6 +126,7 @@ var apiCmd = &cobra.Command{
 			ListenAddr:               listenAddr,
 			BeaconClient:             beaconClient,
 			Datastore:                ds,
+			NetworkName:              networkName,
 			GenesisForkVersionHex:    genesisForkVersionHex,
 			GenesisValidatorsRootHex: genesisValidatorsRootHex,
 			BellatrixForkVersionHex:  bellatrixForkVersionHex,

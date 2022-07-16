@@ -54,7 +54,7 @@ type RelayAPIOpts struct {
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
 
-	// GenesisForkVersion and GenesisValidatorsRoot for validating signatures
+	NetworkName              string
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
@@ -91,6 +91,7 @@ type RelayAPI struct {
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
+	headSlot               uint64
 
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
@@ -166,7 +167,16 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, err
 	}
 
-	api.updateStatusHTMLData()
+	api.statusHTMLData = StatusHTMLData{
+		Network:                     opts.NetworkName,
+		RelayPubkey:                 api.publicKey.String(),
+		BellatrixForkVersion:        api.opts.BellatrixForkVersionHex,
+		GenesisForkVersion:          api.opts.GenesisForkVersionHex,
+		GenesisValidatorsRoot:       api.opts.GenesisValidatorsRootHex,
+		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
+		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
+	}
+
 	return &api, nil
 }
 
@@ -305,6 +315,11 @@ func (api *RelayAPI) StartServer() (err error) {
 // }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
+	if headSlot <= api.headSlot {
+		return
+	}
+
+	api.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
@@ -453,23 +468,27 @@ func (api *RelayAPI) updateStatusHTMLData() {
 
 	numRegistered := printer.Sprintf("%d", _numRegistered)
 	numKnown := printer.Sprintf("%d", api.datastore.NumKnownValidators())
+	headSlot := printer.Sprintf("%d", api.headSlot)
+
+	// header := b.bestHeader
+	// headerData, err := json.MarshalIndent(header, "", "  ")
+	// if err != nil {
+	// 	headerData = []byte{}
+	// }
+
+	// payload := b.bestPayload
+	// payloadData, err := json.MarshalIndent(payload, "", "  ")
+	// if err != nil {
+	// 	payloadData = []byte{}
+	// }
 
 	api.statusHTMLDataLock.Lock()
-	defer api.statusHTMLDataLock.Unlock()
-	api.statusHTMLData = StatusHTMLData{
-		RelayPubkey:          api.publicKey.String(),
-		ValidatorsTotal:      numKnown,
-		ValidatorsRegistered: numRegistered,
-
-		BellatrixForkVersion:  api.opts.BellatrixForkVersionHex,
-		GenesisForkVersion:    api.opts.GenesisForkVersionHex,
-		GenesisValidatorsRoot: api.opts.GenesisValidatorsRootHex,
-
-		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
-		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
-		Header:                      "",
-		Block:                       "",
-	}
+	api.statusHTMLData.HeadSlot = headSlot
+	api.statusHTMLData.ValidatorsTotal = numKnown
+	api.statusHTMLData.ValidatorsRegistered = numRegistered
+	api.statusHTMLData.Header = ""
+	// api.statusHTMLData.Block = ""
+	api.statusHTMLDataLock.Unlock()
 }
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
