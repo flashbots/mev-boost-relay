@@ -25,6 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/atomic"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+
 	_ "net/http/pprof"
 )
 
@@ -38,6 +41,8 @@ var (
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
+
+	printer = message.NewPrinter(language.English)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -270,6 +275,9 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
+	// Update HTML data before starting server
+	api.updateStatusHTMLData()
+
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
@@ -406,6 +414,8 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 				api.log.WithField("cnt", cnt).Info("updated known validators")
 			}
 		}
+
+		api.updateStatusHTMLData()
 	}
 }
 
@@ -437,12 +447,17 @@ func (api *RelayAPI) updateStatusHTMLData() {
 	defer api.statusHTMLDataLock.Unlock()
 	api.statusHTMLData = StatusHTMLData{
 		RelayPubkey:          api.publicKey.String(),
-		ValidatorsTotal:      "17505",
+		ValidatorsTotal:      printer.Sprintf("%d", api.datastore.NumKnownValidators()),
 		ValidatorsRegistered: "17505",
-		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
-		BuilderSigningDomain: hexutil.Encode(api.domainBuilder[:]),
-		Header:               "",
-		Block:                "",
+
+		BellatrixForkVersion:  api.opts.BellatrixForkVersionHex,
+		GenesisForkVersion:    api.opts.GenesisForkVersionHex,
+		GenesisValidatorsRoot: api.opts.GenesisValidatorsRootHex,
+
+		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
+		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
+		Header:                      "",
+		Block:                       "",
 	}
 }
 

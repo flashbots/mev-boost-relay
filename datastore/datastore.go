@@ -21,6 +21,8 @@ type Datastore interface {
 	RefreshKnownValidators() (cnt int, err error) // Updates local cache of known validators
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
 	GetKnownValidatorPubkeyByIndex(index uint64) (types.PubkeyHex, bool)
+	NumKnownValidators() int
+	// NumRegisteredValidators() int
 
 	GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error)
 

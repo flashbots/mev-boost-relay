@@ -59,5 +59,9 @@ func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) erro
 		return errors.New("parentHash mismatch")
 	}
 
+	if payload.Message.ProposerFeeRecipient != payload.ExecutionPayload.FeeRecipient {
+		return errors.New("feeRecipient mismatch")
+	}
+
 	return nil
 }
