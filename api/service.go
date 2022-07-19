@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/atomic"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
@@ -56,10 +57,7 @@ type RelayAPIOpts struct {
 	SecretKey     *bls.SecretKey // used to sign bids (getHeader responses)
 
 	// Network specific variables
-	NetworkName              string
-	GenesisForkVersionHex    string
-	GenesisValidatorsRootHex string
-	BellatrixForkVersionHex  string
+	EthNetDetails common.EthNetworkDetails
 
 	// Whether to enable Pprof
 	PprofAPI bool
@@ -131,12 +129,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.GenesisForkVersionHex, types.Root{}.String())
+	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.EthNetDetails.GenesisForkVersionHex, types.Root{}.String())
 	if err != nil {
 		return nil, err
 	}
 
-	api.domainBeaconProposer, err = common.ComputeDomain(types.DomainTypeBeaconProposer, opts.BellatrixForkVersionHex, opts.GenesisValidatorsRootHex)
+	api.domainBeaconProposer, err = common.ComputeDomain(types.DomainTypeBeaconProposer, opts.EthNetDetails.BellatrixForkVersionHex, opts.EthNetDetails.GenesisValidatorsRootHex)
 	if err != nil {
 		return nil, err
 	}
@@ -167,12 +165,13 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, err
 	}
 
+	caser := cases.Title(language.English)
 	api.statusHTMLData = StatusHTMLData{
-		Network:                     opts.NetworkName,
+		Network:                     caser.String(opts.EthNetDetails.Name),
 		RelayPubkey:                 api.publicKey.String(),
-		BellatrixForkVersion:        api.opts.BellatrixForkVersionHex,
-		GenesisForkVersion:          api.opts.GenesisForkVersionHex,
-		GenesisValidatorsRoot:       api.opts.GenesisValidatorsRootHex,
+		BellatrixForkVersion:        api.opts.EthNetDetails.BellatrixForkVersionHex,
+		GenesisForkVersion:          api.opts.EthNetDetails.GenesisForkVersionHex,
+		GenesisValidatorsRoot:       api.opts.EthNetDetails.GenesisValidatorsRootHex,
 		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
 		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
 	}

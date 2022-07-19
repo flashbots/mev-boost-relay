@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -10,50 +9,36 @@ import (
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
+const (
+	apiDefaultListenAddr = "localhost:9062"
+)
+
 var (
-	// defaults
-	defaultListenAddr = "localhost:9062"
-	defaultBeaconURI  = common.GetEnv("BEACON_URI", "")
-	defaultredisURI   = common.GetEnv("REDIS_URI", "localhost:6379")
-	defaultLogJSON    = os.Getenv("LOG_JSON") != ""
-	defaultLogLevel   = common.GetEnv("LOG_LEVEL", "info")
-
-	listenAddr    string
-	beaconNodeURI string
-	redisURI      string
-	logJSON       bool
-	logLevel      string
-
-	networkKiln    bool
-	networkRopsten bool
-	networkSepolia bool
-
-	apiPprof bool
-
-	secretKey           string
-	getHeaderWaitTimeMs int64
+	apiListenAddr       string
+	apiPprofEnabled     bool
+	apiSecretKey        string
+	apiGetHeaderDelayMs int64
 )
 
 func init() {
 	rootCmd.AddCommand(apiCmd)
-	apiCmd.Flags().StringVar(&listenAddr, "listen-addr", defaultListenAddr, "listen address for webserver")
+	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	apiCmd.Flags().BoolVar(&apiPprof, "pprof", false, "enable pprof API")
-	apiCmd.Flags().Int64Var(&getHeaderWaitTimeMs, "getheader-wait-ms", 500, "ms to wait on getHeader requests")
-	apiCmd.Flags().StringVar(&secretKey, "secret-key", "", "secret key for signing bids")
+	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
+	apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 500, "ms to wait on getHeader requests")
+	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	apiCmd.Flags().BoolVar(&networkKiln, "kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
-	apiCmd.Flags().BoolVar(&networkRopsten, "ropsten", false, "use Ropsten genesis fork version 0x80000069 (for signature validation)")
-	apiCmd.Flags().BoolVar(&networkSepolia, "sepolia", false, "use Sepolia genesis fork version 0x90000069 (for signature validation)")
+	apiCmd.Flags().BoolVar(&useNetworkKiln, "kiln", false, "Kiln network")
+	apiCmd.Flags().BoolVar(&useNetworkRopsten, "ropsten", false, "Ropsten network")
+	apiCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
 	apiCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia")
 
 	apiCmd.Flags().SortFlags = false
@@ -69,40 +54,31 @@ var apiCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", Version)
 
-		// Set network specific parameters
-		networkName := ""
-		genesisForkVersionHex := ""
-		genesisValidatorsRootHex := ""
-		bellatrixForkVersionHex := ""
-
-		if networkKiln {
-			networkName = "Kiln"
-			genesisForkVersionHex = types.GenesisForkVersionKiln
-			genesisValidatorsRootHex = types.GenesisValidatorsRootKiln
-			bellatrixForkVersionHex = types.BellatrixForkVersionKiln
-		} else if networkRopsten {
-			networkName = "Ropsten"
-			genesisForkVersionHex = types.GenesisForkVersionRopsten
-			genesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
-			bellatrixForkVersionHex = types.BellatrixForkVersionRopsten
-		} else if networkSepolia {
-			networkName = "Sepolia"
-			genesisForkVersionHex = types.GenesisForkVersionSepolia
-			genesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
-			bellatrixForkVersionHex = types.BellatrixForkVersionSepolia
+		var networkInfo *common.EthNetworkDetails
+		if useNetworkKiln {
+			networkInfo, err = common.NewEthNetworkDetails("kiln")
+		} else if useNetworkRopsten {
+			networkInfo, err = common.NewEthNetworkDetails("ropsten")
+		} else if useNetworkSepolia {
+			networkInfo, err = common.NewEthNetworkDetails("sepolia")
 		} else {
 			log.Fatal("Please specify a network (eg. -kiln or -ropsten or -sepolia flags)")
 		}
-		log.Infof("Using genesis validators root: %s", genesisValidatorsRootHex)
-		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
-		log.Infof("Using bellatrix fork version: %s", bellatrixForkVersionHex)
+		if err != nil {
+			log.WithError(err).Fatalf("unknown network")
+		}
+
+		log.Infof("Using network: %s", networkInfo.Name)
+		log.Infof("Using genesis validators root: %s", networkInfo.GenesisValidatorsRootHex)
+		log.Infof("Using genesis fork version: %s", networkInfo.GenesisForkVersionHex)
+		log.Infof("Using bellatrix fork version: %s", networkInfo.BellatrixForkVersionHex)
 
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
 
 		// Connect to Redis and setup the datastore
-		redis, err := datastore.NewRedisCache(redisURI)
+		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
@@ -110,7 +86,7 @@ var apiCmd = &cobra.Command{
 		ds := datastore.NewProdDatastore(redis)
 
 		// Decode the private key
-		envSkBytes, err := hexutil.Decode(secretKey)
+		envSkBytes, err := hexutil.Decode(apiSecretKey)
 		if err != nil {
 			log.WithError(err).Fatal("incorrect secret key provided")
 		}
@@ -120,17 +96,14 @@ var apiCmd = &cobra.Command{
 		}
 
 		opts := api.RelayAPIOpts{
-			Log:                      log,
-			ListenAddr:               listenAddr,
-			BeaconClient:             beaconClient,
-			Datastore:                ds,
-			NetworkName:              networkName,
-			GenesisForkVersionHex:    genesisForkVersionHex,
-			GenesisValidatorsRootHex: genesisValidatorsRootHex,
-			BellatrixForkVersionHex:  bellatrixForkVersionHex,
-			PprofAPI:                 apiPprof,
-			GetHeaderWaitTime:        time.Duration(getHeaderWaitTimeMs) * time.Millisecond,
-			SecretKey:                sk,
+			Log:               log,
+			ListenAddr:        apiListenAddr,
+			BeaconClient:      beaconClient,
+			Datastore:         ds,
+			EthNetDetails:     *networkInfo,
+			PprofAPI:          apiPprofEnabled,
+			GetHeaderWaitTime: time.Duration(apiGetHeaderDelayMs) * time.Millisecond,
+			SecretKey:         sk,
 		}
 
 		// Create the relay service
@@ -140,7 +113,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		// Start the server
-		log.Infof("Webserver starting on %s ...", listenAddr)
+		log.Infof("Webserver starting on %s ...", apiListenAddr)
 		log.Fatal(srv.StartServer())
 	},
 }

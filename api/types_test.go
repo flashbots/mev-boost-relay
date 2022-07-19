@@ -33,7 +33,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			BlockHash:     types.Hash{0x09},
 			Transactions:  []hexutil.Bytes{},
 		},
-		Message: &types.BidTraceMessage{
+		Message: &types.BidTrace{
 			Slot:                 1,
 			ParentHash:           types.Hash{0x01},
 			BlockHash:            types.Hash{0x09},

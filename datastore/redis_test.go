@@ -15,7 +15,7 @@ func setupTestRedis(t *testing.T) *RedisCache {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisService, err := NewRedisCache(redisTestServer.Addr())
+	redisService, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
 	return redisService

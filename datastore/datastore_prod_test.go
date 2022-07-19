@@ -16,7 +16,7 @@ func setupTestDatastore(t *testing.T) *ProdDatastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisDs, err := NewRedisCache(redisTestServer.Addr())
+	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
 	ds := NewProdDatastore(redisDs)

@@ -36,7 +36,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 	redisClient, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisCache, err := datastore.NewRedisCache(redisClient.Addr())
+	redisCache, err := datastore.NewRedisCache(redisClient.Addr(), "")
 	require.NoError(t, err)
 
 	ds := datastore.NewProdDatastore(redisCache)
@@ -46,14 +46,14 @@ func newTestBackend(t require.TestingT) *testBackend {
 	require.NoError(t, err)
 
 	opts := RelayAPIOpts{
-		Log:                     common.TestLog,
-		ListenAddr:              "localhost:12345",
-		BeaconClient:            bc,
-		Datastore:               ds,
-		GenesisForkVersionHex:   genesisForkVersionHex,
-		BellatrixForkVersionHex: "0x00000000",
-		// ProposerAPI:           true,
-		// BuilderAPI:            true,
+		Log:          common.TestLog,
+		ListenAddr:   "localhost:12345",
+		BeaconClient: bc,
+		Datastore:    ds,
+		EthNetDetails: common.EthNetworkDetails{
+			GenesisForkVersionHex:   genesisForkVersionHex,
+			BellatrixForkVersionHex: "0x00000000",
+		},
 		SecretKey: sk,
 	}
 

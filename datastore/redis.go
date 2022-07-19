@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -10,14 +11,7 @@ import (
 	"github.com/go-redis/redis/v9"
 )
 
-var (
-	redisPrefix = "boost-relay:"
-
-	// Sets
-	redisSetKeyValidatorKnown                 = redisPrefix + "known-validators"
-	redisSetKeyValidatorRegistrationTimestamp = redisPrefix + "validators-registration-timestamp"
-	redisSetKeyValidatorRegistration          = redisPrefix + "validators-registration"
-)
+var redisPrefix = "boost-relay"
 
 func connectRedis(redisURI string) (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
@@ -32,15 +26,25 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 
 type RedisCache struct {
 	client *redis.Client
+
+	keyKnownValidators                string
+	keyValidatorRegistration          string
+	keyValidatorRegistrationTimestamp string
 }
 
-func NewRedisCache(redisURI string) (*RedisCache, error) {
+func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
 	}
 
-	return &RedisCache{client: client}, nil
+	return &RedisCache{
+		client: client,
+
+		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
+		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
+		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
+	}, nil
 }
 
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
@@ -49,7 +53,7 @@ func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 
 func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
 	validators := make(map[types.PubkeyHex]uint64)
-	entries, err := r.client.HGetAll(context.Background(), redisSetKeyValidatorKnown).Result()
+	entries, err := r.client.HGetAll(context.Background(), r.keyKnownValidators).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +68,12 @@ func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
 }
 
 func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
-	return r.client.HSet(context.Background(), redisSetKeyValidatorKnown, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
+	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
 func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
-	value, err := r.client.HGet(context.Background(), redisSetKeyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()
+	value, err := r.client.HGet(context.Background(), r.keyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()
 	if err == redis.Nil {
 		return nil, nil
 	} else if err != nil {
@@ -81,7 +85,7 @@ func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*
 }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
-	timestamp, err := r.client.HGet(context.Background(), redisSetKeyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
+	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
 	if err == redis.Nil {
 		return 0, nil
 	}
@@ -89,7 +93,7 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.Pubk
 }
 
 func (r *RedisCache) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	err := r.client.HSet(context.Background(), redisSetKeyValidatorRegistrationTimestamp, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), entry.Message.Timestamp).Err()
+	err := r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), entry.Message.Timestamp).Err()
 	if err != nil {
 		return err
 	}
@@ -99,7 +103,7 @@ func (r *RedisCache) SetValidatorRegistration(entry types.SignedValidatorRegistr
 		return err
 	}
 
-	err = r.client.HSet(context.Background(), redisSetKeyValidatorRegistration, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), marshalledValue).Err()
+	err = r.client.HSet(context.Background(), r.keyValidatorRegistration, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), marshalledValue).Err()
 	return err
 }
 
@@ -114,5 +118,5 @@ func (r *RedisCache) SetValidatorRegistrations(entries []types.SignedValidatorRe
 }
 
 func (r *RedisCache) NumRegisteredValidators() (int64, error) {
-	return r.client.HLen(context.Background(), redisSetKeyValidatorRegistrationTimestamp).Result()
+	return r.client.HLen(context.Background(), r.keyValidatorRegistrationTimestamp).Result()
 }
