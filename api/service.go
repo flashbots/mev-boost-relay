@@ -25,6 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/atomic"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+
 	_ "net/http/pprof"
 )
 
@@ -38,6 +41,8 @@ var (
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
+
+	printer = message.NewPrinter(language.English)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -48,18 +53,18 @@ type RelayAPIOpts struct {
 	RegValWorkers int // number of workers for validator registration processing
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
+	SecretKey     *bls.SecretKey // used to sign bids (getHeader responses)
 
-	// GenesisForkVersion and GenesisValidatorsRoot for validating signatures
+	// Network specific variables
+	NetworkName              string
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
 
-	// Secret key to sign builder bids
-	SecretKey *bls.SecretKey
-
-	// Which APIs and services to spin up
+	// Whether to enable Pprof
 	PprofAPI bool
 
+	// Delay on getHeader calls before checking memory for blocks and returning (not used anymore)
 	GetHeaderWaitTime time.Duration
 }
 
@@ -86,6 +91,7 @@ type RelayAPI struct {
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
+	headSlot               uint64
 
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
@@ -161,7 +167,16 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, err
 	}
 
-	api.updateStatusHTMLData()
+	api.statusHTMLData = StatusHTMLData{
+		Network:                     opts.NetworkName,
+		RelayPubkey:                 api.publicKey.String(),
+		BellatrixForkVersion:        api.opts.BellatrixForkVersionHex,
+		GenesisForkVersion:          api.opts.GenesisForkVersionHex,
+		GenesisValidatorsRoot:       api.opts.GenesisValidatorsRootHex,
+		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
+		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
+	}
+
 	return &api, nil
 }
 
@@ -270,6 +285,9 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
+	// Update HTML data before starting server
+	api.updateStatusHTMLData()
+
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
@@ -297,6 +315,11 @@ func (api *RelayAPI) StartServer() (err error) {
 // }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
+	if headSlot <= api.headSlot {
+		return
+	}
+
+	api.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
@@ -309,6 +332,9 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(headSlot)
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
+
+	// Update HTML data once per slot
+	go api.updateStatusHTMLData()
 
 	// Update proposer duties in the background
 	go func() {
@@ -406,6 +432,8 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 				api.log.WithField("cnt", cnt).Info("updated known validators")
 			}
 		}
+
+		api.updateStatusHTMLData()
 	}
 }
 
@@ -433,17 +461,34 @@ func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
 }
 
 func (api *RelayAPI) updateStatusHTMLData() {
-	api.statusHTMLDataLock.Lock()
-	defer api.statusHTMLDataLock.Unlock()
-	api.statusHTMLData = StatusHTMLData{
-		RelayPubkey:          api.publicKey.String(),
-		ValidatorsTotal:      "17505",
-		ValidatorsRegistered: "17505",
-		GenesisForkVersion:   api.opts.GenesisForkVersionHex,
-		BuilderSigningDomain: hexutil.Encode(api.domainBuilder[:]),
-		Header:               "",
-		Block:                "",
+	_numRegistered, err := api.datastore.NumRegisteredValidators()
+	if err != nil {
+		api.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
+
+	numRegistered := printer.Sprintf("%d", _numRegistered)
+	numKnown := printer.Sprintf("%d", api.datastore.NumKnownValidators())
+	headSlot := printer.Sprintf("%d", api.headSlot)
+
+	// header := b.bestHeader
+	// headerData, err := json.MarshalIndent(header, "", "  ")
+	// if err != nil {
+	// 	headerData = []byte{}
+	// }
+
+	// payload := b.bestPayload
+	// payloadData, err := json.MarshalIndent(payload, "", "  ")
+	// if err != nil {
+	// 	payloadData = []byte{}
+	// }
+
+	api.statusHTMLDataLock.Lock()
+	api.statusHTMLData.HeadSlot = headSlot
+	api.statusHTMLData.ValidatorsTotal = numKnown
+	api.statusHTMLData.ValidatorsRegistered = numRegistered
+	api.statusHTMLData.Header = ""
+	// api.statusHTMLData.Block = ""
+	api.statusHTMLDataLock.Unlock()
 }
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
@@ -760,5 +805,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("received block from builder")
+
+	// Update HTML data
+	go api.updateStatusHTMLData()
+
+	// Respond with OK (TODO: proper response format)
 	api.RespondOKEmpty(w)
 }

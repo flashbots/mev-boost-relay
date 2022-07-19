@@ -3,6 +3,7 @@ package api
 import "text/template"
 
 type StatusHTMLData struct {
+	Network                     string
 	RelayPubkey                 string
 	ValidatorsTotal             string
 	ValidatorsRegistered        string
@@ -13,6 +14,7 @@ type StatusHTMLData struct {
 	BeaconProposerSigningDomain string
 	Header                      string
 	Block                       string
+	HeadSlot                    string
 }
 
 func parseIndexTemplate() (*template.Template, error) {
@@ -24,7 +26,7 @@ func parseIndexTemplate() (*template.Template, error) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
 
-    <title>Boost Block Builder</title>
+    <title>Flashbots Block Relay - {{ .Network }}</title>
 
     <meta name="description" content="MEV builder API">
 
@@ -49,6 +51,10 @@ func parseIndexTemplate() (*template.Template, error) {
 			font-size: 1.2em;
 			background: #129fea1f;
 		}
+
+        li {
+            margin: 2px 0px;
+        }
     </style>
 </head>
 
@@ -60,10 +66,11 @@ func parseIndexTemplate() (*template.Template, error) {
             <p>
                 <img style="float:right;" src="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
             <h1>
-                Boost Block Builder
+                Flashbots Boost Relay - {{ .Network }}
             </h1>
 
 			<p>
+            Configuration:
             <ul>
 				<li>Relay Pubkey: <tt>{{ .RelayPubkey }}</tt></li>
                 <li>Bellatrix fork version: <tt>{{ .BellatrixForkVersion }}</tt></li>
@@ -75,14 +82,9 @@ func parseIndexTemplate() (*template.Template, error) {
             </p>
 
             <p>
-			More details:
+			More infos, issues &amp; feedback:
             <ul>
-                <li><a href="https://github.com/flashbots/mev-boost/wiki">github.com/flashbots/mev-boost/wiki</a></li>
-                <li>Issues & feedback: 
-				<ul>
-				<li><a href="https://github.com/flashbots/mev-boost/issues">github.com/flashbots/mev-boost/issues</a></li></li>
-					<li><a href="https://github.com/flashbots/boost-geth-builder/issues">github.com/flashbots/boost-geth-builder/issues</a></li>
-				</ul>
+                <li><a href="https://github.com/flashbots/mev-boost">github.com/flashbots/mev-boost</a></li>
             </ul>
 
             </p>
@@ -91,8 +93,16 @@ func parseIndexTemplate() (*template.Template, error) {
 
             <p>
             <h2>
-				Validators: {{ .ValidatorsRegistered }} / {{ .ValidatorsTotal }}
+				Stats
             </h2>
+            <ul>
+                <li>Latest Slot: {{ .HeadSlot }}</li>
+                <li>Validators<br>
+                    <ul>
+                        <li>Total: {{ .ValidatorsTotal }}</li>
+                        <li>Registered: {{ .ValidatorsRegistered }}</li>
+                    </ul>
+            </ul>
             </p>
 
             <hr>
@@ -104,6 +114,7 @@ func parseIndexTemplate() (*template.Template, error) {
             <pre>coming again soon{{ .Header }}</pre>
             </p>
 
+            <!--
             <hr>
 
             <p>
@@ -112,6 +123,7 @@ func parseIndexTemplate() (*template.Template, error) {
             </h2>
             <pre>coming again soon{{ .Block }}</pre>
             </p>
+            -->
 
         </div>
     </div>

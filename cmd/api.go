@@ -29,7 +29,6 @@ var (
 	logJSON       bool
 	logLevel      string
 
-	networkMainnet bool
 	networkKiln    bool
 	networkRopsten bool
 	networkSepolia bool
@@ -52,11 +51,10 @@ func init() {
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	apiCmd.Flags().BoolVar(&networkMainnet, "mainnet", false, "use Mainnet genesis fork version 0x00000000 (for signature validation)")
 	apiCmd.Flags().BoolVar(&networkKiln, "kiln", false, "use Kiln genesis fork version 0x70000069 (for signature validation)")
 	apiCmd.Flags().BoolVar(&networkRopsten, "ropsten", false, "use Ropsten genesis fork version 0x80000069 (for signature validation)")
 	apiCmd.Flags().BoolVar(&networkSepolia, "sepolia", false, "use Sepolia genesis fork version 0x90000069 (for signature validation)")
-	apiCmd.MarkFlagsMutuallyExclusive("mainnet", "kiln", "ropsten", "sepolia")
+	apiCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia")
 
 	apiCmd.Flags().SortFlags = false
 }
@@ -71,25 +69,29 @@ var apiCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", Version)
 
-		// Set genesis fork version
+		// Set network specific parameters
+		networkName := ""
 		genesisForkVersionHex := ""
 		genesisValidatorsRootHex := ""
 		bellatrixForkVersionHex := ""
 
 		if networkKiln {
+			networkName = "Kiln"
 			genesisForkVersionHex = types.GenesisForkVersionKiln
 			genesisValidatorsRootHex = types.GenesisValidatorsRootKiln
 			bellatrixForkVersionHex = types.BellatrixForkVersionKiln
 		} else if networkRopsten {
+			networkName = "Ropsten"
 			genesisForkVersionHex = types.GenesisForkVersionRopsten
 			genesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
 			bellatrixForkVersionHex = types.BellatrixForkVersionRopsten
 		} else if networkSepolia {
+			networkName = "Sepolia"
 			genesisForkVersionHex = types.GenesisForkVersionSepolia
 			genesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
 			bellatrixForkVersionHex = types.BellatrixForkVersionSepolia
 		} else {
-			log.Fatal("Please specify a genesis fork version (eg. -mainnet or -kiln or -ropsten or -genesis-fork-version flags)")
+			log.Fatal("Please specify a network (eg. -kiln or -ropsten or -sepolia flags)")
 		}
 		log.Infof("Using genesis validators root: %s", genesisValidatorsRootHex)
 		log.Infof("Using genesis fork version: %s", genesisForkVersionHex)
@@ -98,10 +100,6 @@ var apiCmd = &cobra.Command{
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
-		_, err = beaconClient.SyncStatus()
-		if err != nil {
-			log.WithError(err).Fatal("Beacon node is syncing")
-		}
 
 		// Connect to Redis and setup the datastore
 		redis, err := datastore.NewRedisCache(redisURI)
@@ -126,6 +124,7 @@ var apiCmd = &cobra.Command{
 			ListenAddr:               listenAddr,
 			BeaconClient:             beaconClient,
 			Datastore:                ds,
+			NetworkName:              networkName,
 			GenesisForkVersionHex:    genesisForkVersionHex,
 			GenesisValidatorsRootHex: genesisValidatorsRootHex,
 			BellatrixForkVersionHex:  bellatrixForkVersionHex,

@@ -16,3 +16,5 @@
 .vscode
 /tmp/
 /boost-relay
+/dump.rdb
+/deploy.sh

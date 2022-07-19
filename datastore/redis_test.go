@@ -70,3 +70,39 @@ func TestRedisKnownValidators(t *testing.T) {
 	// 	require.Contains(t, knownVals, key2)
 	// })
 }
+
+func TestRedisValidatorRegistrations(t *testing.T) {
+	cache := setupTestRedis(t)
+
+	t.Run("Can save and get validator registrations", func(t *testing.T) {
+		key1 := types.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		require.NoError(t, cache.SetKnownValidator(key1, 1))
+
+		knownVals, err := cache.GetKnownValidators()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(knownVals))
+		require.Contains(t, knownVals, key1)
+
+		numReg, err := cache.NumRegisteredValidators()
+		require.NoError(t, err)
+		require.Equal(t, int64(0), numReg)
+
+		// Create a signed registration for key1
+		pubkey1, err := types.HexToPubkey(key1.String())
+		require.NoError(t, err)
+		entry := types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				Pubkey: pubkey1,
+			},
+		}
+		cache.SetValidatorRegistration(entry)
+
+		numReg, err = cache.NumRegisteredValidators()
+		require.NoError(t, err)
+		require.Equal(t, int64(1), numReg)
+
+		reg, err := cache.GetValidatorRegistration(key1)
+		require.NoError(t, err)
+		require.Equal(t, pubkey1.String(), reg.Message.Pubkey.String())
+	})
+}

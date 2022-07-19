@@ -15,6 +15,7 @@ type ProdDatastore struct {
 	knownValidatorsByIndex  map[uint64]types.PubkeyHex
 	knownValidatorsLock     sync.RWMutex
 
+	// In-memory cache of validator registrations
 	// validatorRegistrations     map[types.PubkeyHex]types.SignedValidatorRegistration
 	// validatorRegistrationsLock sync.RWMutex
 
@@ -66,6 +67,16 @@ func (ds *ProdDatastore) GetKnownValidatorPubkeyByIndex(index uint64) (types.Pub
 	defer ds.knownValidatorsLock.RUnlock()
 	pk, found := ds.knownValidatorsByIndex[index]
 	return pk, found
+}
+
+func (ds *ProdDatastore) NumKnownValidators() int {
+	ds.knownValidatorsLock.RLock()
+	defer ds.knownValidatorsLock.RUnlock()
+	return len(ds.knownValidatorsByIndex)
+}
+
+func (ds *ProdDatastore) NumRegisteredValidators() (int64, error) {
+	return ds.redis.NumRegisteredValidators()
 }
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
