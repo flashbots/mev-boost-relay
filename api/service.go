@@ -53,18 +53,18 @@ type RelayAPIOpts struct {
 	RegValWorkers int // number of workers for validator registration processing
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
+	SecretKey     *bls.SecretKey // used to sign bids (getHeader responses)
 
+	// Network specific variables
 	NetworkName              string
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
 
-	// Secret key to sign builder bids
-	SecretKey *bls.SecretKey
-
-	// Which APIs and services to spin up
+	// Whether to enable Pprof
 	PprofAPI bool
 
+	// Delay on getHeader calls before checking memory for blocks and returning (not used anymore)
 	GetHeaderWaitTime time.Duration
 }
 
