@@ -26,7 +26,9 @@ require (
 	github.com/ferranbt/fastssz v0.1.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/jmoiron/sqlx v1.3.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
+	github.com/lib/pq v1.10.6 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

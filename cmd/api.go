@@ -22,6 +22,8 @@ var (
 	apiPprofEnabled     bool
 	apiSecretKey        string
 	apiGetHeaderDelayMs int64
+
+	postgresDSN string
 )
 
 func init() {
@@ -41,6 +43,8 @@ func init() {
 	apiCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
 	apiCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
 	apiCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
+
+	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 
 	apiCmd.Flags().SortFlags = false
 }
@@ -86,7 +90,10 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 		log.Infof("Connected to Redis at %s", redisURI)
-		ds := datastore.NewProdDatastore(redis)
+		ds, err := datastore.NewProdDatastore(log, redis, postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+		}
 
 		// Decode the private key
 		envSkBytes, err := hexutil.Decode(apiSecretKey)

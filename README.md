@@ -21,6 +21,17 @@ Redis (v6+) is used to store known validators and validator registrations. You c
 docker run --name redis -d -p 6379:6379 redis:7
 ```
 
+Postgres is optional:
+
+```bash
+#docker run --name postgres -e POSTGRES_PASSWORD=postgres -d -p 5432:5432 postgres
+docker-compose up
+```
+
+Visit adminer on http://localhost:8093/?username=postgres
+
+---
+
 The API needs access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
 
 ```bash
@@ -31,10 +42,13 @@ Run the API for Kiln (and update known validators first):
 
 ```bash
 # Sync known validators from BN to Redis
-go run . known-validator-update
+go run . known-validator-update --kiln
 
 # Run APIs for Kiln
-go run . api --kiln
+go run . api --kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2
+go run . api --kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
+# Query status
 curl localhost:9062/eth/v1/builder/status
 
 # Send test validator registrations

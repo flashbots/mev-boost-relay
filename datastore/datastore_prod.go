@@ -4,12 +4,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/sirupsen/logrus"
 )
 
 // ProdDatastore provides a local memory cache with a Redis and DB backend
 type ProdDatastore struct {
 	redis *RedisCache
+	db    *database.DatabaseService
+	log   *logrus.Entry
 
 	knownValidatorsByPubkey map[types.PubkeyHex]uint64
 	knownValidatorsByIndex  map[uint64]types.PubkeyHex
@@ -26,14 +30,24 @@ type ProdDatastore struct {
 	blocks    map[BlockKey]*types.GetPayloadResponse
 }
 
-func NewProdDatastore(redisCache *RedisCache) *ProdDatastore {
-	return &ProdDatastore{
+func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, postgresDSN string) (ds *ProdDatastore, err error) {
+	ds = &ProdDatastore{
+		log:                     log.WithField("module", "datastore"),
 		redis:                   redisCache,
 		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
 		bids:                    make(map[BidKey]*types.GetHeaderResponse),
 		blocks:                  make(map[BlockKey]*types.GetPayloadResponse),
 	}
+
+	if postgresDSN != "" {
+		ds.log.Infof("Connecting to Postgres database...")
+		ds.db, err = database.NewDatabaseService(postgresDSN)
+	} else {
+		ds.log.Warn("No Postgres database configured, skipping...")
+	}
+
+	return ds, err
 }
 
 // RefreshKnownValidators loads known validators from Redis into memory
@@ -90,7 +104,15 @@ func (ds *ProdDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.Pubke
 }
 
 func (ds *ProdDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	return ds.redis.SetValidatorRegistration(entry)
+	err := ds.redis.SetValidatorRegistration(entry)
+	if err != nil {
+		return err
+	}
+
+	if ds.db != nil {
+		err = ds.db.SaveValidatorRegistration(entry)
+	}
+	return err
 }
 
 func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {

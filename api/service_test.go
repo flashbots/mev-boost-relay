@@ -39,7 +39,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 	redisCache, err := datastore.NewRedisCache(redisClient.Addr(), "")
 	require.NoError(t, err)
 
-	ds := datastore.NewProdDatastore(redisCache)
+	ds, err := datastore.NewProdDatastore(common.TestLog, redisCache, "")
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()
