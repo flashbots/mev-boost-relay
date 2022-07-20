@@ -43,7 +43,14 @@ var (
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
 
+	// JSON-RPC builder proxy
+	// pathSendBundle = "/jsonrpc_sendbundle"
+
+	// Printer for pretty printing numbers
 	printer = message.NewPrinter(language.English)
+
+	// Caser is used for casing strings
+	caser = cases.Title(language.English)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -165,7 +172,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, err
 	}
 
-	caser := cases.Title(language.English)
 	api.statusHTMLData = StatusHTMLData{
 		Network:                     caser.String(opts.EthNetDetails.Name),
 		RelayPubkey:                 api.publicKey.String(),

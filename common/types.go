@@ -44,23 +44,38 @@ type EthNetworkDetails struct {
 	BellatrixForkVersionHex  string
 }
 
+var (
+	EthNetworkKiln              = "kiln"
+	EthNetworkRopsten           = "ropsten"
+	EthNetworkSepolia           = "sepolia"
+	EthNetworkGoerliShadowFork5 = "goerli-shadow-fork-5"
+
+	GenesisValidatorsRootGoerliShadowFork5 = "0xe45f26d5a29b0ed5a9f62f248b842a30dd7b7fba0b5b104eab271efc04e0cf66"
+	GenesisForkVersionGoerliShadowFork5    = "0x13001034"
+	BellatrixForkVersionGoerliShadowFork5  = "0x22001034"
+)
+
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
 	ret = &EthNetworkDetails{
 		Name: networkName,
 	}
 	switch networkName {
-	case "kiln":
+	case EthNetworkKiln:
 		ret.GenesisForkVersionHex = types.GenesisForkVersionKiln
 		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootKiln
 		ret.BellatrixForkVersionHex = types.BellatrixForkVersionKiln
-	case "ropsten":
+	case EthNetworkRopsten:
 		ret.GenesisForkVersionHex = types.GenesisForkVersionRopsten
 		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
 		ret.BellatrixForkVersionHex = types.BellatrixForkVersionRopsten
-	case "sepolia":
+	case EthNetworkSepolia:
 		ret.GenesisForkVersionHex = types.GenesisForkVersionSepolia
 		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
 		ret.BellatrixForkVersionHex = types.BellatrixForkVersionSepolia
+	case EthNetworkGoerliShadowFork5:
+		ret.GenesisForkVersionHex = GenesisForkVersionGoerliShadowFork5
+		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerliShadowFork5
+		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerliShadowFork5
 	default:
 		return nil, fmt.Errorf("unknown network: %s", networkName)
 	}
