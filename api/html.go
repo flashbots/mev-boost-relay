@@ -26,9 +26,9 @@ func parseIndexTemplate() (*template.Template, error) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
 
-    <title>Flashbots Block Relay - {{ .Network }}</title>
+    <title>Flashbots Boost Relay - {{ .Network }}</title>
 
-    <meta name="description" content="MEV builder API">
+    <meta name="description" content="Flashbots testing relay for maximal extractable value in Ethereum proof-of-stake.">
 
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css" integrity="sha384-yHIFVG6ClnONEA5yB5DJXfW2/KC173DIQrYoZMEtBvGzmf0PKiGyNEqe9N6BNDBH" crossorigin="anonymous">
     <meta name="viewport" content="width=device-width, initial-scale=1">

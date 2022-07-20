@@ -3,9 +3,9 @@ package database
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -24,7 +24,8 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxOpenConns(50)
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
-	fmt.Println(schema)
+	// fmt.Println(schema)
+
 	_, err = db.Exec(schema)
 	if err != nil {
 		return nil, err
@@ -52,5 +53,11 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 
 	query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, registration, registration_timestamp) VALUES (:pubkey, :registration, :registration_timestamp) ON CONFLICT DO NOTHING`
 	_, err = s.DB.NamedExec(query, entry)
+	return err
+}
+
+func (s *DatabaseService) SaveEpochSummary(summary common.EpochSummary) error {
+	query := `INSERT INTO ` + TableEpochSummary + ` (epoch, slot_first, slot_last, validators_known_total, validator_registrations_total, validator_registrations_renewed, validator_registrations_new, num_register_validator_requests, num_get_header_requests, num_get_payload_requests, num_header_sent, num_header_no_content, num_payload_sent, num_builder_bid_received) VALUES (:epoch, :slot_first, :slot_last, :validators_known_total, :validator_registrations_total, :validator_registrations_renewed, :validator_registrations_new, :num_register_validator_requests, :num_get_header_requests, :num_get_payload_requests, :num_header_sent, :num_header_no_content, :num_payload_sent, :num_builder_bid_received)`
+	_, err := s.DB.NamedExec(query, summary)
 	return err
 }

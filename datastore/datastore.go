@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
@@ -35,4 +36,7 @@ type Datastore interface {
 	GetBlock(slot uint64, proposerPubkey string, blockHash string) (*types.GetPayloadResponse, error)
 	SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
 	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)
+
+	// Database only
+	SaveEpochSummary(summary common.EpochSummary) error
 }

@@ -81,3 +81,26 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	}
 	return ret, nil
 }
+
+type EpochSummary struct {
+	Epoch     uint64 `json:"epoch"      db:"epoch"`
+	FirstSlot uint64 `json:"slot_first" db:"slot_first"`
+	LastSlot  uint64 `json:"slot_last"  db:"slot_last"`
+
+	// Validator stats
+	ValidatorsKnownTotal          uint64 `json:"validators_known_total"          db:"validators_known_total"`
+	ValidatorRegistrationsTotal   uint64 `json:"validator_registrations_total"   db:"validator_registrations_total"`
+	ValidatorRegistrationsRenewed uint64 `json:"validator_registrations_renewed" db:"validator_registrations_renewed"`
+	ValidatorRegistrationsNew     uint64 `json:"validator_registrations_new"     db:"validator_registrations_new"`
+
+	// The number of requests are the count of all requests to a specific path, even invalid ones
+	NumRegisterValidatorRequests uint64 `json:"num_register_validator_requests" db:"num_register_validator_requests"`
+	NumGetHeaderRequests         uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
+	NumGetPayloadRequests        uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
+
+	// Responses to successful queries
+	NumHeaderSent         uint64 `json:"num_header_sent"          db:"num_header_sent"`
+	NumHeaderNoContent    uint64 `json:"num_header_no_content"    db:"num_header_no_content"`
+	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
+	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
+}

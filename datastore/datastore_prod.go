@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
@@ -183,4 +184,11 @@ func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash 
 	block := ds.blocks[blockKey]
 	ds.blockLock.RUnlock()
 	return block, nil
+}
+
+func (ds *ProdDatastore) SaveEpochSummary(summary common.EpochSummary) error {
+	if ds.db != nil {
+		return ds.db.SaveEpochSummary(summary)
+	}
+	return nil
 }

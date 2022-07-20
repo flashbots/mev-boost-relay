@@ -10,6 +10,8 @@ require (
 	github.com/go-redis/redis/v9 v9.0.0-beta.1
 	github.com/gorilla/mux v1.8.0
 	github.com/jinzhu/copier v0.3.5
+	github.com/jmoiron/sqlx v1.3.5
+	github.com/lib/pq v1.10.6
 	github.com/r3labs/sse/v2 v2.8.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.5.0
@@ -26,9 +28,7 @@ require (
 	github.com/ferranbt/fastssz v0.1.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/jmoiron/sqlx v1.3.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
-	github.com/lib/pq v1.10.6 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

@@ -17,8 +17,6 @@ github.com/ethereum/go-ethereum v1.10.20 h1:75IW830ClSS40yrQC1ZCMZCt5I+zU16oqId2
 github.com/ethereum/go-ethereum v1.10.20/go.mod h1:LWUN82TCHGpxB3En5HVmLLzPD7YSrEUFmFfN1nKkVN0=
 github.com/ferranbt/fastssz v0.1.1 h1:hBYNxKu51wjPC9sQYCjicmy5wtJqubENp3IiRVcdJBM=
 github.com/ferranbt/fastssz v0.1.1/go.mod h1:U2ZsxlYyvGeQGmadhz8PlEqwkBzDIhHwd3xuKrg2JIs=
-github.com/flashbots/go-boost-utils v0.3.1 h1:M1K4f97VnzW8v8hHdcVf14btZw343y9oSsfYHOgFl5A=
-github.com/flashbots/go-boost-utils v0.3.1/go.mod h1:7pAZp9AHt06uHUY+Avob0H88IN2La22uPZUpS3seXR0=
 github.com/flashbots/go-boost-utils v0.3.2 h1:d7kudiDYngZy/7oORzSkXCZsNh8mEyr48Vm/IYIo1Wc=
 github.com/flashbots/go-boost-utils v0.3.2/go.mod h1:7pAZp9AHt06uHUY+Avob0H88IN2La22uPZUpS3seXR0=
 github.com/flashbots/go-utils v0.4.7 h1:Xxx8OgjUeSOZqQ0peazBRNDy3OAshCtJmxb54+/9YRI=
@@ -26,6 +24,7 @@ github.com/flashbots/go-utils v0.4.7/go.mod h1:AGyHG5g3nEFzRp5rqSZzzxMmMsGlPsRRk
 github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
 github.com/go-redis/redis/v9 v9.0.0-beta.1 h1:oW3jlPic5HhGUbYMH0lidnP+72BgsT+lCwlVud6o2Mc=
 github.com/go-redis/redis/v9 v9.0.0-beta.1/go.mod h1:6gNX1bXdwkpEG0M/hEBNK/Fp8zdyCkjwwKc6vBbfCDI=
+github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=
 github.com/go-sql-driver/mysql v1.6.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
 github.com/go-stack/stack v1.8.0 h1:5SgMzNM5HxrEjV0ww2lTmX6E2Izsfxas4+YHWRs3Lsk=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
@@ -43,6 +42,7 @@ github.com/klauspost/cpuid/v2 v2.0.12/go.mod h1:g2LTdtYhdyuGPqyWyv7qRAmj1WBqxuOb
 github.com/lib/pq v1.2.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.10.6 h1:jbk+ZieJ0D7EVGJYpL9QTz7/YW6UHbmdnZWYyK5cdBs=
 github.com/lib/pq v1.10.6/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
+github.com/mattn/go-sqlite3 v1.14.6 h1:dNPt6NO46WmLVt2DLNpwczCmdV5boIZ6g/tlDrlRUbg=
 github.com/mattn/go-sqlite3 v1.14.6/go.mod h1:NyWgC/yNuGj7Q9rpYnZvas74GogHl5/Z4A/KQRfk6bU=
 github.com/minio/sha256-simd v1.0.0 h1:v1ta+49hkWZyvaKwrQB8elexRqm6Y0aMLjCNsrYxo6g=
 github.com/minio/sha256-simd v1.0.0/go.mod h1:OuYzVNI5vcoYIAmbIvHPl3N3jUzVedXbKy5RFepssQM=

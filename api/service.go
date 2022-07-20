@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/atomic"
+	uberatomic "go.uber.org/atomic"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -82,10 +83,10 @@ type RelayAPI struct {
 	publicKey *types.PublicKey
 
 	srv        *http.Server
-	srvStarted atomic.Bool
+	srvStarted uberatomic.Bool
 
 	regValEntriesC       chan types.SignedValidatorRegistration
-	regValWorkersStarted atomic.Bool
+	regValWorkersStarted uberatomic.Bool
 
 	datastore    datastore.Datastore
 	beaconClient beaconclient.BeaconNodeClient
@@ -97,6 +98,7 @@ type RelayAPI struct {
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
 	headSlot               uint64
+	currentEpoch           uint64
 
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
@@ -106,6 +108,8 @@ type RelayAPI struct {
 	allowZeroValueBlocks                  bool
 	enableQueryProposerDutiesForNextEpoch bool
 	// disableGetPayloadVerifications        bool
+
+	epochSummary *common.EpochSummary
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -134,6 +138,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
+		epochSummary:           &common.EpochSummary{},
 	}
 
 	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.EthNetDetails.GenesisForkVersionHex, types.Root{}.String())
@@ -234,6 +239,8 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 					continue
 				}
 
+				atomic.AddUint64(&api.epochSummary.ValidatorRegistrationsNew, 1)
+
 				// Save the registration
 				go func() {
 					err := api.datastore.SetValidatorRegistration(registration)
@@ -274,6 +281,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	} else {
 		api.log.WithField("cnt", cnt).Info("updated known validators")
 	}
+
 	go api.startKnownValidatorUpdates()
 
 	// Process current slot
@@ -329,14 +337,27 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	api.log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
 		"slotHead":           headSlot,
-		"slotStartNextEpoch": (currentEpoch + 1) * 32,
+		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Info("updated headSlot")
+
+	if currentEpoch != api.currentEpoch {
+		if api.currentEpoch != 0 {
+			api.saveAndResetEpochSummary(headSlot)
+		}
+		api.currentEpoch = currentEpoch
+	}
+
+	// if headSlot%4 == 0 {
+	// 	api.saveAndResetEpochSummary(headSlot)
+	// }
 
 	if headSlot%10 == 0 {
 		// Remove expired headers
 		numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(headSlot)
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
+
+	api.log.Debugf("epoch summary: %#+v\n", api.epochSummary)
 
 	// Update HTML data once per slot
 	go api.updateStatusHTMLData()
@@ -348,6 +369,41 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 			api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
 		}
 	}()
+}
+
+func (api *RelayAPI) newEpochSummary(slot uint64) (ret *common.EpochSummary) {
+	ret = &common.EpochSummary{
+		FirstSlot:            slot,
+		Epoch:                slot / uint64(common.SlotsPerEpoch),
+		ValidatorsKnownTotal: uint64(api.datastore.NumKnownValidators()),
+	}
+
+	_numRegistered, err := api.datastore.NumRegisteredValidators()
+	if err != nil {
+		api.log.WithError(err).Error("error getting number of registered validators")
+	} else {
+		ret.ValidatorRegistrationsTotal = uint64(_numRegistered)
+	}
+
+	return ret
+}
+
+func (api *RelayAPI) saveAndResetEpochSummary(slot uint64) {
+	api.log.Infof("new epoch! save epochsummary and start new one.")
+	if api.epochSummary.FirstSlot != 0 { // on startup, the first slot is 0 because in the middle of an epoch
+		go func(summary common.EpochSummary, headSlot uint64) {
+			summary.LastSlot = headSlot - 1
+			api.log.Infof("epochsummary: %#+v", summary)
+
+			err := api.datastore.SaveEpochSummary(summary)
+			if err != nil {
+				api.log.WithError(err).Error("error saving epoch summary")
+			}
+		}(*api.epochSummary, slot)
+	}
+
+	// reset
+	api.epochSummary = api.newEpochSummary(slot)
 }
 
 func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
@@ -439,6 +495,15 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 		}
 
 		api.updateStatusHTMLData()
+
+		// Update epoch summary
+		atomic.StoreUint64(&api.epochSummary.ValidatorsKnownTotal, uint64(cnt))
+		_numRegistered, err := api.datastore.NumRegisteredValidators()
+		if err != nil {
+			api.log.WithError(err).Error("error getting number of registered validators")
+		} else {
+			atomic.StoreUint64(&api.epochSummary.ValidatorRegistrationsTotal, uint64(_numRegistered))
+		}
 	}
 }
 
@@ -516,6 +581,7 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 // ---------------
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
+	atomic.AddUint64(&api.epochSummary.NumRegisterValidatorRequests, 1)
 	log := api.log.WithField("method", "registerValidator")
 	// log.Info("registerValidator")
 
@@ -577,6 +643,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Do nothing if the registration is already the latest
 		if prevTimestamp >= registration.Message.Timestamp {
+			atomic.AddUint64(&api.epochSummary.ValidatorRegistrationsRenewed, 1)
 			continue
 		}
 
@@ -592,7 +659,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"lastChanged":      lastChangedPubkey,
 		"timeNeededSec":    time.Since(start).Seconds(),
 		"error":            errorResp,
-		"IP":               common.GetIPXForwardedFor(req),
+		"ip":               common.GetIPXForwardedFor(req),
 	}).Info("validator registrations done")
 
 	if errorResp != "" {
@@ -603,6 +670,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
+	atomic.AddUint64(&api.epochSummary.NumGetHeaderRequests, 1)
+
 	vars := mux.Vars(req)
 	slotStr := vars["slot"]
 	parentHashHex := vars["parent_hash"]
@@ -643,11 +712,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.Data == nil || bid.Data.Message == nil {
+		atomic.AddUint64(&api.epochSummary.NumHeaderNoContent, 1)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	} else {
 		// If 0-value bid, only return if explicitly allowed
 		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.allowZeroValueBlocks {
+			atomic.AddUint64(&api.epochSummary.NumHeaderNoContent, 1)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -657,12 +728,14 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 			"blockHash": bid.Data.Message.Header.BlockHash.String(),
 		}).Info("bid delivered")
 
+		atomic.AddUint64(&api.epochSummary.NumHeaderSent, 1)
 		api.RespondOK(w, bid)
 		return
 	}
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+	atomic.AddUint64(&api.epochSummary.NumGetPayloadRequests, 1)
 	log := api.log.WithField("method", "getPayload")
 
 	payload := new(types.SignedBlindedBeaconBlock)
@@ -721,6 +794,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
+	atomic.AddUint64(&api.epochSummary.NumPayloadSent, 1)
 	api.RespondOK(w, block)
 }
 
@@ -810,6 +884,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("received block from builder")
+	atomic.AddUint64(&api.epochSummary.NumBuilderBidReceived, 1)
 
 	// Update HTML data
 	go api.updateStatusHTMLData()

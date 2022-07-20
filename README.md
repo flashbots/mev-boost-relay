@@ -53,6 +53,9 @@ curl localhost:9062/eth/v1/builder/status
 
 # Send test validator registrations
 curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
+
+# Delete previous registrations
+redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validators-registration-timestamp
 ```
 
 Env vars:
