@@ -1,11 +1,9 @@
 package datastore
 
 import (
-	"errors"
 	"strings"
 	"sync"
 
-	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
@@ -32,9 +30,10 @@ type ProdDatastore struct {
 	blocks    map[BlockKey]*types.GetPayloadResponse
 }
 
-func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, postgresDSN string) (ds *ProdDatastore, err error) {
+func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db *database.DatabaseService) (ds *ProdDatastore, err error) {
 	ds = &ProdDatastore{
 		log:                     log.WithField("module", "datastore"),
+		db:                      db,
 		redis:                   redisCache,
 		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
@@ -42,12 +41,6 @@ func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, postgresDSN str
 		blocks:                  make(map[BlockKey]*types.GetPayloadResponse),
 	}
 
-	if postgresDSN == "" {
-		return nil, errors.New("no postgres DSN provided")
-	}
-
-	ds.log.Infof("Connecting to Postgres database...")
-	ds.db, err = database.NewDatabaseService(postgresDSN)
 	return ds, err
 }
 
@@ -186,18 +179,10 @@ func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash 
 	return block, nil
 }
 
-func (ds *ProdDatastore) SaveEpochSummary(summary common.EpochSummary) error {
-	return ds.db.SaveEpochSummary(summary)
-}
-
 func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
 	newVal, err = ds.redis.IncEpochSummaryVal(epoch, field, value)
 	if err != nil {
-		ds.log.WithError(err).WithFields(logrus.Fields{
-			"epoch": epoch,
-			"field": field,
-			"value": value,
-		}).Error("Error incrementing epoch summary val")
+		ds.log.WithError(err).Error("IncEpochSummaryVal failed")
 	}
 	return newVal, err
 }
@@ -205,11 +190,7 @@ func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value in
 func (ds *ProdDatastore) SetEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
 	err = ds.redis.SetEpochSummaryVal(epoch, field, value)
 	if err != nil {
-		ds.log.WithError(err).WithFields(logrus.Fields{
-			"epoch": epoch,
-			"field": field,
-			"value": value,
-		}).Error("Error setting epoch summary val")
+		ds.log.WithError(err).Error("SetEpochSummaryVal failed")
 	}
 	return err
 }
@@ -217,15 +198,39 @@ func (ds *ProdDatastore) SetEpochSummaryVal(epoch uint64, field string, value in
 func (ds *ProdDatastore) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
 	err = ds.redis.SetNXEpochSummaryVal(epoch, field, value)
 	if err != nil {
-		ds.log.WithError(err).WithFields(logrus.Fields{
-			"epoch": epoch,
-			"field": field,
-			"value": value,
-		}).Error("Error setting epoch summary val")
+		ds.log.WithError(err).Error("SetNXEpochSummaryVal failed")
 	}
 	return err
 }
 
-// func (ds *ProdDatastore) IncSlotSummaryVal(epoch uint64, key string, value any) error {
+func (ds *ProdDatastore) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
+	err = ds.redis.SetSlotPayloadDelivered(slot, proposerPubkey, blockhash)
+	if err != nil {
+		ds.log.WithError(err).Error("SetSlotPayloadDelivered failed")
+	}
+	return err
+}
 
-// }
+func (ds *ProdDatastore) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
+	newVal, err = ds.redis.IncSlotSummaryVal(slot, field, value)
+	if err != nil {
+		ds.log.WithError(err).Error("IncSlotSummaryVal failed")
+	}
+	return newVal, err
+}
+
+func (ds *ProdDatastore) SetSlotSummaryVal(slot uint64, field string, value int64) (err error) {
+	err = ds.redis.SetSlotSummaryVal(slot, field, value)
+	if err != nil {
+		ds.log.WithError(err).Error("SetSlotSummaryVal failed")
+	}
+	return err
+}
+
+func (ds *ProdDatastore) SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error) {
+	err = ds.redis.SetNXSlotSummaryVal(slot, field, value)
+	if err != nil {
+		ds.log.WithError(err).Error("SetNXSlotSummaryVal failed")
+	}
+	return err
+}

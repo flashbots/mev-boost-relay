@@ -7,6 +7,7 @@ import (
 	"github.com/flashbots/boost-relay/api"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/sirupsen/logrus"
@@ -84,13 +85,21 @@ var apiCmd = &cobra.Command{
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
 
-		// Connect to Redis and setup the datastore
+		// Connect to Redis
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
+
+		// Connect to Postgres
+		log.Infof("Connecting to Postgres database...")
+		db, err := database.NewDatabaseService(postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+		}
+
 		log.Infof("Connected to Redis at %s", redisURI)
-		ds, err := datastore.NewProdDatastore(log, redis, postgresDSN)
+		ds, err := datastore.NewProdDatastore(log, redis, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}

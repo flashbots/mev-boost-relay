@@ -34,8 +34,10 @@ type RedisCache struct {
 	keyKnownValidators                string
 	keyValidatorRegistration          string
 	keyValidatorRegistrationTimestamp string
-	prefixEpochSummary                string
-	prefixSlotSummary                 string
+	keySlotPayloadDelivered           string
+
+	prefixEpochSummary string
+	prefixSlotSummary  string
 }
 
 func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
@@ -50,13 +52,19 @@ func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
-		prefixEpochSummary:                fmt.Sprintf("%s/%s:epoch-summary", redisPrefix, prefix),
-		prefixSlotSummary:                 fmt.Sprintf("%s/%s:slot-summary", redisPrefix, prefix),
+		keySlotPayloadDelivered:           fmt.Sprintf("%s/%s:payload-delivered", redisPrefix, prefix),
+
+		prefixEpochSummary: fmt.Sprintf("%s/%s:epoch-summary", redisPrefix, prefix),
+		prefixSlotSummary:  fmt.Sprintf("%s/%s:slot-summary", redisPrefix, prefix),
 	}, nil
 }
 
 func (r *RedisCache) keyEpochSummary(epoch uint64) string {
 	return fmt.Sprintf("%s:%d", r.prefixEpochSummary, epoch)
+}
+
+func (r *RedisCache) keySlotSummary(slot uint64) string {
+	return fmt.Sprintf("%s:%d", r.prefixSlotSummary, slot)
 }
 
 func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
@@ -139,4 +147,23 @@ func (r *RedisCache) SetEpochSummaryVal(epoch uint64, field string, value int64)
 
 func (r *RedisCache) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
 	return r.client.HSetNX(context.Background(), r.keyEpochSummary(epoch), field, value).Err()
+}
+
+func (r *RedisCache) GetEpochSummary(epoch uint64) (ret map[string]string, err error) {
+	return r.client.HGetAll(context.Background(), r.keyEpochSummary(epoch)).Result()
+}
+
+func (r *RedisCache) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
+	return r.client.HSet(context.Background(), r.keySlotPayloadDelivered, slot, proposerPubkey+"_"+blockhash).Err()
+}
+func (r *RedisCache) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
+	return r.client.HIncrBy(context.Background(), r.keySlotSummary(slot), field, value).Result()
+}
+
+func (r *RedisCache) SetSlotSummaryVal(slot uint64, field string, value int64) (err error) {
+	return r.client.HSet(context.Background(), r.keySlotSummary(slot), field, value).Err()
+}
+
+func (r *RedisCache) SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error) {
+	return r.client.HSetNX(context.Background(), r.keySlotSummary(slot), field, value).Err()
 }

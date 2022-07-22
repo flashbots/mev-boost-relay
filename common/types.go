@@ -82,43 +82,58 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	return ret, nil
 }
 
-// type SlotSummary struct {
-// 	Epoch  uint64 `json:"epoch"      db:"epoch"`
-// 	Slot   uint64 `json:"slot_first" db:"slot_first"`
-// 	Missed bool   `json:"missed" db:"missed"`
+type EpochSummary struct {
+	Epoch uint64 `json:"epoch"      db:"epoch"`
 
-// 	// Validator stats
-// 	ValidatorsKnownTotal        uint64 `json:"validators_known_total"          db:"validators_known_total"`
-// 	ValidatorRegistrationsTotal uint64 `json:"validator_registrations_total"   db:"validator_registrations_total"`
+	// first and last slots are just derived from the epoch
+	SlotFirst uint64 `json:"slot_first" db:"slot_first"`
+	SlotLast  uint64 `json:"slot_last"  db:"slot_last"`
 
-// 	// The number of requests are the count of all requests to a specific path, even invalid ones
-// 	NumGetHeaderRequests  uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
-// 	NumGetPayloadRequests uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
+	// registered are those that were actually used by the relay (some might be skipped if only one relay and it started in the mmiddle of the epoch)
+	SlotFirstProcessed uint64 `json:"slot_first_processed" db:"slot_first_processed"`
+	SlotLastProcessed  uint64 `json:"slot_last_processed"  db:"slot_last_processed"`
 
-// 	// Responses to successful queries
-// 	NumHeaderSent         uint64 `json:"num_header_sent"          db:"num_header_sent"`
-// 	NumHeaderNoContent    uint64 `json:"num_header_no_content"    db:"num_header_no_content"`
-// 	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
-// 	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
-// 	HighestBidValue       string `json:"highest_bid_value"        db:"highest_bid_value"`
-// }
+	// Validator stats
+	ValidatorsKnownTotal                     uint64 `json:"validators_known_total"                      db:"validators_known_total"`
+	ValidatorRegistrationsTotal              uint64 `json:"validator_registrations_total"               db:"validator_registrations_total"`
+	ValidatorRegistrationsSaved              uint64 `json:"validator_registrations_saved"               db:"validator_registrations_saved"`
+	ValidatorRegistrationsReceviedUnverified uint64 `json:"validator_registrations_received_unverified" db:"validator_registrations_received_unverified"`
 
-// type Summarizer struct {
-// 	epochSummary     *EpochSummary
-// 	epochSummaryLock sync.RWMutex
+	// The number of requests are the count of all requests to a specific path, even invalid ones
+	NumRegisterValidatorRequests uint64 `json:"num_register_validator_requests" db:"num_register_validator_requests"`
+	NumGetHeaderRequests         uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
+	NumGetPayloadRequests        uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
 
-// 	slotSummary *SlotSummary
-// }
+	// Responses to successful queries
+	NumHeaderSentOk       uint64 `json:"num_header_sent_ok"       db:"num_header_sent_ok"`
+	NumHeaderSent204      uint64 `json:"num_header_sent_204"      db:"num_header_sent_204"`
+	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
+	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
 
-// func NewSummarizer() *Summarizer {
-// 	return &Summarizer{
-// 		epochSummary: &EpochSummary{},
-// 		slotSummary:  &SlotSummary{},
-// 	}
-// }
+	// Whether all slots were seen
+	IsComplete bool `json:"is_complete" db:"is_complete"`
+}
 
-// func (s *Summarizer) EpochSummary() *EpochSummary {
-// 	s.epochSummaryLock.RLock()
-// 	defer s.epochSummaryLock.RUnlock()
-// 	return s.epochSummary
-// }
+type SlotSummary struct {
+	Slot   uint64 `json:"slot"   db:"slot"`
+	Epoch  uint64 `json:"epoch"  db:"epoch"`
+	Missed bool   `json:"missed" db:"missed"`
+
+	// General validator stats
+	ValidatorsKnownTotal        uint64 `json:"validators_known_total"                      db:"validators_known_total"`
+	ValidatorRegistrationsTotal uint64 `json:"validator_registrations_total"               db:"validator_registrations_total"`
+
+	// Slot proposer details
+	ProposerPubkey       string `json:"proposer_pubkey"        db:"proposer_pubkey"`
+	ProposerIsRegistered bool   `json:"proposer_is_registered" db:"proposer_is_registered"`
+
+	// The number of requests are the count of all requests to a specific path, even invalid ones
+	NumGetHeaderRequests  uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
+	NumGetPayloadRequests uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
+
+	// Responses to successful queries
+	NumHeaderSentOk       uint64 `json:"num_header_sent_ok"       db:"num_header_sent_ok"`
+	NumHeaderSent204      uint64 `json:"num_header_sent_204"      db:"num_header_sent_204"`
+	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
+	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
+}

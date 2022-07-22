@@ -57,7 +57,7 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 }
 
 func (s *DatabaseService) SaveEpochSummary(summary common.EpochSummary) error {
-	query := `INSERT INTO ` + TableEpochSummary + ` (epoch, slot_first, slot_last, validators_known_total, validator_registrations_total, validator_registrations_renewed, validator_registrations_new, num_register_validator_requests, num_get_header_requests, num_get_payload_requests, num_header_sent, num_header_no_content, num_payload_sent, num_builder_bid_received) VALUES (:epoch, :slot_first, :slot_last, :validators_known_total, :validator_registrations_total, :validator_registrations_renewed, :validator_registrations_new, :num_register_validator_requests, :num_get_header_requests, :num_get_payload_requests, :num_header_sent, :num_header_no_content, :num_payload_sent, :num_builder_bid_received)`
+	query := `INSERT INTO ` + TableEpochSummary + ` (epoch, slot_first, slot_last, slot_first_processed, slot_last_processed, validators_known_total, validator_registrations_total, validator_registrations_saved, validator_registrations_received_unverified, num_register_validator_requests, num_get_header_requests, num_get_payload_requests, num_header_sent_ok, num_header_sent_204, num_payload_sent, num_builder_bid_received, is_complete) VALUES (:epoch, :slot_first, :slot_last, :slot_first_processed, :slot_last_processed, :validators_known_total, :validator_registrations_total, :validator_registrations_saved, :validator_registrations_received_unverified, :num_register_validator_requests, :num_get_header_requests, :num_get_payload_requests, :num_header_sent_ok, :num_header_sent_204, :num_payload_sent, :num_builder_bid_received, :is_complete)`
 	_, err := s.DB.NamedExec(query, summary)
 	return err
 }

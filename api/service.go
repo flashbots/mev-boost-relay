@@ -96,8 +96,9 @@ type RelayAPI struct {
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
-	headSlot               uint64
-	currentEpoch           uint64
+
+	headSlot     uint64
+	currentEpoch uint64
 
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
@@ -330,7 +331,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	if api.headSlot > 0 {
 		for s := api.headSlot + 1; s < headSlot; s++ {
-			api.log.Warnf("missed slot: %d", s)
+			api.log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
 		}
 	}
 
@@ -340,7 +341,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"epoch":              currentEpoch,
 		"slotHead":           headSlot,
 		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
-	}).Info("updated headSlot")
+	}).Infof("updated headSlot to %d", headSlot)
 
 	go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
 	go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
@@ -471,19 +472,18 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 				api.log.WithField("cnt", cnt).Warn("updated known validators, but have not received any")
 			} else {
 				api.log.WithField("cnt", cnt).Info("updated known validators")
+				go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validators_known_total", int64(cnt))
 			}
 		}
 
-		api.updateStatusHTMLData()
-
-		// Update epoch summary
-		go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validators_known_total", int64(cnt))
 		_numRegistered, err := api.datastore.NumRegisteredValidators()
 		if err != nil {
 			api.log.WithError(err).Error("error getting number of registered validators")
 		} else {
 			go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validator_registrations_total", int64(_numRegistered))
 		}
+
+		api.updateStatusHTMLData()
 	}
 }
 
@@ -775,9 +775,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
-	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
 	api.RespondOK(w, block)
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
+	go api.datastore.SetSlotPayloadDelivered(payload.Message.Slot, pubkeyFromIndex.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
 }
 
 // --------------------
