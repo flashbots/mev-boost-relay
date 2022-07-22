@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -108,8 +107,6 @@ type RelayAPI struct {
 	allowZeroValueBlocks                  bool
 	enableQueryProposerDutiesForNextEpoch bool
 	// disableGetPayloadVerifications        bool
-
-	epochSummary *common.EpochSummary
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -138,7 +135,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		beaconClient:           opts.BeaconClient,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
-		epochSummary:           &common.EpochSummary{},
 	}
 
 	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.EthNetDetails.GenesisForkVersionHex, types.Root{}.String())
@@ -239,7 +235,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 					continue
 				}
 
-				atomic.AddUint64(&api.epochSummary.ValidatorRegistrationsNew, 1)
+				go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 
 				// Save the registration
 				go func() {
@@ -332,6 +328,12 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		return
 	}
 
+	if api.headSlot > 0 {
+		for s := api.headSlot + 1; s < headSlot; s++ {
+			api.log.Warnf("missed slot: %d", s)
+		}
+	}
+
 	api.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
@@ -340,24 +342,21 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Info("updated headSlot")
 
-	if currentEpoch != api.currentEpoch {
-		if api.currentEpoch != 0 {
-			api.saveAndResetEpochSummary(headSlot)
-		}
-		api.currentEpoch = currentEpoch
+	go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
+	go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
+
+	// On actual epoch changes, update the epoch summary
+	if api.currentEpoch > 0 && currentEpoch > api.currentEpoch {
+		api.saveAndResetEpochSummary(currentEpoch)
 	}
 
-	// if headSlot%4 == 0 {
-	// 	api.saveAndResetEpochSummary(headSlot)
-	// }
+	api.currentEpoch = currentEpoch
 
 	if headSlot%10 == 0 {
 		// Remove expired headers
 		numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(headSlot)
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
-
-	api.log.Debugf("epoch summary: %#+v\n", api.epochSummary)
 
 	// Update HTML data once per slot
 	go api.updateStatusHTMLData()
@@ -371,39 +370,20 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	}()
 }
 
-func (api *RelayAPI) newEpochSummary(slot uint64) (ret *common.EpochSummary) {
-	ret = &common.EpochSummary{
-		FirstSlot:            slot,
-		Epoch:                slot / uint64(common.SlotsPerEpoch),
-		ValidatorsKnownTotal: uint64(api.datastore.NumKnownValidators()),
-	}
+func (api *RelayAPI) saveAndResetEpochSummary(epoch uint64) {
+	// // we're in a new epoch, save and reset now. if it's the first epoch since service start then discard because incomplete
+	// if api.epochSummary.FirstSlot != 0 { // on startup, the first slot is 0
+	// 	go func(summary common.EpochSummary) {
+	// 		api.log.Infof("epochsummary: %#+v", summary)
+	// 		err := api.datastore.SaveEpochSummary(summary)
+	// 		if err != nil {
+	// 			api.log.WithError(err).Error("error saving epoch summary")
+	// 		}
+	// 	}(*api.epochSummary)
+	// }
 
-	_numRegistered, err := api.datastore.NumRegisteredValidators()
-	if err != nil {
-		api.log.WithError(err).Error("error getting number of registered validators")
-	} else {
-		ret.ValidatorRegistrationsTotal = uint64(_numRegistered)
-	}
-
-	return ret
-}
-
-func (api *RelayAPI) saveAndResetEpochSummary(slot uint64) {
-	api.log.Infof("new epoch! save epochsummary and start new one.")
-	if api.epochSummary.FirstSlot != 0 { // on startup, the first slot is 0 because in the middle of an epoch
-		go func(summary common.EpochSummary, headSlot uint64) {
-			summary.LastSlot = headSlot - 1
-			api.log.Infof("epochsummary: %#+v", summary)
-
-			err := api.datastore.SaveEpochSummary(summary)
-			if err != nil {
-				api.log.WithError(err).Error("error saving epoch summary")
-			}
-		}(*api.epochSummary, slot)
-	}
-
-	// reset
-	api.epochSummary = api.newEpochSummary(slot)
+	// // reset
+	// api.epochSummary = api.newEpochSummary(epoch)
 }
 
 func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
@@ -497,12 +477,12 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 		api.updateStatusHTMLData()
 
 		// Update epoch summary
-		atomic.StoreUint64(&api.epochSummary.ValidatorsKnownTotal, uint64(cnt))
+		go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validators_known_total", int64(cnt))
 		_numRegistered, err := api.datastore.NumRegisteredValidators()
 		if err != nil {
 			api.log.WithError(err).Error("error getting number of registered validators")
 		} else {
-			atomic.StoreUint64(&api.epochSummary.ValidatorRegistrationsTotal, uint64(_numRegistered))
+			go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validator_registrations_total", int64(_numRegistered))
 		}
 	}
 }
@@ -581,8 +561,9 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 // ---------------
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
-	atomic.AddUint64(&api.epochSummary.NumRegisterValidatorRequests, 1)
 	log := api.log.WithField("method", "registerValidator")
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_register_validator_requests", 1)
+
 	// log.Info("registerValidator")
 
 	start := time.Now()
@@ -641,9 +622,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
 		}
 
+		go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_received_unverified", 1)
+
 		// Do nothing if the registration is already the latest
 		if prevTimestamp >= registration.Message.Timestamp {
-			atomic.AddUint64(&api.epochSummary.ValidatorRegistrationsRenewed, 1)
 			continue
 		}
 
@@ -670,7 +652,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	atomic.AddUint64(&api.epochSummary.NumGetHeaderRequests, 1)
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_get_header_requests", 1)
 
 	vars := mux.Vars(req)
 	slotStr := vars["slot"]
@@ -712,13 +694,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.Data == nil || bid.Data.Message == nil {
-		atomic.AddUint64(&api.epochSummary.NumHeaderNoContent, 1)
+		go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_204", 1)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	} else {
 		// If 0-value bid, only return if explicitly allowed
 		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.allowZeroValueBlocks {
-			atomic.AddUint64(&api.epochSummary.NumHeaderNoContent, 1)
+			go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_204", 1)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -728,15 +710,15 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 			"blockHash": bid.Data.Message.Header.BlockHash.String(),
 		}).Info("bid delivered")
 
-		atomic.AddUint64(&api.epochSummary.NumHeaderSent, 1)
+		go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_ok", 1)
 		api.RespondOK(w, bid)
 		return
 	}
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	atomic.AddUint64(&api.epochSummary.NumGetPayloadRequests, 1)
 	log := api.log.WithField("method", "getPayload")
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_get_payload_requests", 1)
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
@@ -794,7 +776,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
-	atomic.AddUint64(&api.epochSummary.NumPayloadSent, 1)
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
 	api.RespondOK(w, block)
 }
 
@@ -833,6 +815,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_builder_bid_received", 1)
 
 	// Check if there's already a bid
 	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
@@ -884,7 +868,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("received block from builder")
-	atomic.AddUint64(&api.epochSummary.NumBuilderBidReceived, 1)
 
 	// Update HTML data
 	go api.updateStatusHTMLData()

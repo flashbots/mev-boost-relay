@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"errors"
 	"strings"
 	"sync"
 
@@ -41,13 +42,12 @@ func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, postgresDSN str
 		blocks:                  make(map[BlockKey]*types.GetPayloadResponse),
 	}
 
-	if postgresDSN != "" {
-		ds.log.Infof("Connecting to Postgres database...")
-		ds.db, err = database.NewDatabaseService(postgresDSN)
-	} else {
-		ds.log.Warn("No Postgres database configured, skipping...")
+	if postgresDSN == "" {
+		return nil, errors.New("no postgres DSN provided")
 	}
 
+	ds.log.Infof("Connecting to Postgres database...")
+	ds.db, err = database.NewDatabaseService(postgresDSN)
 	return ds, err
 }
 
@@ -187,8 +187,45 @@ func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash 
 }
 
 func (ds *ProdDatastore) SaveEpochSummary(summary common.EpochSummary) error {
-	if ds.db != nil {
-		return ds.db.SaveEpochSummary(summary)
-	}
-	return nil
+	return ds.db.SaveEpochSummary(summary)
 }
+
+func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
+	newVal, err = ds.redis.IncEpochSummaryVal(epoch, field, value)
+	if err != nil {
+		ds.log.WithError(err).WithFields(logrus.Fields{
+			"epoch": epoch,
+			"field": field,
+			"value": value,
+		}).Error("Error incrementing epoch summary val")
+	}
+	return newVal, err
+}
+
+func (ds *ProdDatastore) SetEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
+	err = ds.redis.SetEpochSummaryVal(epoch, field, value)
+	if err != nil {
+		ds.log.WithError(err).WithFields(logrus.Fields{
+			"epoch": epoch,
+			"field": field,
+			"value": value,
+		}).Error("Error setting epoch summary val")
+	}
+	return err
+}
+
+func (ds *ProdDatastore) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
+	err = ds.redis.SetNXEpochSummaryVal(epoch, field, value)
+	if err != nil {
+		ds.log.WithError(err).WithFields(logrus.Fields{
+			"epoch": epoch,
+			"field": field,
+			"value": value,
+		}).Error("Error setting epoch summary val")
+	}
+	return err
+}
+
+// func (ds *ProdDatastore) IncSlotSummaryVal(epoch uint64, key string, value any) error {
+
+// }

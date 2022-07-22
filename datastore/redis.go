@@ -13,6 +13,10 @@ import (
 
 var redisPrefix = "boost-relay"
 
+func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
+	return strings.ToLower(string(pk))
+}
+
 func connectRedis(redisURI string) (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: redisURI,
@@ -30,6 +34,8 @@ type RedisCache struct {
 	keyKnownValidators                string
 	keyValidatorRegistration          string
 	keyValidatorRegistrationTimestamp string
+	prefixEpochSummary                string
+	prefixSlotSummary                 string
 }
 
 func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
@@ -44,11 +50,13 @@ func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
+		prefixEpochSummary:                fmt.Sprintf("%s/%s:epoch-summary", redisPrefix, prefix),
+		prefixSlotSummary:                 fmt.Sprintf("%s/%s:slot-summary", redisPrefix, prefix),
 	}, nil
 }
 
-func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
-	return strings.ToLower(string(pk))
+func (r *RedisCache) keyEpochSummary(epoch uint64) string {
+	return fmt.Sprintf("%s:%d", r.prefixEpochSummary, epoch)
 }
 
 func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
@@ -119,4 +127,16 @@ func (r *RedisCache) SetValidatorRegistrations(entries []types.SignedValidatorRe
 
 func (r *RedisCache) NumRegisteredValidators() (int64, error) {
 	return r.client.HLen(context.Background(), r.keyValidatorRegistrationTimestamp).Result()
+}
+
+func (r *RedisCache) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
+	return r.client.HIncrBy(context.Background(), r.keyEpochSummary(epoch), field, value).Result()
+}
+
+func (r *RedisCache) SetEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
+	return r.client.HSet(context.Background(), r.keyEpochSummary(epoch), field, value).Err()
+}
+
+func (r *RedisCache) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
+	return r.client.HSetNX(context.Background(), r.keyEpochSummary(epoch), field, value).Err()
 }

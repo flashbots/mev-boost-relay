@@ -82,25 +82,43 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	return ret, nil
 }
 
-type EpochSummary struct {
-	Epoch     uint64 `json:"epoch"      db:"epoch"`
-	FirstSlot uint64 `json:"slot_first" db:"slot_first"`
-	LastSlot  uint64 `json:"slot_last"  db:"slot_last"`
+// type SlotSummary struct {
+// 	Epoch  uint64 `json:"epoch"      db:"epoch"`
+// 	Slot   uint64 `json:"slot_first" db:"slot_first"`
+// 	Missed bool   `json:"missed" db:"missed"`
 
-	// Validator stats
-	ValidatorsKnownTotal          uint64 `json:"validators_known_total"          db:"validators_known_total"`
-	ValidatorRegistrationsTotal   uint64 `json:"validator_registrations_total"   db:"validator_registrations_total"`
-	ValidatorRegistrationsRenewed uint64 `json:"validator_registrations_renewed" db:"validator_registrations_renewed"`
-	ValidatorRegistrationsNew     uint64 `json:"validator_registrations_new"     db:"validator_registrations_new"`
+// 	// Validator stats
+// 	ValidatorsKnownTotal        uint64 `json:"validators_known_total"          db:"validators_known_total"`
+// 	ValidatorRegistrationsTotal uint64 `json:"validator_registrations_total"   db:"validator_registrations_total"`
 
-	// The number of requests are the count of all requests to a specific path, even invalid ones
-	NumRegisterValidatorRequests uint64 `json:"num_register_validator_requests" db:"num_register_validator_requests"`
-	NumGetHeaderRequests         uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
-	NumGetPayloadRequests        uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
+// 	// The number of requests are the count of all requests to a specific path, even invalid ones
+// 	NumGetHeaderRequests  uint64 `json:"num_get_header_requests"         db:"num_get_header_requests"`
+// 	NumGetPayloadRequests uint64 `json:"num_get_payload_requests"        db:"num_get_payload_requests"`
 
-	// Responses to successful queries
-	NumHeaderSent         uint64 `json:"num_header_sent"          db:"num_header_sent"`
-	NumHeaderNoContent    uint64 `json:"num_header_no_content"    db:"num_header_no_content"`
-	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
-	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
-}
+// 	// Responses to successful queries
+// 	NumHeaderSent         uint64 `json:"num_header_sent"          db:"num_header_sent"`
+// 	NumHeaderNoContent    uint64 `json:"num_header_no_content"    db:"num_header_no_content"`
+// 	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
+// 	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
+// 	HighestBidValue       string `json:"highest_bid_value"        db:"highest_bid_value"`
+// }
+
+// type Summarizer struct {
+// 	epochSummary     *EpochSummary
+// 	epochSummaryLock sync.RWMutex
+
+// 	slotSummary *SlotSummary
+// }
+
+// func NewSummarizer() *Summarizer {
+// 	return &Summarizer{
+// 		epochSummary: &EpochSummary{},
+// 		slotSummary:  &SlotSummary{},
+// 	}
+// }
+
+// func (s *Summarizer) EpochSummary() *EpochSummary {
+// 	s.epochSummaryLock.RLock()
+// 	defer s.epochSummaryLock.RUnlock()
+// 	return s.epochSummary
+// }
