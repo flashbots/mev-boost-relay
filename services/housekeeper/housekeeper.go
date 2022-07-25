@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -38,9 +40,9 @@ type Housekeeper struct {
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
+	proposerDutiesSlot       uint64
 
 	headSlot uint64
-	// currentEpoch uint64
 
 	// feature flags
 	enableQueryProposerDutiesForNextEpoch bool
@@ -111,20 +113,16 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		}
 	}
 
+	// Update proposer duties
+	go hk.updateProposerDuties(headSlot)
+
+	hk.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	hk.log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
 		"slotHead":           headSlot,
 		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
-
-	// Update proposer duties twice per epoch
-	if hk.headSlot == 0 || headSlot%uint64(common.SlotsPerEpoch/2) == 0 {
-		go hk.updateProposerDuties(currentEpoch)
-	}
-
-	hk.headSlot = headSlot
-	// hk.currentEpoch = currentEpoch
 }
 
 func (hk *Housekeeper) updateKnownValidators() {
@@ -154,14 +152,18 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// hk.log.Info("Updated Redis ", last.Index, " ", last.Validator.Pubkey)
 }
 
-func (hk *Housekeeper) updateProposerDuties(epoch uint64) {
+func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	// Should only happen once at a time
-	defer hk.isUpdatingProposerDuties.Store(false)
 	if hk.isUpdatingProposerDuties.Swap(true) {
 		return
 	}
+	defer hk.isUpdatingProposerDuties.Store(false)
 
-	epochFrom := epoch
+	if headSlot%uint64(common.SlotsPerEpoch/2) != 0 && headSlot-hk.proposerDutiesSlot < uint64(common.SlotsPerEpoch/2) {
+		return
+	}
+
+	epochFrom := headSlot / uint64(common.SlotsPerEpoch)
 	epochTo := epochFrom
 	if hk.enableQueryProposerDutiesForNextEpoch {
 		epochTo = epochFrom + 1
@@ -220,5 +222,13 @@ func (hk *Housekeeper) updateProposerDuties(epoch uint64) {
 	}
 
 	hk.redis.SetProposerDuties(proposerDuties)
-	log.WithField("duties", len(proposerDuties)).Info("proposer duties updated")
+	hk.proposerDutiesSlot = headSlot
+
+	// pretty-print
+	_duties := make([]string, len(proposerDuties))
+	for i, duty := range proposerDuties {
+		_duties[i] = fmt.Sprint(duty.Slot)
+	}
+	sort.Strings(_duties)
+	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }

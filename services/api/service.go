@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,8 +85,10 @@ type RelayAPI struct {
 	headSlot     uint64
 	currentEpoch uint64
 
-	proposerDutiesLock     sync.RWMutex
-	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
+	proposerDutiesLock       sync.RWMutex
+	proposerDutiesResponse   []types.BuilderGetValidatorsResponseEntry
+	proposerDutiesSlot       uint64
+	isUpdatingProposerDuties uberatomic.Bool
 
 	// feature flag options
 	allowZeroValueBlocks bool
@@ -215,7 +218,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	api.startValidatorRegistrationWorkers()
 
 	// Get current proposer duties
-	api.updateProposerDuties()
+	api.updateProposerDuties(syncStatus.HeadSlot)
 
 	// Update list of known validators, and start refresh loop
 	go api.startKnownValidatorUpdates()
@@ -230,6 +233,15 @@ func (api *RelayAPI) StartServer() (err error) {
 		for {
 			headSlot := <-c
 			api.processNewSlot(headSlot)
+		}
+	}()
+
+	// Periodically remove expired headers
+	go func() {
+		for {
+			time.Sleep(2 * time.Minute)
+			numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(api.headSlot)
+			api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 		}
 	}()
 
@@ -281,30 +293,41 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
 	go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
 
-	if headSlot%10 == 0 {
-		// Remove expired headers
-		numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(headSlot)
-		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
-	}
-
-	// Update proposer duties in the background, every other slot
-	if headSlot%2 == 0 {
-		go api.updateProposerDuties()
-	}
+	// Regularly update proposer duties in the background
+	go api.updateProposerDuties(headSlot)
 }
 
-func (api *RelayAPI) updateProposerDuties() {
-	duties, err := api.redis.GetProposerDuties()
-	_duties := make([]uint64, len(duties))
-	for i, duty := range duties {
-		_duties[i] = duty.Slot
+func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
+	// Ensure only one updating is running at a time
+	if api.isUpdatingProposerDuties.Swap(true) {
+		return
 	}
+	defer api.isUpdatingProposerDuties.Store(false)
+
+	// Update once every 8 slots (or more, if a slot was missed)
+	if headSlot%8 != 0 && headSlot-api.proposerDutiesSlot < 8 {
+		return
+	}
+
+	// Until epoch+1 is enabled, we need to delay here, because at start of epoch at the same time the housekeeper is updating, and we might get an old update otherwise
+	time.Sleep(1 * time.Second)
+
+	// Get duties from mem
+	duties, err := api.redis.GetProposerDuties()
 
 	if err == nil {
 		api.proposerDutiesLock.Lock()
 		api.proposerDutiesResponse = duties
+		api.proposerDutiesSlot = headSlot
 		api.proposerDutiesLock.Unlock()
-		api.log.Info("updated proposer duties: %+v", _duties)
+
+		// pretty-print
+		_duties := make([]string, len(duties))
+		for i, duty := range duties {
+			_duties[i] = fmt.Sprint(duty.Slot)
+		}
+		sort.Strings(_duties)
+		api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 	} else {
 		api.log.WithError(err).Error("failed to update proposer duties")
 	}
@@ -427,14 +450,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		lastChangedPubkey = registration.Message.Pubkey.String()
 	}
 
-	log.WithFields(logrus.Fields{
+	log = log.WithFields(logrus.Fields{
 		"numRegistrations": len(payload),
 		"numSentToC":       numSentToC,
 		"lastChanged":      lastChangedPubkey,
 		"timeNeededSec":    time.Since(start).Seconds(),
-		"error":            errorResp,
 		"ip":               common.GetIPXForwardedFor(req),
-	}).Info("validator registrations done")
+	})
+	if errorResp != "" {
+		log = log.WithField("error", errorResp)
+	}
+	log.Info("validator registrations processed")
 
 	if errorResp != "" {
 		api.RespondError(w, http.StatusBadRequest, errorResp)
@@ -549,7 +575,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature[:])
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify payload signature")
-		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
 		return
 	}
 
@@ -570,7 +596,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	api.RespondOK(w, block)
 	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
 	go api.datastore.SetSlotPayloadDelivered(payload.Message.Slot, pubkeyFromIndex.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
-	log.WithField("tx", len(block.Data.Transactions)).Info("execution payload delivered")
+	log.WithFields(logrus.Fields{
+		"numTx":       len(block.Data.Transactions),
+		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
+	}).Info("execution payload delivered")
 }
 
 // --------------------
@@ -610,6 +639,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_builder_bid_received", 1)
+
+	// Verify the signature
+	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
+	if !ok || err != nil {
+		log.WithError(err).Warn("could not verify builder bid payload signature")
+		// continue for now, as long as we're the only builder
+		// api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		// return
+	}
 
 	// Check if there's already a bid
 	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
