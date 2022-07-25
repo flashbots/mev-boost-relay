@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
-	"github.com/flashbots/boost-relay/website"
+	"github.com/flashbots/boost-relay/services/website"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
