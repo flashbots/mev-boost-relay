@@ -11,10 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/datastore"
@@ -24,10 +22,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
 
 	_ "net/http/pprof"
 )
@@ -45,12 +39,6 @@ var (
 
 	// JSON-RPC builder proxy
 	// pathSendBundle = "/jsonrpc_sendbundle"
-
-	// Printer for pretty printing numbers
-	printer = message.NewPrinter(language.English)
-
-	// Caser is used for casing strings
-	caser = cases.Title(language.English)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -90,19 +78,12 @@ type RelayAPI struct {
 	datastore    datastore.Datastore
 	beaconClient beaconclient.BeaconNodeClient
 
-	domainBuilder        types.Domain
-	domainBeaconProposer types.Domain
-
 	proposerDutiesLock     sync.RWMutex
 	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
 	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
 
 	headSlot     uint64
 	currentEpoch uint64
-
-	indexTemplate      *template.Template
-	statusHTMLData     StatusHTMLData
-	statusHTMLDataLock sync.RWMutex
 
 	// feature flag options
 	allowZeroValueBlocks                  bool
@@ -112,7 +93,6 @@ type RelayAPI struct {
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
 func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
-	var err error
 	if opts.Log == nil {
 		return nil, errors.New("log parameter is nil")
 	}
@@ -138,16 +118,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
 
-	api.domainBuilder, err = common.ComputeDomain(types.DomainTypeAppBuilder, opts.EthNetDetails.GenesisForkVersionHex, types.Root{}.String())
-	if err != nil {
-		return nil, err
-	}
-
-	api.domainBeaconProposer, err = common.ComputeDomain(types.DomainTypeBeaconProposer, opts.EthNetDetails.BellatrixForkVersionHex, opts.EthNetDetails.GenesisValidatorsRootHex)
-	if err != nil {
-		return nil, err
-	}
-
 	api.log.Infof("Using BLS key: %s", publicKey.String())
 
 	if opts.GetHeaderWaitTime > 0 {
@@ -169,27 +139,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	// 	api.disableGetPayloadVerifications = true
 	// }
 
-	api.indexTemplate, err = parseIndexTemplate()
-	if err != nil {
-		return nil, err
-	}
-
-	api.statusHTMLData = StatusHTMLData{
-		Network:                     caser.String(opts.EthNetDetails.Name),
-		RelayPubkey:                 api.publicKey.String(),
-		BellatrixForkVersion:        api.opts.EthNetDetails.BellatrixForkVersionHex,
-		GenesisForkVersion:          api.opts.EthNetDetails.GenesisForkVersionHex,
-		GenesisValidatorsRoot:       api.opts.EthNetDetails.GenesisValidatorsRootHex,
-		BuilderSigningDomain:        hexutil.Encode(api.domainBuilder[:]),
-		BeaconProposerSigningDomain: hexutil.Encode(api.domainBeaconProposer[:]),
-	}
-
 	return &api, nil
 }
 
 func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
+	// r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
 
 	// Proposer API
 	r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
@@ -230,7 +185,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 				registration := <-api.regValEntriesC
 
 				// Verify the signature
-				ok, err := types.VerifySignature(registration.Message, api.domainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
+				ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 				if err != nil || !ok {
 					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
 					continue
@@ -296,7 +251,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	}()
 
 	// Update HTML data before starting server
-	api.updateStatusHTMLData()
+	// api.updateStatusHTMLData()
 
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
@@ -345,12 +300,6 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
 	go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
-
-	// On actual epoch changes, update the epoch summary
-	if api.currentEpoch > 0 && currentEpoch > api.currentEpoch {
-		api.saveAndResetEpochSummary(currentEpoch)
-	}
-
 	api.currentEpoch = currentEpoch
 
 	if headSlot%10 == 0 {
@@ -359,9 +308,6 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
 
-	// Update HTML data once per slot
-	go api.updateStatusHTMLData()
-
 	// Update proposer duties in the background
 	go func() {
 		err := api.updateProposerDuties(currentEpoch)
@@ -369,22 +315,6 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 			api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
 		}
 	}()
-}
-
-func (api *RelayAPI) saveAndResetEpochSummary(epoch uint64) {
-	// // we're in a new epoch, save and reset now. if it's the first epoch since service start then discard because incomplete
-	// if api.epochSummary.FirstSlot != 0 { // on startup, the first slot is 0
-	// 	go func(summary common.EpochSummary) {
-	// 		api.log.Infof("epochsummary: %#+v", summary)
-	// 		err := api.datastore.SaveEpochSummary(summary)
-	// 		if err != nil {
-	// 			api.log.WithError(err).Error("error saving epoch summary")
-	// 		}
-	// 	}(*api.epochSummary)
-	// }
-
-	// // reset
-	// api.epochSummary = api.newEpochSummary(epoch)
 }
 
 func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
@@ -483,7 +413,7 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 			go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validator_registrations_total", int64(_numRegistered))
 		}
 
-		api.updateStatusHTMLData()
+		// api.updateStatusHTMLData()
 	}
 }
 
@@ -506,54 +436,8 @@ func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 	}
 }
 
-func (api *RelayAPI) RespondOKEmpty(w http.ResponseWriter) {
-	api.RespondOK(w, NilResponse)
-}
-
-func (api *RelayAPI) updateStatusHTMLData() {
-	_numRegistered, err := api.datastore.NumRegisteredValidators()
-	if err != nil {
-		api.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
-	}
-
-	numRegistered := printer.Sprintf("%d", _numRegistered)
-	numKnown := printer.Sprintf("%d", api.datastore.NumKnownValidators())
-	headSlot := printer.Sprintf("%d", api.headSlot)
-
-	// header := b.bestHeader
-	// headerData, err := json.MarshalIndent(header, "", "  ")
-	// if err != nil {
-	// 	headerData = []byte{}
-	// }
-
-	// payload := b.bestPayload
-	// payloadData, err := json.MarshalIndent(payload, "", "  ")
-	// if err != nil {
-	// 	payloadData = []byte{}
-	// }
-
-	api.statusHTMLDataLock.Lock()
-	api.statusHTMLData.HeadSlot = headSlot
-	api.statusHTMLData.ValidatorsTotal = numKnown
-	api.statusHTMLData.ValidatorsRegistered = numRegistered
-	api.statusHTMLData.Header = ""
-	// api.statusHTMLData.Block = ""
-	api.statusHTMLDataLock.Unlock()
-}
-
-func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
-	api.statusHTMLDataLock.RLock()
-	defer api.statusHTMLDataLock.RUnlock()
-
-	if err := api.indexTemplate.Execute(w, api.statusHTMLData); err != nil {
-		api.log.WithError(err).Error("error rendering index template")
-		api.RespondError(w, http.StatusInternalServerError, "error rendering index template")
-		return
-	}
-}
-
 func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
-	api.RespondOKEmpty(w)
+	w.WriteHeader(http.StatusOK)
 }
 
 // ---------------
@@ -647,7 +531,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	if errorResp != "" {
 		api.RespondError(w, http.StatusBadRequest, errorResp)
 	} else {
-		api.RespondOKEmpty(w)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -754,7 +638,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Verify the signature
-	ok, err := types.VerifySignature(payload.Message, api.domainBeaconProposer, pk[:], payload.Signature[:])
+	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature[:])
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify payload signature")
 		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
@@ -804,7 +688,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// By default, don't accept blocks with 0 value
 	if !api.allowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
-			api.RespondOKEmpty(w)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 	}
@@ -830,13 +714,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// If existing bid has same or higher value, do nothing
 	if prevBid != nil {
 		if payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
-			api.RespondOKEmpty(w)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 	}
 
 	// Prepare the response data
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.domainBuilder)
+	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -871,8 +755,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}).Info("received block from builder")
 
 	// Update HTML data
-	go api.updateStatusHTMLData()
+	// go api.updateStatusHTMLData()
 
 	// Respond with OK (TODO: proper response format)
-	api.RespondOKEmpty(w)
+	w.WriteHeader(http.StatusOK)
 }

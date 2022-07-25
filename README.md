@@ -13,6 +13,14 @@ More information:
 * https://www.notion.so/flashbots/Relay-API-Brainstorms-cf5edd57360140668c6d6b78fd04f312
 * https://www.notion.so/flashbots/Relay-Design-Docs-623487c51b92423fabeb8da9c54af7f4
 
+---
+
+The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
+
+* API (proposer & builder): accept requests from proposers and builders
+* Website: handles the root website requests (most of the information is pulled from Redis)
+* Housekeeping: various updates, saves metrics, etc
+
 ## Getting started
 
 Redis (v6+) is used to store known validators and validator registrations. You can start Redis with Docker like this:

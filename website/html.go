@@ -1,4 +1,4 @@
-package api
+package website
 
 import "text/template"
 

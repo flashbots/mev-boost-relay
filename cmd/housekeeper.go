@@ -14,26 +14,26 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(metricsSaverCmd)
-	metricsSaverCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
-	metricsSaverCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
+	rootCmd.AddCommand(housekeeperCmd)
+	housekeeperCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
+	housekeeperCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	metricsSaverCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
-	metricsSaverCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	metricsSaverCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
+	housekeeperCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
+	housekeeperCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
+	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 
-	metricsSaverCmd.Flags().BoolVar(&useNetworkKiln, "kiln", false, "Kiln network")
-	metricsSaverCmd.Flags().BoolVar(&useNetworkRopsten, "ropsten", false, "Ropsten network")
-	metricsSaverCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
-	metricsSaverCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
-	metricsSaverCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
+	housekeeperCmd.Flags().BoolVar(&useNetworkKiln, "kiln", false, "Kiln network")
+	housekeeperCmd.Flags().BoolVar(&useNetworkRopsten, "ropsten", false, "Ropsten network")
+	housekeeperCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
+	housekeeperCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
+	housekeeperCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
 
-	metricsSaverCmd.Flags().SortFlags = false
+	housekeeperCmd.Flags().SortFlags = false
 }
 
-var metricsSaverCmd = &cobra.Command{
-	Use:   "metrics-saver",
-	Short: "Start the metrics saver service (epoch and slot summaries -> DB)",
+var housekeeperCmd = &cobra.Command{
+	Use:   "housekeeper",
+	Short: "Service that runs in the background and does various housekeeping (removing old bids, updating proposer duties, saving metrics, etc.)",
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 

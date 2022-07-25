@@ -42,6 +42,9 @@ type EthNetworkDetails struct {
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
+
+	DomainBuilder        types.Domain
+	DomainBeaconProposer types.Domain
 }
 
 var (
@@ -59,6 +62,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	ret = &EthNetworkDetails{
 		Name: networkName,
 	}
+
 	switch networkName {
 	case EthNetworkKiln:
 		ret.GenesisForkVersionHex = types.GenesisForkVersionKiln
@@ -79,6 +83,17 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	default:
 		return nil, fmt.Errorf("unknown network: %s", networkName)
 	}
+
+	ret.DomainBuilder, err = ComputeDomain(types.DomainTypeAppBuilder, ret.GenesisForkVersionHex, types.Root{}.String())
+	if err != nil {
+		return nil, err
+	}
+
+	ret.DomainBeaconProposer, err = ComputeDomain(types.DomainTypeBeaconProposer, ret.BellatrixForkVersionHex, ret.GenesisValidatorsRootHex)
+	if err != nil {
+		return nil, err
+	}
+
 	return ret, nil
 }
 

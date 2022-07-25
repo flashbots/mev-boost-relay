@@ -32,9 +32,10 @@ func init() {
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
+	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
+	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
 	apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 0, "ms to wait on getHeader requests")
-	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
@@ -44,8 +45,6 @@ func init() {
 	apiCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
 	apiCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
 	apiCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
-
-	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 
 	apiCmd.Flags().SortFlags = false
 }
