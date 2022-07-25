@@ -39,8 +39,8 @@ type Housekeeper struct {
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
 
-	headSlot     uint64
-	currentEpoch uint64
+	headSlot uint64
+	// currentEpoch uint64
 
 	// feature flags
 	enableQueryProposerDutiesForNextEpoch bool
@@ -120,11 +120,11 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	// Update proposer duties twice per epoch
 	if hk.headSlot == 0 || headSlot%uint64(common.SlotsPerEpoch/2) == 0 {
-		go hk.updateProposerDuties()
+		go hk.updateProposerDuties(currentEpoch)
 	}
 
 	hk.headSlot = headSlot
-	hk.currentEpoch = currentEpoch
+	// hk.currentEpoch = currentEpoch
 }
 
 func (hk *Housekeeper) updateKnownValidators() {
@@ -154,14 +154,14 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// hk.log.Info("Updated Redis ", last.Index, " ", last.Validator.Pubkey)
 }
 
-func (hk *Housekeeper) updateProposerDuties() {
+func (hk *Housekeeper) updateProposerDuties(epoch uint64) {
 	// Should only happen once at a time
 	defer hk.isUpdatingProposerDuties.Store(false)
 	if hk.isUpdatingProposerDuties.Swap(true) {
 		return
 	}
 
-	epochFrom := hk.currentEpoch
+	epochFrom := epoch
 	epochTo := epochFrom
 	if hk.enableQueryProposerDutiesForNextEpoch {
 		epochTo = epochFrom + 1

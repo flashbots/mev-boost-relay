@@ -38,7 +38,7 @@ func init() {
 	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
-	apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 0, "ms to wait on getHeader requests")
+	// apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 0, "ms to wait on getHeader requests")
 
 	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
 	apiCmd.MarkFlagRequired("network")

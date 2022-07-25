@@ -114,6 +114,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
+		redis:                  opts.Redis,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 	}
@@ -121,7 +122,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	api.log.Infof("Using BLS key: %s", publicKey.String())
 
 	if opts.GetHeaderWaitTime > 0 {
-		api.log.Infof("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
+		api.log.Warn("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
 
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
@@ -213,21 +214,14 @@ func (api *RelayAPI) StartServer() (err error) {
 	// Start worker pool for validator registration processing
 	api.startValidatorRegistrationWorkers()
 
-	// Update list of known validators, and start refresh loop
-	cnt, err := api.datastore.RefreshKnownValidators()
-	if err != nil {
-		return err
-	} else if cnt == 0 {
-		api.log.WithField("cnt", cnt).Warn("updated known validators, but have not received any")
-	} else {
-		api.log.WithField("cnt", cnt).Info("updated known validators")
-	}
+	// Get current proposer duties
+	api.updateProposerDuties()
 
+	// Update list of known validators, and start refresh loop
 	go api.startKnownValidatorUpdates()
 
 	// Process current slot
-	headSlot := syncStatus.HeadSlot
-	api.processNewSlot(headSlot)
+	api.processNewSlot(syncStatus.HeadSlot)
 
 	// Start regular slot updates
 	go func() {
@@ -238,9 +232,6 @@ func (api *RelayAPI) StartServer() (err error) {
 			api.processNewSlot(headSlot)
 		}
 	}()
-
-	// Update HTML data before starting server
-	// api.updateStatusHTMLData()
 
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
@@ -296,27 +287,31 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
 
-	// Update proposer duties in the background, at start and middle of epoch
-	go func() {
-		if headSlot%uint64(common.SlotsPerEpoch/2) == 0 {
-			duties, err := api.redis.GetProposerDuties()
-			if err == nil {
-				api.proposerDutiesLock.Lock()
-				api.proposerDutiesResponse = duties
-				api.proposerDutiesLock.Unlock()
-				api.log.Info("updated proposer duties")
-			} else {
-				api.log.WithError(err).Error("failed to update proposer duties")
-			}
-		}
-	}()
+	// Update proposer duties in the background, every other slot
+	if headSlot%2 == 0 {
+		go api.updateProposerDuties()
+	}
+}
+
+func (api *RelayAPI) updateProposerDuties() {
+	duties, err := api.redis.GetProposerDuties()
+	_duties := make([]uint64, len(duties))
+	for i, duty := range duties {
+		_duties[i] = duty.Slot
+	}
+
+	if err == nil {
+		api.proposerDutiesLock.Lock()
+		api.proposerDutiesResponse = duties
+		api.proposerDutiesLock.Unlock()
+		api.log.Info("updated proposer duties: %+v", _duties)
+	} else {
+		api.log.WithError(err).Error("failed to update proposer duties")
+	}
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
 	for {
-		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
-		time.Sleep(common.DurationPerEpoch / 2)
-
 		// Refresh known validators
 		cnt, err := api.datastore.RefreshKnownValidators()
 		if err != nil {
@@ -324,6 +319,9 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 		} else {
 			api.log.WithField("cnt", cnt).Info("updated known validators")
 		}
+
+		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
+		time.Sleep(common.DurationPerEpoch / 2)
 	}
 }
 
