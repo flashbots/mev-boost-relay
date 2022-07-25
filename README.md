@@ -23,22 +23,17 @@ The relay consists of several components that are designed to run and scale inde
 
 ## Getting started
 
-Redis (v6+) is used to store known validators and validator registrations. You can start Redis with Docker like this:
+Redis (v6+) and PostgreSQL is used.
 
 ```bash
+# Start Redis
 docker run --name redis -d -p 6379:6379 redis:7
-```
 
-Postgres is optional:
-
-```bash
-#docker run --name postgres -e POSTGRES_PASSWORD=postgres -d -p 5432:5432 postgres
+# Start PostgreSQL
 docker-compose up
 ```
 
 Visit adminer on http://localhost:8093/?username=postgres
-
----
 
 The API needs access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
 
@@ -46,18 +41,17 @@ The API needs access to a beacon node for event subscriptions (by default using 
 ssh -L 3500:localhost:3500 fb-builder-kilndev
 ```
 
-### Kiln
+Now start the services:
 
 ```bash
-# Start the housekeeper, which sets up the validators in Redis too
+# The housekeeper sets up the validators, and does various housekeeping
 go run . housekeeper --network kiln --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
-# Sync known validators from BN to Redis
-go run . known-validator-update --kiln
-
 # Run APIs for Kiln
-go run . api --kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2
-go run . api --kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+go run . api --network kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
+# Run Website for Kiln
+go run . website --network kiln --relay-pubkey 0xfoo
 
 # Query status
 curl localhost:9062/eth/v1/builder/status
