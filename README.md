@@ -46,9 +46,12 @@ The API needs access to a beacon node for event subscriptions (by default using 
 ssh -L 3500:localhost:3500 fb-builder-kilndev
 ```
 
-Run the API for Kiln (and update known validators first):
+### Kiln
 
 ```bash
+# Start the housekeeper, which sets up the validators in Redis too
+go run . housekeeper --network kiln --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
 # Sync known validators from BN to Redis
 go run . known-validator-update --kiln
 

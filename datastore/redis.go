@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/go-redis/redis/v9"
@@ -31,13 +32,16 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 type RedisCache struct {
 	client *redis.Client
 
+	prefixEpochSummary string
+	prefixSlotSummary  string
+
 	keyKnownValidators                string
 	keyValidatorRegistration          string
 	keyValidatorRegistrationTimestamp string
 	keySlotPayloadDelivered           string
 
-	prefixEpochSummary string
-	prefixSlotSummary  string
+	keyStats          string
+	keyProposerDuties string
 }
 
 func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
@@ -49,13 +53,16 @@ func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 	return &RedisCache{
 		client: client,
 
+		prefixEpochSummary: fmt.Sprintf("%s/%s:epoch-summary", redisPrefix, prefix),
+		prefixSlotSummary:  fmt.Sprintf("%s/%s:slot-summary", redisPrefix, prefix),
+
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
 		keySlotPayloadDelivered:           fmt.Sprintf("%s/%s:payload-delivered", redisPrefix, prefix),
 
-		prefixEpochSummary: fmt.Sprintf("%s/%s:epoch-summary", redisPrefix, prefix),
-		prefixSlotSummary:  fmt.Sprintf("%s/%s:slot-summary", redisPrefix, prefix),
+		keyStats:          fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
+		keyProposerDuties: fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
 	}, nil
 }
 
@@ -65,6 +72,24 @@ func (r *RedisCache) keyEpochSummary(epoch uint64) string {
 
 func (r *RedisCache) keySlotSummary(slot uint64) string {
 	return fmt.Sprintf("%s:%d", r.prefixSlotSummary, slot)
+}
+
+func (r *RedisCache) GetObj(key string, obj any) (err error) {
+	value, err := r.client.Get(context.Background(), key).Result()
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal([]byte(value), &obj)
+}
+
+func (r *RedisCache) SetObj(key string, value any, expiration time.Duration) (err error) {
+	marshalledValue, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	return r.client.Set(context.Background(), key, marshalledValue, expiration).Err()
 }
 
 func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
@@ -166,4 +191,18 @@ func (r *RedisCache) SetSlotSummaryVal(slot uint64, field string, value int64) (
 
 func (r *RedisCache) SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error) {
 	return r.client.HSetNX(context.Background(), r.keySlotSummary(slot), field, value).Err()
+}
+
+func (r *RedisCache) SetStats(field string, value string) (err error) {
+	return r.client.HSet(context.Background(), r.keyStats, field, value).Err()
+}
+
+func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidatorsResponseEntry) (err error) {
+	return r.SetObj(r.keyProposerDuties, proposerDuties, 0)
+}
+
+func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
+	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
+	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
+	return proposerDuties, err
 }

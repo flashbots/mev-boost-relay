@@ -14,7 +14,6 @@ const (
 
 var (
 	websiteListenAddr  string
-	websiteNetwork     string
 	websiteRelayPubkey string
 )
 
@@ -29,7 +28,7 @@ func init() {
 	websiteCmd.Flags().StringVar(&websiteRelayPubkey, "relay-pubkey", "", "relay pubkey")
 	websiteCmd.MarkFlagRequired("relay-pubkey")
 
-	websiteCmd.Flags().StringVar(&websiteNetwork, "network", "", "Which network to use")
+	websiteCmd.Flags().StringVar(&network, "network", "", "Which network to use")
 	websiteCmd.MarkFlagRequired("network")
 }
 
@@ -43,7 +42,7 @@ var websiteCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/website")
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(websiteNetwork)
+		networkInfo, err := common.NewEthNetworkDetails(network)
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}

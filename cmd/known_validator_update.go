@@ -17,13 +17,8 @@ func init() {
 	knownValidatorUpdateCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	knownValidatorUpdateCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	knownValidatorUpdateCmd.Flags().BoolVar(&useNetworkKiln, "kiln", false, "Kiln network")
-	knownValidatorUpdateCmd.Flags().BoolVar(&useNetworkRopsten, "ropsten", false, "Ropsten network")
-	knownValidatorUpdateCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
-	knownValidatorUpdateCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
-	knownValidatorUpdateCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
-
-	knownValidatorUpdateCmd.Flags().SortFlags = false
+	knownValidatorUpdateCmd.Flags().StringVar(&network, "network", "", "Which network to use")
+	knownValidatorUpdateCmd.MarkFlagRequired("network")
 }
 
 var knownValidatorUpdateCmd = &cobra.Command{
@@ -36,21 +31,11 @@ var knownValidatorUpdateCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/known-validator-update")
 		log.Infof("boost-relay %s", Version)
 
-		var networkInfo *common.EthNetworkDetails
-		if useNetworkKiln {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkKiln)
-		} else if useNetworkRopsten {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkRopsten)
-		} else if useNetworkSepolia {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkSepolia)
-		} else if useNetworkGoerliSF5 {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkGoerliShadowFork5)
-		} else {
-			log.Fatal("Please specify a network (eg. --kiln or --ropsten or --sepolia or --goerli-sf5 flags)")
-		}
+		networkInfo, err := common.NewEthNetworkDetails(network)
 		if err != nil {
-			log.WithError(err).Fatalf("unknown network")
+			log.WithError(err).Fatalf("error getting network details")
 		}
+		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect beacon client to node
 		if beaconNodeURI == "" {

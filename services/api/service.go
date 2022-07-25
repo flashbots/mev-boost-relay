@@ -49,7 +49,9 @@ type RelayAPIOpts struct {
 	RegValWorkers int // number of workers for validator registration processing
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
-	SecretKey     *bls.SecretKey // used to sign bids (getHeader responses)
+	Redis         *datastore.RedisCache
+
+	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
 
 	// Network specific variables
 	EthNetDetails common.EthNetworkDetails
@@ -75,20 +77,18 @@ type RelayAPI struct {
 	regValEntriesC       chan types.SignedValidatorRegistration
 	regValWorkersStarted uberatomic.Bool
 
-	datastore    datastore.Datastore
 	beaconClient beaconclient.BeaconNodeClient
-
-	proposerDutiesLock     sync.RWMutex
-	proposerDutiesEpoch    uint64 // used to update duties only once per epoch
-	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
+	datastore    datastore.Datastore
+	redis        *datastore.RedisCache
 
 	headSlot     uint64
 	currentEpoch uint64
 
+	proposerDutiesLock     sync.RWMutex
+	proposerDutiesResponse []types.BuilderGetValidatorsResponseEntry
+
 	// feature flag options
-	allowZeroValueBlocks                  bool
-	enableQueryProposerDutiesForNextEpoch bool
-	// disableGetPayloadVerifications        bool
+	allowZeroValueBlocks bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -129,22 +129,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.allowZeroValueBlocks = true
 	}
 
-	if os.Getenv("ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH") != "" {
-		api.log.Warn("env: ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH - querying proposer duties for current + next epoch")
-		api.enableQueryProposerDutiesForNextEpoch = true
-	}
-
-	// if os.Getenv("DISABLE_SIGNATURE_VERIFICATIONS") != "" {
-	// 	api.log.Warn("env: DISABLE_SIGNATURE_VERIFICATIONS - signature verifications disabled for registraterValidator and getPayload calls")
-	// 	api.disableGetPayloadVerifications = true
-	// }
-
 	return &api, nil
 }
 
 func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
-	// r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
 
 	// Proposer API
 	r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
@@ -291,16 +280,15 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	}
 
 	api.headSlot = headSlot
-	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
+	api.currentEpoch = headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
-		"epoch":              currentEpoch,
+		"epoch":              api.currentEpoch,
 		"slotHead":           headSlot,
-		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
+		"slotStartNextEpoch": (api.currentEpoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
 
 	go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
 	go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
-	api.currentEpoch = currentEpoch
 
 	if headSlot%10 == 0 {
 		// Remove expired headers
@@ -308,84 +296,20 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 	}
 
-	// Update proposer duties in the background
+	// Update proposer duties in the background, at start and middle of epoch
 	go func() {
-		err := api.updateProposerDuties(currentEpoch)
-		if err != nil {
-			api.log.WithError(err).WithField("epoch", currentEpoch).Error("failed to update proposer duties")
+		if headSlot%uint64(common.SlotsPerEpoch/2) == 0 {
+			duties, err := api.redis.GetProposerDuties()
+			if err == nil {
+				api.proposerDutiesLock.Lock()
+				api.proposerDutiesResponse = duties
+				api.proposerDutiesLock.Unlock()
+				api.log.Info("updated proposer duties")
+			} else {
+				api.log.WithError(err).Error("failed to update proposer duties")
+			}
 		}
 	}()
-}
-
-func (api *RelayAPI) updateProposerDuties(epoch uint64) error {
-	// Do nothing if already checked this epoch
-	if epoch <= api.proposerDutiesEpoch {
-		return nil
-	}
-
-	// Get the proposers with duty in this epoch (TODO: and next, but Prysm doesn't support it yet, Terence is on it)
-	epochFrom := epoch
-	epochTo := epoch
-	if api.enableQueryProposerDutiesForNextEpoch {
-		epochTo = epoch + 1
-	}
-
-	log := api.log.WithFields(logrus.Fields{
-		"epochFrom": epochFrom,
-		"epochTo":   epochTo,
-	})
-	log.Debug("updating proposer duties...")
-
-	r, err := api.beaconClient.GetProposerDuties(epoch)
-	if err != nil {
-		return err
-	}
-
-	entries := r.Data
-
-	if api.enableQueryProposerDutiesForNextEpoch {
-		r2, err := api.beaconClient.GetProposerDuties(epoch + 1)
-		if err != nil {
-			return err
-		}
-		entries = append(entries, r2.Data...)
-	}
-
-	// Result for parallel Redis requests
-	type result struct {
-		val types.BuilderGetValidatorsResponseEntry
-		err error
-	}
-
-	// Scatter requests to Redis to get registrations
-	c := make(chan result, len(entries))
-	for i := 0; i < cap(c); i++ {
-		go func(duty beaconclient.ProposerDutiesResponseData) {
-			reg, err := api.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
-			c <- result{types.BuilderGetValidatorsResponseEntry{
-				Slot:  duty.Slot,
-				Entry: reg,
-			}, err}
-		}(entries[i])
-	}
-
-	// Gather results
-	proposerDutiesResponse := make([]types.BuilderGetValidatorsResponseEntry, 0)
-	for i := 0; i < cap(c); i++ {
-		res := <-c
-		if res.err != nil {
-			return res.err
-		} else if res.val.Entry != nil {
-			proposerDutiesResponse = append(proposerDutiesResponse, res.val)
-		}
-	}
-
-	api.proposerDutiesLock.Lock()
-	api.proposerDutiesEpoch = epoch
-	api.proposerDutiesResponse = proposerDutiesResponse
-	api.proposerDutiesLock.Unlock()
-	log.WithField("duties", len(proposerDutiesResponse)).Info("proposer duties updated")
-	return nil
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
@@ -398,22 +322,8 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 		if err != nil {
 			api.log.WithError(err).Error("error getting known validators")
 		} else {
-			if cnt == 0 {
-				api.log.WithField("cnt", cnt).Warn("updated known validators, but have not received any")
-			} else {
-				api.log.WithField("cnt", cnt).Info("updated known validators")
-				go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validators_known_total", int64(cnt))
-			}
+			api.log.WithField("cnt", cnt).Info("updated known validators")
 		}
-
-		_numRegistered, err := api.datastore.NumRegisteredValidators()
-		if err != nil {
-			api.log.WithError(err).Error("error getting number of registered validators")
-		} else {
-			go api.datastore.SetEpochSummaryVal(api.currentEpoch, "validator_registrations_total", int64(_numRegistered))
-		}
-
-		// api.updateStatusHTMLData()
 	}
 }
 

@@ -17,8 +17,5 @@ var (
 	logJSON       bool
 	logLevel      string
 
-	useNetworkKiln      bool
-	useNetworkRopsten   bool
-	useNetworkSepolia   bool
-	useNetworkGoerliSF5 bool
+	network string
 )

@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/boost-relay/api"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
+	"github.com/flashbots/boost-relay/services/api"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -29,6 +29,9 @@ var (
 
 func init() {
 	rootCmd.AddCommand(apiCmd)
+	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
+	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
+
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
@@ -37,16 +40,8 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
 	apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 0, "ms to wait on getHeader requests")
 
-	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
-	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
-
-	apiCmd.Flags().BoolVar(&useNetworkKiln, "kiln", false, "Kiln network")
-	apiCmd.Flags().BoolVar(&useNetworkRopsten, "ropsten", false, "Ropsten network")
-	apiCmd.Flags().BoolVar(&useNetworkSepolia, "sepolia", false, "Sepolia network")
-	apiCmd.Flags().BoolVar(&useNetworkGoerliSF5, "goerli-sf5", false, "Goerli Shadow Fork 5")
-	apiCmd.MarkFlagsMutuallyExclusive("kiln", "ropsten", "sepolia", "goerli-sf5")
-
-	apiCmd.Flags().SortFlags = false
+	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
+	apiCmd.MarkFlagRequired("network")
 }
 
 var apiCmd = &cobra.Command{
@@ -59,21 +54,11 @@ var apiCmd = &cobra.Command{
 		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", Version)
 
-		var networkInfo *common.EthNetworkDetails
-		if useNetworkKiln {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkKiln)
-		} else if useNetworkRopsten {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkRopsten)
-		} else if useNetworkSepolia {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkSepolia)
-		} else if useNetworkGoerliSF5 {
-			networkInfo, err = common.NewEthNetworkDetails(common.EthNetworkGoerliShadowFork5)
-		} else {
-			log.Fatal("Please specify a network (eg. --kiln or --ropsten or --sepolia or --goerli-sf5 flags)")
-		}
+		networkInfo, err := common.NewEthNetworkDetails(network)
 		if err != nil {
-			log.WithError(err).Fatalf("unknown network")
+			log.WithError(err).Fatalf("error getting network details")
 		}
+		log.Infof("Using network: %s", networkInfo.Name)
 
 		log.Infof("Using network: %s", networkInfo.Name)
 		log.Infof("Using genesis validators root: %s", networkInfo.GenesisValidatorsRootHex)
@@ -89,6 +74,7 @@ var apiCmd = &cobra.Command{
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
+		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Postgres
 		log.Infof("Connecting to Postgres database...")
@@ -97,7 +83,6 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}
 
-		log.Infof("Connected to Redis at %s", redisURI)
 		ds, err := datastore.NewProdDatastore(log, redis, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
@@ -118,6 +103,7 @@ var apiCmd = &cobra.Command{
 			ListenAddr:        apiListenAddr,
 			BeaconClient:      beaconClient,
 			Datastore:         ds,
+			Redis:             redis,
 			EthNetDetails:     *networkInfo,
 			PprofAPI:          apiPprofEnabled,
 			GetHeaderWaitTime: time.Duration(apiGetHeaderDelayMs) * time.Millisecond,

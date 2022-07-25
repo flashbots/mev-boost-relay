@@ -106,3 +106,19 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 		require.Equal(t, pubkey1.String(), reg.Message.Pubkey.String())
 	})
 }
+
+func TestRedisProposerDuties(t *testing.T) {
+	cache := setupTestRedis(t)
+	duties := []types.BuilderGetValidatorsResponseEntry{
+		{Slot: 1, Entry: &types.SignedValidatorRegistration{Message: &types.RegisterValidatorRequestMessage{FeeRecipient: types.Address{0x02}}}},
+	}
+	err := cache.SetProposerDuties(duties)
+	require.NoError(t, err)
+
+	duties2, err := cache.GetProposerDuties()
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(duties2))
+	require.Equal(t, duties[0].Entry.Message.FeeRecipient, duties2[0].Entry.Message.FeeRecipient)
+
+}
