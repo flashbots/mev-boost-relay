@@ -67,6 +67,12 @@ func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) err
 	return err
 }
 
+func (s *DatabaseService) GetRecentDeliveredPayloads(limit int) ([]*DeliveredPayloadEntry, error) {
+	tasks := []*DeliveredPayloadEntry{}
+	err := s.DB.Select(&tasks, "SELECT * FROM "+TableDeliveredPayload+" ORDER BY id DESC LIMIT $1", limit)
+	return tasks, err
+}
+
 func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
 	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload)`
 	_, err := s.DB.NamedExec(query, entry)

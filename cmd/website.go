@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/boost-relay/services/website"
 	"github.com/sirupsen/logrus"
@@ -24,6 +25,7 @@ func init() {
 
 	websiteCmd.Flags().StringVar(&websiteListenAddr, "listen-addr", websiteDefaultListenAddr, "listen address for webserver")
 	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
+	websiteCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 
 	websiteCmd.Flags().StringVar(&websiteRelayPubkey, "relay-pubkey", "", "relay pubkey")
 	websiteCmd.MarkFlagRequired("relay-pubkey")
@@ -55,12 +57,20 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
+		// Connect to Postgres
+		log.Infof("Connecting to Postgres database...")
+		db, err := database.NewDatabaseService(postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+		}
+
 		// Create the website service
 		opts := &website.WebserverOpts{
 			ListenAddress:  websiteListenAddr,
 			RelayPubkeyHex: websiteRelayPubkey,
 			NetworkDetails: networkInfo,
 			Redis:          redis,
+			DB:             db,
 			Log:            log,
 		}
 

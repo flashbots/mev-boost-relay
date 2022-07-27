@@ -14,8 +14,10 @@ var (
 
 	beaconNodeURI string
 	redisURI      string
-	logJSON       bool
-	logLevel      string
+	postgresDSN   string
+
+	logJSON  bool
+	logLevel string
 
 	network string
 )

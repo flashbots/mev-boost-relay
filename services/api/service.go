@@ -310,7 +310,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	}
 
 	// Until epoch+1 is enabled, we need to delay here, because at start of epoch at the same time the housekeeper is updating, and we might get an old update otherwise
-	time.Sleep(1 * time.Second)
+	// time.Sleep(1 * time.Second)
 
 	// Get duties from mem
 	duties, err := api.redis.GetProposerDuties()
@@ -379,13 +379,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	log := api.log.WithField("method", "registerValidator")
 	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_register_validator_requests", 1)
 
-	// log.Info("registerValidator")
-
 	start := time.Now()
 	startTimestamp := start.Unix()
 
 	payload := []types.SignedValidatorRegistration{}
-	// lastChangedPubkey := ""
 	errorResp := ""
 	numRegNew := 0
 	numRegErr := 0
@@ -451,15 +448,16 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Send to workers for signature verification and saving
-		// lastChangedPubkey = registration.Message.Pubkey.String()
 		numRegNew++
 		if api.ffSyncValidatorRegistrations {
 			// Verify the signature
 			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 			if err != nil || !ok {
-				api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Warn("failed to verify registerValidator signature")
-				errorResp = "failed to verify validator signature for " + registration.Message.Pubkey.String()
+				if err != nil {
+					api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Error("error verifying registerValidator signature")
+				}
 				numRegErr += 1
+				errorResp = fmt.Sprintf("failed to verify validator signature of %d registrations. latest: %s", numRegErr, registration.Message.Pubkey)
 			} else {
 				// Save and increment counter
 				go api.datastore.SetValidatorRegistration(registration)
@@ -476,9 +474,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"numRegistrations":    len(payload),
 		"numRegistrationsNew": numRegNew,
 		"numRegistrationsErr": numRegErr,
-		// "lastChanged":      lastChangedPubkey,
-		"timeNeededSec": time.Since(start).Seconds(),
-		"ip":            common.GetIPXForwardedFor(req),
+		"timeNeededSec":       time.Since(start).Seconds(),
+		"ip":                  common.GetIPXForwardedFor(req),
 	})
 	if errorResp != "" {
 		log = log.WithField("error", errorResp)

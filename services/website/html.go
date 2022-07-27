@@ -1,6 +1,10 @@
 package website
 
-import "text/template"
+import (
+	"text/template"
+
+	"github.com/flashbots/boost-relay/database"
+)
 
 type StatusHTMLData struct {
 	Network                     string
@@ -12,9 +16,8 @@ type StatusHTMLData struct {
 	GenesisValidatorsRoot       string
 	BuilderSigningDomain        string
 	BeaconProposerSigningDomain string
-	Header                      string
-	Block                       string
 	HeadSlot                    string
+	Payloads                    []*database.DeliveredPayloadEntry
 }
 
 func parseIndexTemplate() (*template.Template, error) {
@@ -55,6 +58,14 @@ func parseIndexTemplate() (*template.Template, error) {
 
         li {
             margin: 2px 0px;
+        }
+
+        .pure-table thead {
+            background-color: #129fea1f;
+        }
+
+        .pure-table tr:hover td  {
+            background: #129fea1f !important;
         }
     </style>
 </head>
@@ -110,22 +121,36 @@ func parseIndexTemplate() (*template.Template, error) {
 
             <p>
             <h2>
-                Best Header
+                Recently Delivered Payloads
             </h2>
-            <pre>coming again soon{{ .Header }}</pre>
+
+            <table class="pure-table pure-table-horizontal pure-table-striped">
+            <thead>
+                <tr>
+                    <th>Epoch</th>
+                    <th>Slot</th>
+                    <th>Block number</th>
+                    <th>Parent hash</th>
+                    <th>Block hash</th>
+                    <th>Num tx</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Payloads }}
+                    <tr>
+                        <td>{{.Epoch}}</td>
+                        <td>{{.Slot}}</td>
+                        <td>{{.BlockNumber}}</td>
+                        <td>{{.ParentHash}}</td>
+                        <td>{{.BlockHash}}</td>
+                        <td>{{.NumTx}}</td>
+                        <td>{{.Value}}</td>
+                    </tr>
+                {{ end }}
+            </tbody>
+            </table>
             </p>
-
-            <!--
-            <hr>
-
-            <p>
-            <h2>
-                Best Payload
-            </h2>
-            <pre>coming again soon{{ .Block }}</pre>
-            </p>
-            -->
-
         </div>
     </div>
 </body>

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
@@ -33,6 +34,7 @@ type WebserverOpts struct {
 	RelayPubkeyHex string
 	NetworkDetails *common.EthNetworkDetails
 	Redis          *datastore.RedisCache
+	DB             *database.DatabaseService
 	Log            *logrus.Entry
 }
 
@@ -40,7 +42,9 @@ type Webserver struct {
 	opts *WebserverOpts
 	log  *logrus.Entry
 
-	redis      *datastore.RedisCache
+	redis *datastore.RedisCache
+	db    *database.DatabaseService
+
 	srv        *http.Server
 	srvStarted uberatomic.Bool
 
@@ -55,6 +59,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		opts:  opts,
 		log:   opts.Log.WithField("module", "webserver"),
 		redis: opts.Redis,
+		db:    opts.DB,
 	}
 
 	server.indexTemplate, err = parseIndexTemplate()
@@ -128,13 +133,18 @@ func (srv *Webserver) updateStatusHTMLData() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
+	payloads, err := srv.db.GetRecentDeliveredPayloads(20)
+	if err != nil {
+		srv.log.WithError(err).Error("error getting recent payloads")
+	}
+
 	numRegistered := printer.Sprintf("%d", _numRegistered)
 	numKnown := printer.Sprintf("%d", len(knownValidators))
 
 	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
 	srv.statusHTMLData.ValidatorsRegistered = numRegistered
-	srv.statusHTMLData.Header = ""
+	srv.statusHTMLData.Payloads = payloads
 	srv.statusHTMLDataLock.Unlock()
 }
 

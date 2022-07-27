@@ -23,8 +23,6 @@ var (
 	apiPprofEnabled     bool
 	apiSecretKey        string
 	apiGetHeaderDelayMs int64
-
-	postgresDSN string
 )
 
 func init() {
