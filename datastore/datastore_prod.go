@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -100,13 +101,17 @@ func (ds *ProdDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.Pubke
 func (ds *ProdDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	err := ds.redis.SetValidatorRegistration(entry)
 	if err != nil {
+		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
 		return err
 	}
 
-	if ds.db != nil {
-		err = ds.db.SaveValidatorRegistration(entry)
+	err = ds.db.SaveValidatorRegistration(entry)
+	if err != nil {
+		ds.log.WithError(err).Error("failed to save validator registration to database")
+		return err
 	}
-	return err
+
+	return nil
 }
 
 func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {

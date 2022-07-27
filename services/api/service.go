@@ -90,8 +90,9 @@ type RelayAPI struct {
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
-	// feature flag options
-	allowZeroValueBlocks bool
+	// feature flags
+	ffAllowZeroValueBlocks       bool
+	ffSyncValidatorRegistrations bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -130,7 +131,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("env: ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
-		api.allowZeroValueBlocks = true
+		api.ffAllowZeroValueBlocks = true
+	}
+
+	if os.Getenv("SYNC_VALIDATOR_REGISTRATIONS") != "" {
+		api.log.Warn("env: SYNC_VALIDATOR_REGISTRATIONS: enabling sync validator registrations")
+		api.ffSyncValidatorRegistrations = true
 	}
 
 	return &api, nil
@@ -184,15 +190,9 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 					continue
 				}
 
+				// Save the registration and increment counter
+				go api.datastore.SetValidatorRegistration(registration)
 				go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
-
-				// Save the registration
-				go func() {
-					err := api.datastore.SetValidatorRegistration(registration)
-					if err != nil {
-						api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Error("error updating validator registration")
-					}
-				}()
 			}
 		}()
 	}
@@ -385,9 +385,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	startTimestamp := start.Unix()
 
 	payload := []types.SignedValidatorRegistration{}
-	lastChangedPubkey := ""
+	// lastChangedPubkey := ""
 	errorResp := ""
-	numSentToC := 0
+	numRegNew := 0
+	numRegErr := 0
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -401,18 +402,21 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	for _, registration := range payload {
 		if registration.Message == nil {
 			log.Warn("registration without message")
+			numRegErr += 1
 			continue
 		}
 
 		if len(registration.Message.Pubkey) != 48 {
 			errorResp = "invalid pubkey length"
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			numRegErr += 1
 			continue
 		}
 
 		if len(registration.Signature) != 96 {
 			errorResp = "invalid signature length"
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			numRegErr += 1
 			continue
 		}
 
@@ -420,6 +424,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		if td > 10 {
 			errorResp = "timestamp too far in the future"
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			numRegErr += 1
 			continue
 		}
 
@@ -428,6 +433,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		if !isKnownValidator {
 			errorResp = fmt.Sprintf("not a known validator: %s", registration.Message.Pubkey.PubkeyHex())
 			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
+			numRegErr += 1
 			continue
 		}
 
@@ -445,17 +451,34 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Send to workers for signature verification and saving
-		api.regValEntriesC <- registration
-		numSentToC++
-		lastChangedPubkey = registration.Message.Pubkey.String()
+		// lastChangedPubkey = registration.Message.Pubkey.String()
+		numRegNew++
+		if api.ffSyncValidatorRegistrations {
+			// Verify the signature
+			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
+			if err != nil || !ok {
+				api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Warn("failed to verify registerValidator signature")
+				errorResp = "failed to verify validator signature for " + registration.Message.Pubkey.String()
+				numRegErr += 1
+			} else {
+				// Save and increment counter
+				go api.datastore.SetValidatorRegistration(registration)
+				go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
+			}
+
+		} else {
+			// Send to channel for async processing
+			api.regValEntriesC <- registration
+		}
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"numRegistrations": len(payload),
-		"numSentToC":       numSentToC,
-		"lastChanged":      lastChangedPubkey,
-		"timeNeededSec":    time.Since(start).Seconds(),
-		"ip":               common.GetIPXForwardedFor(req),
+		"numRegistrations":    len(payload),
+		"numRegistrationsNew": numRegNew,
+		"numRegistrationsErr": numRegErr,
+		// "lastChanged":      lastChangedPubkey,
+		"timeNeededSec": time.Since(start).Seconds(),
+		"ip":            common.GetIPXForwardedFor(req),
 	})
 	if errorResp != "" {
 		log = log.WithField("error", errorResp)
@@ -517,7 +540,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	} else {
 		// If 0-value bid, only return if explicitly allowed
-		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.allowZeroValueBlocks {
+		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.ffAllowZeroValueBlocks {
 			go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_204", 1)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -556,8 +579,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
 	if !found {
-		log.Warnf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
-		// api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+		log.Errorf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
+		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 		return
 	}
 
@@ -582,7 +605,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Get the block
 	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
 	if err != nil {
-		log.WithError(err).Error("could not get block")
+		log.WithError(err).Error("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -632,7 +655,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// By default, don't accept blocks with 0 value
-	if !api.allowZeroValueBlocks {
+	if !api.ffAllowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
 			w.WriteHeader(http.StatusOK)
 			return
