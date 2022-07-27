@@ -30,17 +30,19 @@ type HeadEventData struct {
 
 func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
-	client := sse.NewClient(eventsURL)
-	client.SubscribeRaw(func(msg *sse.Event) {
-		var data HeadEventData
-		err := json.Unmarshal(msg.Data, &data)
-		if err != nil {
-			c.log.WithError(err).Error("could not unmarshal head event")
-		} else {
-			slotC <- data.Slot
-		}
-	})
-	c.log.Warn("beaconclient SubscribeToHeadEvents: end of function!")
+	for {
+		client := sse.NewClient(eventsURL)
+		client.SubscribeRaw(func(msg *sse.Event) {
+			var data HeadEventData
+			err := json.Unmarshal(msg.Data, &data)
+			if err != nil {
+				c.log.WithError(err).Error("could not unmarshal head event")
+			} else {
+				slotC <- data.Slot
+			}
+		})
+		c.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+	}
 }
 
 func (c *ProdBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {

@@ -125,7 +125,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	api.log.Infof("Using BLS key: %s", publicKey.String())
 
 	if opts.GetHeaderWaitTime > 0 {
-		api.log.Warn("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
+		api.log.Warnf("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
 
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
@@ -554,17 +554,17 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	pubkeyFromIndex, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
+	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
 	if !found {
 		log.Warnf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
 		// api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 		return
 	}
 
-	log = log.WithField("pubkeyFromIndex", pubkeyFromIndex)
+	log = log.WithField("pubkeyFromIndex", proposerPubkey)
 
 	// Get the proposer pubkey based on the validator index from the payload
-	pk, err := types.HexToPubkey(pubkeyFromIndex.String())
+	pk, err := types.HexToPubkey(proposerPubkey.String())
 	if err != nil {
 		log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
 		api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
@@ -580,26 +580,35 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get the block
-	block, err := api.datastore.GetBlock(payload.Message.Slot, pubkeyFromIndex.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
 	if err != nil {
 		log.WithError(err).Error("could not get block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if block == nil {
+	if blockBidAndTrace == nil {
 		log.Error("requested execution payload was not found")
 		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 		return
 	}
 
-	api.RespondOK(w, block)
-	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
-	go api.datastore.SetSlotPayloadDelivered(payload.Message.Slot, pubkeyFromIndex.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	api.RespondOK(w, blockBidAndTrace.Payload)
 	log.WithFields(logrus.Fields{
-		"numTx":       len(block.Data.Transactions),
+		"numTx":       len(blockBidAndTrace.Payload.Data.Transactions),
 		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
 	}).Info("execution payload delivered")
+
+	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
+	go api.datastore.SetSlotPayloadDelivered(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+
+	go func() {
+		err = api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
+		if err != nil {
+			log.WithError(err).Error("saveToDb: could not save delivered payload")
+			return
+		}
+	}()
 }
 
 // --------------------
@@ -649,6 +658,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// return
 	}
 
+	// Save to database
+	go func() {
+		err := api.datastore.SaveBuilderBlockSubmission(payload)
+		if err != nil {
+			log.WithError(err).Error("saving builder block submission to database failed")
+		}
+	}()
+
 	// Check if there's already a bid
 	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
 	if err != nil {
@@ -658,11 +675,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// If existing bid has same or higher value, do nothing
-	if prevBid != nil {
-		if payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+	if prevBid != nil && payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
 	// Prepare the response data
@@ -683,7 +698,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Data:    payload.ExecutionPayload,
 	}
 
-	err = api.datastore.SaveBidAndBlock(payload.Message.Slot, payload.Message.ProposerPubkey.String(), &getHeaderResponse, &getPayloadResponse)
+	signedBidTrace := types.SignedBidTrace{
+		Message:   payload.Message,
+		Signature: payload.Signature,
+	}
+
+	err = api.datastore.SaveBidAndBlock(payload.Message.Slot, payload.Message.ProposerPubkey.String(), &signedBidTrace, &getHeaderResponse, &getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())

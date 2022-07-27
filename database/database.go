@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -56,8 +55,20 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	return err
 }
 
-func (s *DatabaseService) SaveEpochSummary(summary common.EpochSummary) error {
-	query := `INSERT INTO ` + TableEpochSummary + ` (epoch, slot_first, slot_last, slot_first_processed, slot_last_processed, validators_known_total, validator_registrations_total, validator_registrations_saved, validator_registrations_received_unverified, num_register_validator_requests, num_get_header_requests, num_get_payload_requests, num_header_sent_ok, num_header_sent_204, num_payload_sent, num_builder_bid_received, is_complete) VALUES (:epoch, :slot_first, :slot_last, :slot_first_processed, :slot_last_processed, :validators_known_total, :validator_registrations_total, :validator_registrations_saved, :validator_registrations_received_unverified, :num_register_validator_requests, :num_get_header_requests, :num_get_payload_requests, :num_header_sent_ok, :num_header_sent_204, :num_payload_sent, :num_builder_bid_received, :is_complete)`
-	_, err := s.DB.NamedExec(query, summary)
+// func (s *DatabaseService) SaveEpochSummary(summary common.EpochSummary) error {
+// 	query := `INSERT INTO ` + TableEpochSummary + ` (epoch, slot_first, slot_last, slot_first_processed, slot_last_processed, validators_known_total, validator_registrations_total, validator_registrations_saved, validator_registrations_received_unverified, num_register_validator_requests, num_get_header_requests, num_get_payload_requests, num_header_sent_ok, num_header_sent_204, num_payload_sent, num_builder_bid_received, is_complete) VALUES (:epoch, :slot_first, :slot_last, :slot_first_processed, :slot_last_processed, :validators_known_total, :validator_registrations_total, :validator_registrations_saved, :validator_registrations_received_unverified, :num_register_validator_requests, :num_get_header_requests, :num_get_payload_requests, :num_header_sent_ok, :num_header_sent_204, :num_payload_sent, :num_builder_bid_received, :is_complete)`
+// 	_, err := s.DB.NamedExec(query, summary)
+// 	return err
+// }
+
+func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
+	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, signed_bid_trace, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :signed_bid_trace, :signed_builder_bid, :signed_blinded_beacon_block)`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
+
+func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
+	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload)`
+	_, err := s.DB.NamedExec(query, entry)
 	return err
 }

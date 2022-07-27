@@ -27,7 +27,7 @@ type ProdDatastore struct {
 	bids    map[BidKey]*types.GetHeaderResponse
 
 	blockLock sync.RWMutex
-	blocks    map[BlockKey]*types.GetPayloadResponse
+	blocks    map[BlockKey]*BlockBidAndTrace
 }
 
 func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db *database.DatabaseService) (ds *ProdDatastore, err error) {
@@ -38,7 +38,7 @@ func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db *database.Da
 		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
 		bids:                    make(map[BidKey]*types.GetHeaderResponse),
-		blocks:                  make(map[BlockKey]*types.GetPayloadResponse),
+		blocks:                  make(map[BlockKey]*BlockBidAndTrace),
 	}
 
 	return ds, err
@@ -109,7 +109,7 @@ func (ds *ProdDatastore) SetValidatorRegistration(entry types.SignedValidatorReg
 	return err
 }
 
-func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
+func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
 	bidKey := BidKey{
 		Slot:           slot,
 		ParentHash:     strings.ToLower(headerResp.Data.Message.Header.ParentHash.String()),
@@ -127,7 +127,11 @@ func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, hea
 	ds.bidLock.Unlock()
 
 	ds.blockLock.Lock()
-	ds.blocks[blockKey] = payloadResp
+	ds.blocks[blockKey] = &BlockBidAndTrace{
+		Trace:   signedBidTrace,
+		Bid:     headerResp,
+		Payload: payloadResp,
+	}
 	ds.blockLock.Unlock()
 	return nil
 }
@@ -135,7 +139,7 @@ func (ds *ProdDatastore) SaveBidAndBlock(slot uint64, proposerPubkey string, hea
 func (ds *ProdDatastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, numRemaining int) {
 	ds.bidLock.Lock()
 	for key := range ds.bids {
-		if key.Slot < headSlot-10 {
+		if key.Slot < headSlot-1000 {
 			delete(ds.bids, key)
 			numRemoved++
 		}
@@ -145,7 +149,7 @@ func (ds *ProdDatastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved in
 
 	ds.blockLock.Lock()
 	for key := range ds.blocks {
-		if key.Slot < headSlot-10 {
+		if key.Slot < headSlot-1000 {
 			delete(ds.blocks, key)
 		}
 	}
@@ -166,7 +170,7 @@ func (ds *ProdDatastore) GetBid(slot uint64, parentHash string, proposerPubkey s
 	return bid, nil
 }
 
-func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash string) (*types.GetPayloadResponse, error) {
+func (ds *ProdDatastore) GetBlockBidAndTrace(slot uint64, proposerPubkey string, blockHash string) (*BlockBidAndTrace, error) {
 	blockKey := BlockKey{
 		Slot:           slot,
 		ProposerPubkey: strings.ToLower(proposerPubkey),
@@ -174,9 +178,9 @@ func (ds *ProdDatastore) GetBlock(slot uint64, proposerPubkey string, blockHash 
 	}
 
 	ds.blockLock.RLock()
-	block := ds.blocks[blockKey]
+	blockBidAndTrace := ds.blocks[blockKey]
 	ds.blockLock.RUnlock()
-	return block, nil
+	return blockBidAndTrace, nil
 }
 
 func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
@@ -233,4 +237,20 @@ func (ds *ProdDatastore) SetNXSlotSummaryVal(slot uint64, field string, value in
 		ds.log.WithError(err).Error("SetNXSlotSummaryVal failed")
 	}
 	return err
+}
+
+func (ds *ProdDatastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error {
+	entry, err := database.NewDeliveredPayloadEntry(bid.Data, signedBlindedBeaconBlock, payload.Data, signedBidTrace)
+	if err != nil {
+		return err
+	}
+	return ds.db.SaveDeliveredPayload(entry)
+}
+
+func (ds *ProdDatastore) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
+	entry, err := database.NewBuilderBlockEntry(payload)
+	if err != nil {
+		return err
+	}
+	return ds.db.SaveBuilderBlockSubmission(entry)
 }

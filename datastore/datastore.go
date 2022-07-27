@@ -17,6 +17,12 @@ type BlockKey struct {
 	BlockHash      string
 }
 
+type BlockBidAndTrace struct {
+	Trace   *types.SignedBidTrace
+	Bid     *types.GetHeaderResponse
+	Payload *types.GetPayloadResponse
+}
+
 type Datastore interface {
 	RefreshKnownValidators() (cnt int, err error) // Updates local cache of known validators
 	IsKnownValidator(pubkeyHex types.PubkeyHex) bool
@@ -32,9 +38,12 @@ type Datastore interface {
 	SetValidatorRegistration(entry types.SignedValidatorRegistration) error
 
 	GetBid(slot uint64, parentHash string, proposerPubkeyHex string) (*types.GetHeaderResponse, error)
-	GetBlock(slot uint64, proposerPubkey string, blockHash string) (*types.GetPayloadResponse, error)
-	SaveBidAndBlock(slot uint64, proposerPubkey string, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
+	GetBlockBidAndTrace(slot uint64, proposerPubkey string, blockHash string) (*BlockBidAndTrace, error)
+	SaveBidAndBlock(slot uint64, proposerPubkey string, signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
 	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)
+
+	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error
+	SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error
 
 	// Keeping track of delivered payloads
 	SetSlotPayloadDelivered(slot uint64, proposerPubkey string, blockhash string) (err error)
