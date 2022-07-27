@@ -3,23 +3,20 @@
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/boost-relay)](https://goreportcard.com/report/github.com/flashbots/boost-relay)
 [![Test status](https://github.com/flashbots/boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/boost-relay/actions?query=workflow%3A%22Checks%22)
 
-Flashbots internal PBS/[mev-boost](https://github.com/flashbots/mev-boost/) relay.
+Flashbots [mev-boost](https://github.com/flashbots/mev-boost/) relay.
 
-* Exposes a Builder REST API for mev-boost (proposer-api, conforming with [builder-specs](https://ethereum.github.io/builder-specs/#/Builder))
-* Exposes an API for builders to send blocks (builder-api)
+See also:
 
-More information:
-
-* https://www.notion.so/flashbots/Relay-API-Brainstorms-cf5edd57360140668c6d6b78fd04f312
-* https://www.notion.so/flashbots/Relay-Design-Docs-623487c51b92423fabeb8da9c54af7f4
+* https://www.notion.so/flashbots/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#38a21c8a40e64970904500eb7b373ea5
+* https://www.notion.so/flashbots/Relay-Design-Infra-APIs-cf5edd57360140668c6d6b78fd04f312
 
 ---
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
-* API (proposer & builder): accept requests from proposers and builders
-* Website: handles the root website requests (most of the information is pulled from Redis)
-* Housekeeping: various updates, saves metrics, etc
+1. Housekeeping: update known validators, proposer duties. Soon: save metrics, etc.
+1. API for proposer, block builder, data
+2. Website: handles the root website requests (information is pulled from Redis and database)
 
 ## Getting started
 
@@ -51,7 +48,7 @@ go run . housekeeper --network kiln --db postgres://postgres:postgres@localhost:
 go run . api --network kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
 # Run Website for Kiln
-go run . website --network kiln --relay-pubkey 0xfoo
+go run . website --network kiln --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
 # Query status
 curl localhost:9062/eth/v1/builder/status
@@ -66,5 +63,5 @@ redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validato
 Env vars:
 
 * `ENABLE_ZERO_VALUE_BLOCKS` - set to 1 to send out blocks with 0 value
-* `ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH`
-* `DISABLE_SIGNATURE_VERIFICATIONS`
+* `ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH` - get proposerduties for current AND next slot
+* `SYNC_VALIDATOR_REGISTRATIONS` - handle validator registrations synchronously
