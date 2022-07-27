@@ -125,6 +125,16 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())
 
+	// ensure pubkey is same across all relay instances
+	_pubkey, err := api.redis.GetRelayConfig(datastore.FieldPubkey)
+	if err != nil {
+		return nil, err
+	} else if _pubkey == "" {
+		api.redis.SetRelayConfig(datastore.FieldPubkey, publicKey.String())
+	} else if _pubkey != publicKey.String() {
+		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
+	}
+
 	if opts.GetHeaderWaitTime > 0 {
 		api.log.Warnf("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
@@ -619,16 +629,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
 	}).Info("execution payload delivered")
 
+	// Save payload and increment counter
+	go api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
 	go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
-	go api.datastore.SetSlotPayloadDelivered(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
-
-	go func() {
-		err = api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
-		if err != nil {
-			log.WithError(err).Error("saveToDb: could not save delivered payload")
-			return
-		}
-	}()
 }
 
 // --------------------

@@ -45,9 +45,6 @@ type Datastore interface {
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error
 	SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error
 
-	// Keeping track of delivered payloads
-	SetSlotPayloadDelivered(slot uint64, proposerPubkey string, blockhash string) (err error)
-
 	// Epoch summary (with error logging)
 	IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error)
 	SetEpochSummaryVal(epoch uint64, field string, value int64) (err error)

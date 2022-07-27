@@ -212,14 +212,6 @@ func (ds *ProdDatastore) SetNXEpochSummaryVal(epoch uint64, field string, value 
 	return err
 }
 
-func (ds *ProdDatastore) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
-	err = ds.redis.SetSlotPayloadDelivered(slot, proposerPubkey, blockhash)
-	if err != nil {
-		ds.log.WithError(err).Error("SetSlotPayloadDelivered failed")
-	}
-	return err
-}
-
 func (ds *ProdDatastore) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
 	newVal, err = ds.redis.IncSlotSummaryVal(slot, field, value)
 	if err != nil {
@@ -247,9 +239,15 @@ func (ds *ProdDatastore) SetNXSlotSummaryVal(slot uint64, field string, value in
 func (ds *ProdDatastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error {
 	entry, err := database.NewDeliveredPayloadEntry(bid.Data, signedBlindedBeaconBlock, payload.Data, signedBidTrace)
 	if err != nil {
+		ds.log.WithError(err).Error("failed creating delivered-payload-entry")
 		return err
 	}
-	return ds.db.SaveDeliveredPayload(entry)
+	err = ds.db.SaveDeliveredPayload(entry)
+	if err != nil {
+		ds.log.WithError(err).Error("failed saving delivered payload to database")
+		return err
+	}
+	return nil
 }
 
 func (ds *ProdDatastore) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {

@@ -12,7 +12,11 @@ import (
 	"github.com/go-redis/redis/v9"
 )
 
-var redisPrefix = "boost-relay"
+var (
+	redisPrefix = "boost-relay"
+
+	FieldPubkey = "pubkey"
+)
 
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 	return strings.ToLower(string(pk))
@@ -38,7 +42,8 @@ type RedisCache struct {
 	keyKnownValidators                string
 	keyValidatorRegistration          string
 	keyValidatorRegistrationTimestamp string
-	keySlotPayloadDelivered           string
+	// keySlotPayloadDelivered           string
+	keyRelayConfig string
 
 	keyStats          string
 	keyProposerDuties string
@@ -59,7 +64,8 @@ func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
-		keySlotPayloadDelivered:           fmt.Sprintf("%s/%s:payload-delivered", redisPrefix, prefix),
+		// keySlotPayloadDelivered:           fmt.Sprintf("%s/%s:payload-delivered", redisPrefix, prefix),
+		keyRelayConfig: fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:          fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties: fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -178,9 +184,10 @@ func (r *RedisCache) GetEpochSummary(epoch uint64) (ret map[string]string, err e
 	return r.client.HGetAll(context.Background(), r.keyEpochSummary(epoch)).Result()
 }
 
-func (r *RedisCache) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
-	return r.client.HSet(context.Background(), r.keySlotPayloadDelivered, slot, proposerPubkey+"_"+blockhash).Err()
-}
+// func (r *RedisCache) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
+// 	return r.client.HSet(context.Background(), r.keySlotPayloadDelivered, slot, proposerPubkey+"_"+blockhash).Err()
+// }
+
 func (r *RedisCache) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
 	return r.client.HIncrBy(context.Background(), r.keySlotSummary(slot), field, value).Result()
 }
@@ -205,4 +212,16 @@ func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValid
 	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
 	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
 	return proposerDuties, err
+}
+
+func (r *RedisCache) SetRelayConfig(field string, value string) (err error) {
+	return r.client.HSet(context.Background(), r.keyRelayConfig, field, value).Err()
+}
+
+func (r *RedisCache) GetRelayConfig(field string) (string, error) {
+	res, err := r.client.HGet(context.Background(), r.keyRelayConfig, field).Result()
+	if err == redis.Nil {
+		return res, nil
+	}
+	return res, err
 }

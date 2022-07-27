@@ -33,6 +33,7 @@ func parseIndexTemplate() (*template.Template, error) {
 
     <meta name="description" content="Flashbots testing relay for maximal extractable value in Ethereum proof-of-stake.">
     <link data-react-helmet="true" rel="shortcut icon" href="https://writings.flashbots.net/img/favicon.ico">
+    <meta property="og:image" content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
 
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css" integrity="sha384-yHIFVG6ClnONEA5yB5DJXfW2/KC173DIQrYoZMEtBvGzmf0PKiGyNEqe9N6BNDBH" crossorigin="anonymous">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -96,6 +97,7 @@ func parseIndexTemplate() (*template.Template, error) {
             <p>
 			More infos, issues &amp; feedback:
             <ul>
+                <li><a href="http://boost.flashbots.net">boost.flashbots.net</a></li>
                 <li><a href="https://github.com/flashbots/mev-boost">github.com/flashbots/mev-boost</a></li>
             </ul>
 
@@ -105,16 +107,12 @@ func parseIndexTemplate() (*template.Template, error) {
 
             <p>
             <h2>
-				Stats
+				Validator Stats
             </h2>
-            <ul>
-                <li>Latest Slot: {{ .HeadSlot }}</li>
-                <li>Validators<br>
-                    <ul>
-                        <li>Total: {{ .ValidatorsTotal }}</li>
-                        <li>Registered: {{ .ValidatorsRegistered }}</li>
-                    </ul>
-            </ul>
+
+            <p>Total: {{ .ValidatorsTotal }}</p>
+            <p>Registered: {{ .ValidatorsRegistered }}</p>
+
             </p>
 
             <hr>

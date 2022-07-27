@@ -14,8 +14,7 @@ const (
 )
 
 var (
-	websiteListenAddr  string
-	websiteRelayPubkey string
+	websiteListenAddr string
 )
 
 func init() {
@@ -26,9 +25,6 @@ func init() {
 	websiteCmd.Flags().StringVar(&websiteListenAddr, "listen-addr", websiteDefaultListenAddr, "listen address for webserver")
 	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
 	websiteCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
-
-	websiteCmd.Flags().StringVar(&websiteRelayPubkey, "relay-pubkey", "", "relay pubkey")
-	websiteCmd.MarkFlagRequired("relay-pubkey")
 
 	websiteCmd.Flags().StringVar(&network, "network", "", "Which network to use")
 	websiteCmd.MarkFlagRequired("network")
@@ -57,6 +53,11 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
+		relayPubkey, err := redis.GetRelayConfig(datastore.FieldPubkey)
+		if err != nil {
+			log.WithError(err).Fatal("failed getting publey from Redis")
+		}
+
 		// Connect to Postgres
 		log.Infof("Connecting to Postgres database...")
 		db, err := database.NewDatabaseService(postgresDSN)
@@ -67,7 +68,7 @@ var websiteCmd = &cobra.Command{
 		// Create the website service
 		opts := &website.WebserverOpts{
 			ListenAddress:  websiteListenAddr,
-			RelayPubkeyHex: websiteRelayPubkey,
+			RelayPubkeyHex: relayPubkey,
 			NetworkDetails: networkInfo,
 			Redis:          redis,
 			DB:             db,
