@@ -12,9 +12,9 @@ import (
 
 // ProdDatastore provides a local memory cache with a Redis and DB backend
 type ProdDatastore struct {
-	redis *RedisCache
-	db    *database.DatabaseService
 	log   *logrus.Entry
+	redis *RedisCache
+	db    database.IDatabaseService
 
 	knownValidatorsByPubkey map[types.PubkeyHex]uint64
 	knownValidatorsByIndex  map[uint64]types.PubkeyHex
@@ -31,7 +31,7 @@ type ProdDatastore struct {
 	blocks    map[BlockKey]*BlockBidAndTrace
 }
 
-func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db *database.DatabaseService) (ds *ProdDatastore, err error) {
+func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *ProdDatastore, err error) {
 	ds = &ProdDatastore{
 		log:                     log.WithField("module", "datastore"),
 		db:                      db,

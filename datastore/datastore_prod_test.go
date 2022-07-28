@@ -5,6 +5,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jinzhu/copier"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func setupTestDatastore(t *testing.T) *ProdDatastore {
 	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
-	ds, err := NewProdDatastore(common.TestLog, redisDs, nil)
+	ds, err := NewProdDatastore(common.TestLog, redisDs, database.MockDB{})
 	require.NoError(t, err)
 
 	return ds

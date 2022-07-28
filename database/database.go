@@ -10,6 +10,13 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type IDatabaseService interface {
+	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
+	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
+	GetRecentDeliveredPayloads(limit int) ([]*DeliveredPayloadEntry, error)
+	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
+}
+
 type DatabaseService struct {
 	DB *sqlx.DB
 }

@@ -196,7 +196,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 				// Verify the signature
 				ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 				if err != nil || !ok {
-					api.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", registration)).Warn("failed to verify registerValidator signature")
+					api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Warn("failed to verify registerValidator signature")
 					continue
 				}
 
