@@ -45,13 +45,13 @@ type Datastore interface {
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error
 	SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error
 
-	// Epoch summary (with error logging)
-	IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error)
-	SetEpochSummaryVal(epoch uint64, field string, value int64) (err error)
-	SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error)
+	// // Epoch summary (with error logging)
+	// IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error)
+	// SetEpochSummaryVal(epoch uint64, field string, value int64) (err error)
+	// SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error)
 
-	// Slot summary (with error logging)
-	IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error)
-	SetSlotSummaryVal(slot uint64, field string, value int64) (err error)
-	SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error)
+	// // Slot summary (with error logging)
+	// IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error)
+	// SetSlotSummaryVal(slot uint64, field string, value int64) (err error)
+	// SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error)
 }
