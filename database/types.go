@@ -9,11 +9,14 @@ import (
 )
 
 type ValidatorRegistrationEntry struct {
-	ID                    uint64    `db:"id"`
-	InsertedAt            time.Time `db:"inserted_at"`
-	Pubkey                string    `db:"pubkey"`
-	Registration          string    `db:"registration"`
-	RegistrationTimestamp time.Time `db:"registration_timestamp"`
+	ID         uint64    `db:"id"`
+	InsertedAt time.Time `db:"inserted_at"`
+
+	Pubkey       string `db:"pubkey"`
+	FeeRecipient string `db:"fee_recipient"`
+	Timestamp    uint64 `db:"timestamp"`
+	GasLimit     uint64 `db:"gas_limit"`
+	Signature    string `db:"signature"`
 }
 
 type DeliveredPayloadEntry struct {

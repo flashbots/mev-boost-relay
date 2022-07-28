@@ -2,8 +2,7 @@
 package database
 
 import (
-	"encoding/json"
-	"time"
+	"database/sql"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jmoiron/sqlx"
@@ -47,19 +46,33 @@ func (s *DatabaseService) Close() {
 }
 
 func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedValidatorRegistration) error {
-	regStr, err := json.Marshal(registration)
 	entry := ValidatorRegistrationEntry{
-		Pubkey:                registration.Message.Pubkey.String(),
-		Registration:          string(regStr),
-		RegistrationTimestamp: time.Unix(int64(registration.Message.Timestamp), 0), // UTC
-	}
-	if err != nil {
-		return err
+		Pubkey:       registration.Message.Pubkey.String(),
+		FeeRecipient: registration.Message.FeeRecipient.String(),
+		Timestamp:    registration.Message.Timestamp,
+		GasLimit:     registration.Message.GasLimit,
+		Signature:    registration.Signature.String(),
 	}
 
-	query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, registration, registration_timestamp) VALUES (:pubkey, :registration, :registration_timestamp) ON CONFLICT DO NOTHING`
-	_, err = s.DB.NamedExec(query, entry)
-	return err
+	// Check if we already have a registration with same or newer timestamp
+	prevEntry := new(ValidatorRegistrationEntry)
+	err := s.DB.Get(prevEntry, "SELECT pubkey, timestamp FROM "+TableValidatorRegistration+" WHERE pubkey = $1", entry.Pubkey)
+	if err == sql.ErrNoRows {
+		// Insert new entry
+		query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES (:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)`
+		_, err = s.DB.NamedExec(query, entry)
+		return err
+
+	} else if err != nil {
+		return err
+
+	} else if entry.Timestamp > prevEntry.Timestamp {
+		// Update
+		query := `UPDATE ` + TableValidatorRegistration + ` SET fee_recipient=:fee_recipient, timestamp=:timestamp, gas_limit=:gas_limit, signature=:signature WHERE pubkey=:pubkey`
+		_, err = s.DB.NamedExec(query, entry)
+		return err
+	}
+	return nil
 }
 
 // func (s *DatabaseService) SaveEpochSummary(summary common.EpochSummary) error {
