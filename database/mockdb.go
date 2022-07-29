@@ -13,7 +13,7 @@ func (db MockDB) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
 	return nil
 }
 
-func (db MockDB) GetRecentDeliveredPayloads(limit int) ([]*DeliveredPayloadEntry, error) {
+func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	return nil, nil
 }
 

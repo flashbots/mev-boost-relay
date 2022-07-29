@@ -3,17 +3,27 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
+type GetPayloadsFilters struct {
+	Slot            uint64
+	Limit           uint64
+	BlockHash       string
+	IncludeBidTrace bool
+	IncludePayloads bool
+}
+
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
 	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
-	GetRecentDeliveredPayloads(limit int) ([]*DeliveredPayloadEntry, error)
 	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
+	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 }
 
 type DatabaseService struct {
@@ -82,14 +92,46 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 // }
 
 func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
-	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, signed_bid_trace, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :signed_bid_trace, :signed_builder_bid, :signed_blinded_beacon_block)`
+	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :bid_trace, :bid_trace_builder_sig, :signed_builder_bid, :signed_blinded_beacon_block)`
 	_, err := s.DB.NamedExec(query, entry)
 	return err
 }
 
-func (s *DatabaseService) GetRecentDeliveredPayloads(limit int) ([]*DeliveredPayloadEntry, error) {
+func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
+	arg := map[string]interface{}{
+		"limit":      filters.Limit,
+		"slot":       filters.Slot,
+		"block_hash": filters.BlockHash,
+	}
+
 	tasks := []*DeliveredPayloadEntry{}
-	err := s.DB.Select(&tasks, "SELECT * FROM "+TableDeliveredPayload+" ORDER BY id DESC LIMIT $1", limit)
+	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
+	if filters.IncludePayloads {
+		fields += ", execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block"
+	} else if filters.IncludeBidTrace {
+		fields += ", bid_trace, bid_trace_builder_sig"
+	}
+
+	whereConds := []string{}
+	if filters.Slot > 0 {
+		whereConds = append(whereConds, "slot = :slot")
+	}
+	if filters.BlockHash != "" {
+		whereConds = append(whereConds, "block_hash = :block_hash")
+	}
+
+	where := ""
+	if len(whereConds) > 0 {
+		where = "WHERE " + strings.Join(whereConds, " AND ")
+	}
+
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
+	if err != nil {
+		return nil, err
+	}
+
+	// fmt.Println("nstmt", nstmt.QueryString)
+	err = nstmt.Select(&tasks, arg)
 	return tasks, err
 }
 

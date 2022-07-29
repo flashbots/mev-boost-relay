@@ -133,7 +133,7 @@ func (srv *Webserver) updateStatusHTMLData() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	payloads, err := srv.db.GetRecentDeliveredPayloads(20)
+	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 20})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -38,8 +39,8 @@ var (
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
 
-	// JSON-RPC builder proxy
-	// pathSendBundle = "/jsonrpc_sendbundle"
+	// Data API
+	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -164,6 +165,9 @@ func (api *RelayAPI) getRouter() http.Handler {
 	// Builder API
 	r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 	r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+
+	// Data API
+	r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivers).Methods(http.MethodGet)
 
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
@@ -748,4 +752,57 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Respond with OK (TODO: proper response format)
 	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) handleDataProposerPayloadDelivers(w http.ResponseWriter, req *http.Request) {
+	var err error
+
+	args := req.URL.Query()
+
+	filters := database.GetPayloadsFilters{
+		IncludeBidTrace: true,
+		Limit:           10,
+		BlockHash:       args.Get("block_hash"),
+	}
+
+	if args.Get("slot") != "" {
+		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			return
+		}
+	}
+
+	if args.Get("limit") != "" {
+		_limit, err := strconv.ParseUint(args.Get("limit"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			return
+		}
+		if _limit < filters.Limit {
+			filters.Limit = _limit
+		}
+	}
+
+	// fmt.Println(req.URL.Query(), _slot, _blockhash)
+	// fmt.Printf("%+#v \n", filters)
+	payloads, err := api.datastore.GetRecentDeliveredPayloads(filters)
+	if err != nil {
+		api.log.WithError(err).Error("error getting recent payloads")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := []types.BidTrace{}
+	for _, payload := range payloads {
+		trace := types.BidTrace{}
+		err = json.Unmarshal([]byte(payload.BidTrace), &trace)
+		if err != nil {
+			api.log.WithError(err).Error("failed to unmarshal bidtrace")
+		} else {
+			response = append(response, trace)
+		}
+	}
+
+	api.RespondOK(w, response)
 }

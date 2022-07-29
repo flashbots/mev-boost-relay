@@ -257,3 +257,7 @@ func (ds *ProdDatastore) SaveBuilderBlockSubmission(payload *types.BuilderSubmit
 	}
 	return ds.db.SaveBuilderBlockSubmission(entry)
 }
+
+func (ds *ProdDatastore) GetRecentDeliveredPayloads(filters database.GetPayloadsFilters) ([]*database.DeliveredPayloadEntry, error) {
+	return ds.db.GetRecentDeliveredPayloads(filters)
+}

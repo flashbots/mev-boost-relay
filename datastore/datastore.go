@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
@@ -44,6 +45,7 @@ type Datastore interface {
 
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error
 	SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error
+	GetRecentDeliveredPayloads(filters database.GetPayloadsFilters) ([]*database.DeliveredPayloadEntry, error)
 
 	// // Epoch summary (with error logging)
 	// IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error)

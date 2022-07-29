@@ -70,9 +70,10 @@ CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
 	gas_used  bigint NOT NULL,
 	gas_limit bigint NOT NULL,
 
-	execution_payload   json NOT NULL,
-	signed_bid_trace    json NOT NULL,
-	signed_builder_bid  json NOT NULL,
+	execution_payload     json NOT NULL,
+	bid_trace             json NOT NULL,
+	bid_trace_builder_sig text NOT NULL,
+	signed_builder_bid    json NOT NULL,
 	signed_blinded_beacon_block json NOT NULL
 );
 `

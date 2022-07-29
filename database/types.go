@@ -26,11 +26,6 @@ type DeliveredPayloadEntry struct {
 	Slot  uint64 `db:"slot"`
 	Epoch uint64 `db:"epoch"`
 
-	ExecutionPayload         string `db:"execution_payload"`
-	SignedBidTrace           string `db:"signed_bid_trace"`
-	SignedBuilderBid         string `db:"signed_builder_bid"`
-	SignedBlindedBeaconBlock string `db:"signed_blinded_beacon_block"`
-
 	BuilderPubkey        string `db:"builder_pubkey"`
 	ProposerPubkey       string `db:"proposer_pubkey"`
 	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
@@ -43,6 +38,12 @@ type DeliveredPayloadEntry struct {
 
 	GasUsed  uint64 `db:"gas_used"`
 	GasLimit uint64 `db:"gas_limit"`
+
+	ExecutionPayload         string `db:"execution_payload"`
+	BidTrace                 string `db:"bid_trace"`
+	BidTraceBuilderSig       string `db:"bid_trace_builder_sig"`
+	SignedBuilderBid         string `db:"signed_builder_bid"`
+	SignedBlindedBeaconBlock string `db:"signed_blinded_beacon_block"`
 }
 
 func NewDeliveredPayloadEntry(bid *types.SignedBuilderBid, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, payload *types.ExecutionPayload, signedBidTrace *types.SignedBidTrace) (*DeliveredPayloadEntry, error) {
@@ -61,7 +62,7 @@ func NewDeliveredPayloadEntry(bid *types.SignedBuilderBid, signedBlindedBeaconBl
 		return nil, err
 	}
 
-	_trace, err := json.Marshal(signedBidTrace)
+	_trace, err := json.Marshal(signedBidTrace.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +85,8 @@ func NewDeliveredPayloadEntry(bid *types.SignedBuilderBid, signedBlindedBeaconBl
 		GasLimit: payload.GasLimit,
 
 		ExecutionPayload:         string(_payload),
-		SignedBidTrace:           string(_trace),
+		BidTrace:                 string(_trace),
+		BidTraceBuilderSig:       signedBidTrace.Signature.String(),
 		SignedBuilderBid:         string(_bid),
 		SignedBlindedBeaconBlock: string(_signedBlindedBeaconBlock),
 	}, nil

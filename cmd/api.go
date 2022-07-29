@@ -58,11 +58,6 @@ var apiCmd = &cobra.Command{
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
-		log.Infof("Using network: %s", networkInfo.Name)
-		log.Infof("Using genesis validators root: %s", networkInfo.GenesisValidatorsRootHex)
-		log.Infof("Using genesis fork version: %s", networkInfo.GenesisForkVersionHex)
-		log.Infof("Using bellatrix fork version: %s", networkInfo.BellatrixForkVersionHex)
-
 		// Connect to beacon client and ensure it's synced
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
