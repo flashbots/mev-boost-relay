@@ -97,6 +97,7 @@ func parseIndexTemplate() (*template.Template, error) {
             <p>
 			More infos, issues &amp; feedback:
             <ul>
+                <li><a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5">Relay API docs</a></li>
                 <li><a href="http://boost.flashbots.net">boost.flashbots.net</a></li>
                 <li><a href="https://github.com/flashbots/mev-boost">github.com/flashbots/mev-boost</a></li>
             </ul>
