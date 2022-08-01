@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.21.0
 	github.com/ethereum/go-ethereum v1.10.20
-	github.com/flashbots/go-boost-utils v0.3.2
+	github.com/flashbots/go-boost-utils v0.3.3
 	github.com/flashbots/go-utils v0.4.7
 	github.com/go-redis/redis/v9 v9.0.0-beta.1
 	github.com/gorilla/mux v1.8.0
@@ -25,7 +25,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/ferranbt/fastssz v0.1.1 // indirect
+	github.com/ferranbt/fastssz v0.1.2-0.20220723134332-b3d3034a4575 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect

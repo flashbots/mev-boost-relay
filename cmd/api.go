@@ -16,6 +16,7 @@ import (
 
 const (
 	apiDefaultListenAddr = "localhost:9062"
+	apiDefaultBlockSim   = "http://localhost:8545"
 )
 
 var (
@@ -23,6 +24,7 @@ var (
 	apiPprofEnabled     bool
 	apiSecretKey        string
 	apiGetHeaderDelayMs int64
+	apiBlockSimURL      string
 )
 
 func init() {
@@ -36,7 +38,7 @@ func init() {
 	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
-	// apiCmd.Flags().Int64Var(&apiGetHeaderDelayMs, "getheader-delay-ms", 0, "ms to wait on getHeader requests")
+	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
 
 	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
 	apiCmd.MarkFlagRequired("network")
@@ -101,6 +103,7 @@ var apiCmd = &cobra.Command{
 			PprofAPI:          apiPprofEnabled,
 			GetHeaderWaitTime: time.Duration(apiGetHeaderDelayMs) * time.Millisecond,
 			SecretKey:         sk,
+			BlockSimURL:       apiBlockSimURL,
 		}
 
 		// Create the relay service

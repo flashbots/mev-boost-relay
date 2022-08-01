@@ -21,6 +21,7 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
+	"github.com/flashbots/go-utils/jsonrpc"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -52,6 +53,7 @@ type RelayAPIOpts struct {
 	BeaconClient  beaconclient.BeaconNodeClient
 	Datastore     datastore.Datastore
 	Redis         *datastore.RedisCache
+	BlockSimURL   string
 
 	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
 
@@ -94,6 +96,7 @@ type RelayAPI struct {
 	// feature flags
 	ffAllowZeroValueBlocks       bool
 	ffSyncValidatorRegistrations bool
+	ffAllowBlockVerificationFail bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -150,6 +153,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.ffSyncValidatorRegistrations = true
 	}
 
+	if os.Getenv("ALLOW_BLOCK_VERIFICATION_FAIL") != "" {
+		api.log.Warn("env: ALLOW_BLOCK_VERIFICATION_FAIL: allow failing block verification")
+		api.ffAllowBlockVerificationFail = true
+	}
+
 	return &api, nil
 }
 
@@ -167,7 +175,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 
 	// Data API
-	r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivers).Methods(http.MethodGet)
+	r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
 
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
@@ -390,19 +398,26 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 // ---------------
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
-	log := api.log.WithField("method", "registerValidator")
+	log := api.log.WithFields(logrus.Fields{
+		"method": "registerValidator",
+		"ip":     common.GetIPXForwardedFor(req),
+	})
+
 	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_register_validator_requests", 1)
+
+	respondError := func(code int, msg string) {
+		log.Warn("bad request: ", msg)
+		api.RespondError(w, code, msg)
+	}
 
 	start := time.Now()
 	startTimestamp := start.Unix()
 
 	payload := []types.SignedValidatorRegistration{}
-	errorResp := ""
 	numRegNew := 0
-	numRegErr := 0
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		api.RespondError(w, http.StatusBadRequest, err.Error())
+		respondError(http.StatusBadRequest, "failed to decode payload")
 		return
 	}
 
@@ -412,40 +427,31 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	//   (1) sanity checks, (2) IsKnownValidator, (3) CheckTimestamp, (4) Batch SetValidatorRegistration
 	for _, registration := range payload {
 		if registration.Message == nil {
-			log.Warn("registration without message")
-			numRegErr += 1
-			continue
+			respondError(http.StatusBadRequest, "registration without message")
+			return
 		}
 
 		if len(registration.Message.Pubkey) != 48 {
-			errorResp = "invalid pubkey length"
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
-			numRegErr += 1
-			continue
+			respondError(http.StatusBadRequest, "invalid pubkey length")
+			return
 		}
 
 		if len(registration.Signature) != 96 {
-			errorResp = "invalid signature length"
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
-			numRegErr += 1
-			continue
+			respondError(http.StatusBadRequest, "invalid signature length")
+			return
 		}
 
 		td := int64(registration.Message.Timestamp) - startTimestamp
 		if td > 10 {
-			errorResp = "timestamp too far in the future"
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
-			numRegErr += 1
-			continue
+			respondError(http.StatusBadRequest, "timestamp too far in the future")
+			return
 		}
 
 		// Check if actually a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
 		if !isKnownValidator {
-			errorResp = fmt.Sprintf("not a known validator: %s", registration.Message.Pubkey.PubkeyHex())
-			log.WithField("registration", fmt.Sprintf("%+v", registration)).Warn(errorResp)
-			numRegErr += 1
-			continue
+			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", registration.Message.Pubkey.PubkeyHex()))
+			return
 		}
 
 		// Check for a previous registration timestamp
@@ -466,12 +472,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		if api.ffSyncValidatorRegistrations {
 			// Verify the signature
 			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
-			if err != nil || !ok {
-				if err != nil {
-					api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Error("error verifying registerValidator signature")
-				}
-				numRegErr += 1
-				errorResp = fmt.Sprintf("failed to verify validator signature of %d registrations. latest: %s", numRegErr, registration.Message.Pubkey)
+			if err != nil {
+				api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Error("error verifying registerValidator signature")
+				continue
+			} else if !ok {
+				api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
+				return
 			} else {
 				// Save and increment counter
 				go api.datastore.SetValidatorRegistration(registration)
@@ -487,20 +493,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	log = log.WithFields(logrus.Fields{
 		"numRegistrations":    len(payload),
 		"numRegistrationsNew": numRegNew,
-		"numRegistrationsErr": numRegErr,
 		"timeNeededSec":       time.Since(start).Seconds(),
-		"ip":                  common.GetIPXForwardedFor(req),
 	})
-	if errorResp != "" {
-		log = log.WithField("error", errorResp)
-	}
-	log.Info("validator registrations processed")
-
-	if errorResp != "" {
-		api.RespondError(w, http.StatusBadRequest, errorResp)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	log.Info("validator registrations call processed")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -693,6 +689,25 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
+	// Simulate block submission
+	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmission", payload)
+	simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
+	if err != nil {
+		log.WithError(err).Error("failed to simulate block submission")
+		if !api.ffAllowBlockVerificationFail {
+			api.RespondError(w, http.StatusInternalServerError, "failed to simulate block submission")
+			return
+		}
+	} else if simResp.Error != nil {
+		log.Error("simulation failed")
+		if !api.ffAllowBlockVerificationFail {
+			api.RespondError(w, http.StatusInternalServerError, "simulation failed")
+			return
+		}
+	} else {
+		log.Info("simulation succeeded")
+	}
+
 	// Check if there's already a bid
 	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
 	if err != nil {
@@ -747,14 +762,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"tx":             len(payload.ExecutionPayload.Transactions),
 	}).Info("received block from builder")
 
-	// Update HTML data
-	// go api.updateStatusHTMLData()
-
 	// Respond with OK (TODO: proper response format)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api *RelayAPI) handleDataProposerPayloadDelivers(w http.ResponseWriter, req *http.Request) {
+func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	args := req.URL.Query()
@@ -784,8 +796,6 @@ func (api *RelayAPI) handleDataProposerPayloadDelivers(w http.ResponseWriter, re
 		}
 	}
 
-	// fmt.Println(req.URL.Query(), _slot, _blockhash)
-	// fmt.Printf("%+#v \n", filters)
 	payloads, err := api.datastore.GetRecentDeliveredPayloads(filters)
 	if err != nil {
 		api.log.WithError(err).Error("error getting recent payloads")
