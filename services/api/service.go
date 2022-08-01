@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -67,30 +66,32 @@ type RelayAPIOpts struct {
 
 type BlockSimulationRateLimit struct {
 	cv      *sync.Cond
-	counter *int64
+	counter int64
 }
 
 func NewBlockSimuationRateLimit() *BlockSimulationRateLimit {
 	return &BlockSimulationRateLimit{
 		cv:      sync.NewCond(&sync.Mutex{}),
-		counter: new(int64),
+		counter: 0,
 	}
 }
 
 const maxConcurrentBlocks = 4
 
 func (b *BlockSimulationRateLimit) send(cb func()) {
-	newCounter := atomic.AddInt64(b.counter, 1)
-	if newCounter > maxConcurrentBlocks {
-		b.cv.L.Lock()
+	b.cv.L.Lock()
+	b.counter += 1
+	if b.counter > maxConcurrentBlocks {
 		b.cv.Wait()
-		b.cv.L.Unlock()
 	}
+	b.cv.L.Unlock()
 
 	cb()
 
-	atomic.AddInt64(b.counter, -1)
+	b.cv.L.Lock()
+	b.counter -= 1
 	b.cv.Signal()
+	b.cv.L.Unlock()
 }
 
 // RelayAPI represents a single Relay instance
