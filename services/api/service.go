@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/boost-relay/beaconclient"
@@ -64,6 +65,34 @@ type RelayAPIOpts struct {
 	PprofAPI bool
 }
 
+type BlockSimulationRateLimit struct {
+	cv      *sync.Cond
+	counter *int64
+}
+
+func NewBlockSimuationRateLimit() *BlockSimulationRateLimit {
+	return &BlockSimulationRateLimit{
+		cv:      sync.NewCond(&sync.Mutex{}),
+		counter: new(int64),
+	}
+}
+
+const maxConcurrentBlocks = 4
+
+func (b *BlockSimulationRateLimit) send(cb func()) {
+	newCounter := atomic.AddInt64(b.counter, 1)
+	if newCounter > maxConcurrentBlocks {
+		b.cv.L.Lock()
+		b.cv.Wait()
+		b.cv.L.Unlock()
+	}
+
+	cb()
+
+	atomic.AddInt64(b.counter, -1)
+	b.cv.Signal()
+}
+
 // RelayAPI represents a single Relay instance
 type RelayAPI struct {
 	opts RelayAPIOpts
@@ -90,6 +119,8 @@ type RelayAPI struct {
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
+	blockSimuationRateLimit *BlockSimulationRateLimit
+
 	// feature flags
 	ffAllowZeroValueBlocks       bool
 	ffSyncValidatorRegistrations bool
@@ -113,15 +144,16 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
 
 	api := RelayAPI{
-		opts:                   opts,
-		log:                    opts.Log.WithField("module", "api"),
-		blsSk:                  opts.SecretKey,
-		publicKey:              &publicKey,
-		datastore:              opts.Datastore,
-		beaconClient:           opts.BeaconClient,
-		redis:                  opts.Redis,
-		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
-		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
+		opts:                    opts,
+		log:                     opts.Log.WithField("module", "api"),
+		blsSk:                   opts.SecretKey,
+		publicKey:               &publicKey,
+		datastore:               opts.Datastore,
+		beaconClient:            opts.BeaconClient,
+		redis:                   opts.Redis,
+		proposerDutiesResponse:  []types.BuilderGetValidatorsResponseEntry{},
+		regValEntriesC:          make(chan types.SignedValidatorRegistration, 5000),
+		blockSimuationRateLimit: NewBlockSimuationRateLimit(),
 	}
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())
@@ -685,22 +717,34 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	// Simulate block submission
-	// TODO: save in DB
-	// TODO: add rate limiting queue to throttle outgoing requests to max 4 blocks concurrently
-	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-	simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
+	simError := make(chan error, 1)
+	api.blockSimuationRateLimit.send(func() {
+		if err := req.Context().Err(); err != nil {
+			simError <- fmt.Errorf("context error: %w", err)
+			return
+		}
+
+		// Simulate block submission
+		// TODO: save in DB
+		// TODO: add rate limiting queue to throttle outgoing requests to max 4 blocks concurrently
+		simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
+		simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
+		if err != nil {
+			simError <- errors.New("failed to simulate block submission")
+			return
+		} else if simResp.Error != nil {
+			simError <- fmt.Errorf("simulation failed: %s", simResp.Error.Message)
+			return
+		} else {
+			simError <- nil
+		}
+	})
+
+	err = <-simError
 	if err != nil {
 		log.WithError(err).Error("failed to simulate block submission")
 		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusInternalServerError, "failed to simulate block submission")
-			return
-		}
-	} else if simResp.Error != nil {
-		log.WithError(simResp.Error).Error("simulation failed")
-		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusInternalServerError, "simulation failed")
-			return
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
 		}
 	}
 
