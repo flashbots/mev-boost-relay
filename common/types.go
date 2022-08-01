@@ -51,11 +51,11 @@ var (
 	EthNetworkKiln              = "kiln"
 	EthNetworkRopsten           = "ropsten"
 	EthNetworkSepolia           = "sepolia"
-	EthNetworkGoerliShadowFork5 = "goerli-shadow-fork-5"
+	EthNetworkGoerliShadowFork6 = "goerli-shadow-fork-6"
 
-	GenesisValidatorsRootGoerliShadowFork5 = "0xe45f26d5a29b0ed5a9f62f248b842a30dd7b7fba0b5b104eab271efc04e0cf66"
-	GenesisForkVersionGoerliShadowFork5    = "0x13001034"
-	BellatrixForkVersionGoerliShadowFork5  = "0x22001034"
+	GenesisValidatorsRootGoerliShadowFork6 = "0x6985063fa80a61a958ceeac5cf6125991ac297348e42542c85affbe9fb1c7328"
+	GenesisForkVersionGoerliShadowFork6    = "0x13001035"
+	BellatrixForkVersionGoerliShadowFork6  = "0x22001035"
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -76,10 +76,10 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		ret.GenesisForkVersionHex = types.GenesisForkVersionSepolia
 		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
 		ret.BellatrixForkVersionHex = types.BellatrixForkVersionSepolia
-	case EthNetworkGoerliShadowFork5:
-		ret.GenesisForkVersionHex = GenesisForkVersionGoerliShadowFork5
-		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerliShadowFork5
-		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerliShadowFork5
+	case EthNetworkGoerliShadowFork6:
+		ret.GenesisForkVersionHex = GenesisForkVersionGoerliShadowFork6
+		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerliShadowFork6
+		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerliShadowFork6
 	default:
 		return nil, fmt.Errorf("unknown network: %s", networkName)
 	}

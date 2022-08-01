@@ -62,9 +62,6 @@ type RelayAPIOpts struct {
 
 	// Whether to enable Pprof
 	PprofAPI bool
-
-	// Delay on getHeader calls before checking memory for blocks and returning (not used anymore)
-	GetHeaderWaitTime time.Duration
 }
 
 // RelayAPI represents a single Relay instance
@@ -137,10 +134,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.redis.SetRelayConfig(datastore.FieldPubkey, publicKey.String())
 	} else if _pubkey != publicKey.String() {
 		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
-	}
-
-	if opts.GetHeaderWaitTime > 0 {
-		api.log.Warnf("GetHeaderWaitTime: %s", opts.GetHeaderWaitTime.String())
 	}
 
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
@@ -529,11 +522,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Give builders some time...
-	if api.opts.GetHeaderWaitTime > 0 {
-		time.Sleep(api.opts.GetHeaderWaitTime)
-	}
-
 	bid, err := api.datastore.GetBid(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
@@ -647,6 +635,14 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "submitNewBlock")
 
+	// respondOk := func(trace *types.BidTrace) {
+	// 	response := &types.BuilderSubmitBlockResponseMessage{
+	// 		ReceiveTimestamp: uint64(time.Now().UTC().Unix()),
+	// 		BidUnverified:    trace,
+	// 	}
+	// 	api.RespondOK(w, response)
+	// }
+
 	payload := new(types.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
 		log.WithError(err).Error("could not decode payload")
@@ -706,8 +702,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			api.RespondError(w, http.StatusInternalServerError, "simulation failed")
 			return
 		}
-	} else {
-		log.Info("simulation succeeded")
 	}
 
 	// Check if there's already a bid

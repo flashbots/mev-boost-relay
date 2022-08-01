@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
@@ -20,11 +18,10 @@ const (
 )
 
 var (
-	apiListenAddr       string
-	apiPprofEnabled     bool
-	apiSecretKey        string
-	apiGetHeaderDelayMs int64
-	apiBlockSimURL      string
+	apiListenAddr   string
+	apiPprofEnabled bool
+	apiSecretKey    string
+	apiBlockSimURL  string
 )
 
 func init() {
@@ -94,16 +91,15 @@ var apiCmd = &cobra.Command{
 		}
 
 		opts := api.RelayAPIOpts{
-			Log:               log,
-			ListenAddr:        apiListenAddr,
-			BeaconClient:      beaconClient,
-			Datastore:         ds,
-			Redis:             redis,
-			EthNetDetails:     *networkInfo,
-			PprofAPI:          apiPprofEnabled,
-			GetHeaderWaitTime: time.Duration(apiGetHeaderDelayMs) * time.Millisecond,
-			SecretKey:         sk,
-			BlockSimURL:       apiBlockSimURL,
+			Log:           log,
+			ListenAddr:    apiListenAddr,
+			BeaconClient:  beaconClient,
+			Datastore:     ds,
+			Redis:         redis,
+			EthNetDetails: *networkInfo,
+			PprofAPI:      apiPprofEnabled,
+			SecretKey:     sk,
+			BlockSimURL:   apiBlockSimURL,
 		}
 
 		// Create the relay service

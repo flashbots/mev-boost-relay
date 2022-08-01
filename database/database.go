@@ -140,3 +140,9 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) e
 	_, err := s.DB.NamedExec(query, entry)
 	return err
 }
+
+func (s *DatabaseService) SaveBuilderBlockSimResult(entry *SimResultEntry) error {
+	query := `INSERT INTO ` + TableBuilderBlockSimResult + ` (block_submission_id, success, error) VALUES (:block_submission_id, :success, :error)`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
