@@ -718,7 +718,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	simError := make(chan error, 1)
-	api.blockSimuationRateLimit.send(func() {
+	go api.blockSimuationRateLimit.send(func() {
 		if err := req.Context().Err(); err != nil {
 			simError <- fmt.Errorf("context error: %w", err)
 			return
@@ -731,21 +731,27 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
 		if err != nil {
 			simError <- errors.New("failed to simulate block submission")
-			return
 		} else if simResp.Error != nil {
 			simError <- fmt.Errorf("simulation failed: %s", simResp.Error.Message)
-			return
 		} else {
 			simError <- nil
 		}
 	})
 
-	err = <-simError
-	if err != nil {
-		log.WithError(err).Error("failed to simulate block submission")
-		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusInternalServerError, err.Error())
+	select {
+	case err = <-simError:
+		if err != nil {
+			log.WithError(err).Error("failed to simulate block submission")
+			if !api.ffAllowBlockVerificationFail {
+				api.RespondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		} else {
+			log.Info("simulation succeeded")
 		}
+	case <-req.Context().Done():
+		log.Error("failed to simulate block submission: request context is done")
+		return
 	}
 
 	// Check if there's already a bid
