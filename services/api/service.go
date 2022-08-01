@@ -690,7 +690,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Simulate block submission
-	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmission", payload)
+	// TODO: save in DB
+	// TODO: add rate limiting queue to throttle outgoing requests to max 4 blocks concurrently
+	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
 	simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
 	if err != nil {
 		log.WithError(err).Error("failed to simulate block submission")
@@ -699,7 +701,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			return
 		}
 	} else if simResp.Error != nil {
-		log.Error("simulation failed")
+		log.WithError(simResp.Error).Error("simulation failed")
 		if !api.ffAllowBlockVerificationFail {
 			api.RespondError(w, http.StatusInternalServerError, "simulation failed")
 			return
