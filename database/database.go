@@ -22,7 +22,7 @@ type GetPayloadsFilters struct {
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
 	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
-	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
+	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) (int64, error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 }
 
@@ -135,14 +135,18 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	return tasks, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
-	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload)`
-	_, err := s.DB.NamedExec(query, entry)
-	return err
+func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) (int64, error) {
+	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload) RETURNING id`
+	result, err := s.DB.NamedExec(query, entry)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
 }
 
-func (s *DatabaseService) SaveBuilderBlockSimResult(entry *SimResultEntry) error {
-	query := `INSERT INTO ` + TableBuilderBlockSimResult + ` (block_submission_id, success, error) VALUES (:block_submission_id, :success, :error)`
-	_, err := s.DB.NamedExec(query, entry)
-	return err
-}
+// func (s *DatabaseService) SaveBuilderBlockSimResult(entry *SimResultEntry) error {
+// 	query := `INSERT INTO ` + TableBuilderBlockSimResult + ` (block_submission_id, success, error) VALUES (:block_submission_id, :success, :error)`
+// 	_, err := s.DB.NamedExec(query, entry)
+// 	return err
+// }

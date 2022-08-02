@@ -43,7 +43,7 @@ type Datastore interface {
 	SaveBidAndBlock(slot uint64, proposerPubkey string, signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error
 	CleanupOldBidsAndBlocks(slot uint64) (numRemoved int, numRemaining int)
 
-	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error
+	SaveBuilderBlockSubmission(entry *database.BuilderBlockEntry) (int64, error)
 	SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error
 	GetRecentDeliveredPayloads(filters database.GetPayloadsFilters) ([]*database.DeliveredPayloadEntry, error)
 

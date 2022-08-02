@@ -21,7 +21,6 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
-	"github.com/flashbots/go-utils/jsonrpc"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -90,7 +89,7 @@ type RelayAPI struct {
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
-	blockSimuationRateLimit *BlockSimulationRateLimiter
+	blockSimRateLimiter *BlockSimulationRateLimiter
 
 	// feature flags
 	ffAllowZeroValueBlocks       bool
@@ -115,16 +114,16 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
 
 	api := RelayAPI{
-		opts:                    opts,
-		log:                     opts.Log.WithField("module", "api"),
-		blsSk:                   opts.SecretKey,
-		publicKey:               &publicKey,
-		datastore:               opts.Datastore,
-		beaconClient:            opts.BeaconClient,
-		redis:                   opts.Redis,
-		proposerDutiesResponse:  []types.BuilderGetValidatorsResponseEntry{},
-		regValEntriesC:          make(chan types.SignedValidatorRegistration, 5000),
-		blockSimuationRateLimit: NewBlockSimuationRateLimiter(),
+		opts:                   opts,
+		log:                    opts.Log.WithField("module", "api"),
+		blsSk:                  opts.SecretKey,
+		publicKey:              &publicKey,
+		datastore:              opts.Datastore,
+		beaconClient:           opts.BeaconClient,
+		redis:                  opts.Redis,
+		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
+		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
+		blockSimRateLimiter:    NewBlockSimuationRateLimiter(opts.BlockSimURL),
 	}
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())
@@ -674,54 +673,41 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Verify the signature
 	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
 	if !ok || err != nil {
-		log.WithError(err).Warn("could not verify builder bid payload signature")
-		// continue for now, as long as we're the only builder
-		// api.RespondError(w, http.StatusBadRequest, "invalid signature")
-		// return
+		log.WithError(err).Warnf("could not verify builder bid payload signature from %s", payload.Message.BuilderPubkey.String())
+		api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		return
 	}
 
-	// Save to database
-	go func() {
-		err := api.datastore.SaveBuilderBlockSubmission(payload)
+	// Helper to save block to database
+	saveBlockToDB := func(payload *types.BuilderSubmitBlockRequest, simErr error) {
+		dbEntry, err := database.NewBuilderBlockEntry(payload)
 		if err != nil {
-			log.WithError(err).Error("saving builder block submission to database failed")
-		}
-	}()
-
-	simError := make(chan error, 1)
-	go api.blockSimuationRateLimit.send(func() {
-		if err := req.Context().Err(); err != nil {
-			simError <- fmt.Errorf("context error: %w", err)
+			log.WithError(err).Error("could not create builder block entry")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		// Simulate block submission
-		// TODO: save in DB
-		simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-		simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
-		if err != nil {
-			simError <- errors.New("failed to simulate block submission")
-		} else if simResp.Error != nil {
-			simError <- fmt.Errorf("simulation failed: %s", simResp.Error.Message)
+		if simErr == nil {
+			dbEntry.SimSuccess = true
 		} else {
-			simError <- nil
+			dbEntry.SimError = simErr.Error()
 		}
-	})
 
-	select {
-	case err = <-simError:
+		_, err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
 		if err != nil {
-			log.WithError(err).Error("failed to simulate block submission")
-			if !api.ffAllowBlockVerificationFail {
-				api.RespondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-		} else {
-			log.Info("simulation succeeded")
+			log.WithError(err).Error("saving builder block submission to database failed")
 		}
-	case <-req.Context().Done():
-		log.Info("failed to simulate block submission: request context is done")
-		return
+	}
+
+	// Simulate the block submission and save to db
+	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
+	saveBlockToDB(payload, simErr)
+	if simErr != nil {
+		log.WithError(err).Error("failed block simulation")
+		if !api.ffAllowBlockVerificationFail {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	// Check if there's already a bid
