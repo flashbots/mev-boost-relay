@@ -93,7 +93,7 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 // }
 
 func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
-	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :bid_trace, :bid_trace_builder_sig, :signed_builder_bid, :signed_blinded_beacon_block)`
+	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :bid_trace, :bid_trace_builder_sig, :signed_builder_bid, :signed_blinded_beacon_block) ON CONFLICT DO NOTHING`
 	_, err := s.DB.NamedExec(query, entry)
 	return err
 }

@@ -74,8 +74,11 @@ CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
 	bid_trace             json NOT NULL,
 	bid_trace_builder_sig text NOT NULL,
 	signed_builder_bid    json NOT NULL,
-	signed_blinded_beacon_block json NOT NULL
+	signed_blinded_beacon_block json NOT NULL,
+
+	UNIQUE (slot, proposer_pubkey, block_hash)
 );
+
 
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_slot_idx ON ` + TableDeliveredPayload + `("slot");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blockhash_idx ON ` + TableDeliveredPayload + `("block_hash");
