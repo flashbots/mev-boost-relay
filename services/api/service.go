@@ -652,6 +652,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithFields(logrus.Fields{
+		"slot":      payload.Message.Slot,
+		"builder":   payload.Message.BuilderPubkey.String(),
+		"blockHash": payload.Message.BlockHash.String(),
+	})
+
 	// By default, don't accept blocks with 0 value
 	if !api.ffAllowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
@@ -663,47 +669,44 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Sanity check the submission
 	err := VerifyBuilderBlockSubmission(payload)
 	if err != nil {
-		log.WithError(err).Warn("block submission verification failed")
+		log.WithError(err).Warn("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_builder_bid_received", 1)
-
 	// Verify the signature
 	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
 	if !ok || err != nil {
-		log.WithError(err).Warnf("could not verify builder bid payload signature from %s", payload.Message.BuilderPubkey.String())
+		log.WithError(err).Warnf("could not verify builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
 		return
 	}
 
-	// Helper to save block to database
-	saveBlockToDB := func(payload *types.BuilderSubmitBlockRequest, simErr error) {
-		dbEntry, err := database.NewBuilderBlockEntry(payload)
-		if err != nil {
-			log.WithError(err).Error("could not create builder block entry")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		if simErr == nil {
-			dbEntry.SimSuccess = true
-		} else {
-			dbEntry.SimError = simErr.Error()
-		}
-
-		_, err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
-		if err != nil {
-			log.WithError(err).Error("saving builder block submission to database failed")
-		}
-	}
-
 	// Simulate the block submission and save to db
 	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
-	saveBlockToDB(payload, simErr)
+
+	// Save to database
+	dbEntry, err := database.NewBuilderBlockEntry(payload)
+	if err != nil {
+		log.WithError(err).Error("failed creating BuilderBlockEntry")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if simErr == nil {
+		dbEntry.SimSuccess = true
+	} else {
+		dbEntry.SimError = simErr.Error()
+	}
+
+	_, err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
+	if err != nil {
+		log.WithError(err).Error("saving builder block submission to database failed")
+	}
+
+	// Handle simulation error
 	if simErr != nil {
-		log.WithError(err).Error("failed block simulation")
+		log.WithError(err).Error("failed block simulation for block from ")
 		if !api.ffAllowBlockVerificationFail {
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
