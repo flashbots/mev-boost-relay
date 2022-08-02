@@ -7,12 +7,8 @@ import (
 var (
 	tableBase = common.GetEnv("DB_TABLE_PREFIX", "dev")
 
-	// TableEvent                 = tableBase + "_event"
-	TableValidatorRegistration = tableBase + "_validator_registration"
-	// TableEpochSummary           = tableBase + "_epoch_summary"
-	// TableSlotSummary            = tableBase + "_slot_summary"
+	TableValidatorRegistration  = tableBase + "_validator_registration"
 	TableBuilderBlockSubmission = tableBase + "_builder_block_submission"
-	TableBuilderBlockSimResult  = tableBase + "_builder_block_sim_result"
 	TableDeliveredPayload       = tableBase + "_payload_delivered"
 )
 

@@ -14,8 +14,8 @@ See also:
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
-1. Housekeeping: update known validators, proposer duties. Soon: save metrics, etc.
-1. API for proposer, block builder, data
+1. Housekeeper: update known validators, proposer duties. Soon: save metrics, etc.
+1. API: for proposer, block builder, data
 2. Website: handles the root website requests (information is pulled from Redis and database)
 
 ## Getting started
@@ -23,16 +23,13 @@ The relay consists of several components that are designed to run and scale inde
 Redis (v6+) and PostgreSQL is used.
 
 ```bash
-# Start Redis
-docker run --name redis -d -p 6379:6379 redis:7
-
-# Start PostgreSQL
+# Start PostgreSQL & Redis in Docker
 docker-compose up
 ```
 
 Visit adminer on http://localhost:8093/?username=postgres
 
-The API needs access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
+The services need access to a beacon node for event subscriptions (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
 
 ```bash
 ssh -L 3500:localhost:3500 fb-builder-kilndev
@@ -62,6 +59,6 @@ redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validato
 
 Env vars:
 
-* `ENABLE_ZERO_VALUE_BLOCKS` - set to 1 to send out blocks with 0 value
-* `ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH` - get proposerduties for current AND next slot
-* `SYNC_VALIDATOR_REGISTRATIONS` - handle validator registrations synchronously
+* `ENABLE_ZERO_VALUE_BLOCKS` - allow blocks with 0 value
+* `SYNC_VALIDATOR_REGISTRATIONS` - handle validator registrations synchronously instead of in a background worker pool
+* `ALLOW_BLOCK_VERIFICATION_FAIL` - accept block even if block simulation fails
