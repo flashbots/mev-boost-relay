@@ -567,6 +567,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithFields(logrus.Fields{
 		"slot":      payload.Message.Slot,
 		"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+		"args":      req.URL.Query(),
+		"ua":        req.UserAgent(),
 	})
 
 	if len(payload.Signature) != 96 {
