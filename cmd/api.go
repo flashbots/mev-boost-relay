@@ -77,7 +77,7 @@ var apiCmd = &cobra.Command{
 
 		ds, err := datastore.NewProdDatastore(log, redis, db)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
 
 		// Decode the private key
