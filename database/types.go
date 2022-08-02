@@ -19,15 +19,6 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
-type SimResultEntry struct {
-	ID         uint64    `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
-
-	BlockSubmissionID string `db:"block_submission_id"`
-	Success           bool   `db:"success"`
-	Error             string `db:"error"`
-}
-
 type DeliveredPayloadEntry struct {
 	ID         uint64    `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
@@ -122,6 +113,9 @@ type BuilderBlockEntry struct {
 	GasLimit uint64 `db:"gas_limit"`
 
 	Payload string `db:"payload"`
+
+	SimSuccess bool   `db:"sim_success"`
+	SimError   string `db:"sim_error"`
 }
 
 func NewBuilderBlockEntry(payload *types.BuilderSubmitBlockRequest) (*BuilderBlockEntry, error) {

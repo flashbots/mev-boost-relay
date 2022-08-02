@@ -10,7 +10,6 @@ package housekeeper
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -43,9 +42,6 @@ type Housekeeper struct {
 	proposerDutiesSlot       uint64
 
 	headSlot uint64
-
-	// feature flags
-	enableQueryProposerDutiesForNextEpoch bool
 }
 
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
@@ -55,11 +51,6 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		redis:        opts.Redis,
 		datastore:    opts.Datastore,
 		beaconClient: opts.BeaconClient,
-	}
-
-	if os.Getenv("ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH") != "" {
-		server.log.Warn("env: ENABLE_QUERY_PROPOSER_DUTIES_NEXT_EPOCH - querying proposer duties for current + next epoch")
-		server.enableQueryProposerDutiesForNextEpoch = true
 	}
 
 	return server
@@ -163,19 +154,16 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 		return
 	}
 
-	epochFrom := headSlot / uint64(common.SlotsPerEpoch)
-	epochTo := epochFrom
-	if hk.enableQueryProposerDutiesForNextEpoch {
-		epochTo = epochFrom + 1
-	}
+	epoch := headSlot / uint64(common.SlotsPerEpoch)
 
 	log := hk.log.WithFields(logrus.Fields{
-		"epochFrom": epochFrom,
-		"epochTo":   epochTo,
+		"epochFrom": epoch,
+		"epochTo":   epoch + 1,
 	})
 	log.Debug("updating proposer duties...")
 
-	r, err := hk.beaconClient.GetProposerDuties(epochFrom)
+	// Query current epoch
+	r, err := hk.beaconClient.GetProposerDuties(epoch)
 	if err != nil {
 		log.WithError(err).Fatal("failed to get proposer duties")
 		return
@@ -183,16 +171,15 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 
 	entries := r.Data
 
-	if hk.enableQueryProposerDutiesForNextEpoch {
-		r2, err := hk.beaconClient.GetProposerDuties(epochTo)
-		if err == nil {
-			entries = append(entries, r2.Data...)
-		} else {
-			hk.log.WithError(err).Error("failed to get proposer duties for next epoch")
-		}
+	// Query next epoch
+	r2, err := hk.beaconClient.GetProposerDuties(epoch + 1)
+	if err == nil {
+		entries = append(entries, r2.Data...)
+	} else {
+		hk.log.WithError(err).Error("failed to get proposer duties for next epoch")
 	}
 
-	// Result of parallel Redis requests
+	// Validator registrations are queried in parallel, and this is the result struct
 	type result struct {
 		val types.BuilderGetValidatorsResponseEntry
 		err error
@@ -221,10 +208,11 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 		}
 	}
 
+	// Save duties to Redis
 	hk.redis.SetProposerDuties(proposerDuties)
 	hk.proposerDutiesSlot = headSlot
 
-	// pretty-print
+	// Pretty-print
 	_duties := make([]string, len(proposerDuties))
 	for i, duty := range proposerDuties {
 		_duties[i] = fmt.Sprint(duty.Slot)

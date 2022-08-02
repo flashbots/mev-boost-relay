@@ -21,7 +21,6 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
-	"github.com/flashbots/go-utils/jsonrpc"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -90,6 +89,8 @@ type RelayAPI struct {
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
+	blockSimRateLimiter *BlockSimulationRateLimiter
+
 	// feature flags
 	ffAllowZeroValueBlocks       bool
 	ffSyncValidatorRegistrations bool
@@ -122,6 +123,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		redis:                  opts.Redis,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
+		blockSimRateLimiter:    NewBlockSimuationRateLimiter(opts.BlockSimURL),
 	}
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())
@@ -565,6 +567,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithFields(logrus.Fields{
 		"slot":      payload.Message.Slot,
 		"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+		"args":      req.URL.Query(),
+		"ua":        req.UserAgent(),
 	})
 
 	if len(payload.Signature) != 96 {
@@ -650,6 +654,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithFields(logrus.Fields{
+		"slot":      payload.Message.Slot,
+		"builder":   payload.Message.BuilderPubkey.String(),
+		"blockHash": payload.Message.BlockHash.String(),
+	})
+
 	// By default, don't accept blocks with 0 value
 	if !api.ffAllowZeroValueBlocks {
 		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
@@ -661,47 +671,46 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Sanity check the submission
 	err := VerifyBuilderBlockSubmission(payload)
 	if err != nil {
-		log.WithError(err).Warn("block submission verification failed")
+		log.WithError(err).Warn("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_builder_bid_received", 1)
-
 	// Verify the signature
 	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
 	if !ok || err != nil {
-		log.WithError(err).Warn("could not verify builder bid payload signature")
-		// continue for now, as long as we're the only builder
-		// api.RespondError(w, http.StatusBadRequest, "invalid signature")
-		// return
+		log.WithError(err).Warnf("could not verify builder signature")
+		api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		return
 	}
 
-	// Save to database
-	go func() {
-		err := api.datastore.SaveBuilderBlockSubmission(payload)
-		if err != nil {
-			log.WithError(err).Error("saving builder block submission to database failed")
-		}
-	}()
-
-	// Simulate block submission
-	// TODO: save in DB
-	// TODO: add rate limiting queue to throttle outgoing requests to max 4 blocks concurrently
-	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-	simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
+	// Prepare entry for saving to database
+	dbEntry, err := database.NewBuilderBlockEntry(payload)
 	if err != nil {
-		log.WithError(err).Error("failed to simulate block submission")
-		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusInternalServerError, "failed to simulate block submission")
-			return
-		}
-	} else if simResp.Error != nil {
-		log.WithError(simResp.Error).Error("simulation failed")
-		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusInternalServerError, "simulation failed")
-			return
-		}
+		log.WithError(err).Error("failed creating BuilderBlockEntry")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Simulate the block submission and save to db
+	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
+	if simErr != nil {
+		log.WithError(err).Error("failed block simulation for block")
+		dbEntry.SimError = simErr.Error()
+	} else {
+		dbEntry.SimSuccess = true
+	}
+
+	// Save to database now
+	err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
+	if err != nil {
+		log.WithError(err).Error("saving builder block submission to database failed")
+	}
+
+	// Return error if block verification failed
+	if simErr != nil && !api.ffAllowBlockVerificationFail {
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Check if there's already a bid
@@ -762,6 +771,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
+// -----------
+//  DATA APIS
+// -----------
+
 func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -769,7 +782,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 
 	filters := database.GetPayloadsFilters{
 		IncludeBidTrace: true,
-		Limit:           10,
+		Limit:           100,
 		BlockHash:       args.Get("block_hash"),
 	}
 
@@ -777,6 +790,12 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			return
+		}
+	} else if args.Get("cursor") != "" {
+		filters.Cursor, err = strconv.ParseUint(args.Get("cursor"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
 			return
 		}
 	}
@@ -787,9 +806,11 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
 			return
 		}
-		if _limit < filters.Limit {
-			filters.Limit = _limit
+		if _limit > filters.Limit {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("maximum limit is %d", filters.Limit))
+			return
 		}
+		filters.Limit = _limit
 	}
 
 	payloads, err := api.datastore.GetRecentDeliveredPayloads(filters)

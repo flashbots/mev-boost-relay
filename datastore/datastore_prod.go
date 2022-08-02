@@ -250,11 +250,7 @@ func (ds *ProdDatastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.Si
 	return nil
 }
 
-func (ds *ProdDatastore) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
-	entry, err := database.NewBuilderBlockEntry(payload)
-	if err != nil {
-		return err
-	}
+func (ds *ProdDatastore) SaveBuilderBlockSubmission(entry *database.BuilderBlockEntry) error {
 	return ds.db.SaveBuilderBlockSubmission(entry)
 }
 
