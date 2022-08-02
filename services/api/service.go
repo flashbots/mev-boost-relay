@@ -684,10 +684,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Simulate the block submission and save to db
-	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
-
-	// Save to database
+	// Prepare entry for saving to database
 	dbEntry, err := database.NewBuilderBlockEntry(payload)
 	if err != nil {
 		log.WithError(err).Error("failed creating BuilderBlockEntry")
@@ -695,24 +692,25 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if simErr == nil {
-		dbEntry.SimSuccess = true
-	} else {
+	// Simulate the block submission and save to db
+	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
+	if simErr != nil {
+		log.WithError(err).Error("failed block simulation for block")
 		dbEntry.SimError = simErr.Error()
+	} else {
+		dbEntry.SimSuccess = true
 	}
 
+	// Save to database now
 	err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
 	if err != nil {
 		log.WithError(err).Error("saving builder block submission to database failed")
 	}
 
-	// Handle simulation error
-	if simErr != nil {
-		log.WithError(err).Error("failed block simulation for block from ")
-		if !api.ffAllowBlockVerificationFail {
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	// Return error if block verification failed
+	if simErr != nil && !api.ffAllowBlockVerificationFail {
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Check if there's already a bid
@@ -772,6 +770,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Respond with OK (TODO: proper response format)
 	w.WriteHeader(http.StatusOK)
 }
+
+// -----------
+//  DATA APIS
+// -----------
 
 func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, req *http.Request) {
 	var err error

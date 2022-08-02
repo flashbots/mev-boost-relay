@@ -59,6 +59,7 @@ redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validato
 
 Env vars:
 
+* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
 * `ENABLE_ZERO_VALUE_BLOCKS` - allow blocks with 0 value
 * `SYNC_VALIDATOR_REGISTRATIONS` - handle validator registrations synchronously instead of in a background worker pool
 * `ALLOW_BLOCK_VERIFICATION_FAIL` - accept block even if block simulation fails

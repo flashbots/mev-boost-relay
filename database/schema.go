@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS ` + TableBuilderBlockSubmission + ` (
 	payload json NOT NULL,
 
 	sim_success boolean NOT NULL,
-	sim_error   text NOT NULL
+	sim_error   text    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
