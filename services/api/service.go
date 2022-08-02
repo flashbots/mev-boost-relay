@@ -64,36 +64,6 @@ type RelayAPIOpts struct {
 	PprofAPI bool
 }
 
-type BlockSimulationRateLimit struct {
-	cv      *sync.Cond
-	counter int64
-}
-
-func NewBlockSimuationRateLimit() *BlockSimulationRateLimit {
-	return &BlockSimulationRateLimit{
-		cv:      sync.NewCond(&sync.Mutex{}),
-		counter: 0,
-	}
-}
-
-const maxConcurrentBlocks = 4
-
-func (b *BlockSimulationRateLimit) send(cb func()) {
-	b.cv.L.Lock()
-	b.counter += 1
-	if b.counter > maxConcurrentBlocks {
-		b.cv.Wait()
-	}
-	b.cv.L.Unlock()
-
-	cb()
-
-	b.cv.L.Lock()
-	b.counter -= 1
-	b.cv.Signal()
-	b.cv.L.Unlock()
-}
-
 // RelayAPI represents a single Relay instance
 type RelayAPI struct {
 	opts RelayAPIOpts
@@ -120,7 +90,7 @@ type RelayAPI struct {
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
-	blockSimuationRateLimit *BlockSimulationRateLimit
+	blockSimuationRateLimit *BlockSimulationRateLimiter
 
 	// feature flags
 	ffAllowZeroValueBlocks       bool
@@ -154,7 +124,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		redis:                   opts.Redis,
 		proposerDutiesResponse:  []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:          make(chan types.SignedValidatorRegistration, 5000),
-		blockSimuationRateLimit: NewBlockSimuationRateLimit(),
+		blockSimuationRateLimit: NewBlockSimuationRateLimiter(),
 	}
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())
@@ -727,7 +697,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 		// Simulate block submission
 		// TODO: save in DB
-		// TODO: add rate limiting queue to throttle outgoing requests to max 4 blocks concurrently
 		simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
 		simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, api.opts.BlockSimURL)
 		if err != nil {
@@ -751,7 +720,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			log.Info("simulation succeeded")
 		}
 	case <-req.Context().Done():
-		log.Error("failed to simulate block submission: request context is done")
+		log.Info("failed to simulate block submission: request context is done")
 		return
 	}
 
