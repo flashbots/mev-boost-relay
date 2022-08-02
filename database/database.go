@@ -13,6 +13,7 @@ import (
 
 type GetPayloadsFilters struct {
 	Slot            uint64
+	Cursor          uint64
 	Limit           uint64
 	BlockHash       string
 	IncludeBidTrace bool
@@ -22,7 +23,7 @@ type GetPayloadsFilters struct {
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
 	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
-	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) (int64, error)
+	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 }
 
@@ -101,6 +102,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	arg := map[string]interface{}{
 		"limit":      filters.Limit,
 		"slot":       filters.Slot,
+		"cursor":     filters.Cursor,
 		"block_hash": filters.BlockHash,
 	}
 
@@ -115,6 +117,8 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	whereConds := []string{}
 	if filters.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
+	} else if filters.Cursor > 0 {
+		whereConds = append(whereConds, "slot <= :cursor")
 	}
 	if filters.BlockHash != "" {
 		whereConds = append(whereConds, "block_hash = :block_hash")
@@ -135,18 +139,8 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	return tasks, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) (int64, error) {
-	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload) RETURNING id`
-	result, err := s.DB.NamedExec(query, entry)
-	if err != nil {
-		return 0, err
-	}
-
-	return result.LastInsertId()
+func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
+	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload, sim_success, sim_error) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload, :sim_success, :sim_error) RETURNING id`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
 }
-
-// func (s *DatabaseService) SaveBuilderBlockSimResult(entry *SimResultEntry) error {
-// 	query := `INSERT INTO ` + TableBuilderBlockSimResult + ` (block_submission_id, success, error) VALUES (:block_submission_id, :success, :error)`
-// 	_, err := s.DB.NamedExec(query, entry)
-// 	return err
-// }

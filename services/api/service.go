@@ -699,7 +699,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		dbEntry.SimError = simErr.Error()
 	}
 
-	_, err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
+	err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
 	if err != nil {
 		log.WithError(err).Error("saving builder block submission to database failed")
 	}
@@ -778,7 +778,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 
 	filters := database.GetPayloadsFilters{
 		IncludeBidTrace: true,
-		Limit:           10,
+		Limit:           100,
 		BlockHash:       args.Get("block_hash"),
 	}
 
@@ -786,6 +786,12 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			return
+		}
+	} else if args.Get("cursor") != "" {
+		filters.Cursor, err = strconv.ParseUint(args.Get("cursor"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
 			return
 		}
 	}
@@ -796,9 +802,11 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
 			return
 		}
-		if _limit < filters.Limit {
-			filters.Limit = _limit
+		if _limit > filters.Limit {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("maximum limit is %d", filters.Limit))
+			return
 		}
+		filters.Limit = _limit
 	}
 
 	payloads, err := api.datastore.GetRecentDeliveredPayloads(filters)

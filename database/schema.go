@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
 	signed_builder_bid    json NOT NULL,
 	signed_blinded_beacon_block json NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_slot_idx ON ` + TableDeliveredPayload + `("slot");
+CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blockhash_idx ON ` + TableDeliveredPayload + `("block_hash");
 `
 
 /*
