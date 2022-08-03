@@ -53,7 +53,7 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
-		relayPubkey, err := redis.GetRelayConfig(datastore.FieldPubkey)
+		relayPubkey, err := redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
 		if err != nil {
 			log.WithError(err).Fatal("failed getting publey from Redis")
 		}
