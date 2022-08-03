@@ -571,7 +571,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithFields(logrus.Fields{
 		"slot":      payload.Message.Slot,
 		"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
-		"args":      req.URL.Query(),
+		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
 
