@@ -699,7 +699,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Simulate the block submission and save to db
 	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
 	if simErr != nil {
-		log.WithError(err).Error("failed block simulation for block")
+		log.WithError(simErr).Error("failed block simulation for block")
 		dbEntry.SimError = simErr.Error()
 	} else {
 		dbEntry.SimSuccess = true
@@ -715,7 +715,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Return error if block verification failed
 	if simErr != nil && !api.ffAllowBlockVerificationFail {
-		api.RespondError(w, http.StatusBadRequest, err.Error())
+		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	}
 
