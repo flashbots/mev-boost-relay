@@ -8,6 +8,15 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+type GetPayloadsFilters struct {
+	Slot            uint64
+	Cursor          uint64
+	Limit           uint64
+	BlockHash       string
+	IncludeBidTrace bool
+	IncludePayloads bool
+}
+
 type ValidatorRegistrationEntry struct {
 	ID         uint64    `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`

@@ -25,7 +25,7 @@ import (
 type HousekeeperOpts struct {
 	Log          *logrus.Entry
 	Redis        *datastore.RedisCache
-	Datastore    datastore.Datastore
+	Datastore    *datastore.Datastore
 	BeaconClient *beaconclient.ProdBeaconClient
 }
 
@@ -33,7 +33,7 @@ type Housekeeper struct {
 	opts *HousekeeperOpts
 	log  *logrus.Entry
 
-	datastore    datastore.Datastore
+	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
 	beaconClient *beaconclient.ProdBeaconClient
 

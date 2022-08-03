@@ -27,7 +27,7 @@ type testBackend struct {
 	t            require.TestingT
 	relay        *RelayAPI
 	beaconClient *beaconclient.MockBeaconClient
-	datastore    datastore.Datastore
+	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
 }
 
@@ -40,7 +40,9 @@ func newTestBackend(t require.TestingT) *testBackend {
 	redisCache, err := datastore.NewRedisCache(redisClient.Addr(), "")
 	require.NoError(t, err)
 
-	ds, err := datastore.NewProdDatastore(common.TestLog, redisCache, database.MockDB{})
+	db := database.MockDB{}
+
+	ds, err := datastore.NewDatastore(common.TestLog, redisCache, db)
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()
@@ -52,6 +54,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 		BeaconClient: bc,
 		Datastore:    ds,
 		Redis:        redisCache,
+		DB:           db,
 		EthNetDetails: common.EthNetworkDetails{
 			GenesisForkVersionHex:   genesisForkVersionHex,
 			BellatrixForkVersionHex: "0x00000000",
