@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDatastore(t *testing.T) *ProdDatastore {
+func setupTestDatastore(t *testing.T) *Datastore {
 	var err error
 
 	redisTestServer, err := miniredis.Run()
@@ -20,7 +20,7 @@ func setupTestDatastore(t *testing.T) *ProdDatastore {
 	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
-	ds, err := NewProdDatastore(common.TestLog, redisDs, database.MockDB{})
+	ds, err := NewDatastore(common.TestLog, redisDs, database.MockDB{})
 	require.NoError(t, err)
 
 	return ds

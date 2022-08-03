@@ -57,7 +57,7 @@ var housekeeperCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database")
 		}
 
-		ds, err := datastore.NewProdDatastore(log, redis, db)
+		ds, err := datastore.NewDatastore(log, redis, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}

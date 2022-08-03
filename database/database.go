@@ -4,21 +4,13 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
-
-type GetPayloadsFilters struct {
-	Slot            uint64
-	Cursor          uint64
-	Limit           uint64
-	BlockHash       string
-	IncludeBidTrace bool
-	IncludePayloads bool
-}
 
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
@@ -40,7 +32,10 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxOpenConns(50)
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
-	// fmt.Println(schema)
+
+	if os.Getenv("PRINT_SCHEMA") == "1" {
+		fmt.Println(schema)
+	}
 
 	_, err = db.Exec(schema)
 	if err != nil {

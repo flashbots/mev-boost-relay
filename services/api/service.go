@@ -48,11 +48,13 @@ type RelayAPIOpts struct {
 	Log *logrus.Entry
 
 	ListenAddr    string
-	RegValWorkers int // number of workers for validator registration processing
-	BeaconClient  beaconclient.BeaconNodeClient
-	Datastore     datastore.Datastore
-	Redis         *datastore.RedisCache
 	BlockSimURL   string
+	RegValWorkers int // number of workers for validator registration processing
+
+	BeaconClient beaconclient.BeaconNodeClient
+	Datastore    *datastore.Datastore
+	Redis        *datastore.RedisCache
+	DB           database.IDatabaseService
 
 	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
 
@@ -78,8 +80,9 @@ type RelayAPI struct {
 	regValWorkersStarted uberatomic.Bool
 
 	beaconClient beaconclient.BeaconNodeClient
-	datastore    datastore.Datastore
+	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
+	db           database.IDatabaseService
 
 	headSlot     uint64
 	currentEpoch uint64
@@ -121,6 +124,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		redis:                  opts.Redis,
+		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 		blockSimRateLimiter:    NewBlockSimuationRateLimiter(opts.BlockSimURL),
@@ -701,11 +705,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		dbEntry.SimSuccess = true
 	}
 
-	// Save to database now
-	err = api.datastore.SaveBuilderBlockSubmission(dbEntry)
-	if err != nil {
-		log.WithError(err).Error("saving builder block submission to database failed")
-	}
+	// Save builder submission to database (in the background)
+	go func() {
+		err = api.db.SaveBuilderBlockSubmission(dbEntry)
+		if err != nil {
+			log.WithError(err).Error("saving builder block submission to database failed")
+		}
+	}()
 
 	// Return error if block verification failed
 	if simErr != nil && !api.ffAllowBlockVerificationFail {
@@ -813,7 +819,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Limit = _limit
 	}
 
-	payloads, err := api.datastore.GetRecentDeliveredPayloads(filters)
+	payloads, err := api.db.GetRecentDeliveredPayloads(filters)
 	if err != nil {
 		api.log.WithError(err).Error("error getting recent payloads")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
