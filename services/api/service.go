@@ -783,7 +783,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, req *http.Request) {
 	var err error
-
 	args := req.URL.Query()
 
 	filters := database.GetPayloadsFilters{
@@ -806,10 +805,18 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		}
 	}
 
+	if args.Get("block_number") != "" {
+		filters.BlockNumber, err = strconv.ParseUint(args.Get("block_number"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
+			return
+		}
+	}
+
 	if args.Get("limit") != "" {
 		_limit, err := strconv.ParseUint(args.Get("limit"), 10, 64)
 		if err != nil {
-			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			api.RespondError(w, http.StatusBadRequest, "invalid limit argument")
 			return
 		}
 		if _limit > filters.Limit {

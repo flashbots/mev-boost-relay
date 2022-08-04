@@ -96,10 +96,11 @@ func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) err
 
 func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	arg := map[string]interface{}{
-		"limit":      filters.Limit,
-		"slot":       filters.Slot,
-		"cursor":     filters.Cursor,
-		"block_hash": filters.BlockHash,
+		"limit":        filters.Limit,
+		"slot":         filters.Slot,
+		"cursor":       filters.Cursor,
+		"block_hash":   filters.BlockHash,
+		"block_number": filters.BlockNumber,
 	}
 
 	tasks := []*DeliveredPayloadEntry{}
@@ -118,6 +119,9 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	}
 	if filters.BlockHash != "" {
 		whereConds = append(whereConds, "block_hash = :block_hash")
+	}
+	if filters.BlockNumber > 0 {
+		whereConds = append(whereConds, "block_number = :block_number")
 	}
 
 	where := ""
