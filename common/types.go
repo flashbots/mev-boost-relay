@@ -51,7 +51,12 @@ var (
 	EthNetworkKiln              = "kiln"
 	EthNetworkRopsten           = "ropsten"
 	EthNetworkSepolia           = "sepolia"
+	EthNetworkGoerli            = "goerli"
 	EthNetworkGoerliShadowFork6 = "goerli-shadow-fork-6"
+
+	GenesisValidatorsRootGoerli = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
+	GenesisForkVersionGoerli    = "0x00001020"
+	BellatrixForkVersionGoerli  = "0x02001020"
 
 	GenesisValidatorsRootGoerliShadowFork6 = "0x6985063fa80a61a958ceeac5cf6125991ac297348e42542c85affbe9fb1c7328"
 	GenesisForkVersionGoerliShadowFork6    = "0x13001035"
@@ -80,6 +85,10 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		ret.GenesisForkVersionHex = GenesisForkVersionGoerliShadowFork6
 		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerliShadowFork6
 		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerliShadowFork6
+	case EthNetworkGoerli:
+		ret.GenesisForkVersionHex = GenesisForkVersionGoerli
+		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerli
+		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerli
 	default:
 		return nil, fmt.Errorf("unknown network: %s", networkName)
 	}
