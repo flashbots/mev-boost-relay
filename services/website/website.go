@@ -14,6 +14,7 @@ import (
 	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-utils/httplogger"
+	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -145,7 +146,7 @@ func (srv *Webserver) updateStatusHTMLData() {
 	}
 
 	_latestSlot, err := srv.redis.GetStats(datastore.RedisStatsFieldLatestSlot)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		srv.log.WithError(err).Error("error getting latest slot")
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)

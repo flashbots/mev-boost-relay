@@ -223,6 +223,9 @@ func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidato
 func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
 	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
 	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
+	if err == redis.Nil {
+		return proposerDuties, nil
+	}
 	return proposerDuties, err
 }
 

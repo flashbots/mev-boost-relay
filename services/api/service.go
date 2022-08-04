@@ -95,6 +95,7 @@ type RelayAPI struct {
 	blockSimRateLimiter *BlockSimulationRateLimiter
 
 	// feature flags
+	ffAllowSyncingBeaconNode     bool
 	ffAllowZeroValueBlocks       bool
 	ffSyncValidatorRegistrations bool
 	ffAllowBlockVerificationFail bool
@@ -142,6 +143,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
 	}
 
+	// Feature Flags
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("env: ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.ffAllowZeroValueBlocks = true
@@ -155,6 +157,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if os.Getenv("ALLOW_BLOCK_VERIFICATION_FAIL") != "" {
 		api.log.Warn("env: ALLOW_BLOCK_VERIFICATION_FAIL: allow failing block verification")
 		api.ffAllowBlockVerificationFail = true
+	}
+
+	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
+		api.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
+		api.ffAllowSyncingBeaconNode = true
 	}
 
 	return &api, nil
@@ -231,7 +238,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
-	if syncStatus.IsSyncing {
+	if syncStatus.IsSyncing && !api.ffAllowSyncingBeaconNode {
 		return errors.New("beacon node is syncing")
 	}
 

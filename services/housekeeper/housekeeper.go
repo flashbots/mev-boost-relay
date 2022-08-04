@@ -10,6 +10,7 @@ package housekeeper
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -42,6 +43,9 @@ type Housekeeper struct {
 	proposerDutiesSlot       uint64
 
 	headSlot uint64
+
+	// feature flags
+	ffAllowSyncingBeaconNode bool
 }
 
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
@@ -51,6 +55,11 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		redis:        opts.Redis,
 		datastore:    opts.Datastore,
 		beaconClient: opts.BeaconClient,
+	}
+
+	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
+		server.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
+		server.ffAllowSyncingBeaconNode = true
 	}
 
 	return server
@@ -68,7 +77,7 @@ func (hk *Housekeeper) Start() (err error) {
 	if err != nil {
 		return err
 	}
-	if syncStatus.IsSyncing {
+	if syncStatus.IsSyncing && !hk.ffAllowSyncingBeaconNode {
 		return errors.New("beacon node is syncing")
 	}
 
