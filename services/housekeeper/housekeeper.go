@@ -106,6 +106,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
+	go hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
 
 	hk.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)

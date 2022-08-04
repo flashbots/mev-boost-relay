@@ -20,3 +20,7 @@ func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*Deli
 func (db MockDB) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
 	return nil
 }
+
+func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
+	return 0, nil
+}

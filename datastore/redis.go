@@ -17,7 +17,8 @@ var (
 
 	expiryBidCache = 5 * time.Minute
 
-	RedisConfigFieldPubkey = "pubkey"
+	RedisConfigFieldPubkey    = "pubkey"
+	RedisStatsFieldLatestSlot = "latest-slot"
 )
 
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
@@ -207,8 +208,12 @@ func (r *RedisCache) NumRegisteredValidators() (int64, error) {
 // 	return r.client.HSetNX(context.Background(), r.keySlotSummary(slot), field, value).Err()
 // }
 
-func (r *RedisCache) SetStats(field string, value string) (err error) {
+func (r *RedisCache) SetStats(field string, value any) (err error) {
 	return r.client.HSet(context.Background(), r.keyStats, field, value).Err()
+}
+
+func (r *RedisCache) GetStats(field string) (value string, err error) {
+	return r.client.HGet(context.Background(), r.keyStats, field).Result()
 }
 
 func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidatorsResponseEntry) (err error) {

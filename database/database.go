@@ -17,6 +17,7 @@ type IDatabaseService interface {
 	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
 	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
+	GetNumDeliveredPayloads() (uint64, error)
 }
 
 type DatabaseService struct {
@@ -132,6 +133,12 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	// fmt.Println("nstmt", nstmt.QueryString)
 	err = nstmt.Select(&tasks, arg)
 	return tasks, err
+}
+
+func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
+	var count uint64
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM " + TableDeliveredPayload).Scan(&count)
+	return count, err
 }
 
 func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {

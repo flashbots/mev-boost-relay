@@ -4,6 +4,7 @@ package website
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 	"text/template"
 	"time"
@@ -133,18 +134,33 @@ func (srv *Webserver) updateStatusHTMLData() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 20})
+	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")
 	}
 
+	_numPayloadsDelivered, err := srv.db.GetNumDeliveredPayloads()
+	if err != nil {
+		srv.log.WithError(err).Error("error getting number of delivered payloads")
+	}
+
+	_latestSlot, err := srv.redis.GetStats(datastore.RedisStatsFieldLatestSlot)
+	if err != nil {
+		srv.log.WithError(err).Error("error getting latest slot")
+	}
+	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
+
 	numRegistered := printer.Sprintf("%d", _numRegistered)
 	numKnown := printer.Sprintf("%d", len(knownValidators))
+	numPayloads := printer.Sprintf("%d", _numPayloadsDelivered)
+	latestSlot := printer.Sprintf("%d", _latestSlotInt)
 
 	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
 	srv.statusHTMLData.ValidatorsRegistered = numRegistered
 	srv.statusHTMLData.Payloads = payloads
+	srv.statusHTMLData.HeadSlot = latestSlot
+	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
 	srv.statusHTMLDataLock.Unlock()
 }
 
