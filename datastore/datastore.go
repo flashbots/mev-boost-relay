@@ -3,6 +3,7 @@ package datastore
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -45,6 +46,9 @@ type Datastore struct {
 
 	blockLock sync.RWMutex
 	blocks    map[BlockKey]*BlockBidAndTrace
+
+	// feature flags
+	ffDisableBidMemoryCache bool
 }
 
 func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
@@ -56,6 +60,11 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDataba
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
 		bids:                    make(map[BidKey]*types.GetHeaderResponse),
 		blocks:                  make(map[BlockKey]*BlockBidAndTrace),
+	}
+
+	if os.Getenv("DISABLE_BID_MEMORY_CACHE") == "1" {
+		ds.log.Warn("env: DISABLE_BID_MEMORY_CACHE - disabling memory bid cache, forcing to load from Redis")
+		ds.ffDisableBidMemoryCache = true
 	}
 
 	return ds, err
@@ -133,16 +142,20 @@ func (ds *Datastore) SetValidatorRegistration(entry types.SignedValidatorRegistr
 
 // SaveBidAndBlock stores bid, block and trace for later use. Save to memory, redis AND database
 func (ds *Datastore) SaveBidAndBlock(slot uint64, proposerPubkey string, signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
+	_blockHash := strings.ToLower(headerResp.Data.Message.Header.BlockHash.String())
+	_parentHash := strings.ToLower(headerResp.Data.Message.Header.ParentHash.String())
+	_proposerPubkey := strings.ToLower(proposerPubkey)
+
 	bidKey := BidKey{
 		Slot:           slot,
-		ParentHash:     strings.ToLower(headerResp.Data.Message.Header.ParentHash.String()),
-		ProposerPubkey: strings.ToLower(proposerPubkey),
+		ParentHash:     _parentHash,
+		ProposerPubkey: _proposerPubkey,
 	}
 
 	blockKey := BlockKey{
 		Slot:           slot,
-		ProposerPubkey: strings.ToLower(proposerPubkey),
-		BlockHash:      strings.ToLower(headerResp.Data.Message.Header.BlockHash.String()),
+		ProposerPubkey: _proposerPubkey,
+		BlockHash:      _blockHash,
 	}
 
 	ds.bidLock.Lock()
@@ -156,7 +169,9 @@ func (ds *Datastore) SaveBidAndBlock(slot uint64, proposerPubkey string, signedB
 		Payload: payloadResp,
 	}
 	ds.blockLock.Unlock()
-	return nil
+
+	// Save to Redis
+	return ds.redis.SaveBid(slot, _parentHash, _proposerPubkey, headerResp)
 }
 
 func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, numRemaining int) {
@@ -180,17 +195,30 @@ func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, n
 	return
 }
 
-func (ds *Datastore) GetBid(slot uint64, parentHash string, proposerPubkey string) (*types.GetHeaderResponse, error) {
+// GetBid returns the bid from memory or Redis
+func (ds *Datastore) GetBid(slot uint64, parentHash string, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
+	_parentHash := strings.ToLower(parentHash)
+	_proposerPubkey := strings.ToLower(proposerPubkey)
+
 	bidKey := BidKey{
 		Slot:           slot,
-		ParentHash:     strings.ToLower(parentHash),
-		ProposerPubkey: strings.ToLower(proposerPubkey),
+		ParentHash:     _parentHash,
+		ProposerPubkey: _proposerPubkey,
 	}
 
-	ds.bidLock.RLock()
-	bid := ds.bids[bidKey]
-	ds.bidLock.RUnlock()
-	return bid, nil
+	// 1. Check in memory
+	if !ds.ffDisableBidMemoryCache {
+		found := false
+		ds.bidLock.RLock()
+		bid, found = ds.bids[bidKey]
+		ds.bidLock.RUnlock()
+		if found {
+			return bid, nil
+		}
+	}
+
+	// 2. Check in Redis
+	return ds.redis.GetBid(slot, _parentHash, _proposerPubkey)
 }
 
 func (ds *Datastore) GetBlockBidAndTrace(slot uint64, proposerPubkey string, blockHash string) (*BlockBidAndTrace, error) {

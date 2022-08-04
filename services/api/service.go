@@ -133,11 +133,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	api.log.Infof("Using BLS key: %s", publicKey.String())
 
 	// ensure pubkey is same across all relay instances
-	_pubkey, err := api.redis.GetRelayConfig(datastore.FieldPubkey)
+	_pubkey, err := api.redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
 	if err != nil {
 		return nil, err
 	} else if _pubkey == "" {
-		api.redis.SetRelayConfig(datastore.FieldPubkey, publicKey.String())
+		api.redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
 	} else if _pubkey != publicKey.String() {
 		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
 	}
@@ -499,8 +499,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_get_header_requests", 1)
-
 	vars := mux.Vars(req)
 	slotStr := vars["slot"]
 	parentHashHex := vars["parent_hash"]
@@ -536,26 +534,21 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.Data == nil || bid.Data.Message == nil {
-		// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_204", 1)
 		w.WriteHeader(http.StatusNoContent)
 		return
-	} else {
-		// If 0-value bid, only return if explicitly allowed
-		if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.ffAllowZeroValueBlocks {
-			// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_204", 1)
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	}
 
-		log.WithFields(logrus.Fields{
-			"value":     bid.Data.Message.Value.String(),
-			"blockHash": bid.Data.Message.Header.BlockHash.String(),
-		}).Info("bid delivered")
-
-		// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_header_sent_ok", 1)
-		api.RespondOK(w, bid)
+	// If 0-value bid, only return if explicitly allowed
+	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.ffAllowZeroValueBlocks {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
+	log.WithFields(logrus.Fields{
+		"value":     bid.Data.Message.Value.String(),
+		"blockHash": bid.Data.Message.Header.BlockHash.String(),
+	}).Info("bid delivered")
+	api.RespondOK(w, bid)
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
