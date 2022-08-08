@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -17,7 +18,7 @@ func setupTestDatastore(t *testing.T) *ProdDatastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
+	redisDs, err := NewRedisCache(context.Background(), redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
 	ds, err := NewProdDatastore(common.TestLog, redisDs, database.MockDB{})
@@ -27,6 +28,7 @@ func setupTestDatastore(t *testing.T) *ProdDatastore {
 }
 
 func TestProdProposerValidatorRegistration(t *testing.T) {
+	ctx := context.Background()
 	ds := setupTestDatastore(t)
 
 	var reg1 types.SignedValidatorRegistration
@@ -35,13 +37,13 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	key := types.NewPubkeyHex(reg1.Message.Pubkey.String())
 
 	// Set known validator and save registration
-	err := ds.redis.SetKnownValidator(key, 1)
+	err := ds.redis.SetKnownValidator(ctx, key, 1)
 	require.NoError(t, err)
-	err = ds.redis.SetValidatorRegistration(reg1)
+	err = ds.redis.SetValidatorRegistration(ctx, reg1)
 	require.NoError(t, err)
 
 	// Check if validator is known
-	cnt, err := ds.RefreshKnownValidators()
+	cnt, err := ds.RefreshKnownValidators(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, cnt)
 	require.True(t, ds.IsKnownValidator(key))

@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
@@ -32,34 +35,37 @@ var housekeeperCmd = &cobra.Command{
 		var err error
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "cmd/metrics-saver")
+		log := logrus.WithField("module", "cmd/housekeeper")
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
-		log.Infof("Using network: %s", networkInfo.Name)
+		log.Infof("using network: %s", networkInfo.Name)
+
+		// Prepare context with cancellation
+		ctx, cancel := context.WithCancel(context.Background())
 
 		// Connect to beacon client and ensure it's synced
-		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
+		log.Infof("using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
 
 		// Connect to Redis and setup the datastore
-		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
+		redis, err := datastore.NewRedisCache(ctx, redisURI, networkInfo.Name)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
+			log.WithError(err).Fatalf("failed to connect to Redis at %s", redisURI)
 		}
 
-		log.Infof("Connecting to Postgres database...")
-		db, err := database.NewDatabaseService(postgresDSN)
+		log.Infof("connecting to Postgres database...")
+		db, err := database.NewDatabaseService(ctx, postgresDSN)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database")
+			log.WithError(err).Fatalf("failed to connect to Postgres database")
 		}
 
 		ds, err := datastore.NewProdDatastore(log, redis, db)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+			log.WithError(err).Fatalf("failed to connect to Postgres database at %s", postgresDSN)
 		}
 
 		opts := &housekeeper.HousekeeperOpts{
@@ -69,9 +75,25 @@ var housekeeperCmd = &cobra.Command{
 			BeaconClient: beaconClient,
 		}
 		service := housekeeper.NewHousekeeper(opts)
-		log.Info("Starting service...")
-		err = service.Start()
-		log.WithError(err).Fatalf("Failed to start housekeeper")
+
+		// Handle graceful shutdown
+		done := make(chan struct{}, 1)
+		go func() {
+			shutdown := make(chan os.Signal, 1)
+			signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+			<-shutdown
+			signal.Stop(shutdown)
+
+			log.Warn("shutting down housekeeper....")
+			cancel()
+			close(done)
+		}()
+		log.Info("starting housekeeper service...")
+		if err = service.Start(ctx); err != nil {
+			log.WithError(err).Fatalf("failed to start housekeeper")
+		}
+		<-done
+		log.Warn("good bye")
 	},
 }
 

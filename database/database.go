@@ -2,6 +2,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -21,17 +22,17 @@ type GetPayloadsFilters struct {
 }
 
 type IDatabaseService interface {
-	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
-	SaveDeliveredPayload(entry *DeliveredPayloadEntry) error
-	SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error
-	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
+	SaveValidatorRegistration(ctx context.Context, registration types.SignedValidatorRegistration) error
+	SaveDeliveredPayload(ctx context.Context, entry *DeliveredPayloadEntry) error
+	SaveBuilderBlockSubmission(ctx context.Context, entry *BuilderBlockEntry) error
+	GetRecentDeliveredPayloads(ctx context.Context, filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 }
 
 type DatabaseService struct {
 	DB *sqlx.DB
 }
 
-func NewDatabaseService(dsn string) (*DatabaseService, error) {
+func NewDatabaseService(ctx context.Context, dsn string) (*DatabaseService, error) {
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		return nil, err
@@ -42,7 +43,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetConnMaxIdleTime(0)
 	// fmt.Println(schema)
 
-	_, err = db.Exec(schema)
+	_, err = db.ExecContext(ctx, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +57,7 @@ func (s *DatabaseService) Close() {
 	s.DB.Close()
 }
 
-func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedValidatorRegistration) error {
+func (s *DatabaseService) SaveValidatorRegistration(ctx context.Context, registration types.SignedValidatorRegistration) error {
 	entry := ValidatorRegistrationEntry{
 		Pubkey:       registration.Message.Pubkey.String(),
 		FeeRecipient: registration.Message.FeeRecipient.String(),
@@ -67,11 +68,11 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 
 	// Check if we already have a registration with same or newer timestamp
 	prevEntry := new(ValidatorRegistrationEntry)
-	err := s.DB.Get(prevEntry, "SELECT pubkey, timestamp FROM "+TableValidatorRegistration+" WHERE pubkey = $1", entry.Pubkey)
+	err := s.DB.GetContext(ctx, prevEntry, "SELECT pubkey, timestamp FROM "+TableValidatorRegistration+" WHERE pubkey = $1", entry.Pubkey)
 	if err == sql.ErrNoRows {
 		// Insert new entry
 		query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES (:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)`
-		_, err = s.DB.NamedExec(query, entry)
+		_, err = s.DB.NamedExecContext(ctx, query, entry)
 		return err
 
 	} else if err != nil {
@@ -80,7 +81,7 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	} else if entry.Timestamp > prevEntry.Timestamp {
 		// Update
 		query := `UPDATE ` + TableValidatorRegistration + ` SET fee_recipient=:fee_recipient, timestamp=:timestamp, gas_limit=:gas_limit, signature=:signature WHERE pubkey=:pubkey`
-		_, err = s.DB.NamedExec(query, entry)
+		_, err = s.DB.NamedExecContext(ctx, query, entry)
 		return err
 	}
 	return nil
@@ -92,13 +93,13 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 // 	return err
 // }
 
-func (s *DatabaseService) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
+func (s *DatabaseService) SaveDeliveredPayload(ctx context.Context, entry *DeliveredPayloadEntry) error {
 	query := `INSERT INTO ` + TableDeliveredPayload + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :execution_payload, :bid_trace, :bid_trace_builder_sig, :signed_builder_bid, :signed_blinded_beacon_block) ON CONFLICT DO NOTHING`
-	_, err := s.DB.NamedExec(query, entry)
+	_, err := s.DB.NamedExecContext(ctx, query, entry)
 	return err
 }
 
-func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
+func (s *DatabaseService) GetRecentDeliveredPayloads(ctx context.Context, filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	arg := map[string]interface{}{
 		"limit":      filters.Limit,
 		"slot":       filters.Slot,
@@ -129,18 +130,18 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
+	nstmt, err := s.DB.PrepareNamedContext(ctx, fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
 	if err != nil {
 		return nil, err
 	}
 
 	// fmt.Println("nstmt", nstmt.QueryString)
-	err = nstmt.Select(&tasks, arg)
+	err = nstmt.SelectContext(ctx, &tasks, arg)
 	return tasks, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
+func (s *DatabaseService) SaveBuilderBlockSubmission(ctx context.Context, entry *BuilderBlockEntry) error {
 	query := `INSERT INTO ` + TableBuilderBlockSubmission + ` (epoch, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, payload, sim_success, sim_error) VALUES (:epoch, :slot, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :num_tx, :value, :gas_used, :gas_limit, :payload, :sim_success, :sim_error) RETURNING id`
-	_, err := s.DB.NamedExec(query, entry)
+	_, err := s.DB.NamedExecContext(ctx, query, entry)
 	return err
 }

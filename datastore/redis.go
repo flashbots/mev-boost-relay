@@ -22,11 +22,11 @@ func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
 
-func connectRedis(redisURI string) (*redis.Client, error) {
+func connectRedis(ctx context.Context, redisURI string) (*redis.Client, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: redisURI,
 	})
-	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
+	if _, err := redisClient.Ping(ctx).Result(); err != nil {
 		// unable to connect to redis
 		return nil, err
 	}
@@ -49,8 +49,8 @@ type RedisCache struct {
 	keyProposerDuties string
 }
 
-func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
-	client, err := connectRedis(redisURI)
+func NewRedisCache(ctx context.Context, redisURI string, prefix string) (*RedisCache, error) {
+	client, err := connectRedis(ctx, redisURI)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +80,8 @@ func (r *RedisCache) keySlotSummary(slot uint64) string {
 	return fmt.Sprintf("%s:%d", r.prefixSlotSummary, slot)
 }
 
-func (r *RedisCache) GetObj(key string, obj any) (err error) {
-	value, err := r.client.Get(context.Background(), key).Result()
+func (r *RedisCache) GetObj(ctx context.Context, key string, obj any) (err error) {
+	value, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		return err
 	}
@@ -89,18 +89,18 @@ func (r *RedisCache) GetObj(key string, obj any) (err error) {
 	return json.Unmarshal([]byte(value), &obj)
 }
 
-func (r *RedisCache) SetObj(key string, value any, expiration time.Duration) (err error) {
+func (r *RedisCache) SetObj(ctx context.Context, key string, value any, expiration time.Duration) (err error) {
 	marshalledValue, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
 
-	return r.client.Set(context.Background(), key, marshalledValue, expiration).Err()
+	return r.client.Set(ctx, key, marshalledValue, expiration).Err()
 }
 
-func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
+func (r *RedisCache) GetKnownValidators(ctx context.Context) (map[types.PubkeyHex]uint64, error) {
 	validators := make(map[types.PubkeyHex]uint64)
-	entries, err := r.client.HGetAll(context.Background(), r.keyKnownValidators).Result()
+	entries, err := r.client.HGetAll(ctx, r.keyKnownValidators).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +114,13 @@ func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
 	return validators, nil
 }
 
-func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
-	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
+func (r *RedisCache) SetKnownValidator(ctx context.Context, pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
+	return r.client.HSet(ctx, r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
-func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+func (r *RedisCache) GetValidatorRegistration(ctx context.Context, proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
-	value, err := r.client.HGet(context.Background(), r.keyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()
+	value, err := r.client.HGet(ctx, r.keyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()
 	if err == redis.Nil {
 		return nil, nil
 	} else if err != nil {
@@ -131,16 +131,16 @@ func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*
 	return registration, err
 }
 
-func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
-	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
+func (r *RedisCache) GetValidatorRegistrationTimestamp(ctx context.Context, proposerPubkey types.PubkeyHex) (uint64, error) {
+	timestamp, err := r.client.HGet(ctx, r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
 	if err == redis.Nil {
 		return 0, nil
 	}
 	return timestamp, err
 }
 
-func (r *RedisCache) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	err := r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), entry.Message.Timestamp).Err()
+func (r *RedisCache) SetValidatorRegistration(ctx context.Context, entry types.SignedValidatorRegistration) error {
+	err := r.client.HSet(ctx, r.keyValidatorRegistrationTimestamp, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), entry.Message.Timestamp).Err()
 	if err != nil {
 		return err
 	}
@@ -150,13 +150,13 @@ func (r *RedisCache) SetValidatorRegistration(entry types.SignedValidatorRegistr
 		return err
 	}
 
-	err = r.client.HSet(context.Background(), r.keyValidatorRegistration, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), marshalledValue).Err()
+	err = r.client.HSet(ctx, r.keyValidatorRegistration, strings.ToLower(entry.Message.Pubkey.PubkeyHex().String()), marshalledValue).Err()
 	return err
 }
 
-func (r *RedisCache) SetValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
+func (r *RedisCache) SetValidatorRegistrations(ctx context.Context, entries []types.SignedValidatorRegistration) error {
 	for _, entry := range entries {
-		err := r.SetValidatorRegistration(entry)
+		err := r.SetValidatorRegistration(ctx, entry)
 		if err != nil {
 			return err
 		}
@@ -164,62 +164,62 @@ func (r *RedisCache) SetValidatorRegistrations(entries []types.SignedValidatorRe
 	return nil
 }
 
-func (r *RedisCache) NumRegisteredValidators() (int64, error) {
-	return r.client.HLen(context.Background(), r.keyValidatorRegistrationTimestamp).Result()
+func (r *RedisCache) NumRegisteredValidators(ctx context.Context) (int64, error) {
+	return r.client.HLen(ctx, r.keyValidatorRegistrationTimestamp).Result()
 }
 
-func (r *RedisCache) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
-	return r.client.HIncrBy(context.Background(), r.keyEpochSummary(epoch), field, value).Result()
+func (r *RedisCache) IncEpochSummaryVal(ctx context.Context, epoch uint64, field string, value int64) (newVal int64, err error) {
+	return r.client.HIncrBy(ctx, r.keyEpochSummary(epoch), field, value).Result()
 }
 
-func (r *RedisCache) SetEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
-	return r.client.HSet(context.Background(), r.keyEpochSummary(epoch), field, value).Err()
+func (r *RedisCache) SetEpochSummaryVal(ctx context.Context, epoch uint64, field string, value int64) (err error) {
+	return r.client.HSet(ctx, r.keyEpochSummary(epoch), field, value).Err()
 }
 
-func (r *RedisCache) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
-	return r.client.HSetNX(context.Background(), r.keyEpochSummary(epoch), field, value).Err()
+func (r *RedisCache) SetNXEpochSummaryVal(ctx context.Context, epoch uint64, field string, value int64) (err error) {
+	return r.client.HSetNX(ctx, r.keyEpochSummary(epoch), field, value).Err()
 }
 
-func (r *RedisCache) GetEpochSummary(epoch uint64) (ret map[string]string, err error) {
-	return r.client.HGetAll(context.Background(), r.keyEpochSummary(epoch)).Result()
+func (r *RedisCache) GetEpochSummary(ctx context.Context, epoch uint64) (ret map[string]string, err error) {
+	return r.client.HGetAll(ctx, r.keyEpochSummary(epoch)).Result()
 }
 
-// func (r *RedisCache) SetSlotPayloadDelivered(slot uint64, proposerPubkey, blockhash string) (err error) {
-// 	return r.client.HSet(context.Background(), r.keySlotPayloadDelivered, slot, proposerPubkey+"_"+blockhash).Err()
+// func (r *RedisCache) SetSlotPayloadDelivered(ctx context.Context, slot uint64, proposerPubkey, blockhash string) (err error) {
+// 	return r.client.HSet(ctx, r.keySlotPayloadDelivered, slot, proposerPubkey+"_"+blockhash).Err()
 // }
 
-func (r *RedisCache) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
-	return r.client.HIncrBy(context.Background(), r.keySlotSummary(slot), field, value).Result()
+func (r *RedisCache) IncSlotSummaryVal(ctx context.Context, slot uint64, field string, value int64) (newVal int64, err error) {
+	return r.client.HIncrBy(ctx, r.keySlotSummary(slot), field, value).Result()
 }
 
-func (r *RedisCache) SetSlotSummaryVal(slot uint64, field string, value int64) (err error) {
-	return r.client.HSet(context.Background(), r.keySlotSummary(slot), field, value).Err()
+func (r *RedisCache) SetSlotSummaryVal(ctx context.Context, slot uint64, field string, value int64) (err error) {
+	return r.client.HSet(ctx, r.keySlotSummary(slot), field, value).Err()
 }
 
-func (r *RedisCache) SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error) {
-	return r.client.HSetNX(context.Background(), r.keySlotSummary(slot), field, value).Err()
+func (r *RedisCache) SetNXSlotSummaryVal(ctx context.Context, slot uint64, field string, value int64) (err error) {
+	return r.client.HSetNX(ctx, r.keySlotSummary(slot), field, value).Err()
 }
 
-func (r *RedisCache) SetStats(field string, value string) (err error) {
-	return r.client.HSet(context.Background(), r.keyStats, field, value).Err()
+func (r *RedisCache) SetStats(ctx context.Context, field string, value string) (err error) {
+	return r.client.HSet(ctx, r.keyStats, field, value).Err()
 }
 
-func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidatorsResponseEntry) (err error) {
-	return r.SetObj(r.keyProposerDuties, proposerDuties, 0)
+func (r *RedisCache) SetProposerDuties(ctx context.Context, proposerDuties []types.BuilderGetValidatorsResponseEntry) (err error) {
+	return r.SetObj(ctx, r.keyProposerDuties, proposerDuties, 0)
 }
 
-func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
+func (r *RedisCache) GetProposerDuties(ctx context.Context) (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
 	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
-	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
+	err = r.GetObj(ctx, r.keyProposerDuties, &proposerDuties)
 	return proposerDuties, err
 }
 
-func (r *RedisCache) SetRelayConfig(field string, value string) (err error) {
-	return r.client.HSet(context.Background(), r.keyRelayConfig, field, value).Err()
+func (r *RedisCache) SetRelayConfig(ctx context.Context, field string, value string) (err error) {
+	return r.client.HSet(ctx, r.keyRelayConfig, field, value).Err()
 }
 
-func (r *RedisCache) GetRelayConfig(field string) (string, error) {
-	res, err := r.client.HGet(context.Background(), r.keyRelayConfig, field).Result()
+func (r *RedisCache) GetRelayConfig(ctx context.Context, field string) (string, error) {
+	res, err := r.client.HGet(ctx, r.keyRelayConfig, field).Result()
 	if err == redis.Nil {
 		return res, nil
 	}

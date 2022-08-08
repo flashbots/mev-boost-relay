@@ -1,6 +1,7 @@
 package beaconclient
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,8 +9,8 @@ import (
 	"net/http"
 )
 
-func fetchBeacon(url string, method string, dst any) error {
-	req, err := http.NewRequest(method, url, nil)
+func fetchBeacon(ctx context.Context, url string, method string, dst any) error {
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return fmt.Errorf("invalid reqest for %s: %w", url, err)
 	}

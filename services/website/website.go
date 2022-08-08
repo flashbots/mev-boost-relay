@@ -2,7 +2,7 @@
 package website
 
 import (
-	"errors"
+	"context"
 	"net/http"
 	"sync"
 	"text/template"
@@ -15,7 +15,6 @@ import (
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-	uberatomic "go.uber.org/atomic"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -45,8 +44,8 @@ type Webserver struct {
 	redis *datastore.RedisCache
 	db    *database.DatabaseService
 
-	srv        *http.Server
-	srvStarted uberatomic.Bool
+	srv   *http.Server
+	srvMu sync.Mutex
 
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
@@ -80,16 +79,20 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	return server, nil
 }
 
-func (srv *Webserver) StartServer() (err error) {
-	if srv.srvStarted.Swap(true) {
-		return errors.New("server was already started")
-	}
+func (srv *Webserver) StartServer(ctx context.Context) (err error) {
 
+	srv.srvMu.Lock()
 	// Start background task to regularly update status HTML data
 	go func() {
 		for {
-			srv.updateStatusHTMLData()
-			time.Sleep(5 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				srv.updateStatusHTMLData(ctx)
+				<-time.After(5 * time.Second)
+			}
+
 		}
 	}()
 
@@ -102,12 +105,20 @@ func (srv *Webserver) StartServer() (err error) {
 		WriteTimeout:      3 * time.Second,
 		IdleTimeout:       3 * time.Second,
 	}
-
+	srv.srvMu.Unlock()
 	err = srv.srv.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
 	}
 	return err
+}
+
+func (srv *Webserver) Stop(ctx context.Context) {
+	srv.srvMu.Lock()
+	defer srv.srvMu.Unlock()
+	if srv.srv != nil {
+		srv.srv.Shutdown(ctx)
+	}
 }
 
 func (srv *Webserver) getRouter() http.Handler {
@@ -122,18 +133,18 @@ func (srv *Webserver) getRouter() http.Handler {
 	return loggedRouter
 }
 
-func (srv *Webserver) updateStatusHTMLData() {
-	knownValidators, err := srv.redis.GetKnownValidators()
+func (srv *Webserver) updateStatusHTMLData(ctx context.Context) {
+	knownValidators, err := srv.redis.GetKnownValidators(ctx)
 	if err != nil {
 		srv.log.WithError(err).Error("error getting known validators in updateStatusHTMLData")
 	}
 
-	_numRegistered, err := srv.redis.NumRegisteredValidators()
+	_numRegistered, err := srv.redis.NumRegisteredValidators(ctx)
 	if err != nil {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 20})
+	payloads, err := srv.db.GetRecentDeliveredPayloads(ctx, database.GetPayloadsFilters{Limit: 20})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")
 	}

@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/boost-relay/beaconclient"
 	"github.com/flashbots/boost-relay/common"
@@ -46,7 +51,6 @@ var apiCmd = &cobra.Command{
 	Short: "Start the API server",
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
-
 		common.LogSetup(logJSON, logLevel)
 		log := logrus.WithField("module", "cmd/api")
 		log.Infof("boost-relay %s", Version)
@@ -61,23 +65,26 @@ var apiCmd = &cobra.Command{
 		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
 		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
 
+		// Prepare context with cancellation
+		ctx, cancel := context.WithCancel(context.Background())
+
 		// Connect to Redis
-		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
+		redis, err := datastore.NewRedisCache(ctx, redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Postgres
-		log.Infof("Connecting to Postgres database...")
-		db, err := database.NewDatabaseService(postgresDSN)
+		log.Infof("connecting to Postgres database...")
+		db, err := database.NewDatabaseService(ctx, postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}
 
 		ds, err := datastore.NewProdDatastore(log, redis, db)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed setting up prod datastore")
+			log.WithError(err).Fatalf("failed setting up prod datastore")
 		}
 
 		// Decode the private key
@@ -108,8 +115,25 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatal("failed to create service")
 		}
 
+		// Handle graceful shutdown
+		done := make(chan struct{}, 1)
+		go func() {
+			shutdown := make(chan os.Signal, 1)
+			signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+			<-shutdown
+			signal.Stop(shutdown)
+
+			log.Warn("shutting down api server....")
+			srv.Stop(ctx)
+			cancel()
+			close(done)
+		}()
 		// Start the server
-		log.Infof("Webserver starting on %s ...", apiListenAddr)
-		log.Fatal(srv.StartServer())
+		log.Infof("starting api webserver on %s ...", websiteListenAddr)
+		if err = srv.StartServer(ctx); err != nil {
+			log.WithError(err).Fatalf("failed to start api server")
+		}
+		<-done
+		log.Warn("good bye")
 	},
 }

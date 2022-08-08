@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -46,8 +47,8 @@ func NewProdDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDa
 }
 
 // RefreshKnownValidators loads known validators from Redis into memory
-func (ds *ProdDatastore) RefreshKnownValidators() (cnt int, err error) {
-	knownValidators, err := ds.redis.GetKnownValidators()
+func (ds *ProdDatastore) RefreshKnownValidators(ctx context.Context) (cnt int, err error) {
+	knownValidators, err := ds.redis.GetKnownValidators(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -84,28 +85,28 @@ func (ds *ProdDatastore) NumKnownValidators() int {
 	return len(ds.knownValidatorsByIndex)
 }
 
-func (ds *ProdDatastore) NumRegisteredValidators() (int64, error) {
-	return ds.redis.NumRegisteredValidators()
+func (ds *ProdDatastore) NumRegisteredValidators(ctx context.Context) (int64, error) {
+	return ds.redis.NumRegisteredValidators(ctx)
 }
 
 // GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
 // there's a datastore error, then an error will be returned.
-func (ds *ProdDatastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
-	return ds.redis.GetValidatorRegistration(pubkeyHex)
+func (ds *ProdDatastore) GetValidatorRegistration(ctx context.Context, pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
+	return ds.redis.GetValidatorRegistration(ctx, pubkeyHex)
 }
 
-func (ds *ProdDatastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
-	return ds.redis.GetValidatorRegistrationTimestamp(pubkeyHex)
+func (ds *ProdDatastore) GetValidatorRegistrationTimestamp(ctx context.Context, pubkeyHex types.PubkeyHex) (uint64, error) {
+	return ds.redis.GetValidatorRegistrationTimestamp(ctx, pubkeyHex)
 }
 
-func (ds *ProdDatastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	err := ds.redis.SetValidatorRegistration(entry)
+func (ds *ProdDatastore) SetValidatorRegistration(ctx context.Context, entry types.SignedValidatorRegistration) error {
+	err := ds.redis.SetValidatorRegistration(ctx, entry)
 	if err != nil {
 		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
 		return err
 	}
 
-	err = ds.db.SaveValidatorRegistration(entry)
+	err = ds.db.SaveValidatorRegistration(ctx, entry)
 	if err != nil {
 		ds.log.WithError(err).Error("failed to save validator registration to database")
 		return err
@@ -189,7 +190,7 @@ func (ds *ProdDatastore) GetBlockBidAndTrace(slot uint64, proposerPubkey string,
 }
 
 func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value int64) (newVal int64, err error) {
-	newVal, err = ds.redis.IncEpochSummaryVal(epoch, field, value)
+	newVal, err = ds.redis.IncEpochSummaryVal(context.Background(), epoch, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("IncEpochSummaryVal failed")
 	}
@@ -197,7 +198,7 @@ func (ds *ProdDatastore) IncEpochSummaryVal(epoch uint64, field string, value in
 }
 
 func (ds *ProdDatastore) SetEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
-	err = ds.redis.SetEpochSummaryVal(epoch, field, value)
+	err = ds.redis.SetEpochSummaryVal(context.Background(), epoch, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("SetEpochSummaryVal failed")
 	}
@@ -205,7 +206,7 @@ func (ds *ProdDatastore) SetEpochSummaryVal(epoch uint64, field string, value in
 }
 
 func (ds *ProdDatastore) SetNXEpochSummaryVal(epoch uint64, field string, value int64) (err error) {
-	err = ds.redis.SetNXEpochSummaryVal(epoch, field, value)
+	err = ds.redis.SetNXEpochSummaryVal(context.Background(), epoch, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("SetNXEpochSummaryVal failed")
 	}
@@ -213,7 +214,7 @@ func (ds *ProdDatastore) SetNXEpochSummaryVal(epoch uint64, field string, value 
 }
 
 func (ds *ProdDatastore) IncSlotSummaryVal(slot uint64, field string, value int64) (newVal int64, err error) {
-	newVal, err = ds.redis.IncSlotSummaryVal(slot, field, value)
+	newVal, err = ds.redis.IncSlotSummaryVal(context.Background(), slot, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("IncSlotSummaryVal failed")
 	}
@@ -221,7 +222,7 @@ func (ds *ProdDatastore) IncSlotSummaryVal(slot uint64, field string, value int6
 }
 
 func (ds *ProdDatastore) SetSlotSummaryVal(slot uint64, field string, value int64) (err error) {
-	err = ds.redis.SetSlotSummaryVal(slot, field, value)
+	err = ds.redis.SetSlotSummaryVal(context.Background(), slot, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("SetSlotSummaryVal failed")
 	}
@@ -229,20 +230,20 @@ func (ds *ProdDatastore) SetSlotSummaryVal(slot uint64, field string, value int6
 }
 
 func (ds *ProdDatastore) SetNXSlotSummaryVal(slot uint64, field string, value int64) (err error) {
-	err = ds.redis.SetNXSlotSummaryVal(slot, field, value)
+	err = ds.redis.SetNXSlotSummaryVal(context.Background(), slot, field, value)
 	if err != nil {
 		ds.log.WithError(err).Error("SetNXSlotSummaryVal failed")
 	}
 	return err
 }
 
-func (ds *ProdDatastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error {
+func (ds *ProdDatastore) SaveDeliveredPayload(ctx context.Context, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error {
 	entry, err := database.NewDeliveredPayloadEntry(bid.Data, signedBlindedBeaconBlock, payload.Data, signedBidTrace)
 	if err != nil {
 		ds.log.WithError(err).Error("failed creating delivered-payload-entry")
 		return err
 	}
-	err = ds.db.SaveDeliveredPayload(entry)
+	err = ds.db.SaveDeliveredPayload(ctx, entry)
 	if err != nil {
 		ds.log.WithError(err).Error("failed saving delivered payload to database")
 		return err
@@ -250,10 +251,10 @@ func (ds *ProdDatastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.Si
 	return nil
 }
 
-func (ds *ProdDatastore) SaveBuilderBlockSubmission(entry *database.BuilderBlockEntry) error {
-	return ds.db.SaveBuilderBlockSubmission(entry)
+func (ds *ProdDatastore) SaveBuilderBlockSubmission(ctx context.Context, entry *database.BuilderBlockEntry) error {
+	return ds.db.SaveBuilderBlockSubmission(ctx, entry)
 }
 
-func (ds *ProdDatastore) GetRecentDeliveredPayloads(filters database.GetPayloadsFilters) ([]*database.DeliveredPayloadEntry, error) {
-	return ds.db.GetRecentDeliveredPayloads(filters)
+func (ds *ProdDatastore) GetRecentDeliveredPayloads(ctx context.Context, filters database.GetPayloadsFilters) ([]*database.DeliveredPayloadEntry, error) {
+	return ds.db.GetRecentDeliveredPayloads(ctx, filters)
 }

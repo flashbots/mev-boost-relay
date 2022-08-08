@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/flashbots/boost-relay/common"
 	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/boost-relay/datastore"
@@ -47,20 +52,23 @@ var websiteCmd = &cobra.Command{
 
 		log.Infof("Using network: %s", networkInfo.Name)
 
+		// Prepare context with cancellation
+		ctx, cancel := context.WithCancel(context.Background())
+
 		// Connect to Redis
-		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
+		redis, err := datastore.NewRedisCache(ctx, redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
-		relayPubkey, err := redis.GetRelayConfig(datastore.FieldPubkey)
+		relayPubkey, err := redis.GetRelayConfig(ctx, datastore.FieldPubkey)
 		if err != nil {
 			log.WithError(err).Fatal("failed getting publey from Redis")
 		}
 
 		// Connect to Postgres
-		log.Infof("Connecting to Postgres database...")
-		db, err := database.NewDatabaseService(postgresDSN)
+		log.Infof("connecting to Postgres database...")
+		db, err := database.NewDatabaseService(ctx, postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}
@@ -80,8 +88,25 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatal("failed to create service")
 		}
 
+		// Handle graceful shutdown
+		done := make(chan struct{}, 1)
+		go func() {
+			shutdown := make(chan os.Signal, 1)
+			signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+			<-shutdown
+			signal.Stop(shutdown)
+
+			log.Warn("shutting down website server....")
+			srv.Stop(ctx)
+			cancel()
+			close(done)
+		}()
 		// Start the server
-		log.Infof("Webserver starting on %s ...", websiteListenAddr)
-		log.Fatal(srv.StartServer())
+		log.Infof("starting website webserver on %s ...", websiteListenAddr)
+		if err = srv.StartServer(ctx); err != nil {
+			log.WithError(err).Fatalf("failed to start website server")
+		}
+		<-done
+		log.Warn("good bye")
 	},
 }

@@ -1,6 +1,7 @@
 package beaconclient
 
 import (
+	"context"
 	"sync"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -42,23 +43,23 @@ func (c *MockBeaconClient) NumValidators() uint64 {
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconClient) FetchValidators(context.Context) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	return c.validatorSet, nil
 }
 
-func (c *MockBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
+func (c *MockBeaconClient) SyncStatus(context.Context) (*SyncStatusPayloadData, error) {
 	return &SyncStatusPayloadData{
 		HeadSlot:  1,
 		IsSyncing: false,
 	}, nil
 }
 
-func (c *MockBeaconClient) CurrentSlot() (uint64, error) {
+func (c *MockBeaconClient) CurrentSlot(context.Context) (uint64, error) {
 	return 1, nil
 }
 
-func (c *MockBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {}
+func (c *MockBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan uint64) {}
 
-func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
+func (c *MockBeaconClient) GetProposerDuties(ctx context.Context, epoch uint64) (*ProposerDutiesResponse, error) {
 	return &ProposerDutiesResponse{}, nil
 }
