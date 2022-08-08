@@ -11,7 +11,7 @@ import (
 func fetchBeacon(url string, method string, dst any) error {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return fmt.Errorf("invalid reqest for %s: %w", url, err)
+		return fmt.Errorf("invalid request for %s: %w", url, err)
 	}
 	req.Header.Set("accept", "application/json")
 

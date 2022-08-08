@@ -15,8 +15,8 @@ See also:
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
 1. Housekeeper: update known validators, proposer duties. Soon: save metrics, etc.
-1. API: for proposer, block builder, data
-2. Website: handles the root website requests (information is pulled from Redis and database)
+2. API: for proposer, block builder, data
+3. Website: handles the root website requests (information is pulled from Redis and database)
 
 ## Getting started
 
