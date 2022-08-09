@@ -34,29 +34,32 @@ func (c *ProdBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	client := sse.NewClient(eventsURL)
 	eventCh := make(chan *sse.Event)
-	go func() {
-		for {
-			if err := client.SubscribeChanRawWithContext(ctx, eventCh); err == nil {
-				<-ctx.Done()
-				c.log.Warn("beaconclient unsubscribe to headEvents")
-				client.Unsubscribe(eventCh)
-				c.log.Warn("closing event and slot channel")
-				close(eventCh)
-				close(slotC)
-				return
-			}
-			c.log.Warn("beaconclient subscribe to headEvents ended, reconnecting ")
+
+	for {
+		if err := client.SubscribeChanRawWithContext(ctx, eventCh); err != nil {
+			c.log.Warn("beaconclient subscribe to headEvents ended, reconnecting ", err)
+			continue // If subscription failed, retry
 		}
-	}()
-	for msg := range eventCh {
-		var data HeadEventData
-		err := json.Unmarshal(msg.Data, &data)
-		if err != nil {
-			c.log.WithError(err).Error("could not unmarshal head eventCh")
-		} else {
-			slotC <- data.Slot
+		break // If subscription succeeded, do not retry
+	}
+	for {
+		select {
+		case msg := <-eventCh:
+			var data HeadEventData
+			err := json.Unmarshal(msg.Data, &data)
+			if err != nil {
+				c.log.WithError(err).Error("could not unmarshal head eventCh")
+			} else {
+				slotC <- data.Slot
+			}
+		case <-ctx.Done():
+			c.log.Warn("beaconclient unsubscribe to headEvents")
+			client.Unsubscribe(eventCh)
+			close(slotC)
+			return
 		}
 	}
+
 }
 
 func (c *ProdBeaconClient) FetchValidators(ctx context.Context) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
