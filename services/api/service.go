@@ -128,7 +128,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
-		blockSimRateLimiter:    NewBlockSimuationRateLimiter(opts.BlockSimURL),
+		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 	}
 
 	api.log.Infof("Using BLS key: %s", publicKey.String())

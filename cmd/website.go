@@ -55,7 +55,7 @@ var websiteCmd = &cobra.Command{
 
 		relayPubkey, err := redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
 		if err != nil {
-			log.WithError(err).Fatal("failed getting publey from Redis")
+			log.WithError(err).Fatal("failed getting pubkey from Redis")
 		}
 
 		// Connect to Postgres

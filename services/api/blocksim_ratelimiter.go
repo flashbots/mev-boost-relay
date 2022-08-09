@@ -19,7 +19,7 @@ type BlockSimulationRateLimiter struct {
 	blockSimURL string
 }
 
-func NewBlockSimuationRateLimiter(blockSimURL string) *BlockSimulationRateLimiter {
+func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimiter {
 	return &BlockSimulationRateLimiter{
 		cv:          sync.NewCond(&sync.Mutex{}),
 		counter:     0,

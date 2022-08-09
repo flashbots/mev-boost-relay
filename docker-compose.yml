@@ -9,7 +9,7 @@ services:
     image: redis
     restart: always
     ports:
-      - 6379:6379
+      - '6379:6379'
 
   db:
     image: postgres
@@ -17,7 +17,7 @@ services:
     volumes:
       - 'psql_data:/var/lib/postgresql/data'
     ports:
-      - 5432:5432
+      - '5432:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -29,6 +29,6 @@ services:
     depends_on:
       - db
     ports:
-      - 8093:8080
+      - '8093:8080'
     environment:
       ADMINER_PLUGINS: tables-filter tinymce
