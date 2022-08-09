@@ -417,7 +417,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	start := time.Now()
-	startTimestamp := start.Unix()
 
 	payload := []types.SignedValidatorRegistration{}
 	numRegNew := 0
