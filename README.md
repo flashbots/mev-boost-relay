@@ -7,8 +7,7 @@ Flashbots [mev-boost](https://github.com/flashbots/mev-boost/) relay.
 
 See also:
 
-* https://www.notion.so/flashbots/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#38a21c8a40e64970904500eb7b373ea5
-* https://www.notion.so/flashbots/Relay-Design-Infra-APIs-cf5edd57360140668c6d6b78fd04f312
+* [Relay API Spec](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 
 ---
 
