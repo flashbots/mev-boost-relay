@@ -447,9 +447,13 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
-		td := int64(registration.Message.Timestamp) - startTimestamp
-		if td > 10 {
+		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
+		timeDiff := registrationTime.Sub(start)
+		if timeDiff.Seconds() > 10 {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
+			return
+		} else if timeDiff.Seconds() < -10 {
+			respondError(http.StatusBadRequest, "timestamp too old")
 			return
 		}
 
