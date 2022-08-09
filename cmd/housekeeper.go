@@ -22,7 +22,7 @@ func init() {
 	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", os.Getenv("POSTGRES_DSN"), "PostgreSQL DSN")
 
 	housekeeperCmd.Flags().StringVar(&network, "network", "", "Which network to use")
-	housekeeperCmd.MarkFlagRequired("network")
+	_ = housekeeperCmd.MarkFlagRequired("network")
 }
 
 var housekeeperCmd = &cobra.Command{

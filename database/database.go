@@ -48,8 +48,8 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	}, nil
 }
 
-func (s *DatabaseService) Close() {
-	s.DB.Close()
+func (s *DatabaseService) Close() error {
+	return s.DB.Close()
 }
 
 func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedValidatorRegistration) error {

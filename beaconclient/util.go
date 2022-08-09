@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"net/http"
 )
@@ -19,7 +20,12 @@ func fetchBeacon(url string, method string, dst any) error {
 	if err != nil {
 		return fmt.Errorf("client refused for %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Debug("failed to close response body")
+		}
+	}(resp.Body)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

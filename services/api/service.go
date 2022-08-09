@@ -138,7 +138,10 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if err != nil {
 		return nil, err
 	} else if _pubkey == "" {
-		api.redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
+		err := api.redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
+		if err != nil {
+			return nil, err
+		}
 	} else if _pubkey != publicKey.String() {
 		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
 	}
@@ -210,16 +213,25 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 		go func() {
 			for {
 				registration := <-api.regValEntriesC
+				log := api.log.WithFields(logrus.Fields{
+					"pubkey": registration.Message.Pubkey.PubkeyHex(),
+				})
 
 				// Verify the signature
 				ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 				if err != nil || !ok {
-					api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Warn("failed to verify registerValidator signature")
+					log.WithError(err).Warn("failed to verify registerValidator signature")
 					continue
 				}
 
 				// Save the registration and increment counter
-				go api.datastore.SetValidatorRegistration(registration)
+				go func() {
+					err := api.datastore.SetValidatorRegistration(registration)
+					if err != nil {
+						log.WithError(err).Error("Failed to set validator registration")
+					}
+				}()
+
 				// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 			}
 		}()
@@ -243,7 +255,10 @@ func (api *RelayAPI) StartServer() (err error) {
 	}
 
 	// Start worker pool for validator registration processing
-	api.startValidatorRegistrationWorkers()
+	err = api.startValidatorRegistrationWorkers()
+	if err != nil {
+		return err
+	}
 
 	// Get current proposer duties
 	api.updateProposerDuties(syncStatus.HeadSlot)
@@ -437,6 +452,11 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
+		pubkey := registration.Message.Pubkey.PubkeyHex()
+		regLog := api.log.WithFields(logrus.Fields{
+			"pubkey": pubkey,
+		})
+
 		if len(registration.Message.Pubkey) != 48 {
 			respondError(http.StatusBadRequest, "invalid pubkey length")
 			return
@@ -454,16 +474,16 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Check if actually a real validator
-		isKnownValidator := api.datastore.IsKnownValidator(registration.Message.Pubkey.PubkeyHex())
+		isKnownValidator := api.datastore.IsKnownValidator(pubkey)
 		if !isKnownValidator {
-			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", registration.Message.Pubkey.PubkeyHex()))
+			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pubkey))
 			return
 		}
 
 		// Check for a previous registration timestamp
-		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(registration.Message.Pubkey.PubkeyHex())
+		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(pubkey)
 		if err != nil {
-			log.WithError(err).Infof("error getting last registration timestamp for %s", registration.Message.Pubkey.PubkeyHex())
+			regLog.WithError(err).Infof("error getting last registration timestamp")
 		}
 
 		// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_received_unverified", 1)
@@ -479,17 +499,22 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			// Verify the signature
 			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 			if err != nil {
-				api.log.WithError(err).WithField("pubkey", registration.Message.Pubkey.String()).Error("error verifying registerValidator signature")
+				regLog.WithError(err).Error("error verifying registerValidator signature")
 				continue
 			} else if !ok {
 				api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
 				return
 			} else {
 				// Save and increment counter
-				go api.datastore.SetValidatorRegistration(registration)
+				go func() {
+					err := api.datastore.SetValidatorRegistration(registration)
+					if err != nil {
+						regLog.WithError(err).Error("Failed to set validator registration")
+					}
+				}()
+
 				// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 			}
-
 		} else {
 			// Send to channel for async processing
 			api.regValEntriesC <- registration
@@ -620,13 +645,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	api.RespondOK(w, blockBidAndTrace.Payload)
-	log.WithFields(logrus.Fields{
+	log = log.WithFields(logrus.Fields{
 		"numTx":       len(blockBidAndTrace.Payload.Data.Transactions),
 		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
-	}).Info("execution payload delivered")
+	})
+	log.Info("execution payload delivered")
 
 	// Save payload and increment counter
-	go api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
+	go func() {
+		err := api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
+		if err != nil {
+			log.WithError(err).Error("Failed to save delivered payload")
+		}
+	}()
+
 	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
 }
 
