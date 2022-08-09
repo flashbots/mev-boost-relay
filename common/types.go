@@ -24,14 +24,14 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 		builderURL = "http://" + builderURL
 	}
 
-	url, err := url.Parse(builderURL)
+	parsedURL, err := url.Parse(builderURL)
 	if err != nil {
 		return entry, err
 	}
 
 	entry = &BuilderEntry{
-		URL:     url,
-		Address: entry.URL.Scheme + "://" + entry.URL.Host,
+		URL:     parsedURL,
+		Address: parsedURL.Scheme + "://" + parsedURL.Host,
 	}
 	err = entry.Pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
 	return entry, err
