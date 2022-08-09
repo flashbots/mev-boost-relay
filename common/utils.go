@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"net/http"
 	"os"
@@ -41,12 +40,8 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 	}
 
 	if resp.StatusCode > 299 {
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				log.Debug("failed to close response body")
-			}
-		}(resp.Body)
+		defer resp.Body.Close()
+
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
