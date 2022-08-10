@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 )
+
+var ErrUnknownNetwork = errors.New("unknown network")
 
 // BuilderEntry represents a builder that is allowed to send blocks
 // Address will be schema://hostname:port
@@ -24,14 +27,14 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 		builderURL = "http://" + builderURL
 	}
 
-	url, err := url.Parse(builderURL)
+	parsedURL, err := url.Parse(builderURL)
 	if err != nil {
 		return entry, err
 	}
 
 	entry = &BuilderEntry{
-		URL:     url,
-		Address: entry.URL.Scheme + "://" + entry.URL.Host,
+		URL:     parsedURL,
+		Address: parsedURL.Scheme + "://" + parsedURL.Host,
 	}
 	err = entry.Pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
 	return entry, err
@@ -90,7 +93,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerli
 		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerli
 	default:
-		return nil, fmt.Errorf("unknown network: %s", networkName)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
 
 	ret.DomainBuilder, err = ComputeDomain(types.DomainTypeAppBuilder, ret.GenesisForkVersionHex, types.Root{}.String())
@@ -113,7 +116,7 @@ type EpochSummary struct {
 	SlotFirst uint64 `json:"slot_first" db:"slot_first"`
 	SlotLast  uint64 `json:"slot_last"  db:"slot_last"`
 
-	// registered are those that were actually used by the relay (some might be skipped if only one relay and it started in the mmiddle of the epoch)
+	// registered are those that were actually used by the relay (some might be skipped if only one relay and it started in the middle of the epoch)
 	SlotFirstProcessed uint64 `json:"slot_first_processed" db:"slot_first_processed"`
 	SlotLastProcessed  uint64 `json:"slot_last_processed"  db:"slot_last_processed"`
 
@@ -121,7 +124,7 @@ type EpochSummary struct {
 	ValidatorsKnownTotal                     uint64 `json:"validators_known_total"                      db:"validators_known_total"`
 	ValidatorRegistrationsTotal              uint64 `json:"validator_registrations_total"               db:"validator_registrations_total"`
 	ValidatorRegistrationsSaved              uint64 `json:"validator_registrations_saved"               db:"validator_registrations_saved"`
-	ValidatorRegistrationsReceviedUnverified uint64 `json:"validator_registrations_received_unverified" db:"validator_registrations_received_unverified"`
+	ValidatorRegistrationsReceivedUnverified uint64 `json:"validator_registrations_received_unverified" db:"validator_registrations_received_unverified"`
 
 	// The number of requests are the count of all requests to a specific path, even invalid ones
 	NumRegisterValidatorRequests uint64 `json:"num_register_validator_requests" db:"num_register_validator_requests"`

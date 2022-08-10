@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -129,7 +130,7 @@ func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex 
 func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
 	value, err := r.client.HGet(context.Background(), r.keyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
@@ -141,7 +142,7 @@ func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
 	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
 	return timestamp, err
@@ -223,7 +224,7 @@ func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidato
 func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
 	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
 	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return proposerDuties, nil
 	}
 	return proposerDuties, err
@@ -235,7 +236,7 @@ func (r *RedisCache) SetRelayConfig(field string, value string) (err error) {
 
 func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	res, err := r.client.HGet(context.Background(), r.keyRelayConfig, field).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return res, nil
 	}
 	return res, err
@@ -251,7 +252,7 @@ func (r *RedisCache) GetBid(slot uint64, parentHash string, proposerPubkey strin
 	key := r.keyBidCache(slot, parentHash, proposerPubkey)
 	bid = new(types.GetHeaderResponse)
 	err = r.GetObj(key, bid)
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	return bid, err

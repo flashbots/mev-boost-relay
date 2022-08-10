@@ -185,7 +185,7 @@ var housekeeperCmd = &cobra.Command{
 // 		ValidatorsKnownTotal:                     m.validatorsKnownTotal,
 // 		ValidatorRegistrationsTotal:              m.validatorRegistrationsTotal,
 // 		ValidatorRegistrationsSaved:              m.valToInt(vals, "validator_registrations_saved"),
-// 		ValidatorRegistrationsReceviedUnverified: m.valToInt(vals, "validator_registrations_received_unverified"),
+// 		ValidatorRegistrationsReceivedUnverified: m.valToInt(vals, "validator_registrations_received_unverified"),
 
 // 		NumRegisterValidatorRequests: m.valToInt(vals, "num_register_validator_requests"),
 // 		NumGetHeaderRequests:         m.valToInt(vals, "num_get_header_requests"),

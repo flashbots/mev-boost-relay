@@ -23,6 +23,8 @@ import (
 	"golang.org/x/text/message"
 )
 
+var ErrServerAlreadyStarted = errors.New("server was already started")
+
 var (
 	// Printer for pretty printing numbers
 	printer = message.NewPrinter(language.English)
@@ -84,7 +86,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 
 func (srv *Webserver) StartServer() (err error) {
 	if srv.srvStarted.Swap(true) {
-		return errors.New("server was already started")
+		return ErrServerAlreadyStarted
 	}
 
 	// Start background task to regularly update status HTML data
@@ -106,7 +108,7 @@ func (srv *Webserver) StartServer() (err error) {
 	}
 
 	err = srv.srv.ListenAndServe()
-	if err == http.ErrServerClosed {
+	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
@@ -146,7 +148,7 @@ func (srv *Webserver) updateStatusHTMLData() {
 	}
 
 	_latestSlot, err := srv.redis.GetStats(datastore.RedisStatsFieldLatestSlot)
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		srv.log.WithError(err).Error("error getting latest slot")
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)

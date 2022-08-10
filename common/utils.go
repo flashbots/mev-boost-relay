@@ -16,6 +16,11 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+var (
+	ErrInvalidForkVersion = errors.New("invalid fork version")
+	ErrHTTPErrorResponse  = errors.New("got an HTTP error response")
+)
+
 func makeRequest(ctx context.Context, client http.Client, method, url string, payload any) (*http.Response, error) {
 	var req *http.Request
 	var err error
@@ -46,7 +51,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 		if err != nil {
 			return nil, err
 		}
-		return resp, fmt.Errorf("HTTP error response: %d / %s", resp.StatusCode, string(bodyBytes))
+		return resp, fmt.Errorf("%w: %d / %s", ErrHTTPErrorResponse, resp.StatusCode, string(bodyBytes))
 	}
 
 	return resp, nil
@@ -57,8 +62,7 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
 	if err != nil || len(forkVersionBytes) > 4 {
-		err = errors.New("invalid fork version passed")
-		return domain, err
+		return domain, ErrInvalidForkVersion
 	}
 	var forkVersion [4]byte
 	copy(forkVersion[:], forkVersionBytes[:4])

@@ -48,6 +48,11 @@ type Housekeeper struct {
 	ffAllowSyncingBeaconNode bool
 }
 
+var (
+	ErrServerAlreadyStarted = errors.New("server was already started")
+	ErrBeaconNodeSyncing    = errors.New("beacon node is syncing")
+)
+
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 	server := &Housekeeper{
 		opts:         opts,
@@ -69,7 +74,7 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 func (hk *Housekeeper) Start() (err error) {
 	defer hk.isStarted.Store(false)
 	if hk.isStarted.Swap(true) {
-		return errors.New("server was already started")
+		return ErrServerAlreadyStarted
 	}
 
 	// Check beacon-node sync status, process current slot and start slot updates
@@ -78,7 +83,7 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 	if syncStatus.IsSyncing && !hk.ffAllowSyncingBeaconNode {
-		return errors.New("beacon node is syncing")
+		return ErrBeaconNodeSyncing
 	}
 
 	// Start regular known validator updates
