@@ -8,6 +8,10 @@ import (
 	"net/http"
 )
 
+var (
+	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
+)
+
 func fetchBeacon(url string, method string, dst any) error {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -34,7 +38,7 @@ func fetchBeacon(url string, method string, dst any) error {
 		if err = json.Unmarshal(bodyBytes, ec); err != nil {
 			return fmt.Errorf("could not unmarshal error response from beacon node for %s from %s: %w", url, string(bodyBytes), err)
 		}
-		return errors.New(ec.Message)
+		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
 	}
 
 	err = json.Unmarshal(bodyBytes, dst)

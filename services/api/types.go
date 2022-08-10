@@ -7,6 +7,11 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+var (
+	ErrMissingRequest   = errors.New("req is nil")
+	ErrMissingSecretKey = errors.New("secret key is nil")
+)
+
 type HTTPErrorResp struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -20,11 +25,11 @@ var ZeroU256 = types.IntToU256(0)
 
 func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
 	if req == nil {
-		return nil, errors.New("req is nil")
+		return nil, ErrMissingRequest
 	}
 
 	if sk == nil {
-		return nil, errors.New("secret key is nil")
+		return nil, ErrMissingSecretKey
 	}
 
 	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)

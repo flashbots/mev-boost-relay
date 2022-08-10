@@ -3,6 +3,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -64,7 +65,7 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	// Check if we already have a registration with same or newer timestamp
 	prevEntry := new(ValidatorRegistrationEntry)
 	err := s.DB.Get(prevEntry, "SELECT pubkey, timestamp FROM "+TableValidatorRegistration+" WHERE pubkey = $1", entry.Pubkey)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// Insert new entry
 		query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES (:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)`
 		_, err = s.DB.NamedExec(query, entry)
