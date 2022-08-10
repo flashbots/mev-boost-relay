@@ -19,7 +19,8 @@ test-race:
 	go test -race ./...
 
 lint:
-	gofmt -d -s ./
+	gofmt -d -s .
+	gofumpt -d .
 	go vet ./...
 	staticcheck ./...
 	golangci-lint run
