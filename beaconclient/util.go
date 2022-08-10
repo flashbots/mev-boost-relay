@@ -8,9 +8,7 @@ import (
 	"net/http"
 )
 
-var (
-	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
-)
+var ErrHTTPErrorResponse = errors.New("got an HTTP error response")
 
 func fetchBeacon(url string, method string, dst any) error {
 	req, err := http.NewRequest(method, url, nil)

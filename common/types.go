@@ -10,9 +10,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-var (
-	ErrUnknownNetwork = errors.New("unknown network")
-)
+var ErrUnknownNetwork = errors.New("unknown network")
 
 // BuilderEntry represents a builder that is allowed to send blocks
 // Address will be schema://hostname:port

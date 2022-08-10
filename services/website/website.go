@@ -23,9 +23,7 @@ import (
 	"golang.org/x/text/message"
 )
 
-var (
-	ErrServerAlreadyStarted = errors.New("server was already started")
-)
+var ErrServerAlreadyStarted = errors.New("server was already started")
 
 var (
 	// Printer for pretty printing numbers
