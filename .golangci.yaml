@@ -15,6 +15,7 @@ linters:
     - gomnd
     - gosec
     - lll
+    - nestif
     - nilnil
     - nlreturn
     - noctx
