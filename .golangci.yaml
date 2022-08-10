@@ -4,7 +4,6 @@ linters:
     - bodyclose
     - cyclop
     - errcheck
-    - errorlint
     - exhaustruct
     - forbidigo
     - funlen
