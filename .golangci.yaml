@@ -53,7 +53,7 @@ linters:
 linters-settings:
   #
   # The G108 rule throws a false positive. We're not actually vulnerable. If
-  # you're not careful the profiling endpoint automatically exposed on
+  # you're not careful the profiling endpoint is automatically exposed on
   # /debug/pprof if you import net/http/pprof. See this link:
   #
   #   https://mmcloughlin.com/posts/your-pprof-is-showing
