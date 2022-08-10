@@ -6,17 +6,23 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+var (
+	ErrBlockHashMismatch    = errors.New("blockHash mismatch")
+	ErrParentHashMismatch   = errors.New("parentHash mismatch")
+	ErrFeeRecipientMismatch = errors.New("feeRecipient mismatch")
+)
+
 func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
 	if payload.Message.BlockHash != payload.ExecutionPayload.BlockHash {
-		return errors.New("blockHash mismatch")
+		return ErrBlockHashMismatch
 	}
 
 	if payload.Message.ParentHash != payload.ExecutionPayload.ParentHash {
-		return errors.New("parentHash mismatch")
+		return ErrParentHashMismatch
 	}
 
 	if payload.Message.ProposerFeeRecipient != payload.ExecutionPayload.FeeRecipient {
-		return errors.New("feeRecipient mismatch")
+		return ErrFeeRecipientMismatch
 	}
 
 	return nil

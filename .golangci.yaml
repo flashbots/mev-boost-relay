@@ -4,7 +4,6 @@ linters:
     - bodyclose
     - cyclop
     - errcheck
-    - errorlint
     - exhaustruct
     - forbidigo
     - funlen
@@ -14,7 +13,6 @@ linters:
     - gocritic
     - godot
     - godox
-    - goerr113
     - gomnd
     - gosec
     - lll

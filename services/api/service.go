@@ -29,6 +29,16 @@ import (
 )
 
 var (
+	ErrMissingLogOpt                     = errors.New("log parameter is nil")
+	ErrMissingBeaconClientOpt            = errors.New("beacon-client is nil")
+	ErrMissingDatastoreOpt               = errors.New("proposer datastore is nil")
+	ErrRelayPubkeyMismatch               = errors.New("relay pubkey does not match existing one")
+	ErrRegistrationWorkersAlreadyStarted = errors.New("validator registration workers already started")
+	ErrServerAlreadyStarted              = errors.New("server was already started")
+	ErrBeaconNodeSyncing                 = errors.New("beacon node is syncing")
+)
+
+var (
 	// Proposer API (builder-specs)
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
@@ -104,15 +114,15 @@ type RelayAPI struct {
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
 func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if opts.Log == nil {
-		return nil, errors.New("log parameter is nil")
+		return nil, ErrMissingLogOpt
 	}
 
 	if opts.BeaconClient == nil {
-		return nil, errors.New("beacon-client is nil")
+		return nil, ErrMissingBeaconClientOpt
 	}
 
 	if opts.Datastore == nil {
-		return nil, errors.New("proposer datastore is nil")
+		return nil, ErrMissingDatastoreOpt
 	}
 
 	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
@@ -140,7 +150,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	} else if _pubkey == "" {
 		api.redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
 	} else if _pubkey != publicKey.String() {
-		return nil, fmt.Errorf("relay pubkey %s does not match already existing one %s", publicKey.String(), _pubkey)
+		return nil, fmt.Errorf("%w: new=%s old=%s", ErrRelayPubkeyMismatch, publicKey.String(), _pubkey)
 	}
 
 	// Feature Flags
@@ -196,7 +206,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 // of (already sanity-checked) validator registrations: the signature verification and updating in Redis.
 func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 	if api.regValWorkersStarted.Swap(true) {
-		return errors.New("validator registration workers already started")
+		return ErrRegistrationWorkersAlreadyStarted
 	}
 
 	numWorkers := api.opts.RegValWorkers
@@ -230,7 +240,7 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
-		return errors.New("server was already started")
+		return ErrServerAlreadyStarted
 	}
 
 	// Check beacon-node sync status, process current slot and start slot updates
@@ -239,7 +249,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 	if syncStatus.IsSyncing && !api.ffAllowSyncingBeaconNode {
-		return errors.New("beacon node is syncing")
+		return ErrBeaconNodeSyncing
 	}
 
 	// Start worker pool for validator registration processing
@@ -284,7 +294,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	}
 
 	err = api.srv.ListenAndServe()
-	if err == http.ErrServerClosed {
+	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err

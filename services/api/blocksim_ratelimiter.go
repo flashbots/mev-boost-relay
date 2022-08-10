@@ -11,6 +11,11 @@ import (
 	"github.com/flashbots/go-utils/jsonrpc"
 )
 
+var (
+	ErrRequestClosed    = errors.New("request context closed")
+	ErrSimulationFailed = errors.New("simulation failed")
+)
+
 var maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4))
 
 type BlockSimulationRateLimiter struct {
@@ -43,7 +48,7 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *type
 	}()
 
 	if err := context.Err(); err != nil {
-		return errors.New("request context closed")
+		return ErrRequestClosed
 	}
 
 	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
@@ -51,7 +56,7 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *type
 	if err != nil {
 		return err
 	} else if simResp.Error != nil {
-		return fmt.Errorf("simulation failed: %s", simResp.Error.Message)
+		return fmt.Errorf("%w: %s", ErrSimulationFailed, simResp.Error.Message)
 	}
 
 	return nil
