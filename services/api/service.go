@@ -447,16 +447,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
-		if len(registration.Message.Pubkey) != 48 {
-			respondError(http.StatusBadRequest, "invalid pubkey length")
-			return
-		}
-
-		if len(registration.Signature) != 96 {
-			respondError(http.StatusBadRequest, "invalid signature length")
-			return
-		}
-
 		td := int64(registration.Message.Timestamp) - startTimestamp
 		if td > 10 {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
@@ -584,11 +574,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
-
-	if len(payload.Signature) != 96 {
-		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSignature.Error())
-		return
-	}
 
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
 	if !found {

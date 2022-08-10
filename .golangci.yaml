@@ -13,8 +13,6 @@ linters:
     - gocritic
     - godot
     - godox
-    - gofmt
-    - gofumpt
     - gomnd
     - gosec
     - lll
