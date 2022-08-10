@@ -46,7 +46,7 @@ linters:
     - wastedassign
 
     #
-    # Disabled because of deprecated:
+    # Disabled because deprecated:
     #
     - exhaustivestruct
     - golint
