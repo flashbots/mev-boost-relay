@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 )
+
+var ErrUnknownNetwork = errors.New("unknown network")
 
 // BuilderEntry represents a builder that is allowed to send blocks
 // Address will be schema://hostname:port
@@ -24,14 +27,14 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 		builderURL = "http://" + builderURL
 	}
 
-	url, err := url.Parse(builderURL)
+	parsedURL, err := url.Parse(builderURL)
 	if err != nil {
 		return entry, err
 	}
 
 	entry = &BuilderEntry{
-		URL:     url,
-		Address: entry.URL.Scheme + "://" + entry.URL.Host,
+		URL:     parsedURL,
+		Address: parsedURL.Scheme + "://" + parsedURL.Host,
 	}
 	err = entry.Pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
 	return entry, err
@@ -90,7 +93,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerli
 		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerli
 	default:
-		return nil, fmt.Errorf("unknown network: %s", networkName)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
 
 	ret.DomainBuilder, err = ComputeDomain(types.DomainTypeAppBuilder, ret.GenesisForkVersionHex, types.Root{}.String())
