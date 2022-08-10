@@ -1,0 +1,54 @@
+linters:
+  enable-all: true
+  disable:
+    - bodyclose
+    - cyclop
+    - errcheck
+    - errorlint
+    - exhaustruct
+    - forbidigo
+    - funlen
+    - gci
+    - gochecknoglobals
+    - gochecknoinits
+    - gocritic
+    - godot
+    - godox
+    - goerr113
+    - gomnd
+    - gosec
+    - lll
+    - nilnil
+    - nlreturn
+    - noctx
+    - nonamedreturns
+    - nosnakecase
+    - paralleltest
+    - revive
+    - tagliatelle
+    - testpackage
+    - thelper
+    - unparam
+    - varnamelen
+    - whitespace
+    - wrapcheck
+    - wsl
+
+    #
+    # Disabled because of generics:
+    #
+    - contextcheck
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - wastedassign
+
+    #
+    # Disabled because deprecated:
+    #
+    - exhaustivestruct
+    - golint
+    - ifshort
+    - interfacer
+    - maligned
+    - scopelint

@@ -2,8 +2,7 @@ package database
 
 import "github.com/flashbots/go-boost-utils/types"
 
-type MockDB struct {
-}
+type MockDB struct{}
 
 func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorRegistration) error {
 	return nil

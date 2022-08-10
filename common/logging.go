@@ -16,7 +16,6 @@ func LogSetup(json bool, logLevel string) {
 		logrus.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 		})
-
 	}
 
 	if logLevel != "" {
