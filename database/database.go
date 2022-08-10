@@ -69,10 +69,8 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 		query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES (:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)`
 		_, err = s.DB.NamedExec(query, entry)
 		return err
-
 	} else if err != nil {
 		return err
-
 	} else if entry.Timestamp > prevEntry.Timestamp {
 		// Update
 		query := `UPDATE ` + TableValidatorRegistration + ` SET fee_recipient=:fee_recipient, timestamp=:timestamp, gas_limit=:gas_limit, signature=:signature WHERE pubkey=:pubkey`
