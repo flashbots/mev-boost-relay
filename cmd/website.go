@@ -13,9 +13,7 @@ const (
 	websiteDefaultListenAddr = "localhost:9060"
 )
 
-var (
-	websiteListenAddr string
-)
+var websiteListenAddr string
 
 func init() {
 	rootCmd.AddCommand(websiteCmd)

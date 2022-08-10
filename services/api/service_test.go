@@ -244,9 +244,10 @@ func TestBuilderApiGetValidators(t *testing.T) {
 
 	backend := newTestBackend(t)
 	backend.relay.proposerDutiesResponse = []types.BuilderGetValidatorsResponseEntry{
-		types.BuilderGetValidatorsResponseEntry{
+		{
 			Slot:  1,
-			Entry: &common.ValidPayloadRegisterValidator},
+			Entry: &common.ValidPayloadRegisterValidator,
+		},
 	}
 
 	rr := backend.request(http.MethodGet, path, nil)
