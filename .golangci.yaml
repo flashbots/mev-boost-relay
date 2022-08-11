@@ -7,7 +7,6 @@ linters:
     - exhaustruct
     - forbidigo
     - funlen
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - gocritic
@@ -22,12 +21,9 @@ linters:
     - nosnakecase
     - paralleltest
     - revive
-    - tagliatelle
     - testpackage
-    - thelper
     - unparam
     - varnamelen
-    - whitespace
     - wrapcheck
     - wsl
 
@@ -61,3 +57,8 @@ linters-settings:
   gosec:
     excludes:
       - G108
+
+  tagliatelle:
+    case:
+      rules:
+        json: snake
