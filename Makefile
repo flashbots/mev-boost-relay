@@ -1,13 +1,12 @@
 GIT_VER := $(shell git describe --tags --always --dirty="-dev")
-# ECR_URI := flashbots/boost-relay
 
 all: clean build
 
 v:
 	@echo "Version: ${GIT_VER}"
 
-#clean:
-#	rm -rf your-project build/
+clean:
+	git clean -fdx
 
 build:
 	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v .
