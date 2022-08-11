@@ -12,6 +12,7 @@ import (
 )
 
 func setupTestDatastore(t *testing.T) *Datastore {
+	t.Helper()
 	var err error
 
 	redisTestServer, err := miniredis.Run()

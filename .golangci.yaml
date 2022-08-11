@@ -23,7 +23,6 @@ linters:
     - paralleltest
     - revive
     - testpackage
-    - thelper
     - unparam
     - varnamelen
     - wrapcheck
