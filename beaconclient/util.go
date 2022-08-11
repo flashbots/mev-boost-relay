@@ -10,7 +10,7 @@ import (
 
 var ErrHTTPErrorResponse = errors.New("got an HTTP error response")
 
-func fetchBeacon(url string, method string, dst any) error {
+func fetchBeacon(url, method string, dst any) error {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", url, err)

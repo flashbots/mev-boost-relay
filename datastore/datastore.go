@@ -174,7 +174,7 @@ func (ds *Datastore) SaveBidAndBlock(slot uint64, proposerPubkey string, signedB
 	return ds.redis.SaveBid(slot, _parentHash, _proposerPubkey, headerResp)
 }
 
-func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, numRemaining int) {
+func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved, numRemaining int) {
 	ds.bidLock.Lock()
 	for key := range ds.bids {
 		if key.Slot < headSlot-1000 {
@@ -196,7 +196,7 @@ func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved int, n
 }
 
 // GetBid returns the bid from memory or Redis
-func (ds *Datastore) GetBid(slot uint64, parentHash string, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
+func (ds *Datastore) GetBid(slot uint64, parentHash, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
 	_parentHash := strings.ToLower(parentHash)
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 
@@ -221,7 +221,7 @@ func (ds *Datastore) GetBid(slot uint64, parentHash string, proposerPubkey strin
 	return ds.redis.GetBid(slot, _parentHash, _proposerPubkey)
 }
 
-func (ds *Datastore) GetBlockBidAndTrace(slot uint64, proposerPubkey string, blockHash string) (*BlockBidAndTrace, error) {
+func (ds *Datastore) GetBlockBidAndTrace(slot uint64, proposerPubkey, blockHash string) (*BlockBidAndTrace, error) {
 	blockKey := BlockKey{
 		Slot:           slot,
 		ProposerPubkey: strings.ToLower(proposerPubkey),

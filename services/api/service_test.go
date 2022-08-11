@@ -75,7 +75,7 @@ func newTestBackend(t require.TestingT) *testBackend {
 	return &backend
 }
 
-func (be *testBackend) request(method string, path string, payload any) *httptest.ResponseRecorder {
+func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
