@@ -22,7 +22,6 @@ linters:
     - nosnakecase
     - paralleltest
     - revive
-    - tagliatelle
     - testpackage
     - thelper
     - unparam
@@ -48,3 +47,10 @@ linters:
     - interfacer
     - maligned
     - scopelint
+
+linters-settings:
+  tagliatelle:
+    case:
+      rules:
+        json: snake
+
