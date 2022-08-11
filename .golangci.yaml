@@ -3,7 +3,6 @@ linters:
   disable:
     - bodyclose
     - cyclop
-    - errcheck
     - exhaustruct
     - forbidigo
     - funlen
@@ -14,6 +13,7 @@ linters:
     - godox
     - gomnd
     - lll
+    - nestif
     - nilnil
     - nlreturn
     - noctx

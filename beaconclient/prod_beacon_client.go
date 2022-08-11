@@ -31,16 +31,22 @@ type HeadEventData struct {
 func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	for {
+		log := c.log.WithFields(logrus.Fields{
+			"url": eventsURL,
+		})
 		client := sse.NewClient(eventsURL)
-		client.SubscribeRaw(func(msg *sse.Event) {
+		err := client.SubscribeRaw(func(msg *sse.Event) {
 			var data HeadEventData
 			err := json.Unmarshal(msg.Data, &data)
 			if err != nil {
-				c.log.WithError(err).Error("could not unmarshal head event")
+				log.WithError(err).Error("could not unmarshal head event")
 			} else {
 				slotC <- data.Slot
 			}
 		})
+		if err != nil {
+			log.WithError(err).Error("failed to subscribe to head events")
+		}
 		c.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
 	}
 }

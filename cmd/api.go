@@ -38,7 +38,7 @@ func init() {
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
 
 	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
-	apiCmd.MarkFlagRequired("network")
+	_ = apiCmd.MarkFlagRequired("network")
 }
 
 var apiCmd = &cobra.Command{

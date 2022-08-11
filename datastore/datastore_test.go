@@ -31,12 +31,13 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	ds := setupTestDatastore(t)
 
 	var reg1 types.SignedValidatorRegistration
-	copier.Copy(&reg1, &common.ValidPayloadRegisterValidator)
+	err := copier.Copy(&reg1, &common.ValidPayloadRegisterValidator)
+	require.NoError(t, err)
 
 	key := types.NewPubkeyHex(reg1.Message.Pubkey.String())
 
 	// Set known validator and save registration
-	err := ds.redis.SetKnownValidator(key, 1)
+	err = ds.redis.SetKnownValidator(key, 1)
 	require.NoError(t, err)
 	err = ds.redis.SetValidatorRegistration(reg1)
 	require.NoError(t, err)
@@ -49,7 +50,8 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 
 	// Copy the original registration
 	var reg2 types.SignedValidatorRegistration
-	copier.Copy(&reg2, &reg1)
+	err = copier.Copy(&reg2, &reg1)
+	require.NoError(t, err)
 
 	// // Ensure it's not updated with the same timestamp
 	// reg2.Message.GasLimit = 7

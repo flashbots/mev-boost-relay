@@ -37,7 +37,8 @@ func TestBeaconValidators(t *testing.T) {
     }
   ]
 }`)
-		w.Write(resp)
+		_, err := w.Write(resp)
+		require.NoError(t, err)
 	})
 
 	vals, err := bc.FetchValidators()

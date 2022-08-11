@@ -28,7 +28,8 @@ func TestRedisValidatorRegistration(t *testing.T) {
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
 		key := common.ValidPayloadRegisterValidator.Message.Pubkey
 		value := common.ValidPayloadRegisterValidator
-		cache.SetValidatorRegistration(value)
+		err := cache.SetValidatorRegistration(value)
+		require.NoError(t, err)
 		result, err := cache.GetValidatorRegistration(key.PubkeyHex())
 		require.NoError(t, err)
 		require.Equal(t, *result, value)
@@ -96,7 +97,8 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 				Pubkey: pubkey1,
 			},
 		}
-		cache.SetValidatorRegistration(entry)
+		err = cache.SetValidatorRegistration(entry)
+		require.NoError(t, err)
 
 		numReg, err = cache.NumRegisteredValidators()
 		require.NoError(t, err)

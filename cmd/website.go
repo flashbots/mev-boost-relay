@@ -25,7 +25,7 @@ func init() {
 	websiteCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 
 	websiteCmd.Flags().StringVar(&network, "network", "", "Which network to use")
-	websiteCmd.MarkFlagRequired("network")
+	_ = websiteCmd.MarkFlagRequired("network")
 }
 
 var websiteCmd = &cobra.Command{

@@ -115,7 +115,10 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.A
 	blsPubKey := bls.PublicKeyFromSecretKey(sk)
 
 	var pubKey types.PublicKey
-	pubKey.FromSlice(blsPubKey.Compress())
+	err = pubKey.FromSlice(blsPubKey.Compress())
+	if err != nil {
+		return nil, err
+	}
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: feeRecipient,
 		Timestamp:    timestamp,
@@ -184,13 +187,16 @@ func TestRegisterValidator(t *testing.T) {
 		t.Skip() // has an error at verifying the sig
 
 		backend := newTestBackend(t)
-		backend.relay.startValidatorRegistrationWorkers()
+		err := backend.relay.startValidatorRegistrationWorkers()
+		require.NoError(t, err)
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
 		index := uint64(17)
-		backend.redis.SetKnownValidator(pubkeyHex, index)
+		err = backend.redis.SetKnownValidator(pubkeyHex, index)
+		require.NoError(t, err)
 
 		// Update datastore
-		backend.datastore.RefreshKnownValidators()
+		_, err = backend.datastore.RefreshKnownValidators()
+		require.NoError(t, err)
 		require.True(t, backend.datastore.IsKnownValidator(pubkeyHex))
 		pkH, ok := backend.datastore.GetKnownValidatorPubkeyByIndex(index)
 		require.True(t, ok)
@@ -220,8 +226,10 @@ func TestRegisterValidator(t *testing.T) {
 		td := uint64(time.Now().Unix())
 		payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
 		require.NoError(t, err)
-		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-		backend.datastore.RefreshKnownValidators()
+		err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
+		require.NoError(t, err)
+		_, err = backend.datastore.RefreshKnownValidators()
+		require.NoError(t, err)
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusOK, rr.Code)
@@ -230,8 +238,10 @@ func TestRegisterValidator(t *testing.T) {
 		td = uint64(time.Now().Unix())
 		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
 		require.NoError(t, err)
-		backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-		backend.datastore.RefreshKnownValidators()
+		err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
+		require.NoError(t, err)
+		_, err = backend.datastore.RefreshKnownValidators()
+		require.NoError(t, err)
 
 		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusBadRequest, rr.Code)

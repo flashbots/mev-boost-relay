@@ -112,23 +112,31 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		return
 	}
 
+	log := hk.log.WithFields(logrus.Fields{
+		"headSlot":     headSlot,
+		"prevHeadSlot": hk.headSlot,
+	})
 	if hk.headSlot > 0 {
 		for s := hk.headSlot + 1; s < headSlot; s++ {
-			hk.log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
+			log.WithField("slot", s).Warn("missed slot")
 		}
 	}
 
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
-	go hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
+	go func() {
+		err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
+		if err != nil {
+			log.WithError(err).Error("failed to set stats")
+		}
+	}()
 
 	hk.headSlot = headSlot
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
-	hk.log.WithFields(logrus.Fields{
+	log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
-		"slotHead":           headSlot,
 		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
-	}).Infof("updated headSlot to %d", headSlot)
+	}).Infof("updated headSlot")
 }
 
 func (hk *Housekeeper) updateKnownValidators() {
@@ -140,18 +148,27 @@ func (hk *Housekeeper) updateKnownValidators() {
 		return
 	}
 
-	hk.log.WithField("numKnownValidators", len(validators)).Infof("updateKnownValidators: received %d validators from BN", len(validators))
-	go hk.redis.SetStats("validators_known_total", fmt.Sprint(len(validators)))
+	log := hk.log.WithField("numKnownValidators", len(validators))
+	log.Infof("received validators from BN")
+	go func() {
+		err := hk.redis.SetStats("validators_known_total", fmt.Sprint(len(validators)))
+		if err != nil {
+			log.WithError(err).WithField(
+				"field", "validators_known_total",
+			).Error("failed to set status")
+		}
+	}()
 
 	// Update Redis with validators
-	hk.log.Debug("Writing to Redis...")
+	log.Debug("Writing to Redis...")
 
 	// var last beaconclient.ValidatorResponseEntry
 	for _, v := range validators {
 		// last = v
-		err = hk.redis.SetKnownValidator(types.PubkeyHex(v.Validator.Pubkey), v.Index)
+		pubkey := types.PubkeyHex(v.Validator.Pubkey)
+		err = hk.redis.SetKnownValidator(pubkey, v.Index)
 		if err != nil {
-			hk.log.WithError(err).WithField("pubkey", v.Validator.Pubkey).Fatal("failed to set known validator in Redis")
+			log.WithError(err).WithField("pubkey", pubkey).Fatal("failed to set known validator in Redis")
 		}
 	}
 
@@ -191,7 +208,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	if err == nil {
 		entries = append(entries, r2.Data...)
 	} else {
-		hk.log.WithError(err).Error("failed to get proposer duties for next epoch")
+		log.WithError(err).Error("failed to get proposer duties for next epoch")
 	}
 
 	// Validator registrations are queried in parallel, and this is the result struct
@@ -224,7 +241,11 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	// Save duties to Redis
-	hk.redis.SetProposerDuties(proposerDuties)
+	err = hk.redis.SetProposerDuties(proposerDuties)
+	if err != nil {
+		log.WithError(err).Fatal("failed to set proposer duties")
+		return
+	}
 	hk.proposerDutiesSlot = headSlot
 
 	// Pretty-print
