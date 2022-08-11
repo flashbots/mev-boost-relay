@@ -13,7 +13,6 @@ linters:
     - godot
     - godox
     - gomnd
-    - gosec
     - lll
     - nilnil
     - nlreturn
@@ -48,8 +47,18 @@ linters:
     - scopelint
 
 linters-settings:
+  #
+  # The G108 rule throws a false positive. We're not actually vulnerable. If
+  # you're not careful the profiling endpoint is automatically exposed on
+  # /debug/pprof if you import net/http/pprof. See this link:
+  #
+  #   https://mmcloughlin.com/posts/your-pprof-is-showing
+  #
+  gosec:
+    excludes:
+      - G108
+
   tagliatelle:
     case:
       rules:
         json: snake
-
