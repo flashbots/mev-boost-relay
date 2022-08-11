@@ -427,7 +427,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	start := time.Now()
-	startTimestamp := start.Unix()
+	registrationTimeUpperBound := start.Add(10 * time.Second)
 
 	payload := []types.SignedValidatorRegistration{}
 	numRegNew := 0
@@ -447,8 +447,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
-		td := int64(registration.Message.Timestamp) - startTimestamp
-		if td > 10 {
+		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
+		if registrationTime.After(registrationTimeUpperBound) {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
 			return
 		}
