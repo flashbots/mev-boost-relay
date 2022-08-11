@@ -62,3 +62,6 @@ linters-settings:
     case:
       rules:
         json: snake
+
+  gofumpt:
+    extra-rules: true
