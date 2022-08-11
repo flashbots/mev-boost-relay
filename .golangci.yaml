@@ -7,7 +7,6 @@ linters:
     - exhaustruct
     - forbidigo
     - funlen
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - gocritic
@@ -28,7 +27,6 @@ linters:
     - thelper
     - unparam
     - varnamelen
-    - whitespace
     - wrapcheck
     - wsl
 

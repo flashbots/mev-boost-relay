@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"sort"
@@ -24,8 +25,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
-
-	_ "net/http/pprof"
 )
 
 var (
@@ -489,7 +488,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 				go api.datastore.SetValidatorRegistration(registration)
 				// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 			}
-
 		} else {
 			// Send to channel for async processing
 			api.regValEntriesC <- registration
