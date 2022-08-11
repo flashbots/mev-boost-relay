@@ -10,6 +10,7 @@ import (
 )
 
 func setupTestRedis(t *testing.T) *RedisCache {
+	t.Helper()
 	var err error
 
 	redisTestServer, err := miniredis.Run()

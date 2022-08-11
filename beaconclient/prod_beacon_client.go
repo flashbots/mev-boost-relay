@@ -25,7 +25,7 @@ func NewProdBeaconClient(log *logrus.Entry, beaconURI string) *ProdBeaconClient 
 // HeadEventData represents the data of a head event
 // {"slot":"827256","block":"0x56b683afa68170c775f3c9debc18a6a72caea9055584d037333a6fe43c8ceb83","state":"0x419e2965320d69c4213782dae73941de802a4f436408fddd6f68b671b3ff4e55","epoch_transition":false,"execution_optimistic":false,"previous_duty_dependent_root":"0x5b81a526839b7fb67c3896f1125451755088fb578ad27c2690b3209f3d7c6b54","current_duty_dependent_root":"0x5f3232c0d5741e27e13754e1d88285c603b07dd6164b35ca57e94344a9e42942"}
 type HeadEventData struct {
-	Slot uint64 `json:",string"`
+	Slot uint64 `json:"slot,string"`
 }
 
 func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
