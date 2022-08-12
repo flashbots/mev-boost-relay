@@ -814,7 +814,6 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	filters := database.GetPayloadsFilters{
 		IncludeBidTrace: true,
 		Limit:           100,
-		BlockHash:       args.Get("block_hash"),
 	}
 
 	if args.Get("slot") != "" {
@@ -829,6 +828,16 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
 			return
 		}
+	}
+
+	if args.Get("block_hash") != "" {
+		var hash types.Hash
+		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
+			return
+		}
+		filters.BlockHash = args.Get("block_hash")
 	}
 
 	if args.Get("block_number") != "" {

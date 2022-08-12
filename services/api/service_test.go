@@ -236,7 +236,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		// Disallow +11 sec
 		td = uint64(time.Now().Unix())
-		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
+		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+11)
 		require.NoError(t, err)
 		err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 		require.NoError(t, err)
@@ -269,6 +269,40 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	require.Equal(t, 1, len(resp))
 	require.Equal(t, uint64(1), resp[0].Slot)
 	require.Equal(t, common.ValidPayloadRegisterValidator, *resp[0].Entry)
+}
+
+func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
+	path := "/relay/v1/data/bidtraces/proposer_payload_delivered"
+
+	t.Run("Accept valid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t)
+
+		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t)
+
+		invalidBlockHashes := []string{
+			// One character too long.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+			// One character too short.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Missing the 0x prefix.
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Has an invalid hex character ('z' at the end).
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaz",
+		}
+
+		for _, invalidBlockHash := range invalidBlockHashes {
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			t.Log(invalidBlockHash)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		}
+	})
 }
 
 // func TestGetHeader(t *testing.T) {
