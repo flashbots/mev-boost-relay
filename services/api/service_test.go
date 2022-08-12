@@ -288,7 +288,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		invalidBlockHashes := []string{
 			// One character too long.
 			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
-			// One character short.
+			// One character too short.
 			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			// Missing the 0x prefix.
 			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
