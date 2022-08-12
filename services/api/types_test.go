@@ -41,6 +41,8 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			ProposerPubkey:       types.PublicKey{0x03},
 			ProposerFeeRecipient: types.Address{0x04},
 			Value:                types.IntToU256(123),
+			GasLimit:             5002,
+			GasUsed:              5003,
 		},
 		Signature: builderSk,
 	}

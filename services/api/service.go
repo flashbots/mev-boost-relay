@@ -861,7 +861,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 
 	response := []types.BidTrace{}
 	for _, payload := range payloads {
-		trace := types.BidTrace{}
+		var trace types.BidTrace
 		err = json.Unmarshal([]byte(payload.BidTrace), &trace)
 		if err != nil {
 			api.log.WithError(err).Error("failed to unmarshal bidtrace")

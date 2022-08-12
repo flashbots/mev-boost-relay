@@ -94,8 +94,12 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 		require.NoError(t, err)
 		entry := types.SignedValidatorRegistration{
 			Message: &types.RegisterValidatorRequestMessage{
-				Pubkey: pubkey1,
+				FeeRecipient: types.Address{0x02},
+				GasLimit:     5000,
+				Timestamp:    0xffffffff,
+				Pubkey:       pubkey1,
 			},
+			Signature: types.Signature{},
 		}
 		err = cache.SetValidatorRegistration(entry)
 		require.NoError(t, err)
@@ -113,7 +117,18 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 func TestRedisProposerDuties(t *testing.T) {
 	cache := setupTestRedis(t)
 	duties := []types.BuilderGetValidatorsResponseEntry{
-		{Slot: 1, Entry: &types.SignedValidatorRegistration{Message: &types.RegisterValidatorRequestMessage{FeeRecipient: types.Address{0x02}}}},
+		{
+			Slot: 1,
+			Entry: &types.SignedValidatorRegistration{
+				Signature: types.Signature{},
+				Message: &types.RegisterValidatorRequestMessage{
+					FeeRecipient: types.Address{0x02},
+					GasLimit:     5000,
+					Timestamp:    0xffffffff,
+					Pubkey:       types.PublicKey{},
+				},
+			},
+		},
 	}
 	err := cache.SetProposerDuties(duties)
 	require.NoError(t, err)
