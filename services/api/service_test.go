@@ -277,17 +277,31 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 	t.Run("Accept valid block_hash", func(t *testing.T) {
 		backend := newTestBackend(t)
 
-		rr := backend.request(http.MethodGet, path+"?block_hash=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil)
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
 	t.Run("Reject invalid block_hash", func(t *testing.T) {
 		backend := newTestBackend(t)
 
-		rr := backend.request(http.MethodGet, path+"?block_hash=blah", nil)
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		invalidBlockHashes := []string{
+			// One character too long.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+			// One character short.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Missing the 0x prefix.
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Has an invalid hex character ('z' at the end).
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaz",
+		}
+
+		for _, invalidBlockHash := range invalidBlockHashes {
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			t.Log(invalidBlockHash)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		}
 	})
 }
 
