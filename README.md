@@ -3,11 +3,16 @@
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/boost-relay)](https://goreportcard.com/report/github.com/flashbots/boost-relay)
 [![Test status](https://github.com/flashbots/boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/boost-relay/actions?query=workflow%3A%22Checks%22)
 
-Flashbots [mev-boost](https://github.com/flashbots/mev-boost/) relay.
+Flashbots [mev-boost](https://github.com/flashbots/mev-boost/) relay, as running for [Goerli](https://builder-relay-goerli.flashbots.net/) and the other test networks.
+
+Provides the builder-specs API for Eth2 validators, an API for block builders to submit blocks, as well as a data API.
+
+The relay software is currently in **alpha state**, and there'll be significant changes in the following weeks. In particular major database schema changes, decoupling of block submissions from the proposer API and proper expiy of Redis entries.
 
 See also:
 
 * [Relay API Spec](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+* [builder-relay-goerli.flashbots.net](https://builder-relay-goerli.flashbots.net/)
 
 ---
 
