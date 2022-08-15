@@ -1,7 +1,6 @@
 linters:
   enable-all: true
   disable:
-    - bodyclose
     - cyclop
     - exhaustruct
     - forbidigo
