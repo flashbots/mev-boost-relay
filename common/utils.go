@@ -57,10 +57,10 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 }
 
 // ComputeDomain computes the signing domain
-func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisValidatorsRootHex string) (domain types.Domain, err error) {
+func ComputeDomain(domainType types.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain types.Domain, err error) {
 	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
-	if err != nil || len(forkVersionBytes) > 4 {
+	if err != nil || len(forkVersionBytes) != 4 {
 		return domain, ErrInvalidForkVersion
 	}
 	var forkVersion [4]byte
@@ -68,7 +68,7 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func GetEnv(key string, defaultValue string) string {
+func GetEnv(key, defaultValue string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
 	}

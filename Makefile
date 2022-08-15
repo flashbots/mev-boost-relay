@@ -19,10 +19,13 @@ test-race:
 
 lint:
 	gofmt -d -s .
-	gofumpt -d .
+	gofumpt -d -extra .
 	go vet ./...
 	staticcheck ./...
 	golangci-lint run
+
+gofumpt:
+	gofumpt -l -w -extra .
 
 cover:
 	go test -coverprofile=/tmp/boost-relay.cover.tmp ./...

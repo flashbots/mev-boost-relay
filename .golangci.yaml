@@ -62,6 +62,9 @@ linters-settings:
       rules:
         json: snake
 
+  gofumpt:
+    extra-rules: true
+
   exhaustruct:
     exclude:
       #

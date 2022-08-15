@@ -53,7 +53,7 @@ type RedisCache struct {
 	keyProposerDuties string
 }
 
-func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
+func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func NewRedisCache(redisURI string, prefix string) (*RedisCache, error) {
 	}, nil
 }
 
-func (r *RedisCache) keyBidCache(slot uint64, parentHash string, proposerPubkey string) string {
+func (r *RedisCache) keyBidCache(slot uint64, parentHash, proposerPubkey string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBidCache, slot, parentHash, proposerPubkey)
 }
 
@@ -230,7 +230,7 @@ func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValid
 	return proposerDuties, err
 }
 
-func (r *RedisCache) SetRelayConfig(field string, value string) (err error) {
+func (r *RedisCache) SetRelayConfig(field, value string) (err error) {
 	return r.client.HSet(context.Background(), r.keyRelayConfig, field, value).Err()
 }
 
@@ -242,13 +242,13 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	return res, err
 }
 
-func (r *RedisCache) SaveBid(slot uint64, parentHash string, proposerPubkey string, headerResp *types.GetHeaderResponse) (err error) {
+func (r *RedisCache) SaveBid(slot uint64, parentHash, proposerPubkey string, headerResp *types.GetHeaderResponse) (err error) {
 	key := r.keyBidCache(slot, parentHash, proposerPubkey)
 	return r.SetObj(key, headerResp, expiryBidCache)
 }
 
 // GetBid retrieves a bid from Redis. If not existing, returns nil for both bid and error
-func (r *RedisCache) GetBid(slot uint64, parentHash string, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
+func (r *RedisCache) GetBid(slot uint64, parentHash, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
 	key := r.keyBidCache(slot, parentHash, proposerPubkey)
 	bid = new(types.GetHeaderResponse)
 	err = r.GetObj(key, bid)
