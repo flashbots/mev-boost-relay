@@ -13,5 +13,10 @@ func TestMakePostRequest(t *testing.T) {
 	var x chan bool
 	resp, err := makeRequest(context.Background(), *http.DefaultClient, http.MethodGet, "", x)
 	require.Error(t, err)
-	resp.Body.Close()
+	require.Nil(t, resp)
+
+	// To satisfy the bodyclose linter.
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
