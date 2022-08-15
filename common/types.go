@@ -29,15 +29,20 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 
 	parsedURL, err := url.Parse(builderURL)
 	if err != nil {
-		return entry, err
+		return nil, err
 	}
 
-	entry = &BuilderEntry{
+	var pubkey hexutil.Bytes
+	err = pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
+	if err != nil {
+		return nil, err
+	}
+
+	return &BuilderEntry{
 		URL:     parsedURL,
 		Address: parsedURL.Scheme + "://" + parsedURL.Host,
-	}
-	err = entry.Pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
-	return entry, err
+		Pubkey:  pubkey,
+	}, nil
 }
 
 type EthNetworkDetails struct {
@@ -67,46 +72,55 @@ var (
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
-	ret = &EthNetworkDetails{
-		Name: networkName,
-	}
+	var genesisForkVersion string
+	var genesisValidatorsRoot string
+	var bellatrixForkVersion string
+	var domainBuilder types.Domain
+	var domainBeaconProposer types.Domain
 
 	switch networkName {
 	case EthNetworkKiln:
-		ret.GenesisForkVersionHex = types.GenesisForkVersionKiln
-		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootKiln
-		ret.BellatrixForkVersionHex = types.BellatrixForkVersionKiln
+		genesisForkVersion = types.GenesisForkVersionKiln
+		genesisValidatorsRoot = types.GenesisValidatorsRootKiln
+		bellatrixForkVersion = types.BellatrixForkVersionKiln
 	case EthNetworkRopsten:
-		ret.GenesisForkVersionHex = types.GenesisForkVersionRopsten
-		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootRopsten
-		ret.BellatrixForkVersionHex = types.BellatrixForkVersionRopsten
+		genesisForkVersion = types.GenesisForkVersionRopsten
+		genesisValidatorsRoot = types.GenesisValidatorsRootRopsten
+		bellatrixForkVersion = types.BellatrixForkVersionRopsten
 	case EthNetworkSepolia:
-		ret.GenesisForkVersionHex = types.GenesisForkVersionSepolia
-		ret.GenesisValidatorsRootHex = types.GenesisValidatorsRootSepolia
-		ret.BellatrixForkVersionHex = types.BellatrixForkVersionSepolia
+		genesisForkVersion = types.GenesisForkVersionSepolia
+		genesisValidatorsRoot = types.GenesisValidatorsRootSepolia
+		bellatrixForkVersion = types.BellatrixForkVersionSepolia
 	case EthNetworkGoerliShadowFork6:
-		ret.GenesisForkVersionHex = GenesisForkVersionGoerliShadowFork6
-		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerliShadowFork6
-		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerliShadowFork6
+		genesisForkVersion = GenesisForkVersionGoerliShadowFork6
+		genesisValidatorsRoot = GenesisValidatorsRootGoerliShadowFork6
+		bellatrixForkVersion = BellatrixForkVersionGoerliShadowFork6
 	case EthNetworkGoerli:
-		ret.GenesisForkVersionHex = GenesisForkVersionGoerli
-		ret.GenesisValidatorsRootHex = GenesisValidatorsRootGoerli
-		ret.BellatrixForkVersionHex = BellatrixForkVersionGoerli
+		genesisForkVersion = GenesisForkVersionGoerli
+		genesisValidatorsRoot = GenesisValidatorsRootGoerli
+		bellatrixForkVersion = BellatrixForkVersionGoerli
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
 
-	ret.DomainBuilder, err = ComputeDomain(types.DomainTypeAppBuilder, ret.GenesisForkVersionHex, types.Root{}.String())
+	domainBuilder, err = ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersion, types.Root{}.String())
 	if err != nil {
 		return nil, err
 	}
 
-	ret.DomainBeaconProposer, err = ComputeDomain(types.DomainTypeBeaconProposer, ret.BellatrixForkVersionHex, ret.GenesisValidatorsRootHex)
+	domainBeaconProposer, err = ComputeDomain(types.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	return ret, nil
+	return &EthNetworkDetails{
+		Name:                     networkName,
+		GenesisForkVersionHex:    genesisForkVersion,
+		GenesisValidatorsRootHex: genesisValidatorsRoot,
+		BellatrixForkVersionHex:  bellatrixForkVersion,
+		DomainBuilder:            domainBuilder,
+		DomainBeaconProposer:     domainBeaconProposer,
+	}, nil
 }
 
 type EpochSummary struct {

@@ -74,11 +74,16 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	server.statusHTMLData = StatusHTMLData{
 		Network:                     caser.String(opts.NetworkDetails.Name),
 		RelayPubkey:                 opts.RelayPubkeyHex,
+		ValidatorsTotal:             "",
+		ValidatorsRegistered:        "",
 		BellatrixForkVersion:        opts.NetworkDetails.BellatrixForkVersionHex,
 		GenesisForkVersion:          opts.NetworkDetails.GenesisForkVersionHex,
 		GenesisValidatorsRoot:       opts.NetworkDetails.GenesisValidatorsRootHex,
 		BuilderSigningDomain:        hexutil.Encode(opts.NetworkDetails.DomainBuilder[:]),
 		BeaconProposerSigningDomain: hexutil.Encode(opts.NetworkDetails.DomainBeaconProposer[:]),
+		HeadSlot:                    "",
+		NumPayloadsDelivered:        "",
+		Payloads:                    []*database.DeliveredPayloadEntry{},
 	}
 
 	return server, nil

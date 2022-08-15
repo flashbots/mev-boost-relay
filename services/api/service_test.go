@@ -56,8 +56,12 @@ func newTestBackend(t require.TestingT) *testBackend {
 		Redis:        redisCache,
 		DB:           db,
 		EthNetDetails: common.EthNetworkDetails{
-			GenesisForkVersionHex:   genesisForkVersionHex,
-			BellatrixForkVersionHex: "0x00000000",
+			Name:                     "test",
+			GenesisForkVersionHex:    genesisForkVersionHex,
+			GenesisValidatorsRootHex: "",
+			BellatrixForkVersionHex:  "0x00000000",
+			DomainBuilder:            types.Domain{},
+			DomainBeaconProposer:     types.Domain{},
 		},
 		SecretKey: sk,
 	}
@@ -123,6 +127,7 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.A
 		FeeRecipient: feeRecipient,
 		Timestamp:    timestamp,
 		Pubkey:       pubKey,
+		GasLimit:     278234191203,
 	}
 
 	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
