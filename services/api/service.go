@@ -314,15 +314,6 @@ func (api *RelayAPI) StartServer() (err error) {
 	return err
 }
 
-// Stop: TODO: use context everywhere to quit background tasks as well
-// func (api *RelayAPI) Stop() error {
-// 	if !api.srvStarted.Load() {
-// 		return nil
-// 	}
-// 	defer api.srvStarted.Store(false)
-// 	return api.srv.Close()
-// }
-
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	if headSlot <= api.headSlot {
 		return

@@ -122,11 +122,6 @@ func (srv *Webserver) StartServer() (err error) {
 func (srv *Webserver) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", srv.handleRoot).Methods(http.MethodGet)
-	// if api.opts.PprofAPI {
-	// 	r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
-	// }
-
-	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(srv.log, r)
 	return loggedRouter
 }

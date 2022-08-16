@@ -52,48 +52,4 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	var reg2 types.SignedValidatorRegistration
 	err = copier.Copy(&reg2, &reg1)
 	require.NoError(t, err)
-
-	// // Ensure it's not updated with the same timestamp
-	// reg2.Message.GasLimit = 7
-	// ds.UpdateValidatorRegistration(reg2)
-	// reg, err := ds.redis.GetValidatorRegistration(key)
-	// require.NoError(t, err)
-	// require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
-
-	// // Ensure it's not updated with an older timestamp
-	// reg2.Message.Timestamp -= 1
-	// ds.UpdateValidatorRegistration(reg2)
-	// reg, err = ds.redis.GetValidatorRegistration(key)
-	// require.NoError(t, err)
-	// require.Equal(t, reg1.Message.GasLimit, reg.Message.GasLimit)
-
-	// // Ensure it's updated with a newer timestamp
-	// reg2.Message.Timestamp += 2
-	// ds.UpdateValidatorRegistration(reg2)
-	// reg, err = ds.redis.GetValidatorRegistration(key)
-	// require.NoError(t, err)
-	// require.Equal(t, reg2.Message.Timestamp, reg.Message.Timestamp)
-	// require.NotEqual(t, reg1.Message.GasLimit, reg.Message.GasLimit)
-	// require.Equal(t, reg2.Message.GasLimit, reg.Message.GasLimit)
 }
-
-// func TestRedisKnownValidators(t *testing.T) {
-// 	cache := setupService(t)
-
-// 	t.Run("Can save and get known validators", func(t *testing.T) {
-// 		key1 := common.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
-// 		key2 := common.NewPubkeyHex("0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
-// 		require.NoError(t, cache.SetKnownValidator(key1))
-// 		require.NoError(t, cache.SetKnownValidator(key2))
-
-// 		result, err := cache.IsKnownValidator(key1)
-// 		require.NoError(t, err)
-// 		require.True(t, result)
-
-// 		knownVals, err := cache.GetKnownValidators()
-// 		require.NoError(t, err)
-// 		require.Equal(t, 2, len(knownVals))
-// 		require.Contains(t, knownVals, key1)
-// 		require.Contains(t, knownVals, key2)
-// 	})
-// }

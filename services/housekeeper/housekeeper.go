@@ -164,7 +164,6 @@ func (hk *Housekeeper) updateKnownValidators() {
 
 	// var last beaconclient.ValidatorResponseEntry
 	for _, v := range validators {
-		// last = v
 		pubkey := types.PubkeyHex(v.Validator.Pubkey)
 		err = hk.redis.SetKnownValidator(pubkey, v.Index)
 		if err != nil {
