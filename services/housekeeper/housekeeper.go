@@ -162,7 +162,6 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Update Redis with validators
 	log.Debug("Writing to Redis...")
 
-	// var last beaconclient.ValidatorResponseEntry
 	for _, v := range validators {
 		pubkey := types.PubkeyHex(v.Validator.Pubkey)
 		err = hk.redis.SetKnownValidator(pubkey, v.Index)
