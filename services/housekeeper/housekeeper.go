@@ -170,8 +170,6 @@ func (hk *Housekeeper) updateKnownValidators() {
 			log.WithError(err).WithField("pubkey", pubkey).Fatal("failed to set known validator in Redis")
 		}
 	}
-
-	// hk.log.Info("Updated Redis ", last.Index, " ", last.Validator.Pubkey)
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
