@@ -240,8 +240,6 @@ func (api *RelayAPI) startValidatorRegistrationWorkers() error {
 						log.WithError(err).Error("Failed to set validator registration")
 					}
 				}()
-
-				// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 			}
 		}()
 	}
@@ -314,15 +312,6 @@ func (api *RelayAPI) StartServer() (err error) {
 	return err
 }
 
-// Stop: TODO: use context everywhere to quit background tasks as well
-// func (api *RelayAPI) Stop() error {
-// 	if !api.srvStarted.Load() {
-// 		return nil
-// 	}
-// 	defer api.srvStarted.Store(false)
-// 	return api.srv.Close()
-// }
-
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	if headSlot <= api.headSlot {
 		return
@@ -342,9 +331,6 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotStartNextEpoch": (api.currentEpoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
 
-	// go api.datastore.SetNXEpochSummaryVal(api.currentEpoch, "slot_first_processed", int64(headSlot))
-	// go api.datastore.SetEpochSummaryVal(api.currentEpoch, "slot_last_processed", int64(headSlot))
-
 	// Regularly update proposer duties in the background
 	go api.updateProposerDuties(headSlot)
 }
@@ -360,9 +346,6 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	if headSlot%8 != 0 && headSlot-api.proposerDutiesSlot < 8 {
 		return
 	}
-
-	// Until epoch+1 is enabled, we need to delay here, because at start of epoch at the same time the housekeeper is updating, and we might get an old update otherwise
-	// time.Sleep(1 * time.Second)
 
 	// Get duties from mem
 	duties, err := api.redis.GetProposerDuties()
@@ -433,8 +416,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"ip":     common.GetIPXForwardedFor(req),
 	})
 
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_register_validator_requests", 1)
-
 	respondError := func(code int, msg string) {
 		log.Warn("bad request: ", msg)
 		api.RespondError(w, code, msg)
@@ -485,8 +466,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			regLog.WithError(err).Infof("error getting last registration timestamp")
 		}
 
-		// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_received_unverified", 1)
-
 		// Do nothing if the registration is already the latest
 		if prevTimestamp >= registration.Message.Timestamp {
 			continue
@@ -511,8 +490,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 						regLog.WithError(err).Error("Failed to set validator registration")
 					}
 				}()
-
-				// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_saved", 1)
 			}
 		} else {
 			// Send to channel for async processing
@@ -584,7 +561,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "getPayload")
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_get_payload_requests", 1)
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
@@ -652,8 +628,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.WithError(err).Error("Failed to save delivered payload")
 		}
 	}()
-
-	// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "num_payload_sent", 1)
 }
 
 // --------------------
@@ -668,14 +642,6 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithField("method", "submitNewBlock")
-
-	// respondOk := func(trace *types.BidTrace) {
-	// 	response := &types.BuilderSubmitBlockResponseMessage{
-	// 		ReceiveTimestamp: uint64(time.Now().UTC().Unix()),
-	// 		BidUnverified:    trace,
-	// 	}
-	// 	api.RespondOK(w, response)
-	// }
 
 	payload := new(types.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
