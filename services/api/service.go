@@ -443,10 +443,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	start := time.Now()
 	registrationTimeUpperBound := start.Add(10 * time.Second)
 
-	payload := []types.SignedValidatorRegistration{}
+	registrations := []types.SignedValidatorRegistration{}
 	numRegNew := 0
 
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
 		respondError(http.StatusBadRequest, "failed to decode payload")
 		return
 	}
@@ -455,7 +455,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	// - GetValidatorRegistrationTimestamp could keep a cache in memory for some time and check memory first before going to Redis
 	// - Do multiple loops and filter down set of registrations, and batch checks for all registrations instead of locking for each individually:
 	//   (1) sanity checks, (2) IsKnownValidator, (3) CheckTimestamp, (4) Batch SetValidatorRegistration
-	for _, registration := range payload {
+	for _, registration := range registrations {
 		if registration.Message == nil {
 			respondError(http.StatusBadRequest, "registration without message")
 			return
@@ -521,7 +521,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"numRegistrations":    len(payload),
+		"numRegistrations":    len(registrations),
 		"numRegistrationsNew": numRegNew,
 		"timeNeededSec":       time.Since(start).Seconds(),
 	})
