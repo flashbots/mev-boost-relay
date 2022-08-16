@@ -56,11 +56,11 @@ jobs:
           git diff-index HEAD
           git diff-index --quiet HEAD
 
- 	semgrep:
-		name: Scan
-		runs-on: ubuntu-latest
-		container:
-			image: returntocorp/semgrep
-		steps:
-		- uses: actions/checkout@v3
-		- run: semgrep ci
+  semgrep:
+    name: Scan
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+			- uses: actions/checkout@v3
+			- run: semgrep ci
