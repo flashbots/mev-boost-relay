@@ -443,10 +443,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	start := time.Now()
 	registrationTimeUpperBound := start.Add(10 * time.Second)
 
-	payload := []types.SignedValidatorRegistration{}
+	registrations := []types.SignedValidatorRegistration{}
 	numRegNew := 0
 
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
 		respondError(http.StatusBadRequest, "failed to decode payload")
 		return
 	}
@@ -455,18 +455,18 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	// - GetValidatorRegistrationTimestamp could keep a cache in memory for some time and check memory first before going to Redis
 	// - Do multiple loops and filter down set of registrations, and batch checks for all registrations instead of locking for each individually:
 	//   (1) sanity checks, (2) IsKnownValidator, (3) CheckTimestamp, (4) Batch SetValidatorRegistration
-	for _, registration := range payload {
-		if registration.Message == nil {
+	for index := range registrations {
+		if registrations[index].Message == nil {
 			respondError(http.StatusBadRequest, "registration without message")
 			return
 		}
 
-		pubkey := registration.Message.Pubkey.PubkeyHex()
+		pubkey := registrations[index].Message.Pubkey.PubkeyHex()
 		regLog := api.log.WithFields(logrus.Fields{
 			"pubkey": pubkey,
 		})
 
-		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
+		registrationTime := time.Unix(int64(registrations[index].Message.Timestamp), 0)
 		if registrationTime.After(registrationTimeUpperBound) {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
 			return
@@ -488,7 +488,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// go api.datastore.IncEpochSummaryVal(api.currentEpoch, "validator_registrations_received_unverified", 1)
 
 		// Do nothing if the registration is already the latest
-		if prevTimestamp >= registration.Message.Timestamp {
+		if prevTimestamp >= registrations[index].Message.Timestamp {
 			continue
 		}
 
@@ -496,17 +496,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		numRegNew++
 		if api.ffSyncValidatorRegistrations {
 			// Verify the signature
-			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
+			ok, err := types.VerifySignature(registrations[index].Message, api.opts.EthNetDetails.DomainBuilder, registrations[index].Message.Pubkey[:], registrations[index].Signature[:])
 			if err != nil {
 				regLog.WithError(err).Error("error verifying registerValidator signature")
 				continue
 			} else if !ok {
-				api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
+				api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registrations[index].Message.Pubkey.String()))
 				return
 			} else {
 				// Save and increment counter
 				go func() {
-					err := api.datastore.SetValidatorRegistration(registration)
+					err := api.datastore.SetValidatorRegistration(registrations[index])
 					if err != nil {
 						regLog.WithError(err).Error("Failed to set validator registration")
 					}
@@ -516,12 +516,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			}
 		} else {
 			// Send to channel for async processing
-			api.regValEntriesC <- registration
+			api.regValEntriesC <- registrations[index]
 		}
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"numRegistrations":    len(payload),
+		"numRegistrations":    len(registrations),
 		"numRegistrationsNew": numRegNew,
 		"timeNeededSec":       time.Since(start).Seconds(),
 	})
