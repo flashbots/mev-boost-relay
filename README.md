@@ -113,7 +113,7 @@ If you find a security vulnerability on this project or any other initiative rel
 
 # License
 
-The code in this project is free software under the [MIT License](LICENSE).
+The code in this project is free software under the [AGPL License version 3 or later](LICENSE).
 
 ---
 
