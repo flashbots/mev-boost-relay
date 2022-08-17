@@ -1,20 +1,12 @@
-# Boost Relay
+# mev-boost Relay
 
-[![Goreport status](https://goreportcard.com/badge/github.com/flashbots/boost-relay)](https://goreportcard.com/report/github.com/flashbots/boost-relay)
-[![Test status](https://github.com/flashbots/boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/boost-relay/actions?query=workflow%3A%22Checks%22)
+[![Goreport status](https://goreportcard.com/badge/github.com/flashbots/mev-boost-relay)](https://goreportcard.com/report/github.com/flashbots/mev-boost-relay)
+[![Test status](https://github.com/flashbots/mev-boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/mev-boost-relay/actions?query=workflow%3A%22Checks%22)
+[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=round-square)](https://github.com/RichardLitt/standard-readme)
 
-Flashbots [mev-boost](https://github.com/flashbots/mev-boost/) relay, as running for [Goerli](https://builder-relay-goerli.flashbots.net/) and the other test networks.
+Flashbots mev-boost relay for proposer/builder separation in Ethereum.
 
-Provides the builder-specs API for Eth2 validators, an API for block builders to submit blocks, as well as a data API.
-
-The relay software is currently in **alpha state**, and there'll be significant changes in the following weeks. In particular major database schema changes, decoupling of block submissions from the proposer API and proper expiy of Redis entries.
-
-See also:
-
-* [Relay API Spec](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-* [builder-relay-goerli.flashbots.net](https://builder-relay-goerli.flashbots.net/)
-
----
+Provides the builder-specs API for Ethereum proof-of-stake validators, an API for block builders to submit blocks, as well as a data API, as running for [Goerli](https://builder-relay-goerli.flashbots.net/) and the other test networks.
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
@@ -22,7 +14,38 @@ The relay consists of several components that are designed to run and scale inde
 2. API: for proposer, block builder, data
 3. Website: handles the root website requests (information is pulled from Redis and database)
 
-## Getting started
+This software is currently in **alpha state**, and there'll be significant changes in the following weeks. In particular major database schema changes, decoupling of block submissions from the proposer API and proper expiy of Redis entries.
+
+See also:
+
+* [mev-boost](https://github.com/flashbots/mev-boost/)
+* [Relay API Spec](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+* [builder-relay-goerli.flashbots.net](https://builder-relay-goerli.flashbots.net/)
+
+---
+
+# Table of contents
+
+- [Background](#background)
+- [Usage](#usage)
+- [Maintainers](#maintainers)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
+
+# Background
+
+MEV is a centralizing force on Ethereum. Unattended, the competition for MEV opportunities leads to consensus security instability and permissioned communication infrastructure between traders and block producers. This erodes neutrality, transparency, decentralization, and permissionlessness.
+
+Flashbots is a research and development organization working on mitigating the negative externalities of MEV. Flashbots started as a builder specializing in MEV extraction in proof-of-work Ethereum to democratize access to MEV and make the most profitable blocks available to all miners. >90% of miners are outsourcing some of their block construction to Flashbots today.
+
+The mev-boost relay is a trusted mediator between block producers and block builders. It enables all Ethereum proof-of-stake validators to offer their blockspace to not just Flashbots but other builders as well. This opens up the market to more builders and creates competition between them, leading to more revenue and choice for validators, and better censorship-resistance for Ethereum.
+
+In the future, [proposer/builder separation](https://ethresear.ch/t/two-slot-proposer-builder-separation/10980) will be enshrined in the Ethereum protocol itself to further harden its trust model.
+
+Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-run-mevboost/) and in the [Frequently Asked Questions](https://github.com/flashbots/mev-boost/wiki/Frequently-Asked-Questions).
+
+# Usage
 
 Redis (v6+) and PostgreSQL is used.
 
@@ -61,18 +84,6 @@ curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validators-registration-timestamp
 ```
 
----
-
-Run tests and linter:
-
-```bash
-make test
-make test-race
-make lint
-```
-
----
-
 Env vars:
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
@@ -81,3 +92,29 @@ Env vars:
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
 * `ALLOW_BLOCK_VERIFICATION_FAIL` - accept block even if block simulation & verification fails
 * `DISABLE_BID_MEMORY_CACHE` - force bids to go through redis/db
+
+# Maintainers
+
+- [@metachris](https://github.com/metachris)
+
+# Contributing
+
+[Flashbots](https://flashbots.net) is a research and development collective working on mitigating the negative externalities of decentralized economies. We contribute with the larger free software community to illuminate the dark forest.
+
+You are welcome here <3.
+
+- If you have a question, feedback or a bug report for this project, please [open a new Issue](https://github.com/flashbots/mev-boost/issues).
+- If you would like to contribute with code, check the [CONTRIBUTING file](CONTRIBUTING.md) for further info about the development environment.
+- We just ask you to be nice. Read our [code of conduct](CODE_OF_CONDUCT.md).
+
+# Security
+
+If you find a security vulnerability on this project or any other initiative related to Flashbots, please let us know sending an email to security@flashbots.net.
+
+# License
+
+The code in this project is free software under the [AGPL License version 3 or later](LICENSE).
+
+---
+
+Made with ☀️ by the ⚡🤖 collective.
