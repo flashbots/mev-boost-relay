@@ -56,7 +56,7 @@ docker-compose up
 
 (you can now visit adminer on http://localhost:8093/?username=postgres)
 
-The services need access to a beacon node for event subscriptions and the beacon API (by default using `localhost:3500` which is the Prysm default beacon-API port). You can proxy the port from a server like this:
+The services need access to a beacon node for event subscriptions. You can also specify multiple beacon nodes by providing a comma separated list of beacon node URIs. The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port). You can proxy the port from a server like this:
 
 ```bash
 ssh -L 3500:localhost:3500 your_server

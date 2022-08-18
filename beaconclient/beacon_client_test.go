@@ -16,7 +16,7 @@ func TestBeaconValidators(t *testing.T) {
 	srv := httptest.NewServer(r)
 	bc := NewProdBeaconClient(common.TestLog, srv.URL)
 
-	r.HandleFunc("/eth/v1/beacon/states/head/validators", func(w http.ResponseWriter, _ *http.Request) {
+	r.HandleFunc("/eth/v1/beacon/states/1/validators", func(w http.ResponseWriter, _ *http.Request) {
 		resp := []byte(`{
   "execution_optimistic": false,
   "data": [
@@ -41,7 +41,7 @@ func TestBeaconValidators(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	vals, err := bc.FetchValidators()
+	vals, err := bc.FetchValidators(1)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(vals))
 	require.Contains(t, vals, types.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))

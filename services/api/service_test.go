@@ -24,15 +24,20 @@ var (
 )
 
 type testBackend struct {
-	t            require.TestingT
-	relay        *RelayAPI
-	beaconClient *beaconclient.MockBeaconClient
-	datastore    *datastore.Datastore
-	redis        *datastore.RedisCache
+	t             require.TestingT
+	relay         *RelayAPI
+	beaconClients []*beaconclient.MockBeaconClient
+	datastore     *datastore.Datastore
+	redis         *datastore.RedisCache
 }
 
-func newTestBackend(t require.TestingT) *testBackend {
-	bc := beaconclient.NewMockBeaconClient()
+func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
+	mockBeaconClients := make([]*beaconclient.MockBeaconClient, numBeaconNodes)
+	mockBeaconClientsInterface := make([]beaconclient.BeaconNodeClient, numBeaconNodes)
+	for i := 0; i < numBeaconNodes; i++ {
+		mockBeaconClients[i] = beaconclient.NewMockBeaconClient()
+		mockBeaconClientsInterface[i] = mockBeaconClients[i]
+	}
 
 	redisClient, err := miniredis.Run()
 	require.NoError(t, err)
@@ -49,12 +54,12 @@ func newTestBackend(t require.TestingT) *testBackend {
 	require.NoError(t, err)
 
 	opts := RelayAPIOpts{
-		Log:          common.TestLog,
-		ListenAddr:   "localhost:12345",
-		BeaconClient: bc,
-		Datastore:    ds,
-		Redis:        redisCache,
-		DB:           db,
+		Log:           common.TestLog,
+		ListenAddr:    "localhost:12345",
+		BeaconClients: mockBeaconClientsInterface,
+		Datastore:     ds,
+		Redis:         redisCache,
+		DB:            db,
 		EthNetDetails: common.EthNetworkDetails{
 			Name:                     "test",
 			GenesisForkVersionHex:    genesisForkVersionHex,
@@ -70,11 +75,11 @@ func newTestBackend(t require.TestingT) *testBackend {
 	require.NoError(t, err)
 
 	backend := testBackend{
-		t:            t,
-		relay:        relay,
-		beaconClient: bc,
-		datastore:    ds,
-		redis:        redisCache,
+		t:             t,
+		relay:         relay,
+		beaconClients: mockBeaconClients,
+		datastore:     ds,
+		redis:         redisCache,
 	}
 	return &backend
 }
@@ -133,7 +138,7 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.A
 
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 		backend.relay.srvStarted.Store(true)
 		err := backend.relay.StartServer()
 		require.Error(t, err)
@@ -141,13 +146,13 @@ func TestWebserver(t *testing.T) {
 }
 
 func TestWebserverRootHandler(t *testing.T) {
-	backend := newTestBackend(t)
+	backend := newTestBackend(t, 1)
 	rr := backend.request(http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestStatus(t *testing.T) {
-	backend := newTestBackend(t)
+	backend := newTestBackend(t, 1)
 	path := "/eth/v1/builder/status"
 	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -159,7 +164,7 @@ func TestRegisterValidator(t *testing.T) {
 	t.Run("Normal function", func(t *testing.T) {
 		t.Skip() // has an error at verifying the sig
 
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 		err := backend.relay.startValidatorRegistrationWorkers()
 		require.NoError(t, err)
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
@@ -186,14 +191,14 @@ func TestRegisterValidator(t *testing.T) {
 	})
 
 	t.Run("not a known validator", func(t *testing.T) {
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("Reject registration for >10sec into the future", func(t *testing.T) {
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 
 		// Allow +10 sec
 		td := uint64(time.Now().Unix())
@@ -225,7 +230,7 @@ func TestRegisterValidator(t *testing.T) {
 func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"
 
-	backend := newTestBackend(t)
+	backend := newTestBackend(t, 1)
 	backend.relay.proposerDutiesResponse = []types.BuilderGetValidatorsResponseEntry{
 		{
 			Slot:  1,
@@ -248,7 +253,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 	path := "/relay/v1/data/bidtraces/proposer_payload_delivered"
 
 	t.Run("Accept valid block_hash", func(t *testing.T) {
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 
 		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
@@ -256,7 +261,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 	})
 
 	t.Run("Reject invalid block_hash", func(t *testing.T) {
-		backend := newTestBackend(t)
+		backend := newTestBackend(t, 1)
 
 		invalidBlockHashes := []string{
 			// One character too long.

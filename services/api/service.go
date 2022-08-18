@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -60,10 +61,10 @@ type RelayAPIOpts struct {
 	BlockSimURL   string
 	RegValWorkers int // number of workers for validator registration processing
 
-	BeaconClient beaconclient.BeaconNodeClient
-	Datastore    *datastore.Datastore
-	Redis        *datastore.RedisCache
-	DB           database.IDatabaseService
+	BeaconClients []beaconclient.BeaconNodeClient
+	Datastore     *datastore.Datastore
+	Redis         *datastore.RedisCache
+	DB            database.IDatabaseService
 
 	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
 
@@ -88,10 +89,10 @@ type RelayAPI struct {
 	regValEntriesC       chan types.SignedValidatorRegistration
 	regValWorkersStarted uberatomic.Bool
 
-	beaconClient beaconclient.BeaconNodeClient
-	datastore    *datastore.Datastore
-	redis        *datastore.RedisCache
-	db           database.IDatabaseService
+	beaconClients []beaconclient.BeaconNodeClient
+	datastore     *datastore.Datastore
+	redis         *datastore.RedisCache
+	db            database.IDatabaseService
 
 	headSlot     uint64
 	currentEpoch uint64
@@ -116,7 +117,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, ErrMissingLogOpt
 	}
 
-	if opts.BeaconClient == nil {
+	if len(opts.BeaconClients) == 0 {
 		return nil, ErrMissingBeaconClientOpt
 	}
 
@@ -132,7 +133,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		blsSk:                  opts.SecretKey,
 		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
-		beaconClient:           opts.BeaconClient,
+		beaconClients:          opts.BeaconClients,
 		redis:                  opts.Redis,
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
@@ -252,13 +253,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		return ErrServerAlreadyStarted
 	}
 
-	// Check beacon-node sync status, process current slot and start slot updates
-	syncStatus, err := api.beaconClient.SyncStatus()
+	// Get best beacon-node status by head slot, process current slot and start slot updates
+	bestSyncStatus, err := api.getBestSyncStatus()
 	if err != nil {
 		return err
-	}
-	if syncStatus.IsSyncing && !api.ffAllowSyncingBeaconNode {
-		return ErrBeaconNodeSyncing
 	}
 
 	// Start worker pool for validator registration processing
@@ -268,18 +266,20 @@ func (api *RelayAPI) StartServer() (err error) {
 	}
 
 	// Get current proposer duties
-	api.updateProposerDuties(syncStatus.HeadSlot)
+	api.updateProposerDuties(bestSyncStatus.HeadSlot)
 
 	// Update list of known validators, and start refresh loop
 	go api.startKnownValidatorUpdates()
 
 	// Process current slot
-	api.processNewSlot(syncStatus.HeadSlot)
+	api.processNewSlot(bestSyncStatus.HeadSlot)
 
 	// Start regular slot updates
 	go func() {
 		c := make(chan beaconclient.HeadEventData)
-		go api.beaconClient.SubscribeToHeadEvents(c)
+		for _, client := range api.beaconClients {
+			go client.SubscribeToHeadEvents(c)
+		}
 		for {
 			headEvent := <-c
 			api.processNewSlot(headEvent.Slot)
@@ -310,6 +310,48 @@ func (api *RelayAPI) StartServer() (err error) {
 		return nil
 	}
 	return err
+}
+
+func (api *RelayAPI) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, error) {
+	var bestSyncStatus *beaconclient.SyncStatusPayloadData
+	var mu sync.Mutex
+	var numSyncedNodes uint32
+
+	// Check each beacon-node sync status
+	var wg sync.WaitGroup
+	for _, client := range api.beaconClients {
+		wg.Add(1)
+		go func(client beaconclient.BeaconNodeClient) {
+			defer wg.Done()
+			log := api.log.WithField("uri", client.GetURI())
+			log.Debug("getting sync status")
+
+			syncStatus, err := client.SyncStatus()
+			if err != nil {
+				log.WithError(err).Error("failed to get sync status")
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if bestSyncStatus == nil || syncStatus.HeadSlot > bestSyncStatus.HeadSlot {
+				bestSyncStatus = syncStatus
+			}
+
+			if !syncStatus.IsSyncing {
+				atomic.AddUint32(&numSyncedNodes, 1)
+			}
+		}(client)
+	}
+
+	// Wait for all requests to complete...
+	wg.Wait()
+
+	if numSyncedNodes == 0 && !api.ffAllowSyncingBeaconNode {
+		return nil, ErrBeaconNodeSyncing
+	}
+	return bestSyncStatus, nil
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {

@@ -75,6 +75,13 @@ func GetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+func GetSliceEnv(key string, defaultValue []string) []string {
+	if value, ok := os.LookupEnv(key); ok {
+		return strings.Split(value, ",")
+	}
+	return defaultValue
+}
+
 func GetIPXForwardedFor(r *http.Request) string {
 	forwarded := r.Header.Get("X-Forwarded-For")
 	if forwarded != "" {

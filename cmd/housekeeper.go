@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -17,7 +18,7 @@ func init() {
 	housekeeperCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	housekeeperCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	housekeeperCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
+	housekeeperCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	housekeeperCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
 	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", os.Getenv("POSTGRES_DSN"), "PostgreSQL DSN")
 
@@ -41,9 +42,15 @@ var housekeeperCmd = &cobra.Command{
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
-		// Connect to beacon client and ensure it's synced
-		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
-		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
+		// Connect to beacon clients and ensure it's synced
+		if len(beaconNodeURIs) == 0 {
+			log.Fatalf("no beacon endpoints specified")
+		}
+		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
+		var beaconClients []*beaconclient.ProdBeaconClient
+		for _, uri := range beaconNodeURIs {
+			beaconClients = append(beaconClients, beaconclient.NewProdBeaconClient(log, uri))
+		}
 
 		// Connect to Redis and setup the datastore
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
@@ -63,10 +70,10 @@ var housekeeperCmd = &cobra.Command{
 		}
 
 		opts := &housekeeper.HousekeeperOpts{
-			Log:          log,
-			Redis:        redis,
-			Datastore:    ds,
-			BeaconClient: beaconClient,
+			Log:           log,
+			Redis:         redis,
+			Datastore:     ds,
+			BeaconClients: beaconClients,
 		}
 		service := housekeeper.NewHousekeeper(opts)
 		log.Info("Starting service...")

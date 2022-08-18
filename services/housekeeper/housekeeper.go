@@ -8,11 +8,14 @@
 package housekeeper
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -24,19 +27,19 @@ import (
 )
 
 type HousekeeperOpts struct {
-	Log          *logrus.Entry
-	Redis        *datastore.RedisCache
-	Datastore    *datastore.Datastore
-	BeaconClient *beaconclient.ProdBeaconClient
+	Log           *logrus.Entry
+	Redis         *datastore.RedisCache
+	Datastore     *datastore.Datastore
+	BeaconClients []*beaconclient.ProdBeaconClient
 }
 
 type Housekeeper struct {
 	opts *HousekeeperOpts
 	log  *logrus.Entry
 
-	datastore    *datastore.Datastore
-	redis        *datastore.RedisCache
-	beaconClient *beaconclient.ProdBeaconClient
+	datastore     *datastore.Datastore
+	redis         *datastore.RedisCache
+	beaconClients []*beaconclient.ProdBeaconClient
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
@@ -55,11 +58,11 @@ var (
 
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 	server := &Housekeeper{
-		opts:         opts,
-		log:          opts.Log.WithField("module", "housekeeper"),
-		redis:        opts.Redis,
-		datastore:    opts.Datastore,
-		beaconClient: opts.BeaconClient,
+		opts:          opts,
+		log:           opts.Log.WithField("module", "housekeeper"),
+		redis:         opts.Redis,
+		datastore:     opts.Datastore,
+		beaconClients: opts.BeaconClients,
 	}
 
 	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
@@ -77,13 +80,10 @@ func (hk *Housekeeper) Start() (err error) {
 		return ErrServerAlreadyStarted
 	}
 
-	// Check beacon-node sync status, process current slot and start slot updates
-	syncStatus, err := hk.beaconClient.SyncStatus()
+	// Get best beacon-node status by head slot, process current slot and start slot updates
+	bestSyncStatus, err := hk.getBestSyncStatus()
 	if err != nil {
 		return err
-	}
-	if syncStatus.IsSyncing && !hk.ffAllowSyncingBeaconNode {
-		return ErrBeaconNodeSyncing
 	}
 
 	// Start regular known validator updates
@@ -95,16 +95,60 @@ func (hk *Housekeeper) Start() (err error) {
 	}()
 
 	// Process the current slot
-	headSlot := syncStatus.HeadSlot
+	headSlot := bestSyncStatus.HeadSlot
 	hk.processNewSlot(headSlot)
 
 	// Start regular slot updates
 	c := make(chan beaconclient.HeadEventData)
-	go hk.beaconClient.SubscribeToHeadEvents(c)
+	for _, client := range hk.beaconClients {
+		go client.SubscribeToHeadEvents(c)
+	}
 	for {
 		headEvent := <-c
 		hk.processNewSlot(headEvent.Slot)
 	}
+}
+
+func (hk *Housekeeper) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, error) {
+	var bestSyncStatus *beaconclient.SyncStatusPayloadData
+	var mu sync.Mutex
+	var numSyncedNodes uint32
+
+	// Check each beacon-node sync status
+	var wg sync.WaitGroup
+	for _, client := range hk.beaconClients {
+		wg.Add(1)
+		go func(client *beaconclient.ProdBeaconClient) {
+			defer wg.Done()
+			log := hk.log.WithField("uri", client.GetURI())
+			log.Debug("getting sync status")
+
+			syncStatus, err := client.SyncStatus()
+			if err != nil {
+				log.WithError(err).Error("failed to get sync status")
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if bestSyncStatus == nil || syncStatus.HeadSlot > bestSyncStatus.HeadSlot {
+				bestSyncStatus = syncStatus
+			}
+
+			if !syncStatus.IsSyncing {
+				atomic.AddUint32(&numSyncedNodes, 1)
+			}
+		}(client)
+	}
+
+	// Wait for all requests to complete...
+	wg.Wait()
+
+	if numSyncedNodes == 0 && !hk.ffAllowSyncingBeaconNode {
+		return nil, ErrBeaconNodeSyncing
+	}
+	return bestSyncStatus, nil
 }
 
 func (hk *Housekeeper) processNewSlot(headSlot uint64) {
@@ -142,9 +186,10 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 func (hk *Housekeeper) updateKnownValidators() {
 	// Query beacon node for known validators
 	hk.log.Debug("Querying validators from beacon node... (this may take a while)")
-	validators, err := hk.beaconClient.FetchValidators()
-	if err != nil {
-		hk.log.WithError(err).Fatal("failed to fetch validators from beacon node")
+
+	validators := hk.fetchValidators()
+	if validators == nil {
+		hk.log.Fatal("failed to fetch validators from all beacon nodes")
 		return
 	}
 
@@ -164,11 +209,52 @@ func (hk *Housekeeper) updateKnownValidators() {
 
 	for _, v := range validators {
 		pubkey := types.PubkeyHex(v.Validator.Pubkey)
-		err = hk.redis.SetKnownValidator(pubkey, v.Index)
+		err := hk.redis.SetKnownValidator(pubkey, v.Index)
 		if err != nil {
 			log.WithError(err).WithField("pubkey", pubkey).Fatal("failed to set known validator in Redis")
 		}
 	}
+}
+
+func (hk *Housekeeper) fetchValidators() map[types.PubkeyHex]beaconclient.ValidatorResponseEntry {
+	// return the first successful beacon node response
+	var result map[types.PubkeyHex]beaconclient.ValidatorResponseEntry
+	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
+	defer requestCtxCancel()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, client := range hk.beaconClients {
+		wg.Add(1)
+		go func(client *beaconclient.ProdBeaconClient) {
+			defer wg.Done()
+			log := hk.log.WithField("uri", client.GetURI())
+			log.Debug("fetching validators")
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			headSlot := hk.headSlot
+			validators, err := client.FetchValidators(headSlot)
+			if err != nil {
+				hk.log.WithError(err).Error("failed to fetch validators")
+				return
+			}
+
+			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
+				return
+			}
+
+			// Received successful response. Cancel other requests and return immediately
+			result = validators
+			requestCtxCancel()
+		}(client)
+	}
+
+	// Wait for all requests to complete...
+	wg.Wait()
+
+	return result
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
@@ -191,20 +277,20 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	log.Debug("updating proposer duties...")
 
 	// Query current epoch
-	r, err := hk.beaconClient.GetProposerDuties(epoch)
-	if err != nil {
-		log.WithError(err).Fatal("failed to get proposer duties")
+	r := hk.getProposerDuties(epoch)
+	if r == nil {
+		log.Fatal("failed to get proposer duties for all beacon nodes")
 		return
 	}
 
 	entries := r.Data
 
 	// Query next epoch
-	r2, err := hk.beaconClient.GetProposerDuties(epoch + 1)
-	if err == nil {
+	r2 := hk.getProposerDuties(epoch + 1)
+	if r2 != nil {
 		entries = append(entries, r2.Data...)
 	} else {
-		log.WithError(err).Error("failed to get proposer duties for next epoch")
+		log.Error("failed to get proposer duties for next epoch for all beacon nodes")
 	}
 
 	// Validator registrations are queried in parallel, and this is the result struct
@@ -230,14 +316,14 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	for i := 0; i < cap(c); i++ {
 		res := <-c
 		if res.err != nil {
-			log.WithError(err).Fatal("error in loading validator registration from redis")
+			log.WithError(res.err).Fatal("error in loading validator registration from redis")
 		} else if res.val.Entry != nil { // only if a known registration
 			proposerDuties = append(proposerDuties, res.val)
 		}
 	}
 
 	// Save duties to Redis
-	err = hk.redis.SetProposerDuties(proposerDuties)
+	err := hk.redis.SetProposerDuties(proposerDuties)
 	if err != nil {
 		log.WithError(err).Fatal("failed to set proposer duties")
 		return
@@ -251,4 +337,44 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDutiesResponse {
+	// return the first successful beacon node response
+	var result *beaconclient.ProposerDutiesResponse
+	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
+	defer requestCtxCancel()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, client := range hk.beaconClients {
+		wg.Add(1)
+		go func(client *beaconclient.ProdBeaconClient) {
+			defer wg.Done()
+			log := hk.log.WithField("uri", client.GetURI())
+			log.Debug("fetching proposer duties")
+
+			duties, err := client.GetProposerDuties(epoch)
+			if err != nil {
+				hk.log.WithError(err).Error("failed to get proposer duties")
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
+				return
+			}
+
+			// Received successful response. Cancel other requests and return immediately
+			result = duties
+			requestCtxCancel()
+		}(client)
+	}
+
+	// Wait for all requests to complete...
+	wg.Wait()
+
+	return result
 }

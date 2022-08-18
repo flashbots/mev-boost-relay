@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -30,13 +32,12 @@ func init() {
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
-	apiCmd.Flags().StringVar(&beaconNodeURI, "beacon-uri", defaultBeaconURI, "beacon endpoint")
+	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
-
 	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
 	_ = apiCmd.MarkFlagRequired("network")
 }
@@ -57,9 +58,15 @@ var apiCmd = &cobra.Command{
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
-		// Connect to beacon client and ensure it's synced
-		log.Infof("Using beacon endpoint: %s", beaconNodeURI)
-		beaconClient := beaconclient.NewProdBeaconClient(log, beaconNodeURI)
+		// Connect to beacon clients and ensure it's synced
+		if len(beaconNodeURIs) == 0 {
+			log.Fatalf("no beacon endpoints specified")
+		}
+		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
+		var beaconClients []beaconclient.BeaconNodeClient
+		for _, uri := range beaconNodeURIs {
+			beaconClients = append(beaconClients, beaconclient.NewProdBeaconClient(log, uri))
+		}
 
 		// Connect to Redis
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
@@ -93,7 +100,7 @@ var apiCmd = &cobra.Command{
 		opts := api.RelayAPIOpts{
 			Log:           log,
 			ListenAddr:    apiListenAddr,
-			BeaconClient:  beaconClient,
+			BeaconClients: beaconClients,
 			Datastore:     ds,
 			Redis:         redis,
 			DB:            db,
