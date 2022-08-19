@@ -30,7 +30,7 @@ type HousekeeperOpts struct {
 	Log           *logrus.Entry
 	Redis         *datastore.RedisCache
 	Datastore     *datastore.Datastore
-	BeaconClients []*beaconclient.ProdBeaconClient
+	BeaconClients []beaconclient.BeaconNodeClient
 }
 
 type Housekeeper struct {
@@ -39,7 +39,7 @@ type Housekeeper struct {
 
 	datastore     *datastore.Datastore
 	redis         *datastore.RedisCache
-	beaconClients []*beaconclient.ProdBeaconClient
+	beaconClients []beaconclient.BeaconNodeClient
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
@@ -52,8 +52,9 @@ type Housekeeper struct {
 }
 
 var (
-	ErrServerAlreadyStarted = errors.New("server was already started")
-	ErrBeaconNodeSyncing    = errors.New("beacon node is syncing")
+	ErrServerAlreadyStarted   = errors.New("server was already started")
+	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing")
+	ErrBeaconNodesUnavailable = errors.New("all beacon nodes responded with error")
 )
 
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
@@ -111,14 +112,16 @@ func (hk *Housekeeper) Start() (err error) {
 
 func (hk *Housekeeper) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, error) {
 	var bestSyncStatus *beaconclient.SyncStatusPayloadData
-	var mu sync.Mutex
 	var numSyncedNodes uint32
+	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
+	defer requestCtxCancel()
 
 	// Check each beacon-node sync status
+	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, client := range hk.beaconClients {
 		wg.Add(1)
-		go func(client *beaconclient.ProdBeaconClient) {
+		go func(client beaconclient.BeaconNodeClient) {
 			defer wg.Done()
 			log := hk.log.WithField("uri", client.GetURI())
 			log.Debug("getting sync status")
@@ -132,12 +135,18 @@ func (hk *Housekeeper) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData,
 			mu.Lock()
 			defer mu.Unlock()
 
-			if bestSyncStatus == nil || syncStatus.HeadSlot > bestSyncStatus.HeadSlot {
+			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
+				return
+			}
+
+			if bestSyncStatus == nil {
 				bestSyncStatus = syncStatus
 			}
 
 			if !syncStatus.IsSyncing {
+				bestSyncStatus = syncStatus
 				atomic.AddUint32(&numSyncedNodes, 1)
+				requestCtxCancel()
 			}
 		}(client)
 	}
@@ -148,6 +157,11 @@ func (hk *Housekeeper) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData,
 	if numSyncedNodes == 0 && !hk.ffAllowSyncingBeaconNode {
 		return nil, ErrBeaconNodeSyncing
 	}
+
+	if bestSyncStatus == nil {
+		return nil, ErrBeaconNodesUnavailable
+	}
+
 	return bestSyncStatus, nil
 }
 
@@ -219,40 +233,29 @@ func (hk *Housekeeper) updateKnownValidators() {
 func (hk *Housekeeper) fetchValidators() map[types.PubkeyHex]beaconclient.ValidatorResponseEntry {
 	// return the first successful beacon node response
 	var result map[types.PubkeyHex]beaconclient.ValidatorResponseEntry
-	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
-	defer requestCtxCancel()
+	clients := hk.getBeaconClientsByLastResponse()
+
 	var mu sync.Mutex
-	var wg sync.WaitGroup
+	for i, client := range clients {
+		log := hk.log.WithField("uri", client.GetURI())
+		log.Debug("fetching validators")
 
-	for _, client := range hk.beaconClients {
-		wg.Add(1)
-		go func(client *beaconclient.ProdBeaconClient) {
-			defer wg.Done()
-			log := hk.log.WithField("uri", client.GetURI())
-			log.Debug("fetching validators")
+		mu.Lock()
+		headSlot := hk.headSlot
+		mu.Unlock()
 
-			mu.Lock()
-			defer mu.Unlock()
+		validators, err := client.FetchValidators(headSlot)
+		if err != nil {
+			hk.log.WithError(err).Error("failed to fetch validators")
+			continue
+		}
 
-			headSlot := hk.headSlot
-			validators, err := client.FetchValidators(headSlot)
-			if err != nil {
-				hk.log.WithError(err).Error("failed to fetch validators")
-				return
-			}
-
-			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
-				return
-			}
-
-			// Received successful response. Cancel other requests and return immediately
-			result = validators
-			requestCtxCancel()
-		}(client)
+		// Received successful response. Set this index as last successful beacon node
+		result = validators
+		if err := hk.redis.SetBeaconNodeIndex(i); err != nil {
+			hk.log.WithError(err).Warn("failed to set healthy beacon node index to cache")
+		}
 	}
-
-	// Wait for all requests to complete...
-	wg.Wait()
 
 	return result
 }
@@ -342,39 +345,41 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDutiesResponse {
 	// return the first successful beacon node response
 	var result *beaconclient.ProposerDutiesResponse
-	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
-	defer requestCtxCancel()
-	var mu sync.Mutex
-	var wg sync.WaitGroup
+	clients := hk.getBeaconClientsByLastResponse()
 
-	for _, client := range hk.beaconClients {
-		wg.Add(1)
-		go func(client *beaconclient.ProdBeaconClient) {
-			defer wg.Done()
-			log := hk.log.WithField("uri", client.GetURI())
-			log.Debug("fetching proposer duties")
+	for i, client := range clients {
+		log := hk.log.WithField("uri", client.GetURI())
+		log.Debug("fetching proposer duties")
 
-			duties, err := client.GetProposerDuties(epoch)
-			if err != nil {
-				hk.log.WithError(err).Error("failed to get proposer duties")
-				return
-			}
+		duties, err := client.GetProposerDuties(epoch)
+		if err != nil {
+			hk.log.WithError(err).Error("failed to get proposer duties")
+			continue
+		}
 
-			mu.Lock()
-			defer mu.Unlock()
-
-			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
-				return
-			}
-
-			// Received successful response. Cancel other requests and return immediately
-			result = duties
-			requestCtxCancel()
-		}(client)
+		// Received successful response. Set this index as last successful beacon node
+		result = duties
+		if err := hk.redis.SetBeaconNodeIndex(i); err != nil {
+			hk.log.WithError(err).Warn("failed to set healthy beacon node index to cache")
+		}
 	}
 
-	// Wait for all requests to complete...
-	wg.Wait()
-
 	return result
+}
+
+func (hk *Housekeeper) getBeaconClientsByLastResponse() []beaconclient.BeaconNodeClient {
+	// get beacon node with last successful response
+	beaconNodeIndex, err := hk.redis.GetBeaconNodeIndex()
+	if err != nil {
+		hk.log.WithError(err).Warn("failed to get last healthy beacon node index from cache")
+		beaconNodeIndex = 0
+	}
+
+	if beaconNodeIndex == 0 {
+		return hk.beaconClients
+	}
+
+	clients := append(hk.beaconClients[:beaconNodeIndex], hk.beaconClients[beaconNodeIndex+1:]...)
+	clients = append([]beaconclient.BeaconNodeClient{hk.beaconClients[beaconNodeIndex]}, clients...)
+	return clients
 }

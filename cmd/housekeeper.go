@@ -47,7 +47,7 @@ var housekeeperCmd = &cobra.Command{
 			log.Fatalf("no beacon endpoints specified")
 		}
 		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
-		var beaconClients []*beaconclient.ProdBeaconClient
+		var beaconClients []beaconclient.BeaconNodeClient
 		for _, uri := range beaconNodeURIs {
 			beaconClients = append(beaconClients, beaconclient.NewProdBeaconClient(log, uri))
 		}

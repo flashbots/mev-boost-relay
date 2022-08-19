@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ var (
 	ErrRegistrationWorkersAlreadyStarted = errors.New("validator registration workers already started")
 	ErrServerAlreadyStarted              = errors.New("server was already started")
 	ErrBeaconNodeSyncing                 = errors.New("beacon node is syncing")
+	ErrBeaconNodesUnavailable            = errors.New("all beacon nodes responded with error")
 )
 
 var (
@@ -314,10 +316,12 @@ func (api *RelayAPI) StartServer() (err error) {
 
 func (api *RelayAPI) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, error) {
 	var bestSyncStatus *beaconclient.SyncStatusPayloadData
-	var mu sync.Mutex
 	var numSyncedNodes uint32
+	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
+	defer requestCtxCancel()
 
 	// Check each beacon-node sync status
+	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, client := range api.beaconClients {
 		wg.Add(1)
@@ -335,12 +339,18 @@ func (api *RelayAPI) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, e
 			mu.Lock()
 			defer mu.Unlock()
 
-			if bestSyncStatus == nil || syncStatus.HeadSlot > bestSyncStatus.HeadSlot {
+			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
+				return
+			}
+
+			if bestSyncStatus == nil {
 				bestSyncStatus = syncStatus
 			}
 
 			if !syncStatus.IsSyncing {
+				bestSyncStatus = syncStatus
 				atomic.AddUint32(&numSyncedNodes, 1)
+				requestCtxCancel()
 			}
 		}(client)
 	}
@@ -351,6 +361,11 @@ func (api *RelayAPI) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, e
 	if numSyncedNodes == 0 && !api.ffAllowSyncingBeaconNode {
 		return nil, ErrBeaconNodeSyncing
 	}
+
+	if bestSyncStatus == nil {
+		return nil, ErrBeaconNodesUnavailable
+	}
+
 	return bestSyncStatus, nil
 }
 
