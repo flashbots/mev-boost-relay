@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/flashbots/boost-relay/beaconclient"
-	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/boost-relay/database"
-	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/beaconclient"
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,20 +68,30 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 
 func TestGetSyncStatus(t *testing.T) {
 	t.Run("returns status of highest head slot", func(t *testing.T) {
-		lowerSyncStatus := &beaconclient.SyncStatusPayloadData{
-			HeadSlot:  1,
-			IsSyncing: false,
+		syncStatuses := []*beaconclient.SyncStatusPayloadData{
+			{
+				HeadSlot:  3,
+				IsSyncing: true,
+			},
+			{
+				HeadSlot:  1,
+				IsSyncing: false,
+			},
+			{
+				HeadSlot:  2,
+				IsSyncing: false,
+			},
 		}
-		higherSyncStatus := &beaconclient.SyncStatusPayloadData{
-			HeadSlot:  2,
-			IsSyncing: false,
+
+		backend := newTestBackend(t, 3)
+		for i := 0; i < len(backend.beaconClients); i++ {
+			backend.beaconClients[i].MockSyncStatus = syncStatuses[i]
+			backend.beaconClients[i].ResponseDelay = 10 * time.Millisecond * time.Duration(i)
 		}
-		backend := newTestBackend(t, 2)
-		backend.beaconClients[0].MockSyncStatus = lowerSyncStatus
-		backend.beaconClients[1].MockSyncStatus = higherSyncStatus
+
 		status, err := backend.housekeeper.getBestSyncStatus()
 		require.NoError(t, err)
-		require.Equal(t, uint64(2), status.HeadSlot)
+		require.Equal(t, syncStatuses[1], status)
 	})
 
 	t.Run("returns status if at least one beacon node does not return error and is synced", func(t *testing.T) {
@@ -106,15 +116,16 @@ func TestGetSyncStatus(t *testing.T) {
 }
 
 func TestUpdateProposerDuties(t *testing.T) {
-	t.Run("returns nil if all of the beacon nodes return error", func(t *testing.T) {
+	t.Run("returns err if all of the beacon nodes return error", func(t *testing.T) {
 		backend := newTestBackend(t, 2)
 		backend.beaconClients[0].MockProposerDutiesErr = errTest
 		backend.beaconClients[1].MockProposerDutiesErr = errTest
-		status := backend.housekeeper.getProposerDuties(1)
+		status, err := backend.housekeeper.getProposerDuties(1)
+		require.Error(t, err)
 		require.Nil(t, status)
 	})
 
-	t.Run("get propose duties from the response that returns first", func(t *testing.T) {
+	t.Run("get propose duties from the first beacon node that does not error", func(t *testing.T) {
 		mockResponse := &beaconclient.ProposerDutiesResponse{
 			Data: []beaconclient.ProposerDutiesResponseData{
 				{
@@ -125,41 +136,54 @@ func TestUpdateProposerDuties(t *testing.T) {
 		}
 
 		backend := newTestBackend(t, 3)
-		backend.beaconClients[0].ResponseDelay = 10 * time.Millisecond
+		backend.beaconClients[0].MockProposerDutiesErr = errTest
 		backend.beaconClients[1].ResponseDelay = 10 * time.Millisecond
-		backend.beaconClients[2].MockProposerDuties = mockResponse
+		backend.beaconClients[1].MockProposerDuties = mockResponse
 
-		duties := backend.housekeeper.getProposerDuties(2)
+		duties, err := backend.housekeeper.getProposerDuties(2)
+		require.NoError(t, err)
 		require.Equal(t, *mockResponse, *duties)
 	})
 }
 
 func TestFetchValidators(t *testing.T) {
-	t.Run("returns nil if all of the beacon nodes return error", func(t *testing.T) {
+	t.Run("returns err if all of the beacon nodes return error", func(t *testing.T) {
 		backend := newTestBackend(t, 2)
 		backend.beaconClients[0].MockFetchValidatorsErr = errTest
 		backend.beaconClients[1].MockFetchValidatorsErr = errTest
-		status := backend.housekeeper.fetchValidators()
+		status, err := backend.housekeeper.fetchValidators()
+		require.Error(t, err)
 		require.Nil(t, status)
 	})
 
-	t.Run("get validator set from the response that returns first", func(t *testing.T) {
+	t.Run("get validator set first from beacon node that did not err", func(t *testing.T) {
 		entry := beaconclient.ValidatorResponseEntry{
 			Validator: beaconclient.ValidatorResponseValidatorData{
 				Pubkey: testPubKey,
 			},
 			Index:   0,
 			Balance: "0",
-			Status:  "synced",
+			Status:  "",
 		}
 
 		backend := newTestBackend(t, 3)
-		backend.beaconClients[0].ResponseDelay = 10 * time.Millisecond
-		backend.beaconClients[1].ResponseDelay = 10 * time.Millisecond
-		backend.beaconClients[2].AddValidator(entry)
+		backend.beaconClients[0].MockFetchValidatorsErr = errTest
+		backend.beaconClients[1].AddValidator(entry)
+		backend.beaconClients[2].MockFetchValidatorsErr = errTest
 
-		validators := backend.housekeeper.fetchValidators()
+		validators, err := backend.housekeeper.fetchValidators()
+		require.NoError(t, err)
 		require.Equal(t, 1, len(validators))
 		require.Contains(t, validators, types.PubkeyHex(testPubKey))
+
+		backend.beaconClients[0].MockFetchValidatorsErr = nil
+		backend.beaconClients[1].SetValidators(make(map[types.PubkeyHex]beaconclient.ValidatorResponseEntry))
+		backend.beaconClients[2].MockFetchValidatorsErr = nil
+		backend.beaconClients[2].AddValidator(entry)
+
+		t.Log(backend.beaconClients[1].NumValidators())
+		validators, err = backend.housekeeper.fetchValidators()
+		require.NoError(t, err)
+		require.Equal(t, 0, len(validators))
 	})
 }

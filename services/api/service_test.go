@@ -148,21 +148,31 @@ func TestWebserver(t *testing.T) {
 }
 
 func TestGetSyncStatus(t *testing.T) {
-	t.Run("returns status of highest head slot", func(t *testing.T) {
-		lowerSyncStatus := &beaconclient.SyncStatusPayloadData{
-			HeadSlot:  1,
-			IsSyncing: false,
+	t.Run("returns status of the beacon node first to respond and is syncing", func(t *testing.T) {
+		syncStatuses := []*beaconclient.SyncStatusPayloadData{
+			{
+				HeadSlot:  3,
+				IsSyncing: true,
+			},
+			{
+				HeadSlot:  1,
+				IsSyncing: false,
+			},
+			{
+				HeadSlot:  2,
+				IsSyncing: false,
+			},
 		}
-		higherSyncStatus := &beaconclient.SyncStatusPayloadData{
-			HeadSlot:  2,
-			IsSyncing: false,
+
+		backend := newTestBackend(t, 3)
+		for i := 0; i < len(backend.beaconClients); i++ {
+			backend.beaconClients[i].MockSyncStatus = syncStatuses[i]
+			backend.beaconClients[i].ResponseDelay = 10 * time.Millisecond * time.Duration(i)
 		}
-		backend := newTestBackend(t, 2)
-		backend.beaconClients[0].MockSyncStatus = lowerSyncStatus
-		backend.beaconClients[1].MockSyncStatus = higherSyncStatus
+
 		status, err := backend.relay.getBestSyncStatus()
 		require.NoError(t, err)
-		require.Equal(t, uint64(2), status.HeadSlot)
+		require.Equal(t, syncStatuses[1], status)
 	})
 
 	t.Run("returns status if at least one beacon node does not return error and is synced", func(t *testing.T) {
