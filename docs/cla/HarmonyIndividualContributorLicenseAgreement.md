@@ -1,11 +1,7 @@
 ## Harmony Individual Contributor License Agreement
 
 Thank you for your interest in contributing to the Flashbots ("We" or "Us") mev-boost-relay repository.
-This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To
-make this document effective, please sign it and send it to Us by mail, email, fax, or electronic
-submission per the prompted instructions. This is a legally binding
-document, so please read it carefully before agreeing to it. The Agreement may cover more than one
-software project managed by Us.
+This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To make this document effective, please fill out the form below. This is a legally binding document, so please read it carefully before agreeing to it. The Agreement may cover more than one software project managed by Us.
 
 # 1. Definitions
  "You" means the individual who Submits a Contribution to Us.
@@ -40,8 +36,6 @@ designated in writing by You as "Not a Contribution."
 
 (a) You retain ownership of the Copyright in Your Contribution and have the same rights to use or
 license the Contribution which You would have had without entering into the Agreement.
-Harmony Individual Contributor License Agreement (HA-CLA-I) 1
-Version 1.0 July 4, 2011
 
 (b) To the maximum extent permitted by the relevant law, You grant to Us a perpetual, worldwide, nonexclusive, transferable, royalty-free, irrevocable license under the Copyright covering the Contribution,
 with the right to sublicense such rights through multiple tiers of sublicensees, to reproduce, modify,
@@ -67,7 +61,6 @@ commercial, or proprietary licenses. As a condition on the exercise of this righ
 license the Contribution under the terms of the license or licenses which We are using for the Material
 on the Submission Date.
 
-Harmony Individual Contributor License Agreement (HA-CLA-I) 2 Version 1.0 July 4, 2011
 In addition, We may use other licenses for Media in the Contribution (including any right to adopt any future version of a license if permitted).
 
 2.4 Moral Rights. If moral rights apply to the Contribution, to the maximum extent permitted by law,
