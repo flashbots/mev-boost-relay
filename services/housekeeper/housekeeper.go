@@ -47,6 +47,8 @@ type Housekeeper struct {
 
 	headSlot uint64
 
+	lastHealthlyBeaconNodeIndex int
+
 	// feature flags
 	ffAllowSyncingBeaconNode bool
 }
@@ -252,9 +254,12 @@ func (hk *Housekeeper) fetchValidators() map[types.PubkeyHex]beaconclient.Valida
 
 		// Received successful response. Set this index as last successful beacon node
 		result = validators
-		if err := hk.redis.SetBeaconNodeIndex(i); err != nil {
-			hk.log.WithError(err).Warn("failed to set healthy beacon node index to cache")
-		}
+
+		mu.Lock()
+		hk.lastHealthlyBeaconNodeIndex = i
+		mu.Unlock()
+
+		break
 	}
 
 	return result
@@ -347,6 +352,7 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDut
 	var result *beaconclient.ProposerDutiesResponse
 	clients := hk.getBeaconClientsByLastResponse()
 
+	var mu sync.Mutex
 	for i, client := range clients {
 		log := hk.log.WithField("uri", client.GetURI())
 		log.Debug("fetching proposer duties")
@@ -359,9 +365,12 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDut
 
 		// Received successful response. Set this index as last successful beacon node
 		result = duties
-		if err := hk.redis.SetBeaconNodeIndex(i); err != nil {
-			hk.log.WithError(err).Warn("failed to set healthy beacon node index to cache")
-		}
+
+		mu.Lock()
+		hk.lastHealthlyBeaconNodeIndex = i
+		mu.Unlock()
+
+		break
 	}
 
 	return result
@@ -369,17 +378,17 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDut
 
 func (hk *Housekeeper) getBeaconClientsByLastResponse() []beaconclient.BeaconNodeClient {
 	// get beacon node with last successful response
-	beaconNodeIndex, err := hk.redis.GetBeaconNodeIndex()
-	if err != nil {
-		hk.log.WithError(err).Warn("failed to get last healthy beacon node index from cache")
-		beaconNodeIndex = 0
-	}
-
-	if beaconNodeIndex == 0 {
+	var mu sync.Mutex
+	mu.Lock()
+	index := hk.lastHealthlyBeaconNodeIndex
+	mu.Unlock()
+	if index == 0 {
 		return hk.beaconClients
 	}
 
-	clients := append(hk.beaconClients[:beaconNodeIndex], hk.beaconClients[beaconNodeIndex+1:]...)
-	clients = append([]beaconclient.BeaconNodeClient{hk.beaconClients[beaconNodeIndex]}, clients...)
+	clients := make([]beaconclient.BeaconNodeClient, len(hk.beaconClients))
+	copy(clients, hk.beaconClients)
+	clients[0], clients[index] = clients[index], clients[0]
+
 	return clients
 }

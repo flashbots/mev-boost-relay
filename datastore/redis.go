@@ -16,8 +16,7 @@ import (
 var (
 	redisPrefix = "boost-relay"
 
-	expiryBidCache   = 5 * time.Minute
-	expiryBeaconNode = 5 * time.Minute
+	expiryBidCache = 5 * time.Minute
 
 	RedisConfigFieldPubkey    = "pubkey"
 	RedisStatsFieldLatestSlot = "latest-slot"
@@ -50,7 +49,6 @@ type RedisCache struct {
 	keyRelayConfig    string
 	keyStats          string
 	keyProposerDuties string
-	keyBeaconNode     string
 }
 
 func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
@@ -68,7 +66,6 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
 		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
-		keyBeaconNode:                     fmt.Sprintf("%s/%s:beacon-node", redisPrefix, prefix),
 
 		keyStats:          fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties: fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -214,18 +211,4 @@ func (r *RedisCache) GetBid(slot uint64, parentHash, proposerPubkey string) (bid
 		return nil, nil
 	}
 	return bid, err
-}
-
-// SetBeaconNodeIndex sets the last beacon node that sent a successful response
-func (r *RedisCache) SetBeaconNodeIndex(beaconNodeIndex int) (err error) {
-	return r.client.Set(context.Background(), r.keyBeaconNode, beaconNodeIndex, expiryBeaconNode).Err()
-}
-
-// GetBeaconNodeIndex retrieves the last beacon node that sent a successful response
-func (r *RedisCache) GetBeaconNodeIndex() (beaconNodeIndex int, err error) {
-	index, err := r.client.Get(context.Background(), r.keyBeaconNode).Int()
-	if errors.Is(err, redis.Nil) {
-		return 0, nil
-	}
-	return index, err
 }
