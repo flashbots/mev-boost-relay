@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -349,7 +348,7 @@ func (api *RelayAPI) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData, e
 
 			if !syncStatus.IsSyncing {
 				bestSyncStatus = syncStatus
-				atomic.AddUint32(&numSyncedNodes, 1)
+				numSyncedNodes++
 				requestCtxCancel()
 			}
 		}(client)

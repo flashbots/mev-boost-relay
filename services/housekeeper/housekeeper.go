@@ -203,9 +203,9 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Query beacon node for known validators
 	hk.log.Debug("Querying validators from beacon node... (this may take a while)")
 
-	validators := hk.fetchValidators()
-	if validators == nil {
-		hk.log.Fatal("failed to fetch validators from all beacon nodes")
+	validators, err := hk.fetchValidators()
+	if err != nil {
+		hk.log.WithError(err).Fatal("failed to fetch validators from all beacon nodes")
 		return
 	}
 
@@ -232,9 +232,8 @@ func (hk *Housekeeper) updateKnownValidators() {
 	}
 }
 
-func (hk *Housekeeper) fetchValidators() map[types.PubkeyHex]beaconclient.ValidatorResponseEntry {
+func (hk *Housekeeper) fetchValidators() (map[types.PubkeyHex]beaconclient.ValidatorResponseEntry, error) {
 	// return the first successful beacon node response
-	var result map[types.PubkeyHex]beaconclient.ValidatorResponseEntry
 	clients := hk.getBeaconClientsByLastResponse()
 
 	var mu sync.Mutex
@@ -252,17 +251,15 @@ func (hk *Housekeeper) fetchValidators() map[types.PubkeyHex]beaconclient.Valida
 			continue
 		}
 
-		// Received successful response. Set this index as last successful beacon node
-		result = validators
-
 		mu.Lock()
 		hk.lastHealthlyBeaconNodeIndex = i
 		mu.Unlock()
 
-		break
+		// Received successful response. Set this index as last successful beacon node
+		return validators, nil
 	}
 
-	return result
+	return nil, ErrBeaconNodesUnavailable
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
@@ -285,20 +282,20 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	log.Debug("updating proposer duties...")
 
 	// Query current epoch
-	r := hk.getProposerDuties(epoch)
-	if r == nil {
-		log.Fatal("failed to get proposer duties for all beacon nodes")
+	r, err := hk.getProposerDuties(epoch)
+	if err != nil {
+		log.WithError(err).Fatal("failed to get proposer duties for all beacon nodes")
 		return
 	}
 
 	entries := r.Data
 
 	// Query next epoch
-	r2 := hk.getProposerDuties(epoch + 1)
+	r2, err := hk.getProposerDuties(epoch + 1)
 	if r2 != nil {
 		entries = append(entries, r2.Data...)
 	} else {
-		log.Error("failed to get proposer duties for next epoch for all beacon nodes")
+		log.WithError(err).Error("failed to get proposer duties for next epoch for all beacon nodes")
 	}
 
 	// Validator registrations are queried in parallel, and this is the result struct
@@ -331,7 +328,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	// Save duties to Redis
-	err := hk.redis.SetProposerDuties(proposerDuties)
+	err = hk.redis.SetProposerDuties(proposerDuties)
 	if err != nil {
 		log.WithError(err).Fatal("failed to set proposer duties")
 		return
@@ -347,9 +344,8 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
-func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDutiesResponse {
+func (hk *Housekeeper) getProposerDuties(epoch uint64) (*beaconclient.ProposerDutiesResponse, error) {
 	// return the first successful beacon node response
-	var result *beaconclient.ProposerDutiesResponse
 	clients := hk.getBeaconClientsByLastResponse()
 
 	var mu sync.Mutex
@@ -363,21 +359,20 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) *beaconclient.ProposerDut
 			continue
 		}
 
-		// Received successful response. Set this index as last successful beacon node
-		result = duties
-
 		mu.Lock()
 		hk.lastHealthlyBeaconNodeIndex = i
 		mu.Unlock()
 
-		break
+		// Received successful response. Set this index as last successful beacon node and break
+		return duties, nil
 	}
 
-	return result
+	return nil, ErrBeaconNodesUnavailable
 }
 
+// getBeaconClientsByLastResponse returns a list of beacon clients that has the client
+// with the last successful response as the first element of the slice
 func (hk *Housekeeper) getBeaconClientsByLastResponse() []beaconclient.BeaconNodeClient {
-	// get beacon node with last successful response
 	var mu sync.Mutex
 	mu.Lock()
 	index := hk.lastHealthlyBeaconNodeIndex

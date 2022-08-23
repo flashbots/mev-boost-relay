@@ -33,10 +33,10 @@ type testBackend struct {
 
 func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	mockBeaconClients := make([]*beaconclient.MockBeaconClient, numBeaconNodes)
-	mockBeaconClientsInterface := make([]beaconclient.BeaconNodeClient, numBeaconNodes)
+	clients := make([]beaconclient.BeaconNodeClient, numBeaconNodes)
 	for i := 0; i < numBeaconNodes; i++ {
 		mockBeaconClients[i] = beaconclient.NewMockBeaconClient()
-		mockBeaconClientsInterface[i] = mockBeaconClients[i]
+		clients[i] = mockBeaconClients[i]
 	}
 
 	redisClient, err := miniredis.Run()
@@ -56,7 +56,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	opts := RelayAPIOpts{
 		Log:           common.TestLog,
 		ListenAddr:    "localhost:12345",
-		BeaconClients: mockBeaconClientsInterface,
+		BeaconClients: clients,
 		Datastore:     ds,
 		Redis:         redisCache,
 		DB:            db,
