@@ -278,11 +278,11 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// Start regular slot updates
 	go func() {
-		c := make(chan uint64)
+		c := make(chan beaconclient.HeadEventData)
 		go api.beaconClient.SubscribeToHeadEvents(c)
 		for {
-			headSlot := <-c
-			api.processNewSlot(headSlot)
+			headEvent := <-c
+			api.processNewSlot(headEvent.Slot)
 		}
 	}()
 

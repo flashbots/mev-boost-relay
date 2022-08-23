@@ -57,7 +57,7 @@ func (c *MockBeaconClient) CurrentSlot() (uint64, error) {
 	return 1, nil
 }
 
-func (c *MockBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {}
+func (c *MockBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 
 func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	return &ProposerDutiesResponse{

@@ -99,11 +99,11 @@ func (hk *Housekeeper) Start() (err error) {
 	hk.processNewSlot(headSlot)
 
 	// Start regular slot updates
-	c := make(chan uint64)
+	c := make(chan beaconclient.HeadEventData)
 	go hk.beaconClient.SubscribeToHeadEvents(c)
 	for {
-		headSlot := <-c
-		hk.processNewSlot(headSlot)
+		headEvent := <-c
+		hk.processNewSlot(headEvent.Slot)
 	}
 }
 

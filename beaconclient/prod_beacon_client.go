@@ -25,10 +25,12 @@ func NewProdBeaconClient(log *logrus.Entry, beaconURI string) *ProdBeaconClient 
 // HeadEventData represents the data of a head event
 // {"slot":"827256","block":"0x56b683afa68170c775f3c9debc18a6a72caea9055584d037333a6fe43c8ceb83","state":"0x419e2965320d69c4213782dae73941de802a4f436408fddd6f68b671b3ff4e55","epoch_transition":false,"execution_optimistic":false,"previous_duty_dependent_root":"0x5b81a526839b7fb67c3896f1125451755088fb578ad27c2690b3209f3d7c6b54","current_duty_dependent_root":"0x5f3232c0d5741e27e13754e1d88285c603b07dd6164b35ca57e94344a9e42942"}
 type HeadEventData struct {
-	Slot uint64 `json:"slot,string"`
+	Slot  uint64 `json:"slot,string"`
+	Block string `json:"block"`
+	State string `json:"state"`
 }
 
-func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
+func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	for {
 		log := c.log.WithFields(logrus.Fields{
@@ -41,7 +43,7 @@ func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan uint64) {
 			if err != nil {
 				log.WithError(err).Error("could not unmarshal head event")
 			} else {
-				slotC <- data.Slot
+				slotC <- data
 			}
 		})
 		if err != nil {
@@ -134,6 +136,48 @@ type ProposerDutiesResponseData struct {
 func (c *ProdBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", c.beaconURI, epoch)
 	resp := new(ProposerDutiesResponse)
+	err := fetchBeacon(uri, "GET", resp)
+	return resp, err
+}
+
+type GetHeaderResponse struct {
+	Data struct {
+		Root   string `json:"root"`
+		Header struct {
+			Message *GetHeaderResponseMessage
+		}
+	}
+}
+
+type GetHeaderResponseMessage struct {
+	Slot          uint64 `json:"slot,string"`
+	ProposerIndex uint64 `json:"proposer_index,string"`
+	ParentRoot    string `json:"parent_root"`
+}
+
+// GetHeader returns the latest header - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockHeader
+func (c *ProdBeaconClient) GetHeader() (*GetHeaderResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/headers/head", c.beaconURI)
+	resp := new(GetHeaderResponse)
+	err := fetchBeacon(uri, "GET", resp)
+	return resp, err
+}
+
+type GetBlockResponse struct {
+	Data struct {
+		Message struct {
+			Slot uint64 `json:"slot,string"`
+			Body struct {
+				ExecutionPayload types.ExecutionPayload `json:"execution_payload"`
+			}
+		}
+	}
+}
+
+// GetBlock returns the latest block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+func (c *ProdBeaconClient) GetBlock() (*GetBlockResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
+	resp := new(GetBlockResponse)
 	err := fetchBeacon(uri, "GET", resp)
 	return resp, err
 }
