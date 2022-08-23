@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/boost-relay/database"
-	"github.com/flashbots/boost-relay/datastore"
-	"github.com/flashbots/boost-relay/services/website"
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/services/website"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

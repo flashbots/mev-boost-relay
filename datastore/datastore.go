@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flashbots/boost-relay/database"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/sirupsen/logrus"
 )
 

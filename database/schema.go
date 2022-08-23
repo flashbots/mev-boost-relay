@@ -1,7 +1,7 @@
 package database
 
 import (
-	"github.com/flashbots/boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (

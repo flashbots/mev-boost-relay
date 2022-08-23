@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/boost-relay/beaconclient"
-	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/boost-relay/database"
-	"github.com/flashbots/boost-relay/datastore"
-	"github.com/flashbots/boost-relay/services/api"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/mev-boost-relay/beaconclient"
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/services/api"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

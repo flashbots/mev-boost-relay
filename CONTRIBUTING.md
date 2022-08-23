@@ -4,6 +4,14 @@ Welcome to the Flashbots collective! We just ask you to be nice when you play wi
 
 Please start by reading our [code of conduct](CODE_OF_CONDUCT.md).
 
+## Install dependencies
+
+```bash
+go install mvdan.cc/gofumpt@latest
+go install honnef.co/go/tools/cmd/staticcheck@v0.3.1
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.48.0
+```
+
 ## Test
 
 ```bash

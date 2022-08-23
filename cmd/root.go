@@ -11,7 +11,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "relay",
 	Short: "mev-boost relay",
-	Long:  `https://github.com/flashbots/boost-relay`,
+	Long:  `https://github.com/flashbots/mev-boost-relay`,
 }
 
 func Execute() {

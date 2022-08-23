@@ -3,7 +3,7 @@ package website
 import (
 	"text/template"
 
-	"github.com/flashbots/boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/database"
 )
 
 type StatusHTMLData struct {

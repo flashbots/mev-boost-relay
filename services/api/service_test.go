@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/flashbots/boost-relay/beaconclient"
-	"github.com/flashbots/boost-relay/common"
-	"github.com/flashbots/boost-relay/database"
-	"github.com/flashbots/boost-relay/datastore"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/beaconclient"
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/stretchr/testify/require"
 )
 

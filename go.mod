@@ -1,4 +1,4 @@
-module github.com/flashbots/boost-relay
+module github.com/flashbots/mev-boost-relay
 
 go 1.18
 
