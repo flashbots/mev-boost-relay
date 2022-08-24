@@ -45,9 +45,9 @@ type Housekeeper struct {
 	isUpdatingProposerDuties uberatomic.Bool
 	proposerDutiesSlot       uint64
 
-	headSlot uint64
+	headSlot uberatomic.Uint64
 
-	lastHealthlyBeaconNodeIndex int
+	lastHealthlyBeaconNodeIndex uberatomic.Int64
 
 	// feature flags
 	ffAllowSyncingBeaconNode bool
@@ -168,16 +168,18 @@ func (hk *Housekeeper) getBestSyncStatus() (*beaconclient.SyncStatusPayloadData,
 }
 
 func (hk *Housekeeper) processNewSlot(headSlot uint64) {
-	if headSlot <= hk.headSlot {
+	prevHeadSlot := hk.headSlot.Load()
+	if headSlot <= prevHeadSlot {
 		return
 	}
 
 	log := hk.log.WithFields(logrus.Fields{
 		"headSlot":     headSlot,
-		"prevHeadSlot": hk.headSlot,
+		"prevHeadSlot": prevHeadSlot,
 	})
-	if hk.headSlot > 0 {
-		for s := hk.headSlot + 1; s < headSlot; s++ {
+
+	if prevHeadSlot > 0 {
+		for s := prevHeadSlot + 1; s < headSlot; s++ {
 			log.WithField("slot", s).Warn("missed slot")
 		}
 	}
@@ -191,7 +193,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		}
 	}()
 
-	hk.headSlot = headSlot
+	hk.headSlot.Store(headSlot)
 	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
 	log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
@@ -236,24 +238,17 @@ func (hk *Housekeeper) fetchValidators() (map[types.PubkeyHex]beaconclient.Valid
 	// return the first successful beacon node response
 	clients := hk.getBeaconClientsByLastResponse()
 
-	var mu sync.Mutex
 	for i, client := range clients {
 		log := hk.log.WithField("uri", client.GetURI())
 		log.Debug("fetching validators")
 
-		mu.Lock()
-		headSlot := hk.headSlot
-		mu.Unlock()
-
-		validators, err := client.FetchValidators(headSlot)
+		validators, err := client.FetchValidators(hk.headSlot.Load())
 		if err != nil {
 			hk.log.WithError(err).Error("failed to fetch validators")
 			continue
 		}
 
-		mu.Lock()
-		hk.lastHealthlyBeaconNodeIndex = i
-		mu.Unlock()
+		hk.lastHealthlyBeaconNodeIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node
 		return validators, nil
@@ -348,7 +343,6 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) (*beaconclient.ProposerDu
 	// return the first successful beacon node response
 	clients := hk.getBeaconClientsByLastResponse()
 
-	var mu sync.Mutex
 	for i, client := range clients {
 		log := hk.log.WithField("uri", client.GetURI())
 		log.Debug("fetching proposer duties")
@@ -359,9 +353,7 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) (*beaconclient.ProposerDu
 			continue
 		}
 
-		mu.Lock()
-		hk.lastHealthlyBeaconNodeIndex = i
-		mu.Unlock()
+		hk.lastHealthlyBeaconNodeIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node and break
 		return duties, nil
@@ -373,10 +365,7 @@ func (hk *Housekeeper) getProposerDuties(epoch uint64) (*beaconclient.ProposerDu
 // getBeaconClientsByLastResponse returns a list of beacon clients that has the client
 // with the last successful response as the first element of the slice
 func (hk *Housekeeper) getBeaconClientsByLastResponse() []beaconclient.BeaconNodeClient {
-	var mu sync.Mutex
-	mu.Lock()
-	index := hk.lastHealthlyBeaconNodeIndex
-	mu.Unlock()
+	index := hk.lastHealthlyBeaconNodeIndex.Load()
 	if index == 0 {
 		return hk.beaconClients
 	}
