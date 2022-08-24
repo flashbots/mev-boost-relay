@@ -83,7 +83,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		BeaconProposerSigningDomain: hexutil.Encode(opts.NetworkDetails.DomainBeaconProposer[:]),
 		HeadSlot:                    "",
 		NumPayloadsDelivered:        "",
-		Payloads:                    []*database.DeliveredPayloadEntry{},
+		// Payloads:                    []*database.DeliveredPayloadEntry{},
 	}
 
 	return server, nil
@@ -137,10 +137,10 @@ func (srv *Webserver) updateStatusHTMLData() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
-	if err != nil {
-		srv.log.WithError(err).Error("error getting recent payloads")
-	}
+	// payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
+	// if err != nil {
+	// 	srv.log.WithError(err).Error("error getting recent payloads")
+	// }
 
 	_numPayloadsDelivered, err := srv.db.GetNumDeliveredPayloads()
 	if err != nil {
@@ -161,7 +161,7 @@ func (srv *Webserver) updateStatusHTMLData() {
 	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
 	srv.statusHTMLData.ValidatorsRegistered = numRegistered
-	srv.statusHTMLData.Payloads = payloads
+	// srv.statusHTMLData.Payloads = payloads
 	srv.statusHTMLData.HeadSlot = latestSlot
 	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
 	srv.statusHTMLDataLock.Unlock()

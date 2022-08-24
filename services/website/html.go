@@ -2,8 +2,6 @@ package website
 
 import (
 	"text/template"
-
-	"github.com/flashbots/mev-boost-relay/database"
 )
 
 type StatusHTMLData struct {
@@ -18,7 +16,7 @@ type StatusHTMLData struct {
 	BeaconProposerSigningDomain string
 	HeadSlot                    string
 	NumPayloadsDelivered        string
-	Payloads                    []*database.DeliveredPayloadEntry
+	// Payloads                    []*database.DeliveredPayloadEntry
 }
 
 func parseIndexTemplate() (*template.Template, error) {

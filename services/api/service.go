@@ -678,12 +678,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log.Info("execution payload delivered")
 
 	// Save payload and increment counter
-	go func() {
-		err := api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
-		if err != nil {
-			log.WithError(err).Error("Failed to save delivered payload")
-		}
-	}()
+	// go func() {
+	// 	err := api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
+	// 	if err != nil {
+	// 		log.WithError(err).Error("Failed to save delivered payload")
+	// 	}
+	// }()
 }
 
 // --------------------
@@ -736,26 +736,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Prepare entry for saving to database
-	dbEntry, err := database.NewBuilderBlockEntry(payload)
-	if err != nil {
-		log.WithError(err).Error("failed creating BuilderBlockEntry")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	// Simulate the block submission and save to db
 	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
 	if simErr != nil {
 		log.WithError(simErr).Error("failed block simulation for block")
-		dbEntry.SimError = simErr.Error()
-	} else {
-		dbEntry.SimSuccess = true
 	}
 
 	// Save builder submission to database (in the background)
 	go func() {
-		err = api.db.SaveBuilderBlockSubmission(dbEntry)
+		err = api.db.SaveBuilderBlockSubmission(payload, simErr)
 		if err != nil {
 			log.WithError(err).Error("saving builder block submission to database failed")
 		}
@@ -883,23 +872,23 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Limit = _limit
 	}
 
-	payloads, err := api.db.GetRecentDeliveredPayloads(filters)
-	if err != nil {
-		api.log.WithError(err).Error("error getting recent payloads")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	// payloads, err := api.db.GetRecentDeliveredPayloads(filters)
+	// if err != nil {
+	// 	api.log.WithError(err).Error("error getting recent payloads")
+	// 	api.RespondError(w, http.StatusInternalServerError, err.Error())
+	// 	return
+	// }
 
-	response := []types.BidTrace{}
-	for _, payload := range payloads {
-		var trace types.BidTrace
-		err = json.Unmarshal([]byte(payload.BidTrace), &trace)
-		if err != nil {
-			api.log.WithError(err).Error("failed to unmarshal bidtrace")
-		} else {
-			response = append(response, trace)
-		}
-	}
+	// response := []types.BidTrace{}
+	// for _, payload := range payloads {
+	// 	var trace types.BidTrace
+	// 	err = json.Unmarshal([]byte(payload.BidTrace), &trace)
+	// 	if err != nil {
+	// 		api.log.WithError(err).Error("failed to unmarshal bidtrace")
+	// 	} else {
+	// 		response = append(response, trace)
+	// 	}
+	// }
 
-	api.RespondOK(w, response)
+	api.RespondOK(w, struct{}{})
 }
