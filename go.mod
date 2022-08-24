@@ -3,7 +3,7 @@ module github.com/flashbots/mev-boost-relay
 go 1.18
 
 require (
-	github.com/alicebob/miniredis/v2 v2.21.0
+	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/ethereum/go-ethereum v1.10.20
 	github.com/flashbots/go-boost-utils v0.3.5
 	github.com/flashbots/go-utils v0.4.7
@@ -15,8 +15,8 @@ require (
 	github.com/r3labs/sse/v2 v2.8.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.5.0
-	github.com/stretchr/testify v1.7.2
-	go.uber.org/atomic v1.9.0
+	github.com/stretchr/testify v1.8.0
+	go.uber.org/atomic v1.10.0
 	golang.org/x/text v0.3.7
 )
 
