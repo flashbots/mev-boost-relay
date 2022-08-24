@@ -28,7 +28,7 @@ func fetchBeacon(url, method string, dst any) error {
 		return fmt.Errorf("could not read response body for %s: %w", url, err)
 	}
 
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode >= http.StatusMultipleChoices {
 		ec := &struct {
 			Code    int    `json:"code"`
 			Message string `json:"message"`
