@@ -15,7 +15,7 @@ require (
 	github.com/r3labs/sse/v2 v2.8.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.5.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	go.uber.org/atomic v1.9.0
 	golang.org/x/text v0.3.7
 )
