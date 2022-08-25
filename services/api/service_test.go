@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,6 +22,7 @@ import (
 var (
 	genesisForkVersionHex = "0x00000000"
 	builderSigningDomain  = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+	errTest               = errors.New("test error")
 )
 
 type testBackend struct {
@@ -142,6 +144,55 @@ func TestWebserver(t *testing.T) {
 		backend.relay.srvStarted.Store(true)
 		err := backend.relay.StartServer()
 		require.Error(t, err)
+	})
+}
+
+func TestGetSyncStatus(t *testing.T) {
+	t.Run("returns status of the beacon node first to respond and is syncing", func(t *testing.T) {
+		syncStatuses := []*beaconclient.SyncStatusPayloadData{
+			{
+				HeadSlot:  3,
+				IsSyncing: true,
+			},
+			{
+				HeadSlot:  1,
+				IsSyncing: false,
+			},
+			{
+				HeadSlot:  2,
+				IsSyncing: false,
+			},
+		}
+
+		backend := newTestBackend(t, 3)
+		for i := 0; i < len(backend.beaconClients); i++ {
+			backend.beaconClients[i].MockSyncStatus = syncStatuses[i]
+			backend.beaconClients[i].ResponseDelay = 10 * time.Millisecond * time.Duration(i)
+		}
+
+		status, err := backend.relay.getBestSyncStatus()
+		require.NoError(t, err)
+		require.Equal(t, syncStatuses[1], status)
+	})
+
+	t.Run("returns status if at least one beacon node does not return error and is synced", func(t *testing.T) {
+		backend := newTestBackend(t, 2)
+		backend.beaconClients[0].MockSyncStatusErr = errTest
+		status, err := backend.relay.getBestSyncStatus()
+		require.NoError(t, err)
+		require.NotNil(t, status)
+	})
+
+	t.Run("returns error if all beacon nodes return error or syncing", func(t *testing.T) {
+		backend := newTestBackend(t, 2)
+		backend.beaconClients[0].MockSyncStatusErr = errTest
+		backend.beaconClients[1].MockSyncStatus = &beaconclient.SyncStatusPayloadData{
+			HeadSlot:  1,
+			IsSyncing: true,
+		}
+		status, err := backend.relay.getBestSyncStatus()
+		require.Equal(t, ErrBeaconNodeSyncing, err)
+		require.Nil(t, status)
 	})
 }
 
