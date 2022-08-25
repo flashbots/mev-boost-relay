@@ -42,7 +42,7 @@ func (c *MockBeaconClient) NumValidators() uint64 {
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconClient) FetchValidators() (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	return c.validatorSet, nil
 }
 
@@ -64,3 +64,5 @@ func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRespo
 		Data: []ProposerDutiesResponseData{},
 	}, nil
 }
+
+func (c *MockBeaconClient) GetURI() string { return "" }
