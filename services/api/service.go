@@ -624,9 +624,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	slot := payload.Message.Slot
+	blockHash := payload.Message.Body.ExecutionPayloadHeader.BlockHash
+
 	log = log.WithFields(logrus.Fields{
-		"slot":      payload.Message.Slot,
-		"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+		"slot":      slot,
+		"blockHash": blockHash.String(),
 		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
@@ -657,7 +660,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get the block
-	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(slot, proposerPubkey.String(), blockHash.String())
 	if err != nil {
 		log.WithError(err).Error("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -677,13 +680,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	})
 	log.Info("execution payload delivered")
 
-	// Save payload and increment counter
-	// go func() {
-	// 	err := api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
-	// 	if err != nil {
-	// 		log.WithError(err).Error("Failed to save delivered payload")
-	// 	}
-	// }()
+	// Save information about delivered payload
+	go func() {
+		err := api.db.SaveDeliveredPayload(slot, proposerPubkey, blockHash, payload)
+		if err != nil {
+			log.WithError(err).Error("Failed to save delivered payload")
+		}
+	}()
 }
 
 // --------------------
@@ -714,7 +717,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// By default, don't accept blocks with 0 value
 	if !api.ffAllowZeroValueBlocks {
-		if payload.Message.Value.Cmp(&ZeroU256) == 0  || len(payload.ExecutionPayload.Transactions) == 0 {
+		if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
 			w.WriteHeader(http.StatusOK)
 			return
 		}

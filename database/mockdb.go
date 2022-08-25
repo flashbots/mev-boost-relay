@@ -27,3 +27,7 @@ func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockReq
 func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
 	return 0, nil
 }
+
+func (db MockDB) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
+	return nil
+}

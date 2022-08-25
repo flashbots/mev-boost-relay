@@ -233,17 +233,3 @@ func (ds *Datastore) GetBlockBidAndTrace(slot uint64, proposerPubkey, blockHash 
 	ds.blockLock.RUnlock()
 	return blockBidAndTrace, nil
 }
-
-// func (ds *Datastore) SaveDeliveredPayload(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, bid *types.GetHeaderResponse, payload *types.GetPayloadResponse, signedBidTrace *types.SignedBidTrace) error {
-// 	entry, err := database.NewDeliveredPayloadEntry(bid.Data, signedBlindedBeaconBlock, payload.Data, signedBidTrace)
-// 	if err != nil {
-// 		ds.log.WithError(err).Error("failed creating delivered-payload-entry")
-// 		return err
-// 	}
-// 	err = ds.db.SaveDeliveredPayload(entry)
-// 	if err != nil {
-// 		ds.log.WithError(err).Error("failed saving delivered payload to database")
-// 		return err
-// 	}
-// 	return nil
-// }
