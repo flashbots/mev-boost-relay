@@ -15,5 +15,5 @@
 ## ✅ I have run these commands
 
 * [ ] `make lint`
-* [ ] `make test`
+* [ ] `make test-race`
 * [ ] `go mod tidy`
