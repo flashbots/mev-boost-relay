@@ -87,3 +87,5 @@ func (c *MockBeaconClient) addDelay() {
 		time.Sleep(c.ResponseDelay)
 	}
 }
+
+func (c *MockBeaconClient) GetURI() string { return "" }
