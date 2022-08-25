@@ -590,7 +590,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bid, err := api.datastore.GetBid(slot, parentHashHex, proposerPubkeyHex)
+	bid, err := api.datastore.GetGetHeaderResponse(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -659,23 +659,23 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Get the block
-	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(slot, proposerPubkey.String(), blockHash.String())
+	// Get the response - from memory, Redis or DB
+	getPayloadResp, err := api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
 	if err != nil {
 		log.WithError(err).Error("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if blockBidAndTrace == nil {
+	if getPayloadResp == nil {
 		log.Error("requested execution payload was not found")
 		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 		return
 	}
 
-	api.RespondOK(w, blockBidAndTrace.Payload)
+	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
-		"numTx":       len(blockBidAndTrace.Payload.Data.Transactions),
+		"numTx":       len(getPayloadResp.Data.Transactions),
 		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
 	})
 	log.Info("execution payload delivered")
@@ -747,7 +747,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Save builder submission to database (in the background)
 	go func() {
-		err = api.db.SaveBuilderBlockSubmission(payload, simErr)
+		_, err := api.db.SaveBuilderBlockSubmission(payload, simErr)
 		if err != nil {
 			log.WithError(err).Error("saving builder block submission to database failed")
 		}
@@ -760,7 +760,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Check if there's already a bid
-	prevBid, err := api.datastore.GetBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
+	prevBid, err := api.datastore.GetGetHeaderResponse(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
 	if err != nil {
 		log.WithError(err).Error("could not get best bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -768,7 +768,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// If existing bid has same or higher value, do nothing
-	if prevBid != nil && payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 {
+	if prevBid != nil && payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 { // todo: use proposer_pubkey as tiebreaker instead of FCFS
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -796,7 +796,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Signature: payload.Signature,
 	}
 
-	err = api.datastore.SaveBidAndBlock(payload.Message.Slot, payload.Message.ProposerPubkey.String(), &signedBidTrace, &getHeaderResponse, &getPayloadResponse)
+	err = api.datastore.SaveBlockSubmissionResponses(&signedBidTrace, &getHeaderResponse, &getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())

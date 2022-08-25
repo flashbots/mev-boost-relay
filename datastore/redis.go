@@ -40,7 +40,8 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 type RedisCache struct {
 	client *redis.Client
 
-	prefixBidCache string
+	prefixGetHeaderResponse  string
+	prefixGetPayloadResponse string
 
 	keyKnownValidators                string
 	keyValidatorRegistration          string
@@ -60,7 +61,8 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 	return &RedisCache{
 		client: client,
 
-		prefixBidCache: fmt.Sprintf("%s/%s:bid-cache", redisPrefix, prefix),
+		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
+		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
 
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistration:          fmt.Sprintf("%s/%s:validators-registration-timestamp", redisPrefix, prefix),
@@ -72,8 +74,12 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 	}, nil
 }
 
-func (r *RedisCache) keyBidCache(slot uint64, parentHash, proposerPubkey string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBidCache, slot, parentHash, proposerPubkey)
+func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposerPubkey string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetHeaderResponse, slot, parentHash, proposerPubkey)
+}
+
+func (r *RedisCache) keyCacheGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetHeaderResponse, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) GetObj(key string, obj any) (err error) {
@@ -197,18 +203,32 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	return res, err
 }
 
-func (r *RedisCache) SaveBid(slot uint64, parentHash, proposerPubkey string, headerResp *types.GetHeaderResponse) (err error) {
-	key := r.keyBidCache(slot, parentHash, proposerPubkey)
+func (r *RedisCache) SaveGetHeaderResponse(slot uint64, parentHash, proposerPubkey string, headerResp *types.GetHeaderResponse) (err error) {
+	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
 	return r.SetObj(key, headerResp, expiryBidCache)
 }
 
-// GetBid retrieves a bid from Redis. If not existing, returns nil for both bid and error
-func (r *RedisCache) GetBid(slot uint64, parentHash, proposerPubkey string) (bid *types.GetHeaderResponse, err error) {
-	key := r.keyBidCache(slot, parentHash, proposerPubkey)
-	bid = new(types.GetHeaderResponse)
-	err = r.GetObj(key, bid)
+func (r *RedisCache) GetGetHeaderResponse(slot uint64, parentHash, proposerPubkey string) (*types.GetHeaderResponse, error) {
+	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
+	resp := new(types.GetHeaderResponse)
+	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
-	return bid, err
+	return resp, err
+}
+
+func (r *RedisCache) SaveGetPayloadResponse(slot uint64, proposerPubkey string, resp *types.GetPayloadResponse) (err error) {
+	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, resp.Data.BlockHash.String())
+	return r.SetObj(key, resp, expiryBidCache)
+}
+
+func (r *RedisCache) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
+	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
+	resp := new(types.GetPayloadResponse)
+	err := r.GetObj(key, resp)
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	}
+	return resp, err
 }

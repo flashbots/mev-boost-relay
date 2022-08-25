@@ -8,8 +8,8 @@ func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorReg
 	return nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error {
-	return nil
+func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error) {
+	return 0, nil
 }
 
 func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
