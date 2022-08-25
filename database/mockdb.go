@@ -8,7 +8,7 @@ func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorReg
 	return nil
 }
 
-func (db MockDB) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
+func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error {
 	return nil
 }
 
@@ -16,10 +16,10 @@ func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*Deli
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
-	return nil
-}
-
 func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
 	return 0, nil
+}
+
+func (db MockDB) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
+	return nil
 }

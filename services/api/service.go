@@ -624,9 +624,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	slot := payload.Message.Slot
+	blockHash := payload.Message.Body.ExecutionPayloadHeader.BlockHash
+
 	log = log.WithFields(logrus.Fields{
-		"slot":      payload.Message.Slot,
-		"blockHash": strings.ToLower(payload.Message.Body.ExecutionPayloadHeader.BlockHash.String()),
+		"slot":      slot,
+		"blockHash": blockHash.String(),
 		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
@@ -657,7 +660,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get the block
-	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(payload.Message.Slot, proposerPubkey.String(), payload.Message.Body.ExecutionPayloadHeader.BlockHash.String())
+	blockBidAndTrace, err := api.datastore.GetBlockBidAndTrace(slot, proposerPubkey.String(), blockHash.String())
 	if err != nil {
 		log.WithError(err).Error("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -677,9 +680,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	})
 	log.Info("execution payload delivered")
 
-	// Save payload and increment counter
+	// Save information about delivered payload
 	go func() {
-		err := api.datastore.SaveDeliveredPayload(payload, blockBidAndTrace.Bid, blockBidAndTrace.Payload, blockBidAndTrace.Trace)
+		err := api.db.SaveDeliveredPayload(slot, proposerPubkey, blockHash, payload)
 		if err != nil {
 			log.WithError(err).Error("Failed to save delivered payload")
 		}
@@ -714,7 +717,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// By default, don't accept blocks with 0 value
 	if !api.ffAllowZeroValueBlocks {
-		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
+		if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -736,26 +739,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Prepare entry for saving to database
-	dbEntry, err := database.NewBuilderBlockEntry(payload)
-	if err != nil {
-		log.WithError(err).Error("failed creating BuilderBlockEntry")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	// Simulate the block submission and save to db
 	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
 	if simErr != nil {
 		log.WithError(simErr).Error("failed block simulation for block")
-		dbEntry.SimError = simErr.Error()
-	} else {
-		dbEntry.SimSuccess = true
 	}
 
 	// Save builder submission to database (in the background)
 	go func() {
-		err = api.db.SaveBuilderBlockSubmission(dbEntry)
+		err = api.db.SaveBuilderBlockSubmission(payload, simErr)
 		if err != nil {
 			log.WithError(err).Error("saving builder block submission to database failed")
 		}
@@ -834,8 +826,8 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	args := req.URL.Query()
 
 	filters := database.GetPayloadsFilters{
-		IncludeBidTrace: true,
-		Limit:           100,
+		// IncludeBidTrace: true,
+		Limit: 100,
 	}
 
 	if args.Get("slot") != "" {
@@ -883,22 +875,27 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Limit = _limit
 	}
 
-	payloads, err := api.db.GetRecentDeliveredPayloads(filters)
+	deliveredPayloads, err := api.db.GetRecentDeliveredPayloads(filters)
 	if err != nil {
 		api.log.WithError(err).Error("error getting recent payloads")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response := []types.BidTrace{}
-	for _, payload := range payloads {
-		var trace types.BidTrace
-		err = json.Unmarshal([]byte(payload.BidTrace), &trace)
-		if err != nil {
-			api.log.WithError(err).Error("failed to unmarshal bidtrace")
-		} else {
-			response = append(response, trace)
+	response := []BidTraceJSON{}
+	for _, payload := range deliveredPayloads {
+		trace := BidTraceJSON{
+			Slot:                 payload.Slot,
+			ParentHash:           payload.ParentHash,
+			BlockHash:            payload.BlockHash,
+			BuilderPubkey:        payload.BuilderPubkey,
+			ProposerPubkey:       payload.ProposerPubkey,
+			ProposerFeeRecipient: payload.ProposerFeeRecipient,
+			GasLimit:             payload.GasLimit,
+			GasUsed:              payload.GasUsed,
+			Value:                payload.Value,
 		}
+		response = append(response, trace)
 	}
 
 	api.RespondOK(w, response)

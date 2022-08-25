@@ -65,4 +65,6 @@ func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRespo
 	}, nil
 }
 
-func (c *MockBeaconClient) GetURI() string { return "" }
+func (c *MockBeaconClient) GetURI() string {
+	return ""
+}
