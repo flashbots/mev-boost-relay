@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -162,21 +163,12 @@ func (ds *Datastore) SaveBlockSubmissionResponses(signedBidTrace *types.SignedBi
 	ds.GetPayloadResponsesLock.Unlock()
 
 	// Save to Redis
-	go func() {
-		// Save getHeader response
-		err := ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
-		if err != nil {
-			ds.log.WithError(err).Error("couldn't save bid to redis")
-		}
+	err := ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
+	if err != nil {
+		return err
+	}
 
-		// Save getPayload response
-		err = ds.redis.SaveGetPayloadResponse(signedBidTrace.Message.Slot, _proposerPubkey, payloadResp)
-		if err != nil {
-			ds.log.WithError(err).Error("couldn't save bid to redis")
-		}
-	}()
-
-	return nil
+	return ds.redis.SaveGetPayloadResponse(signedBidTrace.Message.Slot, _proposerPubkey, payloadResp)
 }
 
 func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved, numRemaining int) {
@@ -225,14 +217,13 @@ func (ds *Datastore) GetGetHeaderResponse(slot uint64, parentHash, proposerPubke
 	return ds.redis.GetGetHeaderResponse(slot, _parentHash, _proposerPubkey)
 }
 
-// GetGetPayloadResponse returns the bid from memory or Redis
+// GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
 func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
-	// _parentHash := strings.ToLower(parentHash)
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
 
 	if !ds.ffDisableBidMemoryCache {
-		// 1. Check in memory
+		// 1. try to get from memory
 		bidKey := GetPayloadResponseKey{
 			Slot:           slot,
 			ProposerPubkey: _proposerPubkey,
@@ -247,8 +238,27 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		}
 	}
 
-	// 2. Check in Redis
-	return ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
+	// 2. try to get from Redis
+	resp, err := ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
+	if err == nil {
+		return resp, nil
+	}
 
-	// TODO: 3. get from database
+	// 3. try to get from database
+	blockSubEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	// deserialize execution payload
+	executionPayload := new(types.ExecutionPayload)
+	err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetPayloadResponse{
+		Version: types.VersionString(blockSubEntry.Version),
+		Data:    executionPayload,
+	}, nil
 }

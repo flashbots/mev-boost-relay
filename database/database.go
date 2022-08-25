@@ -20,6 +20,9 @@ type IDatabaseService interface {
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error)
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 
+	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
+	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
+	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
 }
@@ -144,27 +147,31 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	return blockSubmissionEntry.ID, err
 }
 
-// func (s *DatabaseService) SaveBid(bid *Builder, simError error) (id int64, err error) {
-// }
-
-// // Save bid
-// bidEntry := &BidEntry{
-// 	ExecutionPayloadID:       NewNullInt64(execPayloadEntry.ID),
-// 	BuilderBlockSubmissionID: NewNullInt64(blockSubmissionEntry.ID),
-
-// 	Slot:           payload.Message.Slot,
-// 	BlockHash:      payload.ExecutionPayload.BlockHash.String(),
-// 	ParentHash:     payload.ExecutionPayload.ParentHash.String(),
-// 	ProposerPubkey: payload.Message.ProposerPubkey.String(),
-// }
-
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number
 	FROM ` + TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
 	ORDER BY proposer_pubkey ASC
-		LIMIT 1`
+	LIMIT 1`
 	entry = &BuilderBlockSubmissionEntry{}
+	err = s.DB.Get(entry, query, slot, proposerPubkey, blockHash)
+	return entry, err
+}
+
+func (s *DatabaseService) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + TableExecutionPayload + ` WHERE id=$1`
+	entry = &ExecutionPayloadEntry{}
+	err = s.DB.Get(entry, query, executionPayloadID)
+	return entry, err
+}
+
+func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload
+	FROM ` + TableExecutionPayload + `
+	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
+	ORDER BY proposer_pubkey ASC
+	LIMIT 1`
+	entry = &ExecutionPayloadEntry{}
 	err = s.DB.Get(entry, query, slot, proposerPubkey, blockHash)
 	return entry, err
 }

@@ -12,6 +12,18 @@ func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockReq
 	return 0, nil
 }
 
+func (db MockDB) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
+	return nil, nil
+}
+
 func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	return nil, nil
 }

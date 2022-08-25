@@ -662,13 +662,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Get the response - from memory, Redis or DB
 	getPayloadResp, err := api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
 	if err != nil {
-		log.WithError(err).Error("failed getting execution payload")
+		log.WithError(err).Error("failed getting execution payload from db")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if getPayloadResp == nil {
-		log.Error("requested execution payload was not found")
+		log.Error("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 		return
 	}
