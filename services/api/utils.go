@@ -7,9 +7,8 @@ import (
 )
 
 var (
-	ErrBlockHashMismatch    = errors.New("blockHash mismatch")
-	ErrParentHashMismatch   = errors.New("parentHash mismatch")
-	ErrFeeRecipientMismatch = errors.New("feeRecipient mismatch")
+	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
+	ErrParentHashMismatch = errors.New("parentHash mismatch")
 )
 
 func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
@@ -19,10 +18,6 @@ func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) erro
 
 	if payload.Message.ParentHash != payload.ExecutionPayload.ParentHash {
 		return ErrParentHashMismatch
-	}
-
-	if payload.Message.ProposerFeeRecipient != payload.ExecutionPayload.FeeRecipient {
-		return ErrFeeRecipientMismatch
 	}
 
 	return nil
