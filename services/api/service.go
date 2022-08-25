@@ -714,7 +714,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// By default, don't accept blocks with 0 value
 	if !api.ffAllowZeroValueBlocks {
-		if payload.Message.Value.Cmp(&ZeroU256) == 0 {
+		if payload.Message.Value.Cmp(&ZeroU256) == 0  || len(payload.ExecutionPayload.Transactions) == 0 {
 			w.WriteHeader(http.StatusOK)
 			return
 		}

@@ -166,13 +166,18 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	}
 
 	// Save block_submission
+	simErrStr := ""
+	if simError != nil {
+		simErrStr = simError.Error()
+	}
+
 	blockSubmissionEntry := &BuilderBlockSubmissionEntry{
 		Signature:          payload.Signature.String(),
 		BidTraceID:         bidTraceEntry.ID,
 		ExecutionPayloadID: execPayloadEntry.ID,
 
 		SimSuccess: simError == nil,
-		SimError:   simError.Error(),
+		SimError:   simErrStr,
 
 		Slot:  payload.Message.Slot,
 		Epoch: payload.Message.Slot / uint64(common.SlotsPerEpoch),
