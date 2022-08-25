@@ -18,6 +18,7 @@
 # Random stuff
 /tmp/
 /boost-relay
+/mev-boost-relay
 /dump.rdb
 /deploy.sh
 

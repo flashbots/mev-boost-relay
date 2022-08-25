@@ -64,5 +64,3 @@ func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRespo
 		Data: []ProposerDutiesResponseData{},
 	}, nil
 }
-
-func (c *MockBeaconClient) GetURI() string { return "" }
