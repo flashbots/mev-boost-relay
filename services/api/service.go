@@ -826,8 +826,8 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	args := req.URL.Query()
 
 	filters := database.GetPayloadsFilters{
-		IncludeBidTrace: true,
-		Limit:           100,
+		// IncludeBidTrace: true,
+		Limit: 100,
 	}
 
 	if args.Get("slot") != "" {
@@ -875,23 +875,28 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Limit = _limit
 	}
 
-	// payloads, err := api.db.GetRecentDeliveredPayloads(filters)
-	// if err != nil {
-	// 	api.log.WithError(err).Error("error getting recent payloads")
-	// 	api.RespondError(w, http.StatusInternalServerError, err.Error())
-	// 	return
-	// }
+	deliveredPayloads, err := api.db.GetRecentDeliveredPayloads(filters)
+	if err != nil {
+		api.log.WithError(err).Error("error getting recent payloads")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	// response := []types.BidTrace{}
-	// for _, payload := range payloads {
-	// 	var trace types.BidTrace
-	// 	err = json.Unmarshal([]byte(payload.BidTrace), &trace)
-	// 	if err != nil {
-	// 		api.log.WithError(err).Error("failed to unmarshal bidtrace")
-	// 	} else {
-	// 		response = append(response, trace)
-	// 	}
-	// }
+	response := []BidTraceJSON{}
+	for _, payload := range deliveredPayloads {
+		trace := BidTraceJSON{
+			Slot:                 payload.Slot,
+			ParentHash:           payload.ParentHash,
+			BlockHash:            payload.BlockHash,
+			BuilderPubkey:        payload.BuilderPubkey,
+			ProposerPubkey:       payload.ProposerPubkey,
+			ProposerFeeRecipient: payload.ProposerFeeRecipient,
+			GasLimit:             payload.GasLimit,
+			GasUsed:              payload.GasUsed,
+			Value:                payload.Value,
+		}
+		response = append(response, trace)
+	}
 
-	api.RespondOK(w, struct{}{})
+	api.RespondOK(w, response)
 }

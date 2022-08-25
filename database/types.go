@@ -6,13 +6,13 @@ import (
 )
 
 type GetPayloadsFilters struct {
-	Slot            uint64
-	Cursor          uint64
-	Limit           uint64
-	BlockHash       string
-	BlockNumber     uint64
-	IncludeBidTrace bool
-	IncludePayloads bool
+	Slot        uint64
+	Cursor      uint64
+	Limit       uint64
+	BlockHash   string
+	BlockNumber uint64
+	// IncludeBidTrace bool
+	// IncludePayloads bool
 }
 
 type ValidatorRegistrationEntry struct {

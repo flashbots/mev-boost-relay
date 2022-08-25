@@ -12,17 +12,9 @@ func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockReq
 	return nil
 }
 
-// func (db MockDB) SaveDeliveredPayload(entry *DeliveredPayloadEntry) error {
-// 	return nil
-// }
-
-// func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
-// 	return nil, nil
-// }
-
-// func (db MockDB) SaveBuilderBlockSubmission(entry *BuilderBlockEntry) error {
-// 	return nil
-// }
+func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
+	return nil, nil
+}
 
 func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
 	return 0, nil

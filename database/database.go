@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -19,7 +20,7 @@ type IDatabaseService interface {
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 
-	// GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
+	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
 }
 
@@ -187,49 +188,49 @@ func (s *DatabaseService) SaveDeliveredPayload(slot uint64, proposerPubkey types
 	return err
 }
 
-// func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
-// 	arg := map[string]interface{}{
-// 		"limit":        filters.Limit,
-// 		"slot":         filters.Slot,
-// 		"cursor":       filters.Cursor,
-// 		"block_hash":   filters.BlockHash,
-// 		"block_number": filters.BlockNumber,
-// 	}
+func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
+	arg := map[string]interface{}{
+		"limit":        filters.Limit,
+		"slot":         filters.Slot,
+		"cursor":       filters.Cursor,
+		"block_hash":   filters.BlockHash,
+		"block_number": filters.BlockNumber,
+	}
 
-// 	tasks := []*DeliveredPayloadEntry{}
-// 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
-// 	if filters.IncludePayloads {
-// 		fields += ", execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block"
-// 	} else if filters.IncludeBidTrace {
-// 		fields += ", bid_trace, bid_trace_builder_sig"
-// 	}
+	tasks := []*DeliveredPayloadEntry{}
+	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
+	// if filters.IncludePayloads {
+	// 	fields += ", execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block"
+	// } else if filters.IncludeBidTrace {
+	// 	fields += ", bid_trace, bid_trace_builder_sig"
+	// }
 
-// 	whereConds := []string{}
-// 	if filters.Slot > 0 {
-// 		whereConds = append(whereConds, "slot = :slot")
-// 	} else if filters.Cursor > 0 {
-// 		whereConds = append(whereConds, "slot <= :cursor")
-// 	}
-// 	if filters.BlockHash != "" {
-// 		whereConds = append(whereConds, "block_hash = :block_hash")
-// 	}
-// 	if filters.BlockNumber > 0 {
-// 		whereConds = append(whereConds, "block_number = :block_number")
-// 	}
+	whereConds := []string{}
+	if filters.Slot > 0 {
+		whereConds = append(whereConds, "slot = :slot")
+	} else if filters.Cursor > 0 {
+		whereConds = append(whereConds, "slot <= :cursor")
+	}
+	if filters.BlockHash != "" {
+		whereConds = append(whereConds, "block_hash = :block_hash")
+	}
+	if filters.BlockNumber > 0 {
+		whereConds = append(whereConds, "block_number = :block_number")
+	}
 
-// 	where := ""
-// 	if len(whereConds) > 0 {
-// 		where = "WHERE " + strings.Join(whereConds, " AND ")
-// 	}
+	where := ""
+	if len(whereConds) > 0 {
+		where = "WHERE " + strings.Join(whereConds, " AND ")
+	}
 
-// 	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
+	if err != nil {
+		return nil, err
+	}
 
-// 	err = nstmt.Select(&tasks, arg)
-// 	return tasks, err
-// }
+	err = nstmt.Select(&tasks, arg)
+	return tasks, err
+}
 
 func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
 	var count uint64
