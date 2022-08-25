@@ -138,25 +138,13 @@ func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
 }
 
 func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error {
-	// Save bid_trace
-	bidTraceEntry := PayloadToBidTraceEntry(payload)
-	query := `INSERT INTO ` + TableBidTrace + `(slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value) VALUES (:slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value) RETURNING id`
-	nstmt, err := s.DB.PrepareNamed(query)
-	if err != nil {
-		return err
-	}
-	err = nstmt.QueryRow(bidTraceEntry).Scan(&bidTraceEntry.ID)
-	if err != nil {
-		return err
-	}
-
 	// Save execution_payload
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
 		return err
 	}
-	query = `INSERT INTO ` + TableExecutionPayload + `(slot, proposer_pubkey, block_hash, version, payload) VALUES (:slot, :proposer_pubkey, :block_hash, :version, :payload) RETURNING id`
-	nstmt, err = s.DB.PrepareNamed(query)
+	query := `INSERT INTO ` + TableExecutionPayload + `(slot, proposer_pubkey, block_hash, version, payload) VALUES (:slot, :proposer_pubkey, :block_hash, :version, :payload) RETURNING id`
+	nstmt, err := s.DB.PrepareNamed(query)
 	if err != nil {
 		return err
 	}
@@ -172,25 +160,31 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	}
 
 	blockSubmissionEntry := &BuilderBlockSubmissionEntry{
-		Signature:          payload.Signature.String(),
-		BidTraceID:         bidTraceEntry.ID,
 		ExecutionPayloadID: execPayloadEntry.ID,
 
 		SimSuccess: simError == nil,
 		SimError:   simErrStr,
 
-		Slot:  payload.Message.Slot,
-		Epoch: payload.Message.Slot / uint64(common.SlotsPerEpoch),
+		Signature: payload.Signature.String(),
 
-		NumTx: bidTraceEntry.NumTx,
-		Value: bidTraceEntry.Value,
+		Slot:       payload.Message.Slot,
+		BlockHash:  payload.ExecutionPayload.BlockHash.String(),
+		ParentHash: payload.ExecutionPayload.ParentHash.String(),
 
-		BlockNumber:   payload.ExecutionPayload.BlockNumber,
-		BlockHash:     payload.ExecutionPayload.BlockHash.String(),
-		ParentHash:    payload.ExecutionPayload.ParentHash.String(),
-		BuilderPubkey: payload.Message.BuilderPubkey.String(),
+		BuilderPubkey:        payload.Message.BuilderPubkey.String(),
+		ProposerPubkey:       payload.Message.ProposerPubkey.String(),
+		ProposerFeeRecipient: payload.Message.ProposerFeeRecipient.String(),
+
+		GasUsed:  payload.Message.GasUsed,
+		GasLimit: payload.Message.GasLimit,
+
+		NumTx: len(payload.ExecutionPayload.Transactions),
+		Value: payload.Message.Value.String(),
+
+		Epoch:       payload.Message.Slot / uint64(common.SlotsPerEpoch),
+		BlockNumber: payload.ExecutionPayload.BlockNumber,
 	}
-	query = `INSERT INTO ` + TableBuilderBlockSubmission + ` (signature, bid_trace_id, execution_payload_id, sim_success, sim_error, slot, epoch, num_tx, value, block_number, block_hash, parent_hash, builder_pubkey) VALUES (:signature, :bid_trace_id, :execution_payload_id, :sim_success, :sim_error, :slot, :epoch, :num_tx, :value, :block_number, :block_hash, :parent_hash, :builder_pubkey)`
+	query = `INSERT INTO ` + TableBuilderBlockSubmission + ` (execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number) VALUES (:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number)`
 	_, err = s.DB.NamedExec(query, blockSubmissionEntry)
 	return err
 }

@@ -28,24 +28,24 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
-type BidTraceEntry struct {
-	ID         uint64    `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
+// type BidTraceEntry struct {
+// 	ID         uint64    `db:"id"`
+// 	InsertedAt time.Time `db:"inserted_at"`
 
-	Slot       uint64 `db:"slot"`
-	ParentHash string `db:"parent_hash"`
-	BlockHash  string `db:"block_hash"`
+// 	Slot       uint64 `db:"slot"`
+// 	ParentHash string `db:"parent_hash"`
+// 	BlockHash  string `db:"block_hash"`
 
-	BuilderPubkey        string `db:"builder_pubkey"`
-	ProposerPubkey       string `db:"proposer_pubkey"`
-	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
+// 	BuilderPubkey        string `db:"builder_pubkey"`
+// 	ProposerPubkey       string `db:"proposer_pubkey"`
+// 	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
 
-	GasUsed  uint64 `db:"gas_used"`
-	GasLimit uint64 `db:"gas_limit"`
+// 	GasUsed  uint64 `db:"gas_used"`
+// 	GasLimit uint64 `db:"gas_limit"`
 
-	NumTx int    `db:"num_tx"`
-	Value string `db:"value"`
-}
+// 	NumTx int    `db:"num_tx"`
+// 	Value string `db:"value"`
+// }
 
 type ExecutionPayloadEntry struct {
 	ID         uint64    `db:"id"`
@@ -63,51 +63,61 @@ type BuilderBlockSubmissionEntry struct {
 	ID         uint64    `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
 
-	Signature          string `db:"signature"`
-	BidTraceID         uint64 `db:"bid_trace_id"`
+	// Delivered ExecutionPayload
 	ExecutionPayloadID uint64 `db:"execution_payload_id"`
 
+	// Sim Result
 	SimSuccess bool   `db:"sim_success"`
 	SimError   string `db:"sim_error"`
 
-	Slot  uint64 `db:"slot"`
-	Epoch uint64 `db:"epoch"`
+	// BidTrace data
+	Signature string `db:"signature"`
+
+	Slot       uint64 `db:"slot"`
+	ParentHash string `db:"parent_hash"`
+	BlockHash  string `db:"block_hash"`
+
+	BuilderPubkey        string `db:"builder_pubkey"`
+	ProposerPubkey       string `db:"proposer_pubkey"`
+	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
+
+	GasUsed  uint64 `db:"gas_used"`
+	GasLimit uint64 `db:"gas_limit"`
 
 	NumTx int    `db:"num_tx"`
 	Value string `db:"value"`
 
-	BlockNumber   uint64 `db:"block_number"`
-	BlockHash     string `db:"block_hash"`
-	ParentHash    string `db:"parent_hash"`
-	BuilderPubkey string `db:"builder_pubkey"`
+	// Helpers
+	Epoch       uint64 `db:"epoch"`
+	BlockNumber uint64 `db:"block_number"`
 }
 
-// type DeliveredPayloadEntry struct {
-// 	ID         uint64    `db:"id"`
-// 	InsertedAt time.Time `db:"inserted_at"`
+type DeliveredPayloadEntry struct {
+	ID         uint64    `db:"id"`
+	InsertedAt time.Time `db:"inserted_at"`
 
-// 	Slot  uint64 `db:"slot"`
-// 	Epoch uint64 `db:"epoch"`
+	Slot  uint64 `db:"slot"`
+	Epoch uint64 `db:"epoch"`
 
-// 	BuilderPubkey        string `db:"builder_pubkey"`
-// 	ProposerPubkey       string `db:"proposer_pubkey"`
-// 	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
+	BuilderPubkey        string `db:"builder_pubkey"`
+	ProposerPubkey       string `db:"proposer_pubkey"`
+	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
 
-// 	ParentHash  string `db:"parent_hash"`
-// 	BlockHash   string `db:"block_hash"`
-// 	BlockNumber uint64 `db:"block_number"`
-// 	NumTx       int    `db:"num_tx"`
-// 	Value       string `db:"value"`
+	ParentHash  string `db:"parent_hash"`
+	BlockHash   string `db:"block_hash"`
+	BlockNumber uint64 `db:"block_number"`
 
-// 	GasUsed  uint64 `db:"gas_used"`
-// 	GasLimit uint64 `db:"gas_limit"`
+	GasUsed  uint64 `db:"gas_used"`
+	GasLimit uint64 `db:"gas_limit"`
 
-// 	ExecutionPayload         string `db:"execution_payload"`
-// 	BidTrace                 string `db:"bid_trace"`
-// 	BidTraceBuilderSig       string `db:"bid_trace_builder_sig"`
-// 	SignedBuilderBid         string `db:"signed_builder_bid"`
-// 	SignedBlindedBeaconBlock string `db:"signed_blinded_beacon_block"`
-// }
+	NumTx int    `db:"num_tx"`
+	Value string `db:"value"`
+
+	BuilderBlockSubmissionID uint64 `db:"builder_block_submission_id"`
+	BuilderBidID             uint64 `db:"builder_bid_id"`
+
+	SignedBlindedBeaconBlock string `db:"signed_blinded_beacon_block"`
+}
 
 // func NewDeliveredPayloadEntry(bid *types.SignedBuilderBid, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, payload *types.ExecutionPayload, signedBidTrace *types.SignedBidTrace) (*DeliveredPayloadEntry, error) {
 // 	_bid, err := json.Marshal(bid)
@@ -155,23 +165,23 @@ type BuilderBlockSubmissionEntry struct {
 // 	}, nil
 // }
 
-func PayloadToBidTraceEntry(payload *types.BuilderSubmitBlockRequest) *BidTraceEntry {
-	return &BidTraceEntry{
-		Slot:       payload.Message.Slot,
-		ParentHash: payload.ExecutionPayload.ParentHash.String(),
-		BlockHash:  payload.ExecutionPayload.BlockHash.String(),
+// func PayloadToBidTraceEntry(payload *types.BuilderSubmitBlockRequest) *BidTraceEntry {
+// 	return &BidTraceEntry{
+// 		Slot:       payload.Message.Slot,
+// 		ParentHash: payload.ExecutionPayload.ParentHash.String(),
+// 		BlockHash:  payload.ExecutionPayload.BlockHash.String(),
 
-		BuilderPubkey:        payload.Message.BuilderPubkey.String(),
-		ProposerPubkey:       payload.Message.ProposerPubkey.String(),
-		ProposerFeeRecipient: payload.Message.ProposerFeeRecipient.String(),
+// 		BuilderPubkey:        payload.Message.BuilderPubkey.String(),
+// 		ProposerPubkey:       payload.Message.ProposerPubkey.String(),
+// 		ProposerFeeRecipient: payload.Message.ProposerFeeRecipient.String(),
 
-		GasUsed:  payload.Message.GasUsed,
-		GasLimit: payload.Message.GasLimit,
+// 		GasUsed:  payload.Message.GasUsed,
+// 		GasLimit: payload.Message.GasLimit,
 
-		NumTx: len(payload.ExecutionPayload.Transactions),
-		Value: payload.Message.Value.String(),
-	}
-}
+// 		NumTx: len(payload.ExecutionPayload.Transactions),
+// 		Value: payload.Message.Value.String(),
+// 	}
+// }
 
 func PayloadToExecPayloadEntry(payload *types.BuilderSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
 	_payload, err := json.Marshal(payload.ExecutionPayload)
