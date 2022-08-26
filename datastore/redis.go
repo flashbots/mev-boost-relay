@@ -79,7 +79,7 @@ func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposer
 }
 
 func (r *RedisCache) keyCacheGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetHeaderResponse, slot, proposerPubkey, blockHash)
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetPayloadResponse, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) GetObj(key string, obj any) (err error) {
