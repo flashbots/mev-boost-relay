@@ -21,6 +21,3 @@ func PayloadToExecPayloadEntry(payload *types.BuilderSubmitBlockRequest) (*Execu
 		Payload: string(_payload),
 	}, nil
 }
-
-// func NewDeliveredPayloadEntry(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, builderBlocksubmissionEntry *BuilderBlockSubmissionEntry, executionPayloadEntry *ExecutionPayloadEntry) (*DeliveredPayloadEntry, error) {
-// }

@@ -17,9 +17,12 @@ import (
 
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
-	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error
+	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error)
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 
+	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
+	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
+	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
 }
@@ -84,20 +87,24 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	return nil
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) error {
-	// Save execution_payload
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error) {
+	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	query := `INSERT INTO ` + TableExecutionPayload + `(slot, proposer_pubkey, block_hash, version, payload) VALUES (:slot, :proposer_pubkey, :block_hash, :version, :payload) RETURNING id`
+	query := `INSERT INTO ` + TableExecutionPayload + `
+	(slot, proposer_pubkey, block_hash, version, payload) VALUES
+	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
+	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
+	RETURNING id`
 	nstmt, err := s.DB.PrepareNamed(query)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	err = nstmt.QueryRow(execPayloadEntry).Scan(&execPayloadEntry.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Save block_submission
@@ -131,18 +138,45 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 		Epoch:       payload.Message.Slot / uint64(common.SlotsPerEpoch),
 		BlockNumber: payload.ExecutionPayload.BlockNumber,
 	}
-	query = `INSERT INTO ` + TableBuilderBlockSubmission + ` (execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number) VALUES (:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number)`
-	_, err = s.DB.NamedExec(query, blockSubmissionEntry)
-	return err
+	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
+	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number) VALUES
+	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number)
+	RETURNING id`
+	nstmt, err = s.DB.PrepareNamed(query)
+	if err != nil {
+		return 0, err
+	}
+	err = nstmt.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
+	if err != nil {
+		return 0, err
+	}
+
+	return blockSubmissionEntry.ID, err
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number
 	FROM ` + TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
-	ORDER BY proposer_pubkey ASC
-		LIMIT 1`
+	ORDER BY builder_pubkey ASC
+	LIMIT 1`
 	entry = &BuilderBlockSubmissionEntry{}
+	err = s.DB.Get(entry, query, slot, proposerPubkey, blockHash)
+	return entry, err
+}
+
+func (s *DatabaseService) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + TableExecutionPayload + ` WHERE id=$1`
+	entry = &ExecutionPayloadEntry{}
+	err = s.DB.Get(entry, query, executionPayloadID)
+	return entry, err
+}
+
+func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload
+	FROM ` + TableExecutionPayload + `
+	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3`
+	entry = &ExecutionPayloadEntry{}
 	err = s.DB.Get(entry, query, slot, proposerPubkey, blockHash)
 	return entry, err
 }
@@ -199,11 +233,6 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 
 	tasks := []*DeliveredPayloadEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
-	// if filters.IncludePayloads {
-	// 	fields += ", execution_payload, bid_trace, bid_trace_builder_sig, signed_builder_bid, signed_blinded_beacon_block"
-	// } else if filters.IncludeBidTrace {
-	// 	fields += ", bid_trace, bid_trace_builder_sig"
-	// }
 
 	whereConds := []string{}
 	if filters.Slot > 0 {

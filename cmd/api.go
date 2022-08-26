@@ -24,12 +24,14 @@ var (
 	apiPprofEnabled bool
 	apiSecretKey    string
 	apiBlockSimURL  string
+	apiDebug        bool
 )
 
 func init() {
 	rootCmd.AddCommand(apiCmd)
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
+	apiCmd.Flags().BoolVar(&apiDebug, "debug", false, "debug logging")
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
@@ -47,6 +49,10 @@ var apiCmd = &cobra.Command{
 	Short: "Start the API server",
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
+
+		if apiDebug {
+			logLevel = "debug"
+		}
 
 		common.LogSetup(logJSON, logLevel)
 		log := logrus.WithField("module", "cmd/api")

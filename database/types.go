@@ -11,8 +11,6 @@ type GetPayloadsFilters struct {
 	Limit       uint64
 	BlockHash   string
 	BlockNumber uint64
-	// IncludeBidTrace bool
-	// IncludePayloads bool
 }
 
 type ValidatorRegistrationEntry struct {
