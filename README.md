@@ -92,7 +92,8 @@ Env vars:
 * `SYNC_VALIDATOR_REGISTRATIONS` - handle validator registrations synchronously instead of in a background worker pool
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
 * `ALLOW_BLOCK_VERIFICATION_FAIL` - accept block even if block simulation & verification fails
-* `DISABLE_BID_MEMORY_CACHE` - force bids to go through redis/db
+* `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
+* `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
 
 # Maintainers
 

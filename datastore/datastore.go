@@ -44,6 +44,7 @@ type Datastore struct {
 
 	// feature flags
 	ffDisableBidMemoryCache bool
+	ffDisableBidRedisCache  bool
 }
 
 func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
@@ -58,8 +59,13 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDataba
 	}
 
 	if os.Getenv("DISABLE_BID_MEMORY_CACHE") == "1" {
-		ds.log.Warn("env: DISABLE_BID_MEMORY_CACHE - disabling memory bid cache, forcing to load from Redis")
+		ds.log.Warn("env: DISABLE_BID_MEMORY_CACHE - disabling in-memory bid cache")
 		ds.ffDisableBidMemoryCache = true
+	}
+
+	if os.Getenv("DISABLE_BID_REDIS_CACHE") == "1" {
+		ds.log.Warn("env: DISABLE_BID_REDIS_CACHE - disabling redis bid cache")
+		ds.ffDisableBidRedisCache = true
 	}
 
 	return ds, err
@@ -197,8 +203,8 @@ func (ds *Datastore) GetGetHeaderResponse(slot uint64, parentHash, proposerPubke
 	_parentHash := strings.ToLower(parentHash)
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 
+	// 1. Check in memory
 	if !ds.ffDisableBidMemoryCache {
-		// 1. Check in memory
 		headerKey := GetHeaderResponseKey{
 			Slot:           slot,
 			ParentHash:     _parentHash,
@@ -209,12 +215,19 @@ func (ds *Datastore) GetGetHeaderResponse(slot uint64, parentHash, proposerPubke
 		resp, found := ds.getHeaderResponses[headerKey]
 		ds.getHeaderResponsesLock.RUnlock()
 		if found {
+			ds.log.Debug("getHeader response from in-memory")
 			return resp, nil
 		}
 	}
 
 	// 2. Check in Redis
-	return ds.redis.GetGetHeaderResponse(slot, _parentHash, _proposerPubkey)
+	resp, err := ds.redis.GetGetHeaderResponse(slot, _parentHash, _proposerPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	ds.log.Debug("getHeader response from redis")
+	return resp, nil
 }
 
 // GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
@@ -222,8 +235,8 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
 
+	// 1. try to get from memory
 	if !ds.ffDisableBidMemoryCache {
-		// 1. try to get from memory
 		bidKey := GetPayloadResponseKey{
 			Slot:           slot,
 			ProposerPubkey: _proposerPubkey,
@@ -234,14 +247,18 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		resp, found := ds.GetPayloadResponses[bidKey]
 		ds.getHeaderResponsesLock.RUnlock()
 		if found {
+			ds.log.Debug("getPayload response from in-memory")
 			return resp, nil
 		}
 	}
 
 	// 2. try to get from Redis
-	resp, err := ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
-	if err == nil {
-		return resp, nil
+	if !ds.ffDisableBidRedisCache {
+		resp, err := ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
+		if err == nil {
+			ds.log.Debug("getPayload response from redis")
+			return resp, nil
+		}
 	}
 
 	// 3. try to get from database
@@ -257,6 +274,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		return nil, err
 	}
 
+	ds.log.Debug("getPayload response from database")
 	return &types.GetPayloadResponse{
 		Version: types.VersionString(blockSubEntry.Version),
 		Data:    executionPayload,

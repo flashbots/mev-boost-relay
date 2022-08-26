@@ -96,7 +96,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	query := `INSERT INTO ` + TableExecutionPayload + `
 	(slot, proposer_pubkey, block_hash, version, payload) VALUES
 	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
-	ON CONFLICT DO UPDATE SET slot=:slot
+	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
 	RETURNING id`
 	nstmt, err := s.DB.PrepareNamed(query)
 	if err != nil {
