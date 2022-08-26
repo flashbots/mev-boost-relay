@@ -9,7 +9,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -87,9 +86,6 @@ type RelayAPI struct {
 	srv        *http.Server
 	srvStarted uberatomic.Bool
 
-	regValEntriesC       chan types.SignedValidatorRegistration
-	regValWorkersStarted uberatomic.Bool
-
 	beaconClients []beaconclient.BeaconNodeClient
 	datastore     *datastore.Datastore
 	redis         *datastore.RedisCache
@@ -108,7 +104,6 @@ type RelayAPI struct {
 	// feature flags
 	ffAllowSyncingBeaconNode     bool
 	ffAllowZeroValueBlocks       bool
-	ffSyncValidatorRegistrations bool
 	ffAllowBlockVerificationFail bool
 }
 
@@ -138,7 +133,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		redis:                  opts.Redis,
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
-		regValEntriesC:         make(chan types.SignedValidatorRegistration, 5000),
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 	}
 
@@ -161,11 +155,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
 		api.log.Warn("env: ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
 		api.ffAllowZeroValueBlocks = true
-	}
-
-	if os.Getenv("SYNC_VALIDATOR_REGISTRATIONS") != "" {
-		api.log.Warn("env: SYNC_VALIDATOR_REGISTRATIONS: enabling sync validator registrations")
-		api.ffSyncValidatorRegistrations = true
 	}
 
 	if os.Getenv("ALLOW_BLOCK_VERIFICATION_FAIL") != "" {
@@ -206,48 +195,6 @@ func (api *RelayAPI) getRouter() http.Handler {
 	return loggedRouter
 }
 
-// startValidatorRegistrationWorkers starts a number of worker goroutines to handle the expensive part
-// of (already sanity-checked) validator registrations: the signature verification and updating in Redis.
-func (api *RelayAPI) startValidatorRegistrationWorkers() error {
-	if api.regValWorkersStarted.Swap(true) {
-		return ErrRegistrationWorkersAlreadyStarted
-	}
-
-	numWorkers := api.opts.RegValWorkers
-	if numWorkers == 0 {
-		numWorkers = runtime.NumCPU()
-	}
-
-	api.log.Infof("Starting %d registerValidator workers", numWorkers)
-
-	for i := 0; i < numWorkers; i++ {
-		go func() {
-			for {
-				registration := <-api.regValEntriesC
-				log := api.log.WithFields(logrus.Fields{
-					"pubkey": registration.Message.Pubkey.PubkeyHex(),
-				})
-
-				// Verify the signature
-				ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
-				if err != nil || !ok {
-					log.WithError(err).Warn("failed to verify registerValidator signature")
-					continue
-				}
-
-				// Save the registration and increment counter
-				go func() {
-					err := api.datastore.SetValidatorRegistration(registration)
-					if err != nil {
-						log.WithError(err).Error("Failed to set validator registration")
-					}
-				}()
-			}
-		}()
-	}
-	return nil
-}
-
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
@@ -256,12 +203,6 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// Get best beacon-node status by head slot, process current slot and start slot updates
 	bestSyncStatus, err := api.getBestSyncStatus()
-	if err != nil {
-		return err
-	}
-
-	// Start worker pool for validator registration processing
-	err = api.startValidatorRegistrationWorkers()
 	if err != nil {
 		return err
 	}
@@ -529,27 +470,23 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Send to workers for signature verification and saving
 		numRegNew++
-		if api.ffSyncValidatorRegistrations {
-			// Verify the signature
-			ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
-			if err != nil {
-				regLog.WithError(err).Error("error verifying registerValidator signature")
-				continue
-			} else if !ok {
-				api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
-				return
-			} else {
-				// Save and increment counter
-				go func(reg types.SignedValidatorRegistration) {
-					err := api.datastore.SetValidatorRegistration(reg)
-					if err != nil {
-						regLog.WithError(err).Error("Failed to set validator registration")
-					}
-				}(registration)
-			}
+
+		// Verify the signature
+		ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
+		if err != nil {
+			regLog.WithError(err).Error("error verifying registerValidator signature")
+			continue
+		} else if !ok {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
+			return
 		} else {
-			// Send to channel for async processing
-			api.regValEntriesC <- registration
+			// Save and increment counter
+			go func(reg types.SignedValidatorRegistration) {
+				err := api.datastore.SetValidatorRegistration(reg)
+				if err != nil {
+					regLog.WithError(err).Error("Failed to set validator registration")
+				}
+			}(registration)
 		}
 	}
 
