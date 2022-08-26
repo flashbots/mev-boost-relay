@@ -102,9 +102,7 @@ type RelayAPI struct {
 	blockSimRateLimiter *BlockSimulationRateLimiter
 
 	// feature flags
-	ffAllowSyncingBeaconNode     bool
-	ffAllowZeroValueBlocks       bool
-	ffAllowBlockVerificationFail bool
+	ffAllowSyncingBeaconNode bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -152,16 +150,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	}
 
 	// Feature Flags
-	if os.Getenv("ENABLE_ZERO_VALUE_BLOCKS") != "" {
-		api.log.Warn("env: ENABLE_ZERO_VALUE_BLOCKS: sending blocks with zero value")
-		api.ffAllowZeroValueBlocks = true
-	}
-
-	if os.Getenv("ALLOW_BLOCK_VERIFICATION_FAIL") != "" {
-		api.log.Warn("env: ALLOW_BLOCK_VERIFICATION_FAIL: allow failing block verification")
-		api.ffAllowBlockVerificationFail = true
-	}
-
 	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
 		api.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
 		api.ffAllowSyncingBeaconNode = true
@@ -539,8 +527,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// If 0-value bid, only return if explicitly allowed
-	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 && !api.ffAllowZeroValueBlocks {
+	// Error on bid without value
+	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -652,12 +640,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"blockHash": payload.Message.BlockHash.String(),
 	})
 
-	// By default, don't accept blocks with 0 value
-	if !api.ffAllowZeroValueBlocks {
-		if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+	// Don't accept blocks with 0 value
+	if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
 	// Sanity check the submission
@@ -691,7 +677,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Return error if block verification failed
-	if simErr != nil && !api.ffAllowBlockVerificationFail {
+	if simErr != nil {
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	}
