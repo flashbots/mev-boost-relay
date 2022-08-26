@@ -2,6 +2,7 @@ package beaconclient
 
 import (
 	"sync"
+	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 )
@@ -9,11 +10,26 @@ import (
 type MockBeaconClient struct {
 	mu           sync.RWMutex
 	validatorSet map[types.PubkeyHex]ValidatorResponseEntry
+
+	MockSyncStatus         *SyncStatusPayloadData
+	MockSyncStatusErr      error
+	MockProposerDuties     *ProposerDutiesResponse
+	MockProposerDutiesErr  error
+	MockFetchValidatorsErr error
+
+	ResponseDelay time.Duration
 }
 
 func NewMockBeaconClient() *MockBeaconClient {
 	return &MockBeaconClient{
 		validatorSet: make(map[types.PubkeyHex]ValidatorResponseEntry),
+		MockSyncStatus: &SyncStatusPayloadData{
+			HeadSlot:  1,
+			IsSyncing: false,
+		},
+		MockProposerDuties: &ProposerDutiesResponse{
+			Data: []ProposerDutiesResponseData{},
+		},
 	}
 }
 
@@ -43,28 +59,33 @@ func (c *MockBeaconClient) NumValidators() uint64 {
 }
 
 func (c *MockBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
-	return c.validatorSet, nil
+	c.addDelay()
+	return c.validatorSet, c.MockFetchValidatorsErr
 }
 
 func (c *MockBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
-	return &SyncStatusPayloadData{
-		HeadSlot:  1,
-		IsSyncing: false,
-	}, nil
+	c.addDelay()
+	return c.MockSyncStatus, c.MockSyncStatusErr
 }
 
 func (c *MockBeaconClient) CurrentSlot() (uint64, error) {
-	return 1, nil
+	c.addDelay()
+	return c.MockSyncStatus.HeadSlot, nil
 }
 
 func (c *MockBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 
 func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
-	return &ProposerDutiesResponse{
-		Data: []ProposerDutiesResponseData{},
-	}, nil
+	c.addDelay()
+	return c.MockProposerDuties, c.MockProposerDutiesErr
 }
 
 func (c *MockBeaconClient) GetURI() string {
 	return ""
+}
+
+func (c *MockBeaconClient) addDelay() {
+	if c.ResponseDelay > 0 {
+		time.Sleep(c.ResponseDelay)
+	}
 }
