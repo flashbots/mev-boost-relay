@@ -69,10 +69,11 @@ var apiCmd = &cobra.Command{
 			log.Fatalf("no beacon endpoints specified")
 		}
 		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
-		var beaconClients []beaconclient.BeaconNodeClient
+		var beaconInstances []beaconclient.IBeaconInstance
 		for _, uri := range beaconNodeURIs {
-			beaconClients = append(beaconClients, beaconclient.NewProdBeaconClient(log, uri))
+			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
 		}
+		beaconClient := beaconclient.NewBeaconClient(log, beaconInstances)
 
 		// Connect to Redis
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
@@ -106,7 +107,7 @@ var apiCmd = &cobra.Command{
 		opts := api.RelayAPIOpts{
 			Log:           log,
 			ListenAddr:    apiListenAddr,
-			BeaconClients: beaconClients,
+			BeaconClient:  beaconClient,
 			Datastore:     ds,
 			Redis:         redis,
 			DB:            db,
