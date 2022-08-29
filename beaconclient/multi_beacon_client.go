@@ -46,9 +46,10 @@ type MultiBeaconClient struct {
 
 func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *MultiBeaconClient {
 	client := &MultiBeaconClient{
-		log:             log.WithField("module", "beaconClient"),
-		beaconInstances: beaconInstances,
-		bestBeaconIndex: *uberatomic.NewInt64(0),
+		log:                      log.WithField("module", "beaconClient"),
+		beaconInstances:          beaconInstances,
+		bestBeaconIndex:          *uberatomic.NewInt64(0),
+		ffAllowSyncingBeaconNode: false,
 	}
 
 	// feature flags
@@ -58,7 +59,6 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 	}
 
 	return client
-
 }
 
 func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
