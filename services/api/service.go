@@ -47,6 +47,7 @@ var (
 
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
+	pathDataBuilderBidsReceived      = "/relay/v1/data/bidtraces/builder_blocks_received"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -159,6 +160,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 	// Data API
 	r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
+	r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
 
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
@@ -684,7 +686,6 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	args := req.URL.Query()
 
 	filters := database.GetPayloadsFilters{
-		// IncludeBidTrace: true,
 		Limit: 100,
 	}
 
@@ -743,6 +744,91 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	response := []BidTraceJSON{}
 	for _, payload := range deliveredPayloads {
 		trace := BidTraceJSON{
+			InsertedAt:           0,
+			Slot:                 payload.Slot,
+			ParentHash:           payload.ParentHash,
+			BlockHash:            payload.BlockHash,
+			BuilderPubkey:        payload.BuilderPubkey,
+			ProposerPubkey:       payload.ProposerPubkey,
+			ProposerFeeRecipient: payload.ProposerFeeRecipient,
+			GasLimit:             payload.GasLimit,
+			GasUsed:              payload.GasUsed,
+			Value:                payload.Value,
+		}
+		response = append(response, trace)
+	}
+
+	api.RespondOK(w, response)
+}
+
+func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *http.Request) {
+	var err error
+	args := req.URL.Query()
+
+	filters := database.GetBuilderSubmissionsFilters{
+		Limit:       100,
+		Slot:        0,
+		Cursor:      0,
+		BlockHash:   "",
+		BlockNumber: 0,
+	}
+
+	if args.Get("slot") != "" {
+		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
+			return
+		}
+	} else if args.Get("cursor") != "" {
+		filters.Cursor, err = strconv.ParseUint(args.Get("cursor"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
+			return
+		}
+	}
+
+	if args.Get("block_hash") != "" {
+		var hash types.Hash
+		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
+			return
+		}
+		filters.BlockHash = args.Get("block_hash")
+	}
+
+	if args.Get("block_number") != "" {
+		filters.BlockNumber, err = strconv.ParseUint(args.Get("block_number"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
+			return
+		}
+	}
+
+	if args.Get("limit") != "" {
+		_limit, err := strconv.ParseUint(args.Get("limit"), 10, 64)
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid limit argument")
+			return
+		}
+		if _limit > filters.Limit {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("maximum limit is %d", filters.Limit))
+			return
+		}
+		filters.Limit = _limit
+	}
+
+	deliveredPayloads, err := api.db.GetBuilderSubmissions(filters)
+	if err != nil {
+		api.log.WithError(err).Error("error getting recent payloads")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := []BidTraceJSON{}
+	for _, payload := range deliveredPayloads {
+		trace := BidTraceJSON{
+			InsertedAt:           payload.InsertedAt.Unix(),
 			Slot:                 payload.Slot,
 			ParentHash:           payload.ParentHash,
 			BlockHash:            payload.BlockHash,
