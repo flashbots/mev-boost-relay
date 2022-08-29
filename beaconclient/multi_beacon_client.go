@@ -116,6 +116,8 @@ func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 	return bestSyncStatus, nil
 }
 
+// SubscribeToHeadEvents subscribes to head events from all beacon nodes. A single head event will be received multiple times,
+// likely once for every beacon nodes.
 func (c *MultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	for _, instance := range c.beaconInstances {
 		go instance.SubscribeToHeadEvents(slotC)
