@@ -87,8 +87,7 @@ type RelayAPI struct {
 	redis        *datastore.RedisCache
 	db           database.IDatabaseService
 
-	headSlot     uint64
-	currentEpoch uint64
+	headSlot uberatomic.Uint64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   []types.BuilderGetValidatorsResponseEntry
@@ -205,7 +204,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	go func() {
 		for {
 			time.Sleep(2 * time.Minute)
-			numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(api.headSlot)
+			numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(api.headSlot.Load())
 			api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 		}
 	}()
@@ -228,22 +227,23 @@ func (api *RelayAPI) StartServer() (err error) {
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
-	if headSlot <= api.headSlot {
+	_apiHeadSlot := api.headSlot.Load()
+	if headSlot <= _apiHeadSlot {
 		return
 	}
 
-	if api.headSlot > 0 {
-		for s := api.headSlot + 1; s < headSlot; s++ {
+	if _apiHeadSlot > 0 {
+		for s := _apiHeadSlot + 1; s < headSlot; s++ {
 			api.log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
 		}
 	}
 
-	api.headSlot = headSlot
-	api.currentEpoch = headSlot / uint64(common.SlotsPerEpoch)
+	api.headSlot.Store(headSlot)
+	epoch := headSlot / uint64(common.SlotsPerEpoch)
 	api.log.WithFields(logrus.Fields{
-		"epoch":              api.currentEpoch,
+		"epoch":              epoch,
 		"slotHead":           headSlot,
-		"slotStartNextEpoch": (api.currentEpoch + 1) * uint64(common.SlotsPerEpoch),
+		"slotStartNextEpoch": (epoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
 
 	// Regularly update proposer duties in the background
@@ -569,6 +569,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"builder":   payload.Message.BuilderPubkey.String(),
 		"blockHash": payload.Message.BlockHash.String(),
 	})
+
+	if payload.Message.Slot <= api.headSlot.Load() {
+		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
+		return
+	}
 
 	// Don't accept blocks with 0 value
 	if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
