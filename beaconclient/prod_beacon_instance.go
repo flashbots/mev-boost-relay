@@ -9,17 +9,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type ProdBeaconClient struct {
+type ProdBeaconInstance struct {
 	log       *logrus.Entry
 	beaconURI string
 }
 
-func NewProdBeaconClient(log *logrus.Entry, beaconURI string) *ProdBeaconClient {
+func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
 	_log := log.WithFields(logrus.Fields{
-		"module":    "beaconClient",
+		"module":    "beaconInstance",
 		"beaconURI": beaconURI,
 	})
-	return &ProdBeaconClient{_log, beaconURI}
+	return &ProdBeaconInstance{_log, beaconURI}
 }
 
 // HeadEventData represents the data of a head event
@@ -30,7 +30,7 @@ type HeadEventData struct {
 	State string `json:"state"`
 }
 
-func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
+func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	for {
 		log := c.log.WithFields(logrus.Fields{
@@ -53,7 +53,7 @@ func (c *ProdBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	}
 }
 
-func (c *ProdBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *ProdBeaconInstance) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	vd, err := fetchAllValidators(c.beaconURI, headSlot)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ type SyncStatusPayloadData struct {
 
 // SyncStatus returns the current node sync-status
 // https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
-func (c *ProdBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
+func (c *ProdBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {
 	uri := c.beaconURI + "/eth/v1/node/syncing"
 	resp := new(SyncStatusPayload)
 	err := fetchBeacon(uri, "GET", resp)
@@ -113,7 +113,7 @@ func (c *ProdBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	return &resp.Data, nil
 }
 
-func (c *ProdBeaconClient) CurrentSlot() (uint64, error) {
+func (c *ProdBeaconInstance) CurrentSlot() (uint64, error) {
 	syncStatus, err := c.SyncStatus()
 	if err != nil {
 		return 0, err
@@ -132,7 +132,7 @@ type ProposerDutiesResponseData struct {
 
 // GetProposerDuties returns proposer duties for every slot in this epoch
 // https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
-func (c *ProdBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
+func (c *ProdBeaconInstance) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", c.beaconURI, epoch)
 	resp := new(ProposerDutiesResponse)
 	err := fetchBeacon(uri, "GET", resp)
@@ -155,7 +155,7 @@ type GetHeaderResponseMessage struct {
 }
 
 // GetHeader returns the latest header - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockHeader
-func (c *ProdBeaconClient) GetHeader() (*GetHeaderResponse, error) {
+func (c *ProdBeaconInstance) GetHeader() (*GetHeaderResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/headers/head", c.beaconURI)
 	resp := new(GetHeaderResponse)
 	err := fetchBeacon(uri, "GET", resp)
@@ -174,13 +174,13 @@ type GetBlockResponse struct {
 }
 
 // GetBlock returns the latest block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-func (c *ProdBeaconClient) GetBlock() (*GetBlockResponse, error) {
+func (c *ProdBeaconInstance) GetBlock() (*GetBlockResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
 	resp := new(GetBlockResponse)
 	err := fetchBeacon(uri, "GET", resp)
 	return resp, err
 }
 
-func (c *ProdBeaconClient) GetURI() string {
+func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }

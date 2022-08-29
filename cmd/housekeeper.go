@@ -47,10 +47,11 @@ var housekeeperCmd = &cobra.Command{
 			log.Fatalf("no beacon endpoints specified")
 		}
 		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
-		var beaconClients []beaconclient.BeaconNodeClient
+		var beaconInstances []beaconclient.IBeaconInstance
 		for _, uri := range beaconNodeURIs {
-			beaconClients = append(beaconClients, beaconclient.NewProdBeaconClient(log, uri))
+			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
 		}
+		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis and setup the datastore
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
@@ -70,10 +71,10 @@ var housekeeperCmd = &cobra.Command{
 		}
 
 		opts := &housekeeper.HousekeeperOpts{
-			Log:           log,
-			Redis:         redis,
-			Datastore:     ds,
-			BeaconClients: beaconClients,
+			Log:          log,
+			Redis:        redis,
+			Datastore:    ds,
+			BeaconClient: beaconClient,
 		}
 		service := housekeeper.NewHousekeeper(opts)
 		log.Info("Starting service...")

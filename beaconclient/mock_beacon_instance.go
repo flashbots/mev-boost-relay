@@ -7,7 +7,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-type MockBeaconClient struct {
+type MockBeaconInstance struct {
 	mu           sync.RWMutex
 	validatorSet map[types.PubkeyHex]ValidatorResponseEntry
 
@@ -20,9 +20,10 @@ type MockBeaconClient struct {
 	ResponseDelay time.Duration
 }
 
-func NewMockBeaconClient() *MockBeaconClient {
-	return &MockBeaconClient{
+func NewMockBeaconInstance() *MockBeaconInstance {
+	return &MockBeaconInstance{
 		validatorSet: make(map[types.PubkeyHex]ValidatorResponseEntry),
+
 		MockSyncStatus: &SyncStatusPayloadData{
 			HeadSlot:  1,
 			IsSyncing: false,
@@ -30,61 +31,68 @@ func NewMockBeaconClient() *MockBeaconClient {
 		MockProposerDuties: &ProposerDutiesResponse{
 			Data: []ProposerDutiesResponseData{},
 		},
+		MockSyncStatusErr:      nil,
+		MockProposerDutiesErr:  nil,
+		MockFetchValidatorsErr: nil,
+
+		ResponseDelay: 0,
+
+		mu: sync.RWMutex{},
 	}
 }
 
-func (c *MockBeaconClient) AddValidator(entry ValidatorResponseEntry) {
+func (c *MockBeaconInstance) AddValidator(entry ValidatorResponseEntry) {
 	c.mu.Lock()
 	c.validatorSet[types.NewPubkeyHex(entry.Validator.Pubkey)] = entry
 	c.mu.Unlock()
 }
 
-func (c *MockBeaconClient) SetValidators(validatorSet map[types.PubkeyHex]ValidatorResponseEntry) {
+func (c *MockBeaconInstance) SetValidators(validatorSet map[types.PubkeyHex]ValidatorResponseEntry) {
 	c.mu.Lock()
 	c.validatorSet = validatorSet
 	c.mu.Unlock()
 }
 
-func (c *MockBeaconClient) IsValidator(pubkey types.PubkeyHex) bool {
+func (c *MockBeaconInstance) IsValidator(pubkey types.PubkeyHex) bool {
 	c.mu.RLock()
 	_, found := c.validatorSet[pubkey]
 	c.mu.RUnlock()
 	return found
 }
 
-func (c *MockBeaconClient) NumValidators() uint64 {
+func (c *MockBeaconInstance) NumValidators() uint64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconInstance) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	c.addDelay()
 	return c.validatorSet, c.MockFetchValidatorsErr
 }
 
-func (c *MockBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
+func (c *MockBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {
 	c.addDelay()
 	return c.MockSyncStatus, c.MockSyncStatusErr
 }
 
-func (c *MockBeaconClient) CurrentSlot() (uint64, error) {
+func (c *MockBeaconInstance) CurrentSlot() (uint64, error) {
 	c.addDelay()
 	return c.MockSyncStatus.HeadSlot, nil
 }
 
-func (c *MockBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
+func (c *MockBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 
-func (c *MockBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
+func (c *MockBeaconInstance) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	c.addDelay()
 	return c.MockProposerDuties, c.MockProposerDutiesErr
 }
 
-func (c *MockBeaconClient) GetURI() string {
+func (c *MockBeaconInstance) GetURI() string {
 	return ""
 }
 
-func (c *MockBeaconClient) addDelay() {
+func (c *MockBeaconInstance) addDelay() {
 	if c.ResponseDelay > 0 {
 		time.Sleep(c.ResponseDelay)
 	}
