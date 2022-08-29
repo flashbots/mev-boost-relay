@@ -67,7 +67,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 			GenesisForkVersionHex:    genesisForkVersionHex,
 			GenesisValidatorsRootHex: "",
 			BellatrixForkVersionHex:  "0x00000000",
-			DomainBuilder:            types.Domain{},
+			DomainBuilder:            builderSigningDomain,
 			DomainBeaconProposer:     types.Domain{},
 		},
 		SecretKey: sk,
@@ -216,11 +216,9 @@ func TestRegisterValidator(t *testing.T) {
 		t.Skip() // has an error at verifying the sig
 
 		backend := newTestBackend(t, 1)
-		err := backend.relay.startValidatorRegistrationWorkers()
-		require.NoError(t, err)
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
 		index := uint64(17)
-		err = backend.redis.SetKnownValidator(pubkeyHex, index)
+		err := backend.redis.SetKnownValidator(pubkeyHex, index)
 		require.NoError(t, err)
 
 		// Update datastore
@@ -261,7 +259,7 @@ func TestRegisterValidator(t *testing.T) {
 		require.NoError(t, err)
 
 		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
-		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 		// Disallow +11 sec
 		td = uint64(time.Now().Unix())
