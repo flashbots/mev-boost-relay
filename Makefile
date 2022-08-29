@@ -9,7 +9,7 @@ clean:
 	git clean -fdx
 
 build:
-	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v -o boost-relay .
+	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v -o boos4t-relay .
 
 test:
 	go test ./...
@@ -27,10 +27,9 @@ lint:
 gofumpt:
 	gofumpt -l -w -extra .
 
-cover:
-	go test -coverprofile=/tmp/boost-relay.cover.tmp ./...
-	go tool cover -func /tmp/boost-relay.cover.tmp
-	unlink /tmp/boost-relay.cover.tmp
+test-coverage:
+	go test -race -v -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func coverage.out
 
 cover-html:
 	go test -coverprofile=/tmp/boost-relay.cover.tmp ./...
