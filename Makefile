@@ -9,7 +9,7 @@ clean:
 	git clean -fdx
 
 build:
-	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v -o boos4t-relay .
+	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v -o boost-relay .
 
 test:
 	go test ./...
