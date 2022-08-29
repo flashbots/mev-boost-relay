@@ -20,7 +20,7 @@ var errTest = errors.New("test error")
 type testBackend struct {
 	t               require.TestingT
 	beaconInstances []*MockBeaconInstance
-	beaconClient    IBeaconClient
+	beaconClient    IMultiBeaconClient
 }
 
 func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
@@ -34,7 +34,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	return &testBackend{
 		t:               t,
 		beaconInstances: mockBeaconInstances,
-		beaconClient:    NewBeaconClient(common.TestLog, beaconInstancesInterface),
+		beaconClient:    NewMultiBeaconClient(common.TestLog, beaconInstancesInterface),
 	}
 }
 

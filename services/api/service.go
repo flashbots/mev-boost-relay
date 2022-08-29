@@ -57,7 +57,7 @@ type RelayAPIOpts struct {
 	BlockSimURL   string
 	RegValWorkers int // number of workers for validator registration processing
 
-	BeaconClient beaconclient.IBeaconClient
+	BeaconClient beaconclient.IMultiBeaconClient
 	Datastore    *datastore.Datastore
 	Redis        *datastore.RedisCache
 	DB           database.IDatabaseService
@@ -82,7 +82,7 @@ type RelayAPI struct {
 	srv        *http.Server
 	srvStarted uberatomic.Bool
 
-	beaconClient beaconclient.IBeaconClient
+	beaconClient beaconclient.IMultiBeaconClient
 	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
 	db           database.IDatabaseService

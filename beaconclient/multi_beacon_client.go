@@ -17,13 +17,15 @@ var (
 	ErrBeaconNodesUnavailable = errors.New("all beacon nodes responded with error")
 )
 
-type IBeaconClient interface {
+// IMultiBeaconClient is the interface for the MultiBeaconClient, which can manage several beacon client instances under the hood
+type IMultiBeaconClient interface {
 	BestSyncStatus() (*SyncStatusPayloadData, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 }
 
+// IBeaconInstance is the interface for a single beacon client instance
 type IBeaconInstance interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	CurrentSlot() (uint64, error)
@@ -33,7 +35,7 @@ type IBeaconInstance interface {
 	GetURI() string
 }
 
-type BeaconClient struct {
+type MultiBeaconClient struct {
 	log             *logrus.Entry
 	bestBeaconIndex uberatomic.Int64
 	beaconInstances []IBeaconInstance
@@ -42,25 +44,24 @@ type BeaconClient struct {
 	ffAllowSyncingBeaconNode bool
 }
 
-func NewBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *BeaconClient {
-	_log := log.WithField("module", "beaconClient")
+func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *MultiBeaconClient {
+	client := &MultiBeaconClient{
+		log:             log.WithField("module", "beaconClient"),
+		beaconInstances: beaconInstances,
+		bestBeaconIndex: *uberatomic.NewInt64(0),
+	}
 
 	// feature flags
-	var ffAllowSyncingBeaconNode bool
 	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
-		log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
-		ffAllowSyncingBeaconNode = true
+		client.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
+		client.ffAllowSyncingBeaconNode = true
 	}
 
-	return &BeaconClient{
-		log:                      _log,
-		beaconInstances:          beaconInstances,
-		bestBeaconIndex:          *uberatomic.NewInt64(0),
-		ffAllowSyncingBeaconNode: ffAllowSyncingBeaconNode,
-	}
+	return client
+
 }
 
-func (c *BeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
+func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 	var bestSyncStatus *SyncStatusPayloadData
 	var numSyncedNodes uint32
 	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
@@ -115,13 +116,13 @@ func (c *BeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 	return bestSyncStatus, nil
 }
 
-func (c *BeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
+func (c *MultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	for _, instance := range c.beaconInstances {
 		go instance.SubscribeToHeadEvents(slotC)
 	}
 }
 
-func (c *BeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	// return the first successful beacon node response
 	clients := c.beaconInstancesByLastResponse()
 
@@ -144,7 +145,7 @@ func (c *BeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]Val
 	return nil, ErrBeaconNodesUnavailable
 }
 
-func (c *BeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
+func (c *MultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	// return the first successful beacon node response
 	clients := c.beaconInstancesByLastResponse()
 
@@ -169,7 +170,7 @@ func (c *BeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse,
 
 // beaconInstancesByLastResponse returns a list of beacon clients that has the client
 // with the last successful response as the first element of the slice
-func (c *BeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
+func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 	index := c.bestBeaconIndex.Load()
 	if index == 0 {
 		return c.beaconInstances

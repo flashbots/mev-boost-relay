@@ -48,7 +48,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	opts := RelayAPIOpts{
 		Log:          common.TestLog,
 		ListenAddr:   "localhost:12345",
-		BeaconClient: &beaconclient.BeaconClient{},
+		BeaconClient: &beaconclient.MultiBeaconClient{},
 		Datastore:    ds,
 		Redis:        redisCache,
 		DB:           db,

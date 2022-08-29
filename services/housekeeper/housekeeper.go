@@ -26,7 +26,7 @@ type HousekeeperOpts struct {
 	Log          *logrus.Entry
 	Redis        *datastore.RedisCache
 	Datastore    *datastore.Datastore
-	BeaconClient beaconclient.IBeaconClient
+	BeaconClient beaconclient.IMultiBeaconClient
 }
 
 type Housekeeper struct {
@@ -35,7 +35,7 @@ type Housekeeper struct {
 
 	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
-	beaconClient beaconclient.IBeaconClient
+	beaconClient beaconclient.IMultiBeaconClient
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool

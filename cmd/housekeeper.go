@@ -51,7 +51,7 @@ var housekeeperCmd = &cobra.Command{
 		for _, uri := range beaconNodeURIs {
 			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
 		}
-		beaconClient := beaconclient.NewBeaconClient(log, beaconInstances)
+		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis and setup the datastore
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
