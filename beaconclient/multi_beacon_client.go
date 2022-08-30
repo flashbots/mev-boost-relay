@@ -2,7 +2,6 @@
 package beaconclient
 
 import (
-	"context"
 	"errors"
 	"os"
 	"sync"
@@ -63,9 +62,7 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 
 func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 	var bestSyncStatus *SyncStatusPayloadData
-	var numSyncedNodes uint32
-	requestCtx, requestCtxCancel := context.WithCancel(context.Background())
-	defer requestCtxCancel()
+	var foundSyncedNode bool
 
 	// Check each beacon-node sync status
 	var mu sync.Mutex
@@ -86,7 +83,7 @@ func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 			mu.Lock()
 			defer mu.Unlock()
 
-			if requestCtx.Err() != nil { // request has been cancelled (or deadline exceeded)
+			if foundSyncedNode {
 				return
 			}
 
@@ -96,8 +93,7 @@ func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 
 			if !syncStatus.IsSyncing {
 				bestSyncStatus = syncStatus
-				numSyncedNodes++
-				requestCtxCancel()
+				foundSyncedNode = true
 			}
 		}(instance)
 	}
@@ -105,7 +101,7 @@ func (c *MultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
 	// Wait for all requests to complete...
 	wg.Wait()
 
-	if numSyncedNodes == 0 && !c.ffAllowSyncingBeaconNode {
+	if !foundSyncedNode && !c.ffAllowSyncingBeaconNode {
 		return nil, ErrBeaconNodeSyncing
 	}
 
