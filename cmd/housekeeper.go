@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -19,10 +18,10 @@ func init() {
 	housekeeperCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
 	housekeeperCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
-	housekeeperCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", os.Getenv("POSTGRES_DSN"), "PostgreSQL DSN")
+	housekeeperCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
+	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
 
-	housekeeperCmd.Flags().StringVar(&network, "network", "", "Which network to use")
+	housekeeperCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 	_ = housekeeperCmd.MarkFlagRequired("network")
 }
 
