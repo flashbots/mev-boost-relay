@@ -60,7 +60,10 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 			DomainBuilder:            builderSigningDomain,
 			DomainBeaconProposer:     types.Domain{},
 		},
-		SecretKey: sk,
+		SecretKey:       sk,
+		ProposerAPI:     true,
+		BlockBuilderAPI: true,
+		DataAPI:         true,
 	}
 
 	relay, err := NewRelayAPI(opts)

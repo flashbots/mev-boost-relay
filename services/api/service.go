@@ -32,6 +32,7 @@ var (
 	ErrRelayPubkeyMismatch               = errors.New("relay pubkey does not match existing one")
 	ErrRegistrationWorkersAlreadyStarted = errors.New("validator registration workers already started")
 	ErrServerAlreadyStarted              = errors.New("server was already started")
+	ErrBuilderAPIWithoutSecretKey        = errors.New("cannot start builder API without secret key")
 )
 
 var (
@@ -54,9 +55,8 @@ var (
 type RelayAPIOpts struct {
 	Log *logrus.Entry
 
-	ListenAddr    string
-	BlockSimURL   string
-	RegValWorkers int // number of workers for validator registration processing
+	ListenAddr  string
+	BlockSimURL string
 
 	BeaconClient beaconclient.IMultiBeaconClient
 	Datastore    *datastore.Datastore
@@ -68,8 +68,11 @@ type RelayAPIOpts struct {
 	// Network specific variables
 	EthNetDetails common.EthNetworkDetails
 
-	// Whether to enable Pprof
-	PprofAPI bool
+	// APIs to enable
+	ProposerAPI     bool
+	BlockBuilderAPI bool
+	DataAPI         bool
+	PprofAPI        bool
 }
 
 // RelayAPI represents a single Relay instance
@@ -104,6 +107,8 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, ErrMissingLogOpt
 	}
 
+	log := opts.Log.WithField("module", "api")
+
 	if opts.BeaconClient == nil {
 		return nil, ErrMissingBeaconClientOpt
 	}
@@ -112,34 +117,41 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, ErrMissingDatastoreOpt
 	}
 
-	publicKey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+	// If block-builder API is enabled, then ensure secret key is all set
+	var publicKey types.PublicKey
+	if opts.BlockBuilderAPI {
+		if opts.SecretKey == nil {
+			return nil, ErrBuilderAPIWithoutSecretKey
+		}
+
+		// If using a secret key, ensure it's the correct one
+		publicKey = types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+		log.Infof("Using BLS key: %s", publicKey.String())
+
+		// ensure pubkey is same across all relay instances
+		_pubkey, err := opts.Redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
+		if err != nil {
+			return nil, err
+		} else if _pubkey == "" {
+			err := opts.Redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
+			if err != nil {
+				return nil, err
+			}
+		} else if _pubkey != publicKey.String() {
+			return nil, fmt.Errorf("%w: new=%s old=%s", ErrRelayPubkeyMismatch, publicKey.String(), _pubkey)
+		}
+	}
 
 	api := RelayAPI{
 		opts:                   opts,
-		log:                    opts.Log.WithField("module", "api"),
+		log:                    log,
 		blsSk:                  opts.SecretKey,
-		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		redis:                  opts.Redis,
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
-	}
-
-	api.log.Infof("Using BLS key: %s", publicKey.String())
-
-	// ensure pubkey is same across all relay instances
-	_pubkey, err := api.redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
-	if err != nil {
-		return nil, err
-	} else if _pubkey == "" {
-		err := api.redis.SetRelayConfig(datastore.RedisConfigFieldPubkey, publicKey.String())
-		if err != nil {
-			return nil, err
-		}
-	} else if _pubkey != publicKey.String() {
-		return nil, fmt.Errorf("%w: new=%s old=%s", ErrRelayPubkeyMismatch, publicKey.String(), _pubkey)
 	}
 
 	return &api, nil
@@ -149,19 +161,26 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
 
 	// Proposer API
-	r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
-	r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
-	r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
-	r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+	if api.opts.ProposerAPI {
+		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
+		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
+		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
+		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+	}
 
 	// Builder API
-	r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
-	r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+	if api.opts.BlockBuilderAPI {
+		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
+		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+	}
 
 	// Data API
-	r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
-	r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
+	if api.opts.DataAPI {
+		r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
+		r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
+	}
 
+	// Pprof
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
 	}
