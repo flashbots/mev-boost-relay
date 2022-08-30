@@ -35,3 +35,9 @@ cover-html:
 	go test -coverprofile=/tmp/boost-relay.cover.tmp ./...
 	go tool cover -html=/tmp/boost-relay.cover.tmp
 	unlink /tmp/boost-relay.cover.tmp
+
+docker-image:
+	DOCKER_BUILDKIT=1 docker build --build-arg GIT_VER=${GIT_VER} . -t mev-boost-relay
+
+docker-image-amd:
+	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg GIT_VER=${GIT_VER} . -t mev-boost-relay
