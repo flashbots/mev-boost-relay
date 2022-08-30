@@ -32,6 +32,10 @@ func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
 	return 0, nil
 }
 
+func (db MockDB) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error) {
+	return nil, nil
+}
+
 func (db MockDB) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
 	return nil
 }

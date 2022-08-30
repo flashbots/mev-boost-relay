@@ -65,3 +65,9 @@ type BidTraceJSON struct {
 	GasUsed              uint64 `json:"gas_used,string"`
 	Value                string `json:"value"`
 }
+
+type BidTraceWithTimestampJSON struct {
+	BidTraceJSON
+
+	Timestamp int64 `json:"timestamp,omitempty"`
+}

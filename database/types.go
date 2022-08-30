@@ -13,6 +13,14 @@ type GetPayloadsFilters struct {
 	BlockNumber uint64
 }
 
+type GetBuilderSubmissionsFilters struct {
+	Slot        uint64
+	Cursor      uint64
+	Limit       uint64
+	BlockHash   string
+	BlockNumber uint64
+}
+
 type ValidatorRegistrationEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`

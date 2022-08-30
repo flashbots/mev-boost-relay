@@ -23,8 +23,10 @@ type IDatabaseService interface {
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
 	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
+
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
+	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 }
 
 type DatabaseService struct {
@@ -265,4 +267,43 @@ func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
 	var count uint64
 	err := s.DB.QueryRow("SELECT COUNT(*) FROM " + TableDeliveredPayload).Scan(&count)
 	return count, err
+}
+
+func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error) {
+	arg := map[string]interface{}{
+		"limit":        filters.Limit,
+		"slot":         filters.Slot,
+		"cursor":       filters.Cursor,
+		"block_hash":   filters.BlockHash,
+		"block_number": filters.BlockNumber,
+	}
+
+	tasks := []*BuilderBlockSubmissionEntry{}
+	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
+
+	whereConds := []string{"sim_success = true"}
+	if filters.Slot > 0 {
+		whereConds = append(whereConds, "slot = :slot")
+	} else if filters.Cursor > 0 {
+		whereConds = append(whereConds, "slot <= :cursor")
+	}
+	if filters.BlockHash != "" {
+		whereConds = append(whereConds, "block_hash = :block_hash")
+	}
+	if filters.BlockNumber > 0 {
+		whereConds = append(whereConds, "block_number = :block_number")
+	}
+
+	where := ""
+	if len(whereConds) > 0 {
+		where = "WHERE " + strings.Join(whereConds, " AND ")
+	}
+
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableBuilderBlockSubmission, where))
+	if err != nil {
+		return nil, err
+	}
+
+	err = nstmt.Select(&tasks, arg)
+	return tasks, err
 }
