@@ -20,7 +20,14 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run unit tests and generate the coverage report
-        run: make test-race
+        run: make test-coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./coverage.out
+          verbose: true
+          flags: unittests
 
   lint:
     name: Lint
