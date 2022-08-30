@@ -55,7 +55,6 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 }
 
 type BidTraceJSON struct {
-	InsertedAt           int64  `json:"inserted_at,omitempty"`
 	Slot                 uint64 `json:"slot,string"`
 	ParentHash           string `json:"parent_hash"`
 	BlockHash            string `json:"block_hash"`
@@ -65,4 +64,10 @@ type BidTraceJSON struct {
 	GasLimit             uint64 `json:"gas_limit,string"`
 	GasUsed              uint64 `json:"gas_used,string"`
 	Value                string `json:"value"`
+}
+
+type BidTraceWithTimestampJSON struct {
+	BidTraceJSON
+
+	Timestamp int64 `json:"timestamp,omitempty"`
 }

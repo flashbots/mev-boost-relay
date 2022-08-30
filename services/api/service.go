@@ -689,7 +689,10 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		Limit: 100,
 	}
 
-	if args.Get("slot") != "" {
+	if args.Get("slot") != "" && args.Get("cursor") != "" {
+		api.RespondError(w, http.StatusBadRequest, "cannot specify both slot and cursor")
+		return
+	} else if args.Get("slot") != "" {
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
@@ -744,7 +747,6 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	response := []BidTraceJSON{}
 	for _, payload := range deliveredPayloads {
 		trace := BidTraceJSON{
-			InsertedAt:           0,
 			Slot:                 payload.Slot,
 			ParentHash:           payload.ParentHash,
 			BlockHash:            payload.BlockHash,
@@ -773,7 +775,10 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		BlockNumber: 0,
 	}
 
-	if args.Get("slot") != "" {
+	if args.Get("slot") != "" && args.Get("cursor") != "" {
+		api.RespondError(w, http.StatusBadRequest, "cannot specify both slot and cursor")
+		return
+	} else if args.Get("slot") != "" {
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
@@ -825,19 +830,21 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	response := []BidTraceJSON{}
+	response := []BidTraceWithTimestampJSON{}
 	for _, payload := range deliveredPayloads {
-		trace := BidTraceJSON{
-			InsertedAt:           payload.InsertedAt.Unix(),
-			Slot:                 payload.Slot,
-			ParentHash:           payload.ParentHash,
-			BlockHash:            payload.BlockHash,
-			BuilderPubkey:        payload.BuilderPubkey,
-			ProposerPubkey:       payload.ProposerPubkey,
-			ProposerFeeRecipient: payload.ProposerFeeRecipient,
-			GasLimit:             payload.GasLimit,
-			GasUsed:              payload.GasUsed,
-			Value:                payload.Value,
+		trace := BidTraceWithTimestampJSON{
+			Timestamp: payload.InsertedAt.Unix(),
+			BidTraceJSON: BidTraceJSON{
+				Slot:                 payload.Slot,
+				ParentHash:           payload.ParentHash,
+				BlockHash:            payload.BlockHash,
+				BuilderPubkey:        payload.BuilderPubkey,
+				ProposerPubkey:       payload.ProposerPubkey,
+				ProposerFeeRecipient: payload.ProposerFeeRecipient,
+				GasLimit:             payload.GasLimit,
+				GasUsed:              payload.GasUsed,
+				Value:                payload.Value,
+			},
 		}
 		response = append(response, trace)
 	}
