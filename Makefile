@@ -1,15 +1,15 @@
-GIT_VER := $(shell git describe --tags --always --dirty="-dev")
+VERSION ?= $(shell git describe --tags --always --dirty="-dev")
 
 all: clean build
 
 v:
-	@echo "Version: ${GIT_VER}"
+	@echo "Version: ${VERSION}"
 
 clean:
 	git clean -fdx
 
 build:
-	go build -ldflags "-X cmd.Version=${GIT_VER} -X main.Version=${GIT_VER}" -v -o boost-relay .
+	go build -ldflags "-X cmd.Version=${VERSION} -X main.Version=${VERSION}" -v -o boost-relay .
 
 test:
 	go test ./...
@@ -37,7 +37,7 @@ cover-html:
 	unlink /tmp/boost-relay.cover.tmp
 
 docker-image:
-	DOCKER_BUILDKIT=1 docker build --build-arg GIT_VER=${GIT_VER} . -t mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --build-arg VERSION=${VERSION} . -t mev-boost-relay
 
 docker-image-amd:
-	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg GIT_VER=${GIT_VER} . -t mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t mev-boost-relay
