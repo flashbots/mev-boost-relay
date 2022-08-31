@@ -29,7 +29,6 @@ func init() {
 	websiteCmd.Flags().StringVar(&websitePubkeyOverride, "pubkey-override", os.Getenv("PUBKEY_OVERRIDE"), "override for public key")
 
 	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
-	_ = websiteCmd.MarkFlagRequired("network")
 }
 
 var websiteCmd = &cobra.Command{

@@ -42,7 +42,6 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", apiDefaultPprofEnabled, "enable pprof API")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
 	apiCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
-	_ = apiCmd.MarkFlagRequired("network")
 }
 
 var apiCmd = &cobra.Command{
