@@ -9,11 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	websiteDefaultListenAddr = "localhost:9060"
-)
+var (
+	websiteDefaultListenAddr = common.GetEnv("LISTEN_ADDR", "localhost:9060")
 
-var websiteListenAddr string
+	websiteListenAddr string
+)
 
 func init() {
 	rootCmd.AddCommand(websiteCmd)
@@ -21,10 +21,10 @@ func init() {
 	websiteCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
 	websiteCmd.Flags().StringVar(&websiteListenAddr, "listen-addr", websiteDefaultListenAddr, "listen address for webserver")
-	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	websiteCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
+	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
+	websiteCmd.Flags().StringVar(&postgresDSN, "db", defaultLogLevel, "PostgreSQL DSN")
 
-	websiteCmd.Flags().StringVar(&network, "network", "", "Which network to use")
+	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 	_ = websiteCmd.MarkFlagRequired("network")
 }
 

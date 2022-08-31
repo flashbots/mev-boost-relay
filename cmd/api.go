@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,12 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	apiDefaultListenAddr = "localhost:9062"
-	apiDefaultBlockSim   = "http://localhost:8545"
-)
-
 var (
+	apiDefaultListenAddr   = common.GetEnv("LISTEN_ADDR", "localhost:9062")
+	apiDefaultBlockSim     = common.GetEnv("BLOCKSIM_URI", "http://localhost:8545")
+	apiDefaultSecretKey    = common.GetEnv("SECRET_KEY", "")
+	apiDefaultPprofEnabled = os.Getenv("PPROF") != ""
+
 	apiListenAddr   string
 	apiPprofEnabled bool
 	apiSecretKey    string
@@ -35,12 +36,12 @@ func init() {
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
-	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultredisURI, "redis uri")
-	apiCmd.Flags().StringVar(&postgresDSN, "db", "", "PostgreSQL DSN")
-	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", "", "secret key for signing bids")
-	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", false, "enable pprof API")
+	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
+	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
+	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", apiDefaultPprofEnabled, "enable pprof API")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
-	apiCmd.Flags().StringVar(&network, "network", "", "Which network to use")
+	apiCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 	_ = apiCmd.MarkFlagRequired("network")
 }
 

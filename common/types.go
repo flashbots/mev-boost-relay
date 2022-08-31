@@ -56,11 +56,11 @@ type EthNetworkDetails struct {
 }
 
 var (
-	EthNetworkKiln              = "kiln"
-	EthNetworkRopsten           = "ropsten"
-	EthNetworkSepolia           = "sepolia"
-	EthNetworkGoerli            = "goerli"
-	EthNetworkGoerliShadowFork6 = "goerli-shadow-fork-6"
+	EthNetworkKiln    = "kiln"
+	EthNetworkRopsten = "ropsten"
+	EthNetworkSepolia = "sepolia"
+	EthNetworkGoerli  = "goerli"
+	EthNetworkMainnet = "mainnet"
 
 	GenesisValidatorsRootGoerli = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
 	GenesisForkVersionGoerli    = "0x00001020"
@@ -69,6 +69,11 @@ var (
 	GenesisValidatorsRootGoerliShadowFork6 = "0x6985063fa80a61a958ceeac5cf6125991ac297348e42542c85affbe9fb1c7328"
 	GenesisForkVersionGoerliShadowFork6    = "0x13001035"
 	BellatrixForkVersionGoerliShadowFork6  = "0x22001035"
+
+	// https://github.com/eth-clients/eth2-networks/blob/f3ccbe0cf5798d5cd23e4e6e7119aefa043c0935/shared/mainnet/config.yaml
+	GenesisValidatorsRootMainnet = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
+	GenesisForkVersionMainnet    = "0x00000000"
+	BellatrixForkVersionMainnet  = "0x02000000"
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -91,14 +96,14 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		genesisForkVersion = types.GenesisForkVersionSepolia
 		genesisValidatorsRoot = types.GenesisValidatorsRootSepolia
 		bellatrixForkVersion = types.BellatrixForkVersionSepolia
-	case EthNetworkGoerliShadowFork6:
-		genesisForkVersion = GenesisForkVersionGoerliShadowFork6
-		genesisValidatorsRoot = GenesisValidatorsRootGoerliShadowFork6
-		bellatrixForkVersion = BellatrixForkVersionGoerliShadowFork6
 	case EthNetworkGoerli:
 		genesisForkVersion = GenesisForkVersionGoerli
 		genesisValidatorsRoot = GenesisValidatorsRootGoerli
 		bellatrixForkVersion = BellatrixForkVersionGoerli
+	case EthNetworkMainnet:
+		genesisForkVersion = GenesisForkVersionMainnet
+		genesisValidatorsRoot = GenesisValidatorsRootMainnet
+		bellatrixForkVersion = BellatrixForkVersionMainnet
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
