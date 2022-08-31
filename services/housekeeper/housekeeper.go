@@ -132,7 +132,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 
 	validators, err := hk.beaconClient.FetchValidators(hk.headSlot.Load())
 	if err != nil {
-		hk.log.WithError(err).Fatal("failed to fetch validators from all beacon nodes")
+		hk.log.WithError(err).Error("failed to fetch validators from all beacon nodes")
 		return
 	}
 
@@ -154,7 +154,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 		pubkey := types.PubkeyHex(v.Validator.Pubkey)
 		err := hk.redis.SetKnownValidator(pubkey, v.Index)
 		if err != nil {
-			log.WithError(err).WithField("pubkey", pubkey).Fatal("failed to set known validator in Redis")
+			log.WithError(err).WithField("pubkey", pubkey).Error("failed to set known validator in Redis")
 		}
 	}
 }
@@ -181,7 +181,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	// Query current epoch
 	r, err := hk.beaconClient.GetProposerDuties(epoch)
 	if err != nil {
-		log.WithError(err).Fatal("failed to get proposer duties for all beacon nodes")
+		log.WithError(err).Error("failed to get proposer duties for all beacon nodes")
 		return
 	}
 
@@ -218,7 +218,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	for i := 0; i < cap(c); i++ {
 		res := <-c
 		if res.err != nil {
-			log.WithError(res.err).Fatal("error in loading validator registration from redis")
+			log.WithError(res.err).Error("error in loading validator registration from redis")
 		} else if res.val.Entry != nil { // only if a known registration
 			proposerDuties = append(proposerDuties, res.val)
 		}
@@ -227,7 +227,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	// Save duties to Redis
 	err = hk.redis.SetProposerDuties(proposerDuties)
 	if err != nil {
-		log.WithError(err).Fatal("failed to set proposer duties")
+		log.WithError(err).Error("failed to set proposer duties")
 		return
 	}
 	hk.proposerDutiesSlot = headSlot
