@@ -95,16 +95,6 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
 
-		// Decode the private key
-		envSkBytes, err := hexutil.Decode(apiSecretKey)
-		if err != nil {
-			log.WithError(err).Fatal("incorrect secret key provided")
-		}
-		sk, err := bls.SecretKeyFromBytes(envSkBytes[:])
-		if err != nil {
-			log.WithError(err).Fatal("incorrect builder API secret key provided")
-		}
-
 		opts := api.RelayAPIOpts{
 			Log:           log,
 			ListenAddr:    apiListenAddr,
@@ -113,9 +103,27 @@ var apiCmd = &cobra.Command{
 			Redis:         redis,
 			DB:            db,
 			EthNetDetails: *networkInfo,
-			PprofAPI:      apiPprofEnabled,
-			SecretKey:     sk,
 			BlockSimURL:   apiBlockSimURL,
+
+			ProposerAPI:     true,
+			BlockBuilderAPI: true,
+			DataAPI:         true,
+			PprofAPI:        apiPprofEnabled,
+		}
+
+		// Decode the private key
+		if apiSecretKey == "" {
+			log.Warn("No secret key specified, block builder API is disabled")
+			opts.BlockBuilderAPI = false
+		} else {
+			envSkBytes, err := hexutil.Decode(apiSecretKey)
+			if err != nil {
+				log.WithError(err).Fatal("incorrect secret key provided")
+			}
+			opts.SecretKey, err = bls.SecretKeyFromBytes(envSkBytes[:])
+			if err != nil {
+				log.WithError(err).Fatal("incorrect builder API secret key provided")
+			}
 		}
 
 		// Create the relay service
