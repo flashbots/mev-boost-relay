@@ -25,7 +25,7 @@ func init() {
 
 	websiteCmd.Flags().StringVar(&websiteListenAddr, "listen-addr", websiteDefaultListenAddr, "listen address for webserver")
 	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
-	websiteCmd.Flags().StringVar(&postgresDSN, "db", defaultLogLevel, "PostgreSQL DSN")
+	websiteCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
 	websiteCmd.Flags().StringVar(&websitePubkeyOverride, "pubkey-override", os.Getenv("PUBKEY_OVERRIDE"), "override for public key")
 
 	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")

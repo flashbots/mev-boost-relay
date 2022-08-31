@@ -37,7 +37,7 @@ cover-html:
 	unlink /tmp/boost-relay.cover.tmp
 
 docker-image:
-	DOCKER_BUILDKIT=1 docker build --build-arg VERSION=${VERSION} . -t mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --build-arg VERSION=${VERSION} . -t flashbots/mev-boost-relay
 
 docker-image-amd:
-	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t flashbots/mev-boost-relay

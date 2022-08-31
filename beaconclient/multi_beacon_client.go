@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing")
+	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing or unavailable")
 	ErrBeaconNodesUnavailable = errors.New("all beacon nodes responded with error")
 )
 

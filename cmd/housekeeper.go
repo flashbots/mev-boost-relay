@@ -31,7 +31,7 @@ var housekeeperCmd = &cobra.Command{
 		var err error
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "cmd/metrics-saver")
+		log := logrus.WithField("module", "cmd/housekeeper")
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)
@@ -60,12 +60,12 @@ var housekeeperCmd = &cobra.Command{
 		log.Infof("Connecting to Postgres database...")
 		db, err := database.NewDatabaseService(postgresDSN)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database")
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}
 
 		ds, err := datastore.NewDatastore(log, redis, db)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+			log.WithError(err).Fatalf("Failed to create datastore")
 		}
 
 		opts := &housekeeper.HousekeeperOpts{
@@ -75,7 +75,7 @@ var housekeeperCmd = &cobra.Command{
 			BeaconClient: beaconClient,
 		}
 		service := housekeeper.NewHousekeeper(opts)
-		log.Info("Starting service...")
+		log.Info("Starting housekeeper service...")
 		err = service.Start()
 		log.WithError(err).Fatalf("Failed to start housekeeper")
 	},
