@@ -142,7 +142,7 @@ func TestWebserver(t *testing.T) {
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	rr := backend.request(http.MethodGet, "/", nil)
-	require.Equal(t, http.StatusNotFound, rr.Code)
+	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestStatus(t *testing.T) {

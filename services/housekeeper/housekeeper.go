@@ -49,7 +49,7 @@ var ErrServerAlreadyStarted = errors.New("server was already started")
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 	server := &Housekeeper{
 		opts:         opts,
-		log:          opts.Log.WithField("module", "housekeeper"),
+		log:          opts.Log.WithField("module", "relay/housekeeper"),
 		redis:        opts.Redis,
 		datastore:    opts.Datastore,
 		beaconClient: opts.BeaconClient,

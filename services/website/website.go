@@ -61,7 +61,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	var err error
 	server := &Webserver{
 		opts:  opts,
-		log:   opts.Log.WithField("module", "webserver"),
+		log:   opts.Log.WithField("module", "relay/webserver"),
 		redis: opts.Redis,
 		db:    opts.DB,
 	}

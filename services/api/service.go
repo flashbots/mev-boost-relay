@@ -107,7 +107,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, ErrMissingLogOpt
 	}
 
-	log := opts.Log.WithField("module", "api")
+	log := opts.Log.WithField("module", "relay/api")
 
 	if opts.BeaconClient == nil {
 		return nil, ErrMissingBeaconClientOpt
@@ -146,6 +146,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		opts:                   opts,
 		log:                    log,
 		blsSk:                  opts.SecretKey,
+		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		redis:                  opts.Redis,
@@ -159,6 +160,8 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
+
+	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
 
 	// Proposer API
 	if api.opts.ProposerAPI {
@@ -345,6 +348,10 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 // ---------------
 //  PROPOSER APIS
 // ---------------
+
+func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "MEV-Boost Relay API")
+}
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithFields(logrus.Fields{

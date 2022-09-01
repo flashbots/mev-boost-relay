@@ -68,7 +68,7 @@ var apiCmd = &cobra.Command{
 		if len(beaconNodeURIs) == 0 {
 			log.Fatalf("no beacon endpoints specified")
 		}
-		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ","))
+		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ", "))
 		var beaconInstances []beaconclient.IBeaconInstance
 		for _, uri := range beaconNodeURIs {
 			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
