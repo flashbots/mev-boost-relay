@@ -17,3 +17,4 @@
 * [ ] `make lint`
 * [ ] `make test-race`
 * [ ] `go mod tidy`
+* [ ] I have seen and agree to `CONTRIBUTING.md`
