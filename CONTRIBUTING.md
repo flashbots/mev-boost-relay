@@ -40,6 +40,8 @@ We appreciate you, friend <3.
 
 # Individual Contributor License Agreement
 
+This text is adapted from Google's contributors license agreement: https://cla.developers.google.com/about/google-individual
+
 You accept and agree to the following terms and conditions for Your present and future Contributions submitted to Flashbots. Except for the license granted herein to Flashbots and recipients of software distributed by Flashbots, You reserve all right, title, and interest in and to Your Contributions.
 
 1. Definitions.
