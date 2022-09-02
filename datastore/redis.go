@@ -108,7 +108,6 @@ func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
 	}
 	for pubkey, proposerIndexStr := range entries {
 		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
-		// TODO: log on error
 		if err == nil {
 			validators[types.PubkeyHex(pubkey)] = proposerIndex
 		}
