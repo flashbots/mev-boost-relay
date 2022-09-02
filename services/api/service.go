@@ -26,13 +26,12 @@ import (
 )
 
 var (
-	ErrMissingLogOpt                     = errors.New("log parameter is nil")
-	ErrMissingBeaconClientOpt            = errors.New("beacon-client is nil")
-	ErrMissingDatastoreOpt               = errors.New("proposer datastore is nil")
-	ErrRelayPubkeyMismatch               = errors.New("relay pubkey does not match existing one")
-	ErrRegistrationWorkersAlreadyStarted = errors.New("validator registration workers already started")
-	ErrServerAlreadyStarted              = errors.New("server was already started")
-	ErrBuilderAPIWithoutSecretKey        = errors.New("cannot start builder API without secret key")
+	ErrMissingLogOpt              = errors.New("log parameter is nil")
+	ErrMissingBeaconClientOpt     = errors.New("beacon-client is nil")
+	ErrMissingDatastoreOpt        = errors.New("proposer datastore is nil")
+	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
+	ErrServerAlreadyStarted       = errors.New("server was already started")
+	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 )
 
 var (
@@ -350,6 +349,7 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 // ---------------
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "MEV-Boost Relay API")
 }
 
@@ -473,6 +473,11 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if slot < api.headSlot.Load() {
+		api.RespondError(w, http.StatusBadRequest, "slot is too old")
+		return
+	}
+
 	bid, err := api.datastore.GetGetHeaderResponse(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
@@ -593,9 +598,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"slot":      payload.Message.Slot,
-		"builder":   payload.Message.BuilderPubkey.String(),
-		"blockHash": payload.Message.BlockHash.String(),
+		"slot":          payload.Message.Slot,
+		"builderPubkey": payload.Message.BuilderPubkey.String(),
+		"blockHash":     payload.Message.BlockHash.String(),
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
@@ -655,6 +660,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// If existing bid has same or higher value, do nothing
 	if prevBid != nil && payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 { // todo: use proposer_pubkey as tiebreaker instead of FCFS
+		log.Info("block submission with same or lower value")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -693,7 +699,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"slot":           payload.Message.Slot,
 		"blockHash":      payload.Message.BlockHash.String(),
 		"parentHash":     payload.Message.ParentHash.String(),
-		"builderPubkey":  payload.Message.BuilderPubkey.String(),
 		"proposerPubkey": payload.Message.ProposerPubkey.String(),
 		"value":          payload.Message.Value.String(),
 		"tx":             len(payload.ExecutionPayload.Transactions),
