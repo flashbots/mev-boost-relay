@@ -601,6 +601,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"slot":          payload.Message.Slot,
 		"builderPubkey": payload.Message.BuilderPubkey.String(),
 		"blockHash":     payload.Message.BlockHash.String(),
+		"parentHash":    payload.Message.ParentHash.String(),
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
@@ -630,22 +631,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Simulate the block submission and save to db
-	simErr := api.blockSimRateLimiter.send(req.Context(), payload)
-	if simErr != nil {
-		log.WithError(simErr).Error("failed block simulation for block")
-	}
+	var simErr error
+	isMostProfitableBlock := false
 
-	// Save builder submission to database (in the background)
-	go func() {
-		_, err := api.db.SaveBuilderBlockSubmission(payload, simErr)
+	// At end of this function, save builder submission to database (in the background)
+	defer func() {
+		_, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
 		if err != nil {
 			log.WithError(err).Error("saving builder block submission to database failed")
 		}
 	}()
 
-	// Return error if block verification failed
+	// Simulate the block submission and save to db
+	simErr = api.blockSimRateLimiter.send(req.Context(), payload)
 	if simErr != nil {
+		log.WithError(simErr).Warn("failed block verification")
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	}
@@ -653,13 +653,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Check if there's already a bid
 	prevBid, err := api.datastore.GetGetHeaderResponse(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
 	if err != nil {
-		log.WithError(err).Error("could not get best bid")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
+		log.WithError(err).Error("error getting previous bid")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// If existing bid has same or higher value, do nothing
-	if prevBid != nil && payload.Message.Value.Cmp(&prevBid.Data.Message.Value) < 1 { // todo: use proposer_pubkey as tiebreaker instead of FCFS
+	// Only proceed if this bid is higher than previous one
+	isMostProfitableBlock = prevBid == nil || payload.Message.Value.Cmp(&prevBid.Data.Message.Value) == 1
+	if !isMostProfitableBlock {
 		log.Info("block submission with same or lower value")
 		w.WriteHeader(http.StatusOK)
 		return
@@ -696,15 +697,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	log.WithFields(logrus.Fields{
-		"slot":           payload.Message.Slot,
-		"blockHash":      payload.Message.BlockHash.String(),
-		"parentHash":     payload.Message.ParentHash.String(),
-		"proposerPubkey": payload.Message.ProposerPubkey.String(),
-		"value":          payload.Message.Value.String(),
-		"tx":             len(payload.ExecutionPayload.Transactions),
+		"proposerPubkey":   payload.Message.ProposerPubkey.String(),
+		"value":            payload.Message.Value.String(),
+		"tx":               len(payload.ExecutionPayload.Transactions),
+		"isMostProfitable": isMostProfitableBlock,
 	}).Info("received block from builder")
 
-	// Respond with OK (TODO: proper response format)
+	// Respond with OK (TODO: proper response response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
 	w.WriteHeader(http.StatusOK)
 }
 

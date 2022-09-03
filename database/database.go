@@ -17,7 +17,7 @@ import (
 
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
-	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error)
+	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (id int64, err error)
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
@@ -89,7 +89,7 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	return nil
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (id int64, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -137,12 +137,13 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 		NumTx: len(payload.ExecutionPayload.Transactions),
 		Value: payload.Message.Value.String(),
 
-		Epoch:       payload.Message.Slot / uint64(common.SlotsPerEpoch),
-		BlockNumber: payload.ExecutionPayload.BlockNumber,
+		Epoch:             payload.Message.Slot / uint64(common.SlotsPerEpoch),
+		BlockNumber:       payload.ExecutionPayload.BlockNumber,
+		WasMostProfitable: isMostProfitable,
 	}
 	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
-	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number) VALUES
-	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number)
+	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
+	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
 	RETURNING id`
 	nstmt, err = s.DB.PrepareNamed(query)
 	if err != nil {
@@ -281,7 +282,10 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	tasks := []*BuilderBlockSubmissionEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
 
-	whereConds := []string{"sim_success = true"}
+	whereConds := []string{
+		"sim_success = true",
+		"was_most_profitable = true",
+	}
 	if filters.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
 	} else if filters.Cursor > 0 {

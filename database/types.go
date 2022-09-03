@@ -73,8 +73,9 @@ type BuilderBlockSubmissionEntry struct {
 	Value string `db:"value"`
 
 	// Helpers
-	Epoch       uint64 `db:"epoch"`
-	BlockNumber uint64 `db:"block_number"`
+	Epoch             uint64 `db:"epoch"`
+	BlockNumber       uint64 `db:"block_number"`
+	WasMostProfitable bool   `db:"was_most_profitable"`
 }
 
 type DeliveredPayloadEntry struct {

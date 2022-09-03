@@ -8,7 +8,7 @@ func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorReg
 	return nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error) (id int64, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (id int64, err error) {
 	return 0, nil
 }
 

@@ -70,13 +70,15 @@ CREATE TABLE IF NOT EXISTS ` + TableBuilderBlockSubmission + ` (
 
 	-- helpers
 	epoch        bigint NOT NULL,
-	block_number bigint NOT NULL
+	block_number bigint NOT NULL,
+	was_most_profitable boolean NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_slot_idx ON ` + TableBuilderBlockSubmission + `("slot");
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_blockhash_idx ON ` + TableBuilderBlockSubmission + `("block_hash");
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_blocknumber_idx ON ` + TableBuilderBlockSubmission + `("block_number");
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_simsuccess_idx ON ` + TableBuilderBlockSubmission + `("sim_success");
+CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_mostprofit_idx ON ` + TableBuilderBlockSubmission + `("was_most_profitable");
 
 
 CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
