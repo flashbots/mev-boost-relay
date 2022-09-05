@@ -600,10 +600,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"slot":          payload.Message.Slot,
-		"builderPubkey": payload.Message.BuilderPubkey.String(),
-		"blockHash":     payload.Message.BlockHash.String(),
-		"parentHash":    payload.Message.ParentHash.String(),
+		"slot":           payload.Message.Slot,
+		"builderPubkey":  payload.Message.BuilderPubkey.String(),
+		"proposerPubkey": payload.Message.ProposerPubkey.String(),
+		"blockHash":      payload.Message.BlockHash.String(),
+		"parentHash":     payload.Message.ParentHash.String(),
+		"value":          payload.Message.Value.String(),
+		"tx":             len(payload.ExecutionPayload.Transactions),
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
@@ -663,7 +666,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Only proceed if this bid is higher than previous one
 	isMostProfitableBlock = prevBid == nil || payload.Message.Value.Cmp(&prevBid.Data.Message.Value) == 1
 	if !isMostProfitableBlock {
-		log.Info("block submission with same or lower value")
+		log.Debug("block submission with same or lower value")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
