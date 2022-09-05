@@ -48,6 +48,7 @@ var (
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 	pathDataBuilderBidsReceived      = "/relay/v1/data/bidtraces/builder_blocks_received"
+	pathDataValidatorRegistration    = "/relay/v1/data/validator_registration"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -180,6 +181,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.DataAPI {
 		r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
 		r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
+		r.HandleFunc(pathDataValidatorRegistration, api.handleDataValidatorRegistration).Methods(http.MethodGet)
 	}
 
 	// Pprof
@@ -880,4 +882,26 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	api.RespondOK(w, response)
+}
+
+func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req *http.Request) {
+	pkStr := req.URL.Query().Get("pubkey")
+	if pkStr == "" {
+		api.RespondError(w, http.StatusBadRequest, "missing pubkey argument")
+		return
+	}
+
+	registration, err := api.redis.GetValidatorRegistration(types.NewPubkeyHex(pkStr))
+	if err != nil {
+		api.log.WithError(err).Error("error getting validator registration")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if registration == nil {
+		api.RespondError(w, http.StatusBadRequest, "no registration found for validator "+pkStr)
+		return
+	}
+
+	api.RespondOK(w, registration)
 }
