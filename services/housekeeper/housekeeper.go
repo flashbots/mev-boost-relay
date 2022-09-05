@@ -71,10 +71,21 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
-	// Start regular known validator updates
+	// Periodic tasks: update known validator, log number of registered validators
 	go func() {
 		for {
+			// Print number of registered validators
+			numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
+			if err == nil {
+				hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
+			} else {
+				hk.log.WithError(err).Error("failed to get number of registered validators")
+			}
+
+			// Update known validators
 			hk.updateKnownValidators()
+
+			// Wait half an epoch
 			time.Sleep(common.DurationPerEpoch / 2)
 		}
 	}()
