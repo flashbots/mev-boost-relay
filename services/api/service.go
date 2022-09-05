@@ -805,9 +805,13 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	filters := database.GetBuilderSubmissionsFilters{
 		Limit:       100,
 		Slot:        0,
-		Cursor:      0,
 		BlockHash:   "",
 		BlockNumber: 0,
+	}
+
+	if args.Get("cursor") != "" {
+		api.RespondError(w, http.StatusBadRequest, "cursor argument not supported on this API")
+		return
 	}
 
 	if args.Get("slot") != "" && args.Get("cursor") != "" {
@@ -817,12 +821,6 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
-			return
-		}
-	} else if args.Get("cursor") != "" {
-		filters.Cursor, err = strconv.ParseUint(args.Get("cursor"), 10, 64)
-		if err != nil {
-			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
 			return
 		}
 	}

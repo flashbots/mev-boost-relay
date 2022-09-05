@@ -15,10 +15,10 @@ type GetPayloadsFilters struct {
 
 type GetBuilderSubmissionsFilters struct {
 	Slot        uint64
-	Cursor      uint64
 	Limit       uint64
 	BlockHash   string
 	BlockNumber uint64
+	// Cursor      uint64
 }
 
 type ValidatorRegistrationEntry struct {

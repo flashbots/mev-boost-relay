@@ -274,7 +274,6 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	arg := map[string]interface{}{
 		"limit":        filters.Limit,
 		"slot":         filters.Slot,
-		"cursor":       filters.Cursor,
 		"block_hash":   filters.BlockHash,
 		"block_number": filters.BlockNumber,
 	}
@@ -288,8 +287,6 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	}
 	if filters.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
-	} else if filters.Cursor > 0 {
-		whereConds = append(whereConds, "slot <= :cursor")
 	}
 	if filters.BlockHash != "" {
 		whereConds = append(whereConds, "block_hash = :block_hash")
