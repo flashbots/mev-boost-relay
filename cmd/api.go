@@ -20,6 +20,7 @@ var (
 	apiDefaultBlockSim     = common.GetEnv("BLOCKSIM_URI", "http://localhost:8545")
 	apiDefaultSecretKey    = common.GetEnv("SECRET_KEY", "")
 	apiDefaultPprofEnabled = os.Getenv("PPROF") != ""
+	apiDefaultLogTag       = os.Getenv("LOG_TAG")
 
 	apiListenAddr   string
 	apiPprofEnabled bool
@@ -33,7 +34,7 @@ func init() {
 	rootCmd.AddCommand(apiCmd)
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
-	apiCmd.Flags().StringVar(&apiLogTag, "log-tag", "", "if set, a 'tag' field will be added to all logs")
+	apiCmd.Flags().StringVar(&apiLogTag, "log-tag", apiDefaultLogTag, "if set, a 'tag' field will be added to all log entries")
 	apiCmd.Flags().BoolVar(&apiDebug, "debug", false, "debug logging")
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")

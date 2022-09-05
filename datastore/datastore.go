@@ -141,8 +141,8 @@ func (ds *Datastore) SetValidatorRegistration(entry types.SignedValidatorRegistr
 	return nil
 }
 
-// SaveBlockSubmissionResponses stores getHeader and getPayload for later use, to memory and Redis. Note: saving to Postgres not needed, because getHeader doesn't currently check the database, getPayload finds the data it needs through a sql query.
-func (ds *Datastore) SaveBlockSubmissionResponses(signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
+// SaveBlockSubmission stores getHeader and getPayload for later use, to memory and Redis. Note: saving to Postgres not needed, because getHeader doesn't currently check the database, getPayload finds the data it needs through a sql query.
+func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
 	_blockHash := strings.ToLower(headerResp.Data.Message.Header.BlockHash.String())
 	_parentHash := strings.ToLower(headerResp.Data.Message.Header.ParentHash.String())
 	_proposerPubkey := strings.ToLower(signedBidTrace.Message.ProposerPubkey.String())

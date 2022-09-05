@@ -691,7 +691,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Signature: payload.Signature,
 	}
 
-	err = api.datastore.SaveBlockSubmissionResponses(&signedBidTrace, &getHeaderResponse, &getPayloadResponse)
+	err = api.datastore.SaveBlockSubmission(&signedBidTrace, &getHeaderResponse, &getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
