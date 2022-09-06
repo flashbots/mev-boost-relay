@@ -116,7 +116,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	if prevHeadSlot > 0 {
 		for s := prevHeadSlot + 1; s < headSlot; s++ {
-			log.WithField("slot", s).Warn("missed slot")
+			log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
 		}
 	}
 
