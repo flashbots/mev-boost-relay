@@ -102,7 +102,8 @@ type RelayAPI struct {
 	blockSimRateLimiter *BlockSimulationRateLimiter
 
 	// Feature flags
-	ffForceGetHeader204 bool
+	ffForceGetHeader204      bool
+	ffDisableBlockPublishing bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -162,6 +163,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
 		log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
 		api.ffForceGetHeader204 = true
+	}
+
+	if os.Getenv("DISABLE_BLOCK_PUBLISHING") == "1" {
+		log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
+		api.ffDisableBlockPublishing = true
 	}
 
 	return &api, nil
@@ -589,7 +595,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	go func() {
 		err := api.db.SaveDeliveredPayload(slot, proposerPubkey, blockHash, payload)
 		if err != nil {
-			log.WithError(err).Error("Failed to save delivered payload")
+			log.WithError(err).Error("failed to save delivered payload")
+		}
+	}()
+
+	// Finally, publish the signed beacon block
+	go func() {
+		if api.ffDisableBlockPublishing {
+			log.Info("publishing the block is disabled")
+			return
+		}
+		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp.Data)
+		_, err := api.beaconClient.PublishBlock(signedBeaconBlock)
+		if err != nil {
+			log.WithError(err).Error("failed to publish beacon block")
 		}
 	}()
 }

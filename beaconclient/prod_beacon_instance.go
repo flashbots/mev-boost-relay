@@ -3,6 +3,7 @@ package beaconclient
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/r3labs/sse/v2"
@@ -86,7 +87,7 @@ func fetchAllValidators(endpoint string, headSlot uint64) (*AllValidatorsRespons
 	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/validators?status=active,pending", endpoint, headSlot)
 	// https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
 	vd := new(AllValidatorsResponse)
-	err := fetchBeacon(uri, "GET", vd)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, vd)
 	return vd, err
 }
 
@@ -106,7 +107,7 @@ type SyncStatusPayloadData struct {
 func (c *ProdBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {
 	uri := c.beaconURI + "/eth/v1/node/syncing"
 	resp := new(SyncStatusPayload)
-	err := fetchBeacon(uri, "GET", resp)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ type ProposerDutiesResponseData struct {
 func (c *ProdBeaconInstance) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", c.beaconURI, epoch)
 	resp := new(ProposerDutiesResponse)
-	err := fetchBeacon(uri, "GET", resp)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
 
@@ -158,7 +159,7 @@ type GetHeaderResponseMessage struct {
 func (c *ProdBeaconInstance) GetHeader() (*GetHeaderResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/headers/head", c.beaconURI)
 	resp := new(GetHeaderResponse)
-	err := fetchBeacon(uri, "GET", resp)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
 
@@ -177,10 +178,15 @@ type GetBlockResponse struct {
 func (c *ProdBeaconInstance) GetBlock() (*GetBlockResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
 	resp := new(GetBlockResponse)
-	err := fetchBeacon(uri, "GET", resp)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
 
 func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
+}
+
+func (c *ProdBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
+	return fetchBeacon(http.MethodPost, uri, block, nil)
 }

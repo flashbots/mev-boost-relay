@@ -22,6 +22,7 @@ type IMultiBeaconClient interface {
 	SubscribeToHeadEvents(slotC chan HeadEventData)
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
+	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
 }
 
 // IBeaconInstance is the interface for a single beacon client instance
@@ -32,6 +33,7 @@ type IBeaconInstance interface {
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
+	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
 }
 
 type MultiBeaconClient struct {
@@ -179,4 +181,28 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 	instances[0], instances[index] = instances[index], instances[0]
 
 	return instances
+}
+
+// PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
+func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
+	log := c.log.WithFields(logrus.Fields{
+		"slot":      block.Message.Slot,
+		"blockHash": block.Message.Body.ExecutionPayload.BlockHash.String(),
+	})
+
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := log.WithField("uri", client.GetURI())
+		log.Debug("publishing block")
+
+		if code, err = client.PublishBlock(block); err != nil {
+			log.WithField("statusCode", code).WithError(err).Error("failed to publish block")
+			continue
+		}
+
+		log.WithField("statusCode", code).Info("published block")
+		return code, nil
+	}
+
+	return code, err
 }

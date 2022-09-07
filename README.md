@@ -91,6 +91,7 @@ Env vars:
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
+* `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
 

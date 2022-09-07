@@ -71,3 +71,27 @@ type BidTraceWithTimestampJSON struct {
 
 	Timestamp int64 `json:"timestamp,omitempty"`
 }
+
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, executionPayload *types.ExecutionPayload) *types.SignedBeaconBlock {
+	return &types.SignedBeaconBlock{
+		Signature: signedBlindedBeaconBlock.Signature,
+		Message: &types.BeaconBlock{
+			Slot:          signedBlindedBeaconBlock.Message.Slot,
+			ProposerIndex: signedBlindedBeaconBlock.Message.ProposerIndex,
+			ParentRoot:    signedBlindedBeaconBlock.Message.ParentRoot,
+			StateRoot:     signedBlindedBeaconBlock.Message.StateRoot,
+			Body: &types.BeaconBlockBody{
+				RandaoReveal:      signedBlindedBeaconBlock.Message.Body.RandaoReveal,
+				Eth1Data:          signedBlindedBeaconBlock.Message.Body.Eth1Data,
+				Graffiti:          signedBlindedBeaconBlock.Message.Body.Graffiti,
+				ProposerSlashings: signedBlindedBeaconBlock.Message.Body.ProposerSlashings,
+				AttesterSlashings: signedBlindedBeaconBlock.Message.Body.AttesterSlashings,
+				Attestations:      signedBlindedBeaconBlock.Message.Body.Attestations,
+				Deposits:          signedBlindedBeaconBlock.Message.Body.Deposits,
+				VoluntaryExits:    signedBlindedBeaconBlock.Message.Body.VoluntaryExits,
+				SyncAggregate:     signedBlindedBeaconBlock.Message.Body.SyncAggregate,
+				ExecutionPayload:  executionPayload,
+			},
+		},
+	}
+}
