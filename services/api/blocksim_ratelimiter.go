@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
@@ -34,15 +35,15 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 
 func (b *BlockSimulationRateLimiter) send(context context.Context, payload *types.BuilderSubmitBlockRequest) error {
 	b.cv.L.Lock()
-	b.counter += 1
-	if b.counter > maxConcurrentBlocks {
+	cnt := atomic.AddInt64(&b.counter, 1)
+	if cnt > maxConcurrentBlocks {
 		b.cv.Wait()
 	}
 	b.cv.L.Unlock()
 
 	defer func() {
 		b.cv.L.Lock()
-		b.counter -= 1
+		atomic.AddInt64(&b.counter, -1)
 		b.cv.Signal()
 		b.cv.L.Unlock()
 	}()
@@ -60,4 +61,9 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *type
 	}
 
 	return nil
+}
+
+// currentCounter returns the number of waiting and active requests
+func (b *BlockSimulationRateLimiter) currentCounter() int64 {
+	return atomic.LoadInt64(&b.counter)
 }

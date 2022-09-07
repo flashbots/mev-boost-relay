@@ -17,10 +17,10 @@ This software is currently in **alpha state**, and there'll be significant chang
 
 See also:
 
-* [Relay API Spec](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-* [Docker image](https://hub.docker.com/r/flashbots/mev-boost-relay)
-* [builder-relay-goerli.flashbots.net](https://builder-relay-goerli.flashbots.net/)
-* [mev-boost](https://github.com/flashbots/mev-boost/)
+* [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+* [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
+* [Mainnet relay](https://boost-relay.flashbots.net)
+* [mev-boost](https://github.com/flashbots/mev-boost)
 
 ---
 

@@ -648,11 +648,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Simulate the block submission and save to db
+	t := time.Now()
 	simErr = api.blockSimRateLimiter.send(req.Context(), payload)
+
 	if simErr != nil {
-		log.WithError(simErr).Warn("failed block verification")
+		log.WithError(simErr).WithFields(logrus.Fields{
+			"duration":   time.Since(t).Seconds(),
+			"numWaiting": api.blockSimRateLimiter.currentCounter(),
+		}).Warn("block verification failed")
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
+	} else {
+		log.WithFields(logrus.Fields{
+			"duration":   time.Since(t).Seconds(),
+			"numWaiting": api.blockSimRateLimiter.currentCounter(),
+		}).Info("block verification successful")
 	}
 
 	// Check if there's already a bid
