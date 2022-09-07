@@ -33,7 +33,7 @@ func parseIndexTemplate() (*template.Template, error) {
     <title>Flashbots MEV-Boost Relay - {{ .Network }}</title>
 
     <meta name="description"
-        content="Flashbots mev-bosot relay for maximal extractable value in Ethereum proof-of-stake.">
+        content="Flashbots mev-boost relay for maximal extractable value in Ethereum proof-of-stake.">
     <link data-react-helmet="true" rel="shortcut icon" href="https://writings.flashbots.net/img/favicon.ico">
     <meta property="og:image"
         content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
