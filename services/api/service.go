@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,6 +100,9 @@ type RelayAPI struct {
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter *BlockSimulationRateLimiter
+
+	// Feature flags
+	ffForceGetHeader204 bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -153,6 +157,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
+	}
+
+	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
+		log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
+		api.ffForceGetHeader204 = true
 	}
 
 	return &api, nil
@@ -477,6 +486,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	if slot < api.headSlot.Load() {
 		api.RespondError(w, http.StatusBadRequest, "slot is too old")
+		return
+	}
+
+	if api.ffForceGetHeader204 {
+		log.Info("forced getHeader 204 response")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
