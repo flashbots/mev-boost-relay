@@ -112,8 +112,6 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		return nil, ErrMissingLogOpt
 	}
 
-	log := opts.Log.WithField("module", "relay/api")
-
 	if opts.BeaconClient == nil {
 		return nil, ErrMissingBeaconClientOpt
 	}
@@ -131,7 +129,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 		// If using a secret key, ensure it's the correct one
 		publicKey = types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
-		log.Infof("Using BLS key: %s", publicKey.String())
+		opts.Log.Infof("Using BLS key: %s", publicKey.String())
 
 		// ensure pubkey is same across all relay instances
 		_pubkey, err := opts.Redis.GetRelayConfig(datastore.RedisConfigFieldPubkey)
@@ -149,7 +147,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 
 	api := RelayAPI{
 		opts:                   opts,
-		log:                    log,
+		log:                    opts.Log,
 		blsSk:                  opts.SecretKey,
 		publicKey:              &publicKey,
 		datastore:              opts.Datastore,
@@ -161,12 +159,12 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
-		log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
+		api.log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
 		api.ffForceGetHeader204 = true
 	}
 
 	if os.Getenv("DISABLE_BLOCK_PUBLISHING") == "1" {
-		log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
+		api.log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
 		api.ffDisableBlockPublishing = true
 	}
 
