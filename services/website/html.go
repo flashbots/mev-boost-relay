@@ -19,6 +19,7 @@ type StatusHTMLData struct {
 	HeadSlot                    string
 	NumPayloadsDelivered        string
 	Payloads                    []*database.DeliveredPayloadEntry
+	RelayHash                   string
 }
 
 func parseIndexTemplate() (*template.Template, error) {
@@ -96,6 +97,7 @@ func parseIndexTemplate() (*template.Template, error) {
                 <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
                 <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
                 <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
+                <li>Relay binary hash: <tt>{{.RelayHash}}</tt></li>
             </ul>
 
             <p>
