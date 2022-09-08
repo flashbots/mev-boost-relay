@@ -6,11 +6,12 @@ import (
 )
 
 type GetPayloadsFilters struct {
-	Slot        uint64
-	Cursor      uint64
-	Limit       uint64
-	BlockHash   string
-	BlockNumber uint64
+	Slot           uint64
+	Cursor         uint64
+	Limit          uint64
+	BlockHash      string
+	BlockNumber    uint64
+	ProposerPubkey string
 }
 
 type GetBuilderSubmissionsFilters struct {

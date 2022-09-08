@@ -227,11 +227,12 @@ func (s *DatabaseService) SaveDeliveredPayload(slot uint64, proposerPubkey types
 
 func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	arg := map[string]interface{}{
-		"limit":        filters.Limit,
-		"slot":         filters.Slot,
-		"cursor":       filters.Cursor,
-		"block_hash":   filters.BlockHash,
-		"block_number": filters.BlockNumber,
+		"limit":           filters.Limit,
+		"slot":            filters.Slot,
+		"cursor":          filters.Cursor,
+		"block_hash":      filters.BlockHash,
+		"block_number":    filters.BlockNumber,
+		"proposer_pubkey": filters.ProposerPubkey,
 	}
 
 	tasks := []*DeliveredPayloadEntry{}
@@ -248,6 +249,9 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	}
 	if filters.BlockNumber > 0 {
 		whereConds = append(whereConds, "block_number = :block_number")
+	}
+	if filters.ProposerPubkey != "" {
+		whereConds = append(whereConds, "proposer_pubkey = :proposer_pubkey")
 	}
 
 	where := ""
