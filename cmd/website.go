@@ -38,7 +38,7 @@ var websiteCmd = &cobra.Command{
 		var err error
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "cmd/website")
+		log := logrus.WithField("module", "relay/website")
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)

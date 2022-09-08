@@ -31,7 +31,7 @@ var housekeeperCmd = &cobra.Command{
 		var err error
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "cmd/housekeeper")
+		log := logrus.WithField("module", "relay/housekeeper")
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)

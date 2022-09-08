@@ -17,7 +17,7 @@ type ProdBeaconInstance struct {
 
 func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
 	_log := log.WithFields(logrus.Fields{
-		"module":    "beaconInstance",
+		"component": "beaconInstance",
 		"beaconURI": beaconURI,
 	})
 	return &ProdBeaconInstance{_log, beaconURI}

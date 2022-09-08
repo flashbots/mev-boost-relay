@@ -49,7 +49,7 @@ type Datastore struct {
 
 func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
 	ds = &Datastore{
-		log:                     log.WithField("module", "datastore"),
+		log:                     log.WithField("component", "datastore"),
 		db:                      db,
 		redis:                   redisCache,
 		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
