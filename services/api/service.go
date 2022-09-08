@@ -371,7 +371,6 @@ func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithFields(logrus.Fields{
 		"method": "registerValidator",
-		"ip":     common.GetIPXForwardedFor(req),
 	})
 
 	respondError := func(code int, msg string) {
