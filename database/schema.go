@@ -111,4 +111,5 @@ CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_slot_idx ON ` + TableDeliveredPayload + `("slot");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blockhash_idx ON ` + TableDeliveredPayload + `("block_hash");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blocknumber_idx ON ` + TableDeliveredPayload + `("block_number");
+CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_proposerpubkey_idx ON ` + TableDeliveredPayload + `("proposer_pubkey");
 `
