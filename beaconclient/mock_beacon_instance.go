@@ -97,3 +97,7 @@ func (c *MockBeaconInstance) addDelay() {
 		time.Sleep(c.ResponseDelay)
 	}
 }
+
+func (c *MockBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
+	return 0, nil
+}
