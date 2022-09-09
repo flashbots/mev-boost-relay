@@ -47,9 +47,11 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 		fmt.Println(schema)
 	}
 
-	_, err = db.Exec(schema)
-	if err != nil {
-		return nil, err
+	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
+		_, err = db.Exec(schema)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &DatabaseService{

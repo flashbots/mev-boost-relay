@@ -89,6 +89,7 @@ redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validato
 Env vars:
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
+* `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
