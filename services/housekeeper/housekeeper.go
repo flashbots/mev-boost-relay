@@ -25,7 +25,6 @@ import (
 type HousekeeperOpts struct {
 	Log          *logrus.Entry
 	Redis        *datastore.RedisCache
-	Datastore    *datastore.Datastore
 	BeaconClient beaconclient.IMultiBeaconClient
 }
 
@@ -33,7 +32,6 @@ type Housekeeper struct {
 	opts *HousekeeperOpts
 	log  *logrus.Entry
 
-	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
 	beaconClient beaconclient.IMultiBeaconClient
 
@@ -51,7 +49,6 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		opts:         opts,
 		log:          opts.Log,
 		redis:        opts.Redis,
-		datastore:    opts.Datastore,
 		beaconClient: opts.BeaconClient,
 	}
 
@@ -216,7 +213,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	c := make(chan result, len(entries))
 	for i := 0; i < cap(c); i++ {
 		go func(duty beaconclient.ProposerDutiesResponseData) {
-			reg, err := hk.datastore.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
+			reg, err := hk.redis.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
 			c <- result{types.BuilderGetValidatorsResponseEntry{
 				Slot:  duty.Slot,
 				Entry: reg,
