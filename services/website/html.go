@@ -97,7 +97,7 @@ func parseIndexTemplate() (*template.Template, error) {
                 <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
                 <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
                 <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
-                <li>Relay binary hash: <tt>{{.RelayHash}}</tt></li>
+                <li>Relay binary sha256 hash: <tt>{{.RelayHash}}</tt></li>
             </ul>
 
             <p>
