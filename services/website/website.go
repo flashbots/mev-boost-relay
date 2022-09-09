@@ -57,8 +57,6 @@ type Webserver struct {
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
 	statusHTMLDataLock sync.RWMutex
-
-	cachedRelayHash *string
 }
 
 func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
