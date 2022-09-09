@@ -4,7 +4,6 @@ package website
 import (
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -76,6 +75,16 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		return nil, err
 	}
 
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.ReadFile(exe)
+	if err != nil {
+		return nil, err
+	}
+	relayHash := sha256.Sum256(content)
+
 	server.statusHTMLData = StatusHTMLData{
 		Network:                     caser.String(opts.NetworkDetails.Name),
 		RelayPubkey:                 opts.RelayPubkeyHex,
@@ -89,7 +98,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		HeadSlot:                    "",
 		NumPayloadsDelivered:        "",
 		Payloads:                    []*database.DeliveredPayloadEntry{},
-		RelayHash:                   "",
+		RelayHash:                   hexutil.Encode(relayHash[:]),
 	}
 
 	return server, nil
@@ -163,7 +172,6 @@ func (srv *Webserver) updateStatusHTMLData() {
 	numKnown := printer.Sprintf("%d", len(knownValidators))
 	numPayloads := printer.Sprintf("%d", _numPayloadsDelivered)
 	latestSlot := printer.Sprintf("%d", _latestSlotInt)
-	relayHash := srv.getRelayHash()
 
 	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
@@ -171,28 +179,7 @@ func (srv *Webserver) updateStatusHTMLData() {
 	srv.statusHTMLData.Payloads = payloads
 	srv.statusHTMLData.HeadSlot = latestSlot
 	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
-	srv.statusHTMLData.RelayHash = relayHash
 	srv.statusHTMLDataLock.Unlock()
-}
-
-func (srv *Webserver) getRelayHash() string {
-	if srv.cachedRelayHash != nil {
-		return *srv.cachedRelayHash
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		srv.log.WithError(err).Error("error getting executable")
-		return ""
-	}
-	content, err := os.ReadFile(exe)
-	if err != nil {
-		srv.log.WithError(err).Error("error reading executable")
-		return ""
-	}
-	sum := sha256.Sum256(content)
-	srv.cachedRelayHash = new(string)
-	*srv.cachedRelayHash = fmt.Sprintf("%#x", sum)
-	return *srv.cachedRelayHash
 }
 
 func (srv *Webserver) handleRoot(w http.ResponseWriter, req *http.Request) {
