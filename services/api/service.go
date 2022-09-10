@@ -631,13 +631,29 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"slot":           payload.Message.Slot,
-		"builderPubkey":  payload.Message.BuilderPubkey.String(),
-		"proposerPubkey": payload.Message.ProposerPubkey.String(),
-		"blockHash":      payload.Message.BlockHash.String(),
-		"parentHash":     payload.Message.ParentHash.String(),
-		"value":          payload.Message.Value.String(),
-		"tx":             len(payload.ExecutionPayload.Transactions),
+		"slot":          payload.Message.Slot,
+		"builderPubkey": payload.Message.BuilderPubkey.String(),
+	})
+
+	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.Message.BuilderPubkey.String())
+	if err != nil {
+		log.WithError(err).Error("could not get block builder status")
+	}
+
+	if builderIsBlacklisted {
+		log.Info("builder is blacklisted")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"builderHighPrio": builderIsHighPrio,
+		"proposerPubkey":  payload.Message.ProposerPubkey.String(),
+		"blockHash":       payload.Message.BlockHash.String(),
+		"parentHash":      payload.Message.ParentHash.String(),
+		"value":           payload.Message.Value.String(),
+		"tx":              len(payload.ExecutionPayload.Transactions),
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
@@ -652,7 +668,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Sanity check the submission
-	err := VerifyBuilderBlockSubmission(payload)
+	err = VerifyBuilderBlockSubmission(payload)
 	if err != nil {
 		log.WithError(err).Warn("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -672,28 +688,34 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		_, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
 		if err != nil {
 			log.WithError(err).Error("saving builder block submission to database failed")
+			return
+		}
+
+		err = api.db.UpsertBlockBuilderEntry(*submissionEntry, simErr != nil, isMostProfitableBlock)
+		if err != nil {
+			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
 	}()
 
 	// Simulate the block submission and save to db
 	t := time.Now()
-	simErr = api.blockSimRateLimiter.send(req.Context(), payload)
+	simErr = api.blockSimRateLimiter.send(req.Context(), payload, builderIsHighPrio)
 
 	if simErr != nil {
 		log.WithError(simErr).WithFields(logrus.Fields{
 			"duration":   time.Since(t).Seconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
-		}).Warn("block verification failed")
+		}).Warn("block validation failed")
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	} else {
 		log.WithFields(logrus.Fields{
 			"duration":   time.Since(t).Seconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
-		}).Info("block verification successful")
+		}).Info("block validation successful")
 	}
 
 	// Check if there's already a bid
