@@ -17,7 +17,7 @@ var (
 	ErrSimulationFailed = errors.New("simulation failed")
 )
 
-var maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4))
+var maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 
 type BlockSimulationRateLimiter struct {
 	cv          *sync.Cond
@@ -36,7 +36,7 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 func (b *BlockSimulationRateLimiter) send(context context.Context, payload *types.BuilderSubmitBlockRequest) error {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
-	if cnt > maxConcurrentBlocks {
+	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
 		b.cv.Wait()
 	}
 	b.cv.L.Unlock()

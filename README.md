@@ -9,11 +9,11 @@ Provides the builder-specs API for Ethereum proof-of-stake validators, an API fo
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
-1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties. Soon: save metrics, etc.
-2. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): for proposer, block builder, data
-3. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database)
+1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties.
+2. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): for proposer, block builder, data.
+3. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
 
-This software is currently in **alpha state**, and there'll be significant changes in the following weeks. In particular major database schema changes, decoupling of block submissions from the proposer API and proper expiry of Redis entries.
+This software is currently in **alpha state**, and slowly stabilizing. There may still be significant changes.
 
 See also:
 
@@ -90,7 +90,7 @@ Env vars:
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
-* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests
+* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum)
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
