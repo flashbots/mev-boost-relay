@@ -336,13 +336,12 @@ func (s *DatabaseService) UpsertBlockBuilderEntry(lastSubmission BuilderBlockSub
 	query := `INSERT INTO ` + TableBlockBuilder + `
 		(builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid) VALUES
 		(:builder_pubkey, :description, :is_high_prio, :is_blacklisted, :last_submission_id, :last_submission_slot, :num_submissions_total, :num_submissions_simerror, :num_submissions_topbid)
-		ON CONFLICT (builder_pubkey) DO
-			UPDATE SET
-				last_submission_id = :last_submission_id,
-				last_submission_slot = :last_submission_slot,
-				num_submissions_total = num_submissions_total + 1,
-				num_submissions_simerror = num_submissions_simerror + :num_submissions_simerror,
-				num_submissions_topbid = num_submissions_topbid + :num_submissions_topbid;`
+		ON CONFLICT (builder_pubkey) DO UPDATE SET
+			last_submission_id = :last_submission_id,
+			last_submission_slot = :last_submission_slot,
+			num_submissions_total = ` + TableBlockBuilder + `.num_submissions_total + 1,
+			num_submissions_simerror = ` + TableBlockBuilder + `.num_submissions_simerror + :num_submissions_simerror,
+			num_submissions_topbid = ` + TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
 	_, err := s.DB.NamedExec(query, entry)
 	return err
 }
