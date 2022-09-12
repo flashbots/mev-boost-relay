@@ -1040,6 +1040,13 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 		return
 	}
 
+	var pk types.PublicKey
+	err := pk.UnmarshalText([]byte(pkStr))
+	if err != nil {
+		api.RespondError(w, http.StatusBadRequest, "invalid pubkey")
+		return
+	}
+
 	registration, err := api.redis.GetValidatorRegistration(types.NewPubkeyHex(pkStr))
 	if err != nil {
 		api.log.WithError(err).Error("error getting validator registration")
