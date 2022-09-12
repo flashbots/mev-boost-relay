@@ -24,6 +24,9 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
+    - deadcode
+    - varcheck
+    - interfacebloat
 
     #
     # Disabled because of generics:

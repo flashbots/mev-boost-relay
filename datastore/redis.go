@@ -22,6 +22,13 @@ var (
 	RedisStatsFieldLatestSlot = "latest-slot"
 )
 
+type BlockBuilderStatus string
+
+var (
+	RedisBlockBuilderStatusHighPrio    BlockBuilderStatus = "high-prio"
+	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
+)
+
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
@@ -47,9 +54,10 @@ type RedisCache struct {
 	keyValidatorRegistration          string
 	keyValidatorRegistrationTimestamp string
 
-	keyRelayConfig    string
-	keyStats          string
-	keyProposerDuties string
+	keyRelayConfig        string
+	keyStats              string
+	keyProposerDuties     string
+	keyBlockBuilderStatus string
 }
 
 func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
@@ -69,8 +77,9 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validators-registration", redisPrefix, prefix),
 		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
-		keyStats:          fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
-		keyProposerDuties: fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
+		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
+		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
+		keyBlockBuilderStatus: fmt.Sprintf("%s/%s:block-builder-status", redisPrefix, prefix),
 	}, nil
 }
 
@@ -230,4 +239,18 @@ func (r *RedisCache) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		return nil, nil
 	}
 	return resp, err
+}
+
+func (r *RedisCache) SetBlockBuilderStatus(builderPubkey string, status BlockBuilderStatus) (err error) {
+	return r.client.HSet(context.Background(), r.keyBlockBuilderStatus, builderPubkey, string(status)).Err()
+}
+
+func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, isBlacklisted bool, err error) {
+	res, err := r.client.HGet(context.Background(), r.keyBlockBuilderStatus, builderPubkey).Result()
+	if errors.Is(err, redis.Nil) {
+		return false, false, nil
+	}
+	isHighPrio = BlockBuilderStatus(res) == RedisBlockBuilderStatusHighPrio
+	isBlacklisted = BlockBuilderStatus(res) == RedisBlockBuilderStatusBlacklisted
+	return isHighPrio, isBlacklisted, err
 }

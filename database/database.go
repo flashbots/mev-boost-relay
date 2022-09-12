@@ -17,7 +17,7 @@ import (
 
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
-	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (id int64, err error)
+	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (entry *BuilderBlockSubmissionEntry, err error)
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
@@ -27,6 +27,13 @@ type IDatabaseService interface {
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
+
+	GetBlockBuilders() ([]*BlockBuilderEntry, error)
+	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
+	SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error
+	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error
+	IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error
+	IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error
 }
 
 type DatabaseService struct {
@@ -91,11 +98,11 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 	return nil
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (id int64, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	query := `INSERT INTO ` + TableExecutionPayload + `
 	(slot, proposer_pubkey, block_hash, version, payload) VALUES
@@ -104,11 +111,11 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	RETURNING id`
 	nstmt, err := s.DB.PrepareNamed(query)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	err = nstmt.QueryRow(execPayloadEntry).Scan(&execPayloadEntry.ID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Save block_submission
@@ -149,14 +156,14 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	RETURNING id`
 	nstmt, err = s.DB.PrepareNamed(query)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	err = nstmt.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return blockSubmissionEntry.ID, err
+	return blockSubmissionEntry, err
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
@@ -313,4 +320,76 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 
 	err = nstmt.Select(&tasks, arg)
 	return tasks, err
+}
+
+func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
+	entry := BlockBuilderEntry{
+		BuilderPubkey:          lastSubmission.BuilderPubkey,
+		LastSubmissionID:       NewNullInt64(lastSubmission.ID),
+		LastSubmissionSlot:     lastSubmission.Slot,
+		NumSubmissionsTotal:    1,
+		NumSubmissionsSimError: 0,
+		NumSubmissionsTopBid:   0,
+	}
+	if isError {
+		entry.NumSubmissionsSimError = 1
+	}
+	if isTopbid {
+		entry.NumSubmissionsTopBid = 1
+	}
+
+	// Upsert
+	query := `INSERT INTO ` + TableBlockBuilder + `
+		(builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid) VALUES
+		(:builder_pubkey, :description, :is_high_prio, :is_blacklisted, :last_submission_id, :last_submission_slot, :num_submissions_total, :num_submissions_simerror, :num_submissions_topbid)
+		ON CONFLICT (builder_pubkey) DO UPDATE SET
+			last_submission_id = :last_submission_id,
+			last_submission_slot = :last_submission_slot,
+			num_submissions_total = ` + TableBlockBuilder + `.num_submissions_total + 1,
+			num_submissions_simerror = ` + TableBlockBuilder + `.num_submissions_simerror + :num_submissions_simerror,
+			num_submissions_topbid = ` + TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
+
+func (s *DatabaseService) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getheader, num_sent_getpayload FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
+	entries := []*BlockBuilderEntry{}
+	err := s.DB.Select(entries, query)
+	return entries, err
+}
+
+func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getheader, num_sent_getpayload FROM ` + TableBlockBuilder + ` WHERE builder_pubkey=$1;`
+	entry := &BlockBuilderEntry{}
+	err := s.DB.Get(entry, query, pubkey)
+	return entry, err
+}
+
+func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
+	query := `UPDATE ` + TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2 WHERE builder_pubkey=$3;`
+	_, err := s.DB.Exec(query, isHighPrio, isBlacklisted, pubkey)
+	return err
+}
+
+func (s *DatabaseService) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error {
+	query := `UPDATE goerli_blockbuilder
+		SET num_sent_getheader=num_sent_getheader+1
+		FROM (
+			SELECT builder_pubkey FROM goerli_builder_block_submission WHERE slot=$1 AND block_hash=$2
+		) AS sub
+		WHERE goerli_blockbuilder.builder_pubkey=sub.builder_pubkey;`
+	_, err := s.DB.Exec(query, slot, blockhash)
+	return err
+}
+
+func (s *DatabaseService) IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error {
+	query := `UPDATE goerli_blockbuilder
+		SET num_sent_getpayload=num_sent_getpayload+1
+		FROM (
+			SELECT builder_pubkey FROM goerli_builder_block_submission WHERE slot=$1 AND block_hash=$2
+		) AS sub
+		WHERE goerli_blockbuilder.builder_pubkey=sub.builder_pubkey;`
+	_, err := s.DB.Exec(query, slot, blockhash)
+	return err
 }

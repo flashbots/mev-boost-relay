@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 
@@ -33,7 +36,7 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 	}
 }
 
-func (b *BlockSimulationRateLimiter) send(context context.Context, payload *types.BuilderSubmitBlockRequest) error {
+func (b *BlockSimulationRateLimiter) send(context context.Context, payload *types.BuilderSubmitBlockRequest, isHighPrio bool) error {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
 	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
@@ -53,7 +56,7 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *type
 	}
 
 	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-	simResp, err := jsonrpc.SendJSONRPCRequest(*simReq, b.blockSimURL)
+	simResp, err := SendJSONRPCRequest(*simReq, b.blockSimURL, isHighPrio)
 	if err != nil {
 		return err
 	} else if simResp.Error != nil {
@@ -66,4 +69,37 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *type
 // currentCounter returns the number of waiting and active requests
 func (b *BlockSimulationRateLimiter) currentCounter() int64 {
 	return atomic.LoadInt64(&b.counter)
+}
+
+// SendJSONRPCRequest sends the request to URL and returns the general JsonRpcResponse, or an error (note: not the JSONRPCError)
+func SendJSONRPCRequest(req jsonrpc.JSONRPCRequest, url string, isHighPrio bool) (res *jsonrpc.JSONRPCResponse, err error) {
+	buf, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(buf))
+	if err != nil {
+		return nil, err
+	}
+
+	// set request headers
+	httpReq.Header.Add("Content-Type", "application/json")
+	if isHighPrio {
+		httpReq.Header.Add("X-High-Priority", "true")
+	}
+
+	// execute request
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	res = new(jsonrpc.JSONRPCResponse)
+	if err := json.NewDecoder(resp.Body).Decode(res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }

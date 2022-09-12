@@ -5,6 +5,20 @@ import (
 	"time"
 )
 
+func NewNullInt64(i int64) sql.NullInt64 {
+	return sql.NullInt64{
+		Int64: i,
+		Valid: true,
+	}
+}
+
+func NewNullString(s string) sql.NullString {
+	return sql.NullString{
+		String: s,
+		Valid:  true,
+	}
+}
+
 type GetPayloadsFilters struct {
 	Slot           uint64
 	Cursor         uint64
@@ -104,16 +118,23 @@ type DeliveredPayloadEntry struct {
 	Value string `db:"value"`
 }
 
-func NewNullInt64(i int64) sql.NullInt64 {
-	return sql.NullInt64{
-		Int64: i,
-		Valid: true,
-	}
-}
+type BlockBuilderEntry struct {
+	ID         int64     `db:"id"          json:"id"`
+	InsertedAt time.Time `db:"inserted_at" json:"inserted_at"`
 
-func NewNullString(s string) sql.NullString {
-	return sql.NullString{
-		String: s,
-		Valid:  true,
-	}
+	BuilderPubkey string `db:"builder_pubkey" json:"builder_pubkey"`
+	Description   string `db:"description"    json:"description"`
+
+	IsHighPrio    bool `db:"is_high_prio"   json:"is_high_prio"`
+	IsBlacklisted bool `db:"is_blacklisted" json:"is_blacklisted"`
+
+	LastSubmissionID   sql.NullInt64 `db:"last_submission_id"   json:"last_submission_id"`
+	LastSubmissionSlot uint64        `db:"last_submission_slot" json:"last_submission_slot"`
+
+	NumSubmissionsTotal    uint64 `db:"num_submissions_total"    json:"num_submissions_total"`
+	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"num_submissions_simerror"`
+	NumSubmissionsTopBid   uint64 `db:"num_submissions_topbid"   json:"num_submissions_topbid"`
+
+	NumSentGetHeader  uint64 `db:"num_sent_getheader"  json:"num_sent_getheader"`
+	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"num_sent_getpayload"`
 }
