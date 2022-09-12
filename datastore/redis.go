@@ -25,8 +25,8 @@ var (
 type BlockBuilderStatus string
 
 var (
-	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
 	RedisBlockBuilderStatusHighPrio    BlockBuilderStatus = "high-prio"
+	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
 )
 
 func PubkeyHexToLowerStr(pk types.PubkeyHex) string {

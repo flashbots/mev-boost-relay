@@ -120,21 +120,21 @@ type DeliveredPayloadEntry struct {
 
 type BlockBuilderEntry struct {
 	ID         int64     `db:"id"          json:"id"`
-	InsertedAt time.Time `db:"inserted_at" json:"insertedAt"`
+	InsertedAt time.Time `db:"inserted_at" json:"inserted_at"`
 
-	BuilderPubkey string `db:"builder_pubkey" json:"builderPubkey"`
+	BuilderPubkey string `db:"builder_pubkey" json:"builder_pubkey"`
 	Description   string `db:"description"    json:"description"`
 
-	IsHighPrio    bool `db:"is_high_prio"   json:"isHighPrio"`
-	IsBlacklisted bool `db:"is_blacklisted" json:"isBlacklisted"`
+	IsHighPrio    bool `db:"is_high_prio"   json:"is_high_prio"`
+	IsBlacklisted bool `db:"is_blacklisted" json:"is_blacklisted"`
 
-	LastSubmissionID   sql.NullInt64 `db:"last_submission_id"   json:"lastSubmissionId"`
-	LastSubmissionSlot uint64        `db:"last_submission_slot" json:"lastSubmissionSlot"`
+	LastSubmissionID   sql.NullInt64 `db:"last_submission_id"   json:"last_submission_id"`
+	LastSubmissionSlot uint64        `db:"last_submission_slot" json:"last_submission_slot"`
 
-	NumSubmissionsTotal    uint64 `db:"num_submissions_total"    json:"numSubmissionsTotal"`
-	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"numSubmissionsSimError"`
-	NumSubmissionsTopBid   uint64 `db:"num_submissions_topbid"   json:"numSubmissionsTopBid"`
+	NumSubmissionsTotal    uint64 `db:"num_submissions_total"    json:"num_submissions_total"`
+	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"num_submissions_simerror"`
+	NumSubmissionsTopBid   uint64 `db:"num_submissions_topbid"   json:"num_submissions_topbid"`
 
-	NumSentGetHeader  uint64 `db:"num_sent_getheader"  json:"numSentGetHeader"`
-	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"numSentGetPayload"`
+	NumSentGetHeader  uint64 `db:"num_sent_getheader"  json:"num_sent_getheader"`
+	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"num_sent_getpayload"`
 }

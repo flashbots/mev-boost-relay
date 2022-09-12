@@ -132,8 +132,8 @@ CREATE TABLE IF NOT EXISTS ` + TableBlockBuilder + ` (
 	num_submissions_simerror bigint NOT NULL,
 	num_submissions_topbid   bigint NOT NULL,
 
-	num_sent_getheader  bigint NOT NULL,
-	num_sent_getpayload bigint NOT NULL,
+	num_sent_getheader  bigint NOT NULL DEFAULT 0,
+	num_sent_getpayload bigint NOT NULL DEFAULT 0,
 
 	UNIQUE (builder_pubkey)
 );

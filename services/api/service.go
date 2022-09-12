@@ -818,7 +818,6 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 
 		api.RespondOK(w, builderEntry)
 		return
-
 	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
 		args := req.URL.Query()
 		isHighPrio := args.Get("high_prio") == "true"
@@ -844,9 +843,9 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		err = api.db.SetBlockBuilderStatus(builderPubkey, isHighPrio, isBlacklisted)
 		if err != nil {
 			api.log.WithError(err).Error("could not set block builder status in database")
-			api.RespondError(w, http.StatusInternalServerError, err.Error())
-			return
 		}
+
+		api.RespondOK(w, struct{ newStatus string }{newStatus: string(status)})
 	}
 }
 
