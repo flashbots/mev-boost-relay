@@ -44,9 +44,14 @@ func (db MockDB) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderB
 	return nil
 }
 
+func (db MockDB) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
+	return nil, nil
+}
+
 func (db MockDB) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
 	return nil, nil
 }
+
 func (db MockDB) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
 	return nil
 }

@@ -79,6 +79,9 @@ func (hk *Housekeeper) Start() (err error) {
 				hk.log.WithError(err).Error("failed to get number of registered validators")
 			}
 
+			// Update builder status in Redis (from database)
+			go hk.updateBuilderStatusInRedis()
+
 			// Update known validators
 			hk.updateKnownValidators()
 
@@ -247,4 +250,8 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+func (hk *Housekeeper) updateBuilderStatusInRedis() {
+	// builders, err := hk.da
 }

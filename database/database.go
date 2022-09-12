@@ -29,6 +29,7 @@ type IDatabaseService interface {
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error
+	GetBlockBuilders() ([]*BlockBuilderEntry, error)
 	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
 	SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error
 }
@@ -347,6 +348,13 @@ func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission 
 			num_submissions_topbid = ` + TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
 	_, err := s.DB.NamedExec(query, entry)
 	return err
+}
+
+func (s *DatabaseService) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
+	entries := []*BlockBuilderEntry{}
+	err := s.DB.Select(entries, query)
+	return entries, err
 }
 
 func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
