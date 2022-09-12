@@ -27,7 +27,10 @@ type IDatabaseService interface {
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
-	UpsertBlockBuilderEntry(lastSubmission BuilderBlockSubmissionEntry, isError, isTopbid bool) error
+
+	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error
+	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
+	SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error
 }
 
 type DatabaseService struct {
@@ -316,7 +319,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	return tasks, err
 }
 
-func (s *DatabaseService) UpsertBlockBuilderEntry(lastSubmission BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
+func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
 	entry := BlockBuilderEntry{
 		BuilderPubkey:          lastSubmission.BuilderPubkey,
 		LastSubmissionID:       NewNullInt64(lastSubmission.ID),
@@ -343,5 +346,18 @@ func (s *DatabaseService) UpsertBlockBuilderEntry(lastSubmission BuilderBlockSub
 			num_submissions_simerror = ` + TableBlockBuilder + `.num_submissions_simerror + :num_submissions_simerror,
 			num_submissions_topbid = ` + TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
 	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
+
+func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid FROM ` + TableBlockBuilder + ` WHERE builder_pubkey=?`
+	entry := &BlockBuilderEntry{}
+	err := s.DB.Get(entry, query, pubkey)
+	return entry, err
+}
+
+func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
+	query := `UPDATE ` + TableBlockBuilder + ` SET is_high_prio=?, is_blacklisted=? WHERE builder_pubkey=?;`
+	_, err := s.DB.Exec(query, isHighPrio, isBlacklisted, pubkey)
 	return err
 }

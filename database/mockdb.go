@@ -40,6 +40,13 @@ func (db MockDB) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHe
 	return nil
 }
 
-func (db MockDB) UpsertBlockBuilderEntry(lastSubmission BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
+func (db MockDB) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
+	return nil
+}
+
+func (db MockDB) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
+	return nil, nil
+}
+func (db MockDB) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
 	return nil
 }

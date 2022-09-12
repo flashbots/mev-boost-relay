@@ -50,6 +50,9 @@ var (
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 	pathDataBuilderBidsReceived      = "/relay/v1/data/bidtraces/builder_blocks_received"
 	pathDataValidatorRegistration    = "/relay/v1/data/validator_registration"
+
+	// Internal API
+	pathInternalBuilderStatus = "/internal/v1/builder/{pubkey:0x[a-fA-F0-9]+}"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -201,6 +204,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.PprofAPI {
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
 	}
+
+	r.HandleFunc(pathInternalBuilderStatus, api.handleInternalBuilderStatus).Methods(http.MethodGet, http.MethodPost, http.MethodPut)
 
 	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(api.log, r)
@@ -694,7 +699,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			return
 		}
 
-		err = api.db.UpsertBlockBuilderEntry(*submissionEntry, simErr != nil, isMostProfitableBlock)
+		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil, isMostProfitableBlock)
 		if err != nil {
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
@@ -773,6 +778,38 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Respond with OK (TODO: proper response response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
 	w.WriteHeader(http.StatusOK)
+}
+
+// ---------------
+//  INTERNAL APIS
+// ---------------
+
+func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	builderPubkey := vars["pubkey"]
+
+	if req.Method == http.MethodGet {
+		builderEntry, err := api.db.GetBlockBuilderByPubkey(builderPubkey)
+		if err != nil {
+			api.log.WithError(err).Error("could not get block builder")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		api.RespondOK(w, builderEntry)
+		return
+
+	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
+		args := req.URL.Query()
+		isHighPrio := args.Get("high_prio") == "true"
+		isBlacklisted := args.Get("blacklisted") == "true"
+		err := api.db.SetBlockBuilderStatus(builderPubkey, isHighPrio, isBlacklisted)
+		if err != nil {
+			api.log.WithError(err).Error("could not set block builder status")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 }
 
 // -----------
