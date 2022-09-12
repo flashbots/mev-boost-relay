@@ -242,7 +242,7 @@ func (r *RedisCache) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 }
 
 func (r *RedisCache) SetBlockBuilderStatus(builderPubkey string, status BlockBuilderStatus) (err error) {
-	return r.client.HSet(context.Background(), r.keyBlockBuilderStatus, builderPubkey, status).Err()
+	return r.client.HSet(context.Background(), r.keyBlockBuilderStatus, builderPubkey, string(status)).Err()
 }
 
 func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, isBlacklisted bool, err error) {

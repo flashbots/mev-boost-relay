@@ -527,6 +527,14 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"blockHash": bid.Data.Message.Header.BlockHash.String(),
 	}).Info("bid delivered")
 	api.RespondOK(w, bid)
+
+	// Increment builder stats
+	go func() {
+		err := api.db.IncBlockBuilderStatsAfterGetHeader(slot, bid.Data.Message.Header.BlockHash.String())
+		if err != nil {
+			log.WithError(err).Error("could not increment builder-stats after getHeader")
+		}
+	}()
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
@@ -600,9 +608,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		if err != nil {
 			log.WithError(err).Error("failed to save delivered payload")
 		}
+
+		// Increment builder stats
+		err = api.db.IncBlockBuilderStatsAfterGetPayload(slot, blockHash.String())
+		if err != nil {
+			log.WithError(err).Error("could not increment builder-stats after getHeader")
+		}
 	}()
 
-	// Finally, publish the signed beacon block
+	// Publish the signed beacon block via beacon-node
 	go func() {
 		if api.ffDisableBlockPublishing {
 			log.Info("publishing the block is disabled")

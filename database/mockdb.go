@@ -55,3 +55,11 @@ func (db MockDB) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, err
 func (db MockDB) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
 	return nil
 }
+
+func (db MockDB) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error {
+	return nil
+}
+
+func (db MockDB) IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error {
+	return nil
+}
