@@ -373,23 +373,23 @@ func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, isHighPrio, isBla
 }
 
 func (s *DatabaseService) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error {
-	query := `UPDATE goerli_blockbuilder
+	query := `UPDATE ` + TableBlockBuilder + `
 		SET num_sent_getheader=num_sent_getheader+1
 		FROM (
-			SELECT builder_pubkey FROM goerli_builder_block_submission WHERE slot=$1 AND block_hash=$2
+			SELECT builder_pubkey FROM ` + TableBuilderBlockSubmission + ` WHERE slot=$1 AND block_hash=$2
 		) AS sub
-		WHERE goerli_blockbuilder.builder_pubkey=sub.builder_pubkey;`
+		WHERE ` + TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
 	_, err := s.DB.Exec(query, slot, blockhash)
 	return err
 }
 
 func (s *DatabaseService) IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error {
-	query := `UPDATE goerli_blockbuilder
+	query := `UPDATE ` + TableBlockBuilder + `
 		SET num_sent_getpayload=num_sent_getpayload+1
 		FROM (
-			SELECT builder_pubkey FROM goerli_builder_block_submission WHERE slot=$1 AND block_hash=$2
+			SELECT builder_pubkey FROM ` + TableBuilderBlockSubmission + ` WHERE slot=$1 AND block_hash=$2
 		) AS sub
-		WHERE goerli_blockbuilder.builder_pubkey=sub.builder_pubkey;`
+		WHERE ` + TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
 	_, err := s.DB.Exec(query, slot, blockhash)
 	return err
 }
