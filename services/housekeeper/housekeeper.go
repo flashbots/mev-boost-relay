@@ -134,7 +134,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
 		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
-	}).Infof("updated headSlot")
+	}).Infof("updated headSlot to %d", headSlot)
 }
 
 func (hk *Housekeeper) updateKnownValidators() {

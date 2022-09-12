@@ -446,7 +446,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
 			return
 		} else {
-			// Save and increment counter
+			// Save
 			go func(reg types.SignedValidatorRegistration) {
 				err := api.datastore.SetValidatorRegistration(reg)
 				if err != nil {

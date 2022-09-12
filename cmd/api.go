@@ -60,7 +60,7 @@ var apiCmd = &cobra.Command{
 		common.LogSetup(logJSON, logLevel)
 		log := logrus.WithField("module", "relay/api")
 		if apiLogTag != "" {
-			log = logrus.WithField("tag", apiLogTag)
+			log = log.WithField("tag", apiLogTag)
 		}
 		log.Infof("boost-relay %s", Version)
 
