@@ -2,6 +2,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -791,6 +792,11 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 	if req.Method == http.MethodGet {
 		builderEntry, err := api.db.GetBlockBuilderByPubkey(builderPubkey)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				api.RespondError(w, http.StatusBadRequest, "builder not found")
+				return
+			}
+
 			api.log.WithError(err).Error("could not get block builder")
 			api.RespondError(w, http.StatusInternalServerError, err.Error())
 			return
