@@ -86,7 +86,7 @@ func SendJSONRPCRequest(req jsonrpc.JSONRPCRequest, url string, isHighPrio bool)
 	// set request headers
 	httpReq.Header.Add("Content-Type", "application/json")
 	if isHighPrio {
-		httpReq.Header.Add("high_prio", "1")
+		httpReq.Header.Add("X-High-Priority", "true")
 	}
 
 	// execute request
