@@ -100,12 +100,13 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("couldn't read db URL")
 		}
 
-		log.Infof("Connecting to Postgres database at %s %s ...", dbURL.Host, dbURL.Path)
+		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
 		db, err := database.NewDatabaseService(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
 		}
 
+		log.Info("Setting up datastore...")
 		ds, err := datastore.NewDatastore(log, redis, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
@@ -144,6 +145,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		// Create the relay service
+		log.Info("Setting up relay service...")
 		srv, err := api.NewRelayAPI(opts)
 		if err != nil {
 			log.WithError(err).Fatal("failed to create service")
