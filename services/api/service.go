@@ -109,6 +109,7 @@ type RelayAPI struct {
 	// Feature flags
 	ffForceGetHeader204      bool
 	ffDisableBlockPublishing bool
+	ffDisableLowPrioBuilders bool
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -171,6 +172,11 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 	if os.Getenv("DISABLE_BLOCK_PUBLISHING") == "1" {
 		api.log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
 		api.ffDisableBlockPublishing = true
+	}
+
+	if os.Getenv("DISABLE_LOWPRIO_BUILDERS") == "1" {
+		api.log.Warn("env: DISABLE_LOWPRIO_BUILDERS - allowing only high-level builders")
+		api.ffDisableLowPrioBuilders = true
 	}
 
 	return &api, nil
@@ -671,6 +677,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	if builderIsBlacklisted {
 		log.Info("builder is blacklisted")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// In case only high-prio requests are accepted, fail others
+	if api.ffDisableLowPrioBuilders && !builderIsHighPrio {
+		log.Info("rejecting low-prio builder (ff-disable-low-prio-builders)")
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 		return
