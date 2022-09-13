@@ -63,7 +63,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("module", "relay/api")
+		log := logrus.WithField("service", "relay/api")
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
 		}

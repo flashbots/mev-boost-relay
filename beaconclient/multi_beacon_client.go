@@ -47,7 +47,7 @@ type MultiBeaconClient struct {
 
 func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *MultiBeaconClient {
 	client := &MultiBeaconClient{
-		log:                      log.WithField("module", "beaconClient"),
+		log:                      log.WithField("component", "beaconClient"),
 		beaconInstances:          beaconInstances,
 		bestBeaconIndex:          *uberatomic.NewInt64(0),
 		ffAllowSyncingBeaconNode: false,
