@@ -68,27 +68,8 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
-	// Periodic tasks: update known validator, log number of registered validators
-	go func() {
-		for {
-			// Print number of registered validators
-			numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
-			if err == nil {
-				hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
-			} else {
-				hk.log.WithError(err).Error("failed to get number of registered validators")
-			}
-
-			// Update builder status in Redis (from database)
-			go hk.updateBuilderStatusInRedis()
-
-			// Update known validators
-			hk.updateKnownValidators()
-
-			// Wait half an epoch
-			time.Sleep(common.DurationPerEpoch / 2)
-		}
-	}()
+	// Start the periodic task loop (update known validators, log number of registered validators)
+	go hk.periodicTaskLoop()
 
 	// Process the current slot
 	headSlot := bestSyncStatus.HeadSlot
@@ -168,6 +149,8 @@ func (hk *Housekeeper) updateKnownValidators() {
 			log.WithError(err).WithField("pubkey", pubkey).Error("failed to set known validator in Redis")
 		}
 	}
+
+	log.Debug("updateKnownValidators done")
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
@@ -250,6 +233,31 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+func (hk *Housekeeper) periodicTaskLoop() {
+	for {
+		hk.log.Debug("periodicTaskLoop start")
+
+		// Print number of registered validators
+		go func() {
+			numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
+			if err == nil {
+				hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
+			} else {
+				hk.log.WithError(err).Error("failed to get number of registered validators")
+			}
+		}()
+
+		// Update builder status in Redis (from database)
+		go hk.updateBuilderStatusInRedis()
+
+		// Update known validators
+		go hk.updateKnownValidators()
+
+		// Wait half an epoch
+		time.Sleep(common.DurationPerEpoch / 2)
+	}
 }
 
 func (hk *Housekeeper) updateBuilderStatusInRedis() {
