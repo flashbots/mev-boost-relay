@@ -128,6 +128,10 @@ func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex 
 	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
+func (r *RedisCache) SetKnownValidatorNX(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
+	return r.client.HSetNX(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
+}
+
 func (r *RedisCache) GetValidatorRegistration(proposerPubkey types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
 	registration := new(types.SignedValidatorRegistration)
 	value, err := r.client.HGet(context.Background(), r.keyValidatorRegistration, strings.ToLower(proposerPubkey.String())).Result()

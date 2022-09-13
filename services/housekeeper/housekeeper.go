@@ -40,16 +40,19 @@ type Housekeeper struct {
 	proposerDutiesSlot       uint64
 
 	headSlot uberatomic.Uint64
+
+	proposersAlreadySaved map[string]bool // to avoid repeating redis writes
 }
 
 var ErrServerAlreadyStarted = errors.New("server was already started")
 
 func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 	server := &Housekeeper{
-		opts:         opts,
-		log:          opts.Log,
-		redis:        opts.Redis,
-		beaconClient: opts.BeaconClient,
+		opts:                  opts,
+		log:                   opts.Log,
+		redis:                 opts.Redis,
+		beaconClient:          opts.BeaconClient,
+		proposersAlreadySaved: make(map[string]bool),
 	}
 
 	return server
@@ -153,41 +156,50 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 func (hk *Housekeeper) updateKnownValidators() {
 	// Query beacon node for known validators
 	hk.log.Debug("Querying validators from beacon node... (this may take a while)")
-
+	timeStartFetching := time.Now()
 	validators, err := hk.beaconClient.FetchValidators(hk.headSlot.Load() - 1) // -1 to avoid "Invalid state ID: requested slot number is higher than head slot number" with multiple BNs
 	if err != nil {
 		hk.log.WithError(err).Error("failed to fetch validators from all beacon nodes")
 		return
 	}
 
-	log := hk.log.WithField("numKnownValidators", len(validators))
-	log.Infof("received validators from BN")
-	go func() {
-		err := hk.redis.SetStats("validators_known_total", fmt.Sprint(len(validators)))
-		if err != nil {
-			log.WithError(err).WithField(
-				"field", "validators_known_total",
-			).Error("failed to set status")
-		}
-	}()
+	numValidators := len(validators)
+	log := hk.log.WithField("numKnownValidators", numValidators)
+	log.WithField("durationFetchValidators", time.Since(timeStartFetching).Seconds()).Infof("received validators from beacon-node")
+
+	// Store total number of validators
+	err = hk.redis.SetStats("validators_known_total", fmt.Sprint(numValidators))
+	if err != nil {
+		log.WithError(err).WithField(
+			"field", "validators_known_total",
+		).Error("failed to set status")
+	}
 
 	// Update Redis with validators
 	log.Debug("Writing to Redis...")
+	timeStartWriting := time.Now()
 
-	n := len(validators)
 	i := 0
 	for _, validator := range validators {
-		if i%10000 == 0 {
-			fmt.Println(i, n)
-		}
 		i++
-		err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Status), validator.Index)
+		if i%10000 == 0 {
+			hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
+		}
+
+		// avoid resaving
+		if hk.proposersAlreadySaved[validator.Validator.Pubkey] {
+			continue
+		}
+
+		err := hk.redis.SetKnownValidatorNX(types.PubkeyHex(validator.Validator.Pubkey), validator.Index)
 		if err != nil {
-			log.WithError(err).WithField("pubkey", validator.Validator).Error("failed to set known validator in Redis")
+			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
+		} else {
+			hk.proposersAlreadySaved[validator.Validator.Pubkey] = true
 		}
 	}
 
-	log.Debug("updateKnownValidators done")
+	log.WithField("durationRedisWrite", time.Since(timeStartWriting).Seconds()).Debug("updateKnownValidators done")
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
