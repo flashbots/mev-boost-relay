@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -69,8 +68,10 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
-	// Start the periodic task loop (update known validators, log number of registered validators)
-	go hk.periodicTaskLoop()
+	// Start the periodic task loops
+	go hk.periodicTaskUpdateKnownValidators()
+	go hk.periodicTaskLogNumRegisteredValidators()
+	go hk.periodicTaskUpdateBuilderStatusInRedis()
 
 	// Process the current slot
 	headSlot := bestSyncStatus.HeadSlot
@@ -82,6 +83,36 @@ func (hk *Housekeeper) Start() (err error) {
 	for {
 		headEvent := <-c
 		hk.processNewSlot(headEvent.Slot)
+	}
+}
+
+func (hk *Housekeeper) periodicTaskLogNumRegisteredValidators() {
+	for {
+		numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
+		if err == nil {
+			hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
+		} else {
+			hk.log.WithError(err).Error("failed to get number of registered validators")
+		}
+		time.Sleep(common.DurationPerEpoch / 2)
+	}
+}
+
+func (hk *Housekeeper) periodicTaskUpdateKnownValidators() {
+	for {
+		hk.log.Debug("periodicTaskUpdateKnownValidators start")
+		hk.updateKnownValidators()
+		hk.log.Debug("periodicTaskUpdateKnownValidators done")
+
+		// Wait half an epoch
+		time.Sleep(common.DurationPerEpoch / 2)
+	}
+}
+
+func (hk *Housekeeper) periodicTaskUpdateBuilderStatusInRedis() {
+	for {
+		// builders, err := hk.da
+		time.Sleep(common.DurationPerEpoch / 2)
 	}
 }
 
@@ -143,19 +174,19 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Update Redis with validators
 	log.Debug("Writing to Redis...")
 
-	var wg sync.WaitGroup
-	for _, v := range validators {
-		wg.Add(1)
-		go func(wg *sync.WaitGroup, validator beaconclient.ValidatorResponseEntry) {
-			defer wg.Done()
-			err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Status), validator.Index)
-			if err != nil {
-				log.WithError(err).WithField("pubkey", validator.Validator).Error("failed to set known validator in Redis")
-			}
-		}(&wg, v)
+	n := len(validators)
+	i := 0
+	for _, validator := range validators {
+		if i%10000 == 0 {
+			fmt.Println(i, n)
+		}
+		i++
+		err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Status), validator.Index)
+		if err != nil {
+			log.WithError(err).WithField("pubkey", validator.Validator).Error("failed to set known validator in Redis")
+		}
 	}
 
-	wg.Wait()
 	log.Debug("updateKnownValidators done")
 }
 
@@ -239,33 +270,4 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
-}
-
-func (hk *Housekeeper) periodicTaskLoop() {
-	for {
-		hk.log.Debug("periodicTaskLoop start")
-
-		// Print number of registered validators
-		go func() {
-			numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
-			if err == nil {
-				hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
-			} else {
-				hk.log.WithError(err).Error("failed to get number of registered validators")
-			}
-		}()
-
-		// Update builder status in Redis (from database)
-		go hk.updateBuilderStatusInRedis()
-
-		// Update known validators
-		go hk.updateKnownValidators()
-
-		// Wait half an epoch
-		time.Sleep(common.DurationPerEpoch / 2)
-	}
-}
-
-func (hk *Housekeeper) updateBuilderStatusInRedis() {
-	// builders, err := hk.da
 }
