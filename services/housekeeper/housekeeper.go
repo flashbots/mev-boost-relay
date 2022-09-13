@@ -180,6 +180,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 	timeStartWriting := time.Now()
 
 	i := 0
+	newValidators := 0
 	for _, validator := range validators {
 		i++
 		if i%10000 == 0 {
@@ -196,10 +197,14 @@ func (hk *Housekeeper) updateKnownValidators() {
 			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
 		} else {
 			hk.proposersAlreadySaved[validator.Validator.Pubkey] = true
+			newValidators++
 		}
 	}
 
-	log.WithField("durationRedisWrite", time.Since(timeStartWriting).Seconds()).Debug("updateKnownValidators done")
+	log.WithFields(logrus.Fields{
+		"durationRedisWrite": time.Since(timeStartWriting).Seconds(),
+		"newValidators":      newValidators,
+	}).Info("updateKnownValidators done")
 }
 
 func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
