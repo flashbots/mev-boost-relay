@@ -686,12 +686,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
+		api.log.Debug("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return
 	}
 
 	// Don't accept blocks with 0 value
 	if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
+		api.log.Debug("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
