@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -142,14 +143,19 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Update Redis with validators
 	log.Debug("Writing to Redis...")
 
+	var wg sync.WaitGroup
 	for _, v := range validators {
-		pubkey := types.PubkeyHex(v.Validator.Pubkey)
-		err := hk.redis.SetKnownValidator(pubkey, v.Index)
-		if err != nil {
-			log.WithError(err).WithField("pubkey", pubkey).Error("failed to set known validator in Redis")
-		}
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, validator beaconclient.ValidatorResponseEntry) {
+			defer wg.Done()
+			err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Status), validator.Index)
+			if err != nil {
+				log.WithError(err).WithField("pubkey", validator.Validator).Error("failed to set known validator in Redis")
+			}
+		}(&wg, v)
 	}
 
+	wg.Wait()
 	log.Debug("updateKnownValidators done")
 }
 
