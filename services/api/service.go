@@ -922,13 +922,19 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	}
 
 	if args.Get("proposer_pubkey") != "" {
-		var proposerPubkey types.PublicKey
-		err = proposerPubkey.UnmarshalText([]byte(args.Get("proposer_pubkey")))
-		if err != nil {
+		if err = checkBLSPublicKeyHex(args.Get("proposer_pubkey")); err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid proposer_pubkey argument")
 			return
 		}
 		filters.ProposerPubkey = args.Get("proposer_pubkey")
+	}
+
+	if args.Get("builder_pubkey") != "" {
+		if err = checkBLSPublicKeyHex(args.Get("builder_pubkey")); err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid builder_pubkey argument")
+			return
+		}
+		filters.BuilderPubkey = args.Get("builder_pubkey")
 	}
 
 	if args.Get("limit") != "" {
@@ -1013,6 +1019,14 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
 			return
 		}
+	}
+
+	if args.Get("builder_pubkey") != "" {
+		if err = checkBLSPublicKeyHex(args.Get("builder_pubkey")); err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid builder_pubkey argument")
+			return
+		}
+		filters.BuilderPubkey = args.Get("builder_pubkey")
 	}
 
 	if args.Get("limit") != "" {

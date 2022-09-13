@@ -26,6 +26,7 @@ type GetPayloadsFilters struct {
 	BlockHash      string
 	BlockNumber    uint64
 	ProposerPubkey string
+	BuilderPubkey  string
 }
 
 type GetBuilderSubmissionsFilters struct {
@@ -34,6 +35,7 @@ type GetBuilderSubmissionsFilters struct {
 	BlockHash   string
 	BlockNumber uint64
 	// Cursor      uint64
+	BuilderPubkey string
 }
 
 type ValidatorRegistrationEntry struct {

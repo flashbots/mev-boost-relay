@@ -242,6 +242,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 		"block_hash":      filters.BlockHash,
 		"block_number":    filters.BlockNumber,
 		"proposer_pubkey": filters.ProposerPubkey,
+		"builder_pubkey":  filters.BuilderPubkey,
 	}
 
 	tasks := []*DeliveredPayloadEntry{}
@@ -261,6 +262,9 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 	}
 	if filters.ProposerPubkey != "" {
 		whereConds = append(whereConds, "proposer_pubkey = :proposer_pubkey")
+	}
+	if filters.BuilderPubkey != "" {
+		whereConds = append(whereConds, "builder_pubkey = :builder_pubkey")
 	}
 
 	where := ""
@@ -285,10 +289,11 @@ func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
 
 func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error) {
 	arg := map[string]interface{}{
-		"limit":        filters.Limit,
-		"slot":         filters.Slot,
-		"block_hash":   filters.BlockHash,
-		"block_number": filters.BlockNumber,
+		"limit":          filters.Limit,
+		"slot":           filters.Slot,
+		"block_hash":     filters.BlockHash,
+		"block_number":   filters.BlockNumber,
+		"builder_pubkey": filters.BuilderPubkey,
 	}
 
 	tasks := []*BuilderBlockSubmissionEntry{}
@@ -306,6 +311,9 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	}
 	if filters.BlockNumber > 0 {
 		whereConds = append(whereConds, "block_number = :block_number")
+	}
+	if filters.BuilderPubkey != "" {
+		whereConds = append(whereConds, "builder_pubkey = :builder_pubkey")
 	}
 
 	where := ""
