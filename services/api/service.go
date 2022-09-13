@@ -78,6 +78,7 @@ type RelayAPIOpts struct {
 	BlockBuilderAPI bool
 	DataAPI         bool
 	PprofAPI        bool
+	InternalAPI     bool
 }
 
 // RelayAPI represents a single Relay instance
@@ -182,6 +183,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 	// Proposer API
 	if api.opts.ProposerAPI {
+		api.log.Info("proposer API enabled")
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
@@ -190,12 +192,14 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 	// Builder API
 	if api.opts.BlockBuilderAPI {
+		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 	}
 
 	// Data API
 	if api.opts.DataAPI {
+		api.log.Info("data API enabled")
 		r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
 		r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
 		r.HandleFunc(pathDataValidatorRegistration, api.handleDataValidatorRegistration).Methods(http.MethodGet)
@@ -203,10 +207,15 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 	// Pprof
 	if api.opts.PprofAPI {
+		api.log.Info("pprof API enabled")
 		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
 	}
 
-	r.HandleFunc(pathInternalBuilderStatus, api.handleInternalBuilderStatus).Methods(http.MethodGet, http.MethodPost, http.MethodPut)
+	// /internal/...
+	if api.opts.InternalAPI {
+		api.log.Info("internal API enabled")
+		r.HandleFunc(pathInternalBuilderStatus, api.handleInternalBuilderStatus).Methods(http.MethodGet, http.MethodPost, http.MethodPut)
+	}
 
 	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(api.log, r)
