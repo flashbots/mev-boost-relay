@@ -981,10 +981,11 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	args := req.URL.Query()
 
 	filters := database.GetBuilderSubmissionsFilters{
-		Limit:       100,
-		Slot:        0,
-		BlockHash:   "",
-		BlockNumber: 0,
+		Limit:         100,
+		Slot:          0,
+		BlockHash:     "",
+		BlockNumber:   0,
+		BuilderPubkey: "",
 	}
 
 	if args.Get("cursor") != "" {
