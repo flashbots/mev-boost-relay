@@ -513,6 +513,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Debug("getHeader request received")
+
 	if api.ffForceGetHeader204 {
 		log.Info("forced getHeader 204 response")
 		w.WriteHeader(http.StatusNoContent)
@@ -570,6 +572,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
+
+	log.Debug("getPayload request received")
 
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
 	if !found {
