@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/r3labs/sse/v2"
@@ -33,10 +34,10 @@ type HeadEventData struct {
 
 func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
+	log := c.log.WithField("url", eventsURL)
+	log.Info("subscribing to head events")
+
 	for {
-		log := c.log.WithFields(logrus.Fields{
-			"url": eventsURL,
-		})
 		client := sse.NewClient(eventsURL)
 		err := client.SubscribeRaw(func(msg *sse.Event) {
 			var data HeadEventData
@@ -49,6 +50,7 @@ func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 		})
 		if err != nil {
 			log.WithError(err).Error("failed to subscribe to head events")
+			time.Sleep(1 * time.Second)
 		}
 		c.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
 	}
