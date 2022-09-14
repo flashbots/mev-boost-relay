@@ -99,11 +99,10 @@ var apiCmd = &cobra.Command{
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
 		}
-
 		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
 		db, err := database.NewDatabaseService(postgresDSN)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
 		log.Info("Setting up datastore...")

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"net/url"
 	"os"
 
 	"github.com/flashbots/mev-boost-relay/common"
@@ -66,9 +67,14 @@ var websiteCmd = &cobra.Command{
 
 		// Connect to Postgres
 		log.Infof("Connecting to Postgres database...")
+		dbURL, err := url.Parse(postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("couldn't read db URL")
+		}
+		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
 		db, err := database.NewDatabaseService(postgresDSN)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s", postgresDSN)
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
 		// Create the website service

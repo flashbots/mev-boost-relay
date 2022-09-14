@@ -22,3 +22,8 @@ func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) erro
 
 	return nil
 }
+
+func checkBLSPublicKeyHex(pkHex string) error {
+	var proposerPubkey types.PublicKey
+	return proposerPubkey.UnmarshalText([]byte(pkHex))
+}

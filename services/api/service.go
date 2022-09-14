@@ -513,6 +513,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Debug("getHeader request received")
+
 	if api.ffForceGetHeader204 {
 		log.Info("forced getHeader 204 response")
 		w.WriteHeader(http.StatusNoContent)
@@ -570,6 +572,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":     req.URL.Query().Get("id"),
 		"ua":        req.UserAgent(),
 	})
+
+	log.Debug("getPayload request received")
 
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
 	if !found {
@@ -922,13 +926,19 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	}
 
 	if args.Get("proposer_pubkey") != "" {
-		var proposerPubkey types.PublicKey
-		err = proposerPubkey.UnmarshalText([]byte(args.Get("proposer_pubkey")))
-		if err != nil {
+		if err = checkBLSPublicKeyHex(args.Get("proposer_pubkey")); err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid proposer_pubkey argument")
 			return
 		}
 		filters.ProposerPubkey = args.Get("proposer_pubkey")
+	}
+
+	if args.Get("builder_pubkey") != "" {
+		if err = checkBLSPublicKeyHex(args.Get("builder_pubkey")); err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid builder_pubkey argument")
+			return
+		}
+		filters.BuilderPubkey = args.Get("builder_pubkey")
 	}
 
 	if args.Get("limit") != "" {
@@ -975,10 +985,11 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	args := req.URL.Query()
 
 	filters := database.GetBuilderSubmissionsFilters{
-		Limit:       100,
-		Slot:        0,
-		BlockHash:   "",
-		BlockNumber: 0,
+		Limit:         100,
+		Slot:          0,
+		BlockHash:     "",
+		BlockNumber:   0,
+		BuilderPubkey: "",
 	}
 
 	if args.Get("cursor") != "" {
@@ -1013,6 +1024,14 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
 			return
 		}
+	}
+
+	if args.Get("builder_pubkey") != "" {
+		if err = checkBLSPublicKeyHex(args.Get("builder_pubkey")); err != nil {
+			api.RespondError(w, http.StatusBadRequest, "invalid builder_pubkey argument")
+			return
+		}
+		filters.BuilderPubkey = args.Get("builder_pubkey")
 	}
 
 	if args.Get("limit") != "" {
