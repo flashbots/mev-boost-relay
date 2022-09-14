@@ -179,11 +179,12 @@ func (hk *Housekeeper) updateKnownValidators() {
 	log.Debug("Writing to Redis...")
 	timeStartWriting := time.Now()
 
+	printCounter := len(hk.proposersAlreadySaved) == 0 // only on first round
 	i := 0
 	newValidators := 0
 	for _, validator := range validators {
 		i++
-		if i%10000 == 0 {
+		if printCounter && i%10000 == 0 {
 			hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
 		}
 

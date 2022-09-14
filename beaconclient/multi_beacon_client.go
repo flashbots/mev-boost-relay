@@ -148,9 +148,10 @@ func (c *MultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHe
 func (c *MultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	// return the first successful beacon node response
 	clients := c.beaconInstancesByLastResponse()
+	log := c.log.WithField("epoch", epoch)
 
 	for i, client := range clients {
-		log := c.log.WithField("uri", client.GetURI())
+		log := log.WithField("uri", client.GetURI())
 		log.Debug("fetching proposer duties")
 
 		duties, err := client.GetProposerDuties(epoch)

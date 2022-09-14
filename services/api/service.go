@@ -392,6 +392,7 @@ func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	log := api.log.WithFields(logrus.Fields{
 		"method": "registerValidator",
+		"ua":     req.UserAgent(),
 	})
 
 	respondError := func(code int, msg string) {
@@ -490,6 +491,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"slot":       slotStr,
 		"parentHash": parentHashHex,
 		"pubkey":     proposerPubkeyHex,
+		"ua":         req.UserAgent(),
 	})
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
