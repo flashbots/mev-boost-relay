@@ -603,6 +603,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get the response - from memory, Redis or DB
+	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
 	getPayloadResp, err := api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
 	if err != nil {
 		log.WithError(err).Error("failed getting execution payload from db")
@@ -611,7 +612,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	if getPayloadResp == nil {
-		log.Error("failed getting execution payload")
+		log.Info("failed getting execution payload")
 		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 		return
 	}
