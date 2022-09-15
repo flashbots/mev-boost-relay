@@ -148,25 +148,27 @@ func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, h
 	_proposerPubkey := strings.ToLower(signedBidTrace.Message.ProposerPubkey.String())
 
 	// Save to memory
-	bidKey := GetHeaderResponseKey{
-		Slot:           signedBidTrace.Message.Slot,
-		ParentHash:     _parentHash,
-		ProposerPubkey: _proposerPubkey,
+	if !ds.ffDisableBidMemoryCache {
+		bidKey := GetHeaderResponseKey{
+			Slot:           signedBidTrace.Message.Slot,
+			ParentHash:     _parentHash,
+			ProposerPubkey: _proposerPubkey,
+		}
+
+		blockKey := GetPayloadResponseKey{
+			Slot:           signedBidTrace.Message.Slot,
+			ProposerPubkey: _proposerPubkey,
+			BlockHash:      _blockHash,
+		}
+
+		ds.getHeaderResponsesLock.Lock()
+		ds.getHeaderResponses[bidKey] = headerResp
+		ds.getHeaderResponsesLock.Unlock()
+
+		ds.GetPayloadResponsesLock.Lock()
+		ds.GetPayloadResponses[blockKey] = payloadResp
+		ds.GetPayloadResponsesLock.Unlock()
 	}
-
-	blockKey := GetPayloadResponseKey{
-		Slot:           signedBidTrace.Message.Slot,
-		ProposerPubkey: _proposerPubkey,
-		BlockHash:      _blockHash,
-	}
-
-	ds.getHeaderResponsesLock.Lock()
-	ds.getHeaderResponses[bidKey] = headerResp
-	ds.getHeaderResponsesLock.Unlock()
-
-	ds.GetPayloadResponsesLock.Lock()
-	ds.GetPayloadResponses[blockKey] = payloadResp
-	ds.GetPayloadResponsesLock.Unlock()
 
 	// Save to Redis
 	err := ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
