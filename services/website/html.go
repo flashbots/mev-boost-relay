@@ -1,6 +1,7 @@
 package website
 
 import (
+	"math/big"
 	"text/template"
 
 	"github.com/flashbots/mev-boost-relay/database"
@@ -21,8 +22,27 @@ type StatusHTMLData struct {
 	Payloads                    []*database.DeliveredPayloadEntry
 }
 
+func weiToEth(wei string) string {
+	weiBigInt := new(big.Int)
+	weiBigInt.SetString(wei, 10)
+	ethValue := weiBigIntToEthBigFloat(weiBigInt)
+	return ethValue.String()
+}
+
+func weiBigIntToEthBigFloat(wei *big.Int) (ethValue *big.Float) {
+	// wei / 10^18
+	fbalance := new(big.Float)
+	fbalance.SetString(wei.String())
+	ethValue = new(big.Float).Quo(fbalance, big.NewFloat(1e18))
+	return
+}
+
+var funcMap = template.FuncMap{
+	"weiToEth": weiToEth,
+}
+
 func parseIndexTemplate() (*template.Template, error) {
-	return template.New("index").Parse(`
+	return template.New("index").Funcs(funcMap).Parse(`
 <!DOCTYPE html>
 <html lang="en" class="no-js">
 
@@ -139,23 +159,22 @@ func parseIndexTemplate() (*template.Template, error) {
                         <th>Epoch</th>
                         <th>Slot</th>
                         <th>Block number</th>
-                        <!--<th>Parent hash</th>-->
-                        <th>Block hash</th>
+                        <th>Value (ETH)</th>
                         <th>Num tx</th>
-                        <th>Value</th>
+                        <th>Block hash</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{ range .Payloads }}
                     <tr>
                         <td>{{.Epoch}}</td>
-                        <td><a href="/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot}}</a>
+                        <td>
+                            <a href="/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot}}</a>
                         </td>
                         <td>{{.BlockNumber}}</td>
-                        <td>{{.BlockHash}}</td>
-                        <!--<td>{{.ParentHash}}</td>-->
+                        <td>{{.Value | weiToEth}}</td>
                         <td>{{.NumTx}}</td>
-                        <td>{{.Value}}</td>
+                        <td>{{.BlockHash}}</td>
                     </tr>
                     {{ end }}
                 </tbody>
