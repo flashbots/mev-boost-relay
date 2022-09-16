@@ -423,7 +423,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		pubkey := registration.Message.Pubkey.PubkeyHex()
 		regLog := api.log.WithFields(logrus.Fields{
-			"pubkey": pubkey,
+			"pubkey":       pubkey,
+			"feeRecipient": registration.Message.FeeRecipient.String(),
 		})
 
 		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
@@ -895,7 +896,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	args := req.URL.Query()
 
 	filters := database.GetPayloadsFilters{
-		Limit: 100,
+		Limit: 200,
 	}
 
 	if args.Get("slot") != "" && args.Get("cursor") != "" {
@@ -993,7 +994,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	args := req.URL.Query()
 
 	filters := database.GetBuilderSubmissionsFilters{
-		Limit:         100,
+		Limit:         200,
 		Slot:          0,
 		BlockHash:     "",
 		BlockNumber:   0,

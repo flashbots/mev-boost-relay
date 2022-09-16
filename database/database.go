@@ -2,9 +2,7 @@
 package database
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -79,23 +77,12 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 		Signature:    registration.Signature.String(),
 	}
 
-	// Check if we already have a registration with same or newer timestamp
-	prevEntry := new(ValidatorRegistrationEntry)
-	err := s.DB.Get(prevEntry, "SELECT pubkey, timestamp FROM "+TableValidatorRegistration+" WHERE pubkey = $1", entry.Pubkey)
-	if errors.Is(err, sql.ErrNoRows) {
-		// Insert new entry
-		query := `INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES (:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)`
-		_, err = s.DB.NamedExec(query, entry)
-		return err
-	} else if err != nil {
-		return err
-	} else if entry.Timestamp > prevEntry.Timestamp {
-		// Update
-		query := `UPDATE ` + TableValidatorRegistration + ` SET fee_recipient=:fee_recipient, timestamp=:timestamp, gas_limit=:gas_limit, signature=:signature WHERE pubkey=:pubkey`
-		_, err = s.DB.NamedExec(query, entry)
-		return err
-	}
-	return nil
+	query := `INSERT INTO ` + TableValidatorRegistration + `
+		(pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES
+		(:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)
+		ON CONFLICT (pubkey, fee_recipient) DO NOTHING;`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
 }
 
 func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (entry *BuilderBlockSubmissionEntry, err error) {
