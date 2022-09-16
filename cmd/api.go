@@ -21,6 +21,7 @@ var (
 	apiDefaultBlockSim   = common.GetEnv("BLOCKSIM_URI", "http://localhost:8545")
 	apiDefaultSecretKey  = common.GetEnv("SECRET_KEY", "")
 	apiDefaultLogTag     = os.Getenv("LOG_TAG")
+	apiDefaultLogVersion = os.Getenv("LOG_VERSION") == "1"
 
 	apiDefaultPprofEnabled       = os.Getenv("PPROF") == "1"
 	apiDefaultInternalAPIEnabled = os.Getenv("ENABLE_INTERNAL_API") == "1"
@@ -32,6 +33,7 @@ var (
 	apiDebug        bool
 	apiInternalAPI  bool
 	apiLogTag       string
+	apiLogVersion   bool
 )
 
 func init() {
@@ -39,6 +41,7 @@ func init() {
 	apiCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
 	apiCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 	apiCmd.Flags().StringVar(&apiLogTag, "log-tag", apiDefaultLogTag, "if set, a 'tag' field will be added to all log entries")
+	apiCmd.Flags().BoolVar(&apiLogVersion, "log-version", apiDefaultLogVersion, "if set, a 'version' field will be added to all log entries")
 	apiCmd.Flags().BoolVar(&apiDebug, "debug", false, "debug logging")
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
@@ -67,6 +70,9 @@ var apiCmd = &cobra.Command{
 		log := logrus.WithField("service", "relay/api")
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
+		}
+		if apiLogVersion {
+			log = log.WithField("version", Version)
 		}
 		log.Infof("boost-relay %s", Version)
 
