@@ -197,7 +197,7 @@ func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code i
 		log.Debug("publishing block")
 
 		if code, err = client.PublishBlock(block); err != nil {
-			log.WithField("statusCode", code).WithError(err).Error("failed to publish block")
+			log.WithField("statusCode", code).WithError(err).Warn("failed to publish block")
 			continue
 		}
 
@@ -205,5 +205,6 @@ func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code i
 		return code, nil
 	}
 
+	log.WithField("statusCode", code).WithError(err).Error("failed to publish block on any CL node")
 	return code, err
 }
