@@ -672,6 +672,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	if payload.Message == nil || payload.ExecutionPayload == nil {
+		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
+		return
+	}
+
 	log = log.WithFields(logrus.Fields{
 		"slot":          payload.Message.Slot,
 		"builderPubkey": payload.Message.BuilderPubkey.String(),
