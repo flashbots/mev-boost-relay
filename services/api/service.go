@@ -423,7 +423,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		pubkey := registration.Message.Pubkey.PubkeyHex()
 		regLog := api.log.WithFields(logrus.Fields{
-			"pubkey": pubkey,
+			"pubkey":       pubkey,
+			"feeRecipient": registration.Message.FeeRecipient.String(),
 		})
 
 		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
