@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/ethereum/go-ethereum v1.10.23
-	github.com/flashbots/go-boost-utils v1.0.0
-	github.com/flashbots/go-utils v0.4.7
+	github.com/flashbots/go-boost-utils v1.1.0
+	github.com/flashbots/go-utils v0.4.5
 	github.com/go-redis/redis/v9 v9.0.0-beta.2
 	github.com/gorilla/mux v1.8.0
 	github.com/jinzhu/copier v0.3.5
