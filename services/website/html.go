@@ -52,15 +52,24 @@ func parseIndexTemplate() (*template.Template, error) {
     <meta name="viewport" content="width=device-width">
 
     <title>Flashbots MEV-Boost Relay - {{ .Network }}</title>
+    <meta name="description" content="Flashbots MEV-Boost Relay enables Ethereum proof-of-stake validators access to blocks with maximal extractable value">
 
-    <meta name="description"
-        content="Flashbots mev-boost relay for maximal extractable value in Ethereum proof-of-stake.">
     <link data-react-helmet="true" rel="shortcut icon" href="https://writings.flashbots.net/img/favicon.ico">
-    <meta property="og:image"
-        content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
 
-    <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css"
-        integrity="sha384-yHIFVG6ClnONEA5yB5DJXfW2/KC173DIQrYoZMEtBvGzmf0PKiGyNEqe9N6BNDBH" crossorigin="anonymous">
+    <meta property="og:title" content="Flashbots MEV-Boost Relay" />
+    <meta property="og:description" content="Flashbots MEV-Boost Relay enables Ethereum proof-of-stake validators access to blocks with maximal extractable value" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Flashbots MEV-Boost Relay" />
+    <meta property="og:image" content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
+    <meta property="og:image:url" content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
+    <meta property="og:image:alt" content="Flashbots logo" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Flashbots MEV-Boost Relay" />
+    <meta property="twitter:description" content="Flashbots MEV-Boost Relay enables Ethereum proof-of-stake validators access to blocks with maximal extractable value" />
+    <meta property="twitter:image" content="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
+
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css" integrity="sha384-yHIFVG6ClnONEA5yB5DJXfW2/KC173DIQrYoZMEtBvGzmf0PKiGyNEqe9N6BNDBH" crossorigin="anonymous">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style type="text/css">

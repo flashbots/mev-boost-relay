@@ -53,13 +53,13 @@ type Webserver struct {
 	srv        *http.Server
 	srvStarted uberatomic.Bool
 
-	indexTemplate      *template.Template
-	statusHTMLData     StatusHTMLData
-	statusHTMLDataLock sync.RWMutex
+	indexTemplate    *template.Template
+	statusHTMLData   StatusHTMLData
+	rootResponseLock sync.RWMutex
 
-	htmlDefault     bytes.Buffer
-	htmlByValueDesc bytes.Buffer
-	htmlByValueAsc  bytes.Buffer
+	htmlDefault     *bytes.Buffer
+	htmlByValueDesc *bytes.Buffer
+	htmlByValueAsc  *bytes.Buffer
 }
 
 func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
@@ -69,6 +69,10 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		log:   opts.Log,
 		redis: opts.Redis,
 		db:    opts.DB,
+
+		htmlDefault:     &bytes.Buffer{},
+		htmlByValueDesc: &bytes.Buffer{},
+		htmlByValueAsc:  &bytes.Buffer{},
 	}
 
 	server.indexTemplate, err = parseIndexTemplate()
@@ -103,7 +107,7 @@ func (srv *Webserver) StartServer() (err error) {
 	// Start background task to regularly update status HTML data
 	go func() {
 		for {
-			srv.updateStatusHTMLData()
+			srv.updateHTML()
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -132,7 +136,7 @@ func (srv *Webserver) getRouter() http.Handler {
 	return loggedRouter
 }
 
-func (srv *Webserver) updateStatusHTMLData() {
+func (srv *Webserver) updateHTML() {
 	knownValidators, err := srv.redis.GetKnownValidators()
 	if err != nil {
 		srv.log.WithError(err).Error("error getting known validators in updateStatusHTMLData")
@@ -174,40 +178,47 @@ func (srv *Webserver) updateStatusHTMLData() {
 	numPayloads := printer.Sprintf("%d", _numPayloadsDelivered)
 	latestSlot := printer.Sprintf("%d", _latestSlotInt)
 
-	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
 	srv.statusHTMLData.ValidatorsRegistered = numRegistered
 	srv.statusHTMLData.HeadSlot = latestSlot
 	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
 
-	srv.htmlDefault = bytes.Buffer{}
-	srv.htmlByValueDesc = bytes.Buffer{}
+	// Now generate the HTML
+	htmlDefault := bytes.Buffer{}
+	htmlByValueDesc := bytes.Buffer{}
+	htmlByValueAsc := bytes.Buffer{}
 
 	srv.statusHTMLData.ValueLink = "/?order_by=-value"
 	srv.statusHTMLData.Payloads = payloads
-	if err := srv.indexTemplate.Execute(&srv.htmlDefault, srv.statusHTMLData); err != nil {
+	if err := srv.indexTemplate.Execute(&htmlDefault, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template")
 	}
 
 	srv.statusHTMLData.ValueLink = "/?order_by=value"
 	srv.statusHTMLData.Payloads = payloadsByValueDesc
-	if err := srv.indexTemplate.Execute(&srv.htmlByValueDesc, srv.statusHTMLData); err != nil {
+	if err := srv.indexTemplate.Execute(&htmlByValueDesc, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template (by value)")
 	}
 
 	srv.statusHTMLData.ValueLink = "/"
 	srv.statusHTMLData.Payloads = payloadsByValueAsc
-	if err := srv.indexTemplate.Execute(&srv.htmlByValueAsc, srv.statusHTMLData); err != nil {
+	if err := srv.indexTemplate.Execute(&htmlByValueAsc, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template (by -value)")
 	}
-	srv.statusHTMLDataLock.Unlock()
+
+	// Swap the html pointers
+	srv.rootResponseLock.Lock()
+	srv.htmlDefault = &htmlDefault
+	srv.htmlByValueDesc = &htmlByValueDesc
+	srv.htmlByValueAsc = &htmlByValueAsc
+	srv.rootResponseLock.Unlock()
 }
 
 func (srv *Webserver) handleRoot(w http.ResponseWriter, req *http.Request) {
 	var err error
 
-	srv.statusHTMLDataLock.RLock()
-	defer srv.statusHTMLDataLock.RUnlock()
+	srv.rootResponseLock.RLock()
+	defer srv.rootResponseLock.RUnlock()
 	if req.URL.Query().Get("order_by") == "-value" {
 		_, err = w.Write(srv.htmlByValueDesc.Bytes())
 	} else if req.URL.Query().Get("order_by") == "value" {
