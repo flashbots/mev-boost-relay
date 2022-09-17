@@ -27,6 +27,7 @@ type GetPayloadsFilters struct {
 	BlockNumber    uint64
 	ProposerPubkey string
 	BuilderPubkey  string
+	OrderByValue   int8
 }
 
 type GetBuilderSubmissionsFilters struct {

@@ -119,6 +119,7 @@ CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blocknumber_idx ON ` + 
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_proposerpubkey_idx ON ` + TableDeliveredPayload + `("proposer_pubkey");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_builderpubkey_idx ON ` + TableDeliveredPayload + `("builder_pubkey");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_executionpayloadid_idx ON ` + TableDeliveredPayload + `("execution_payload_id");
+CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_value_idx ON ` + TableDeliveredPayload + `("value");
 
 
 CREATE TABLE IF NOT EXISTS ` + TableBlockBuilder + ` (

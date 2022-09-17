@@ -221,36 +221,36 @@ func (s *DatabaseService) SaveDeliveredPayload(slot uint64, proposerPubkey types
 	return err
 }
 
-func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
+func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilters) ([]*DeliveredPayloadEntry, error) {
 	arg := map[string]interface{}{
-		"limit":           filters.Limit,
-		"slot":            filters.Slot,
-		"cursor":          filters.Cursor,
-		"block_hash":      filters.BlockHash,
-		"block_number":    filters.BlockNumber,
-		"proposer_pubkey": filters.ProposerPubkey,
-		"builder_pubkey":  filters.BuilderPubkey,
+		"limit":           queryArgs.Limit,
+		"slot":            queryArgs.Slot,
+		"cursor":          queryArgs.Cursor,
+		"block_hash":      queryArgs.BlockHash,
+		"block_number":    queryArgs.BlockNumber,
+		"proposer_pubkey": queryArgs.ProposerPubkey,
+		"builder_pubkey":  queryArgs.BuilderPubkey,
 	}
 
 	tasks := []*DeliveredPayloadEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
 
 	whereConds := []string{}
-	if filters.Slot > 0 {
+	if queryArgs.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
-	} else if filters.Cursor > 0 {
+	} else if queryArgs.Cursor > 0 {
 		whereConds = append(whereConds, "slot <= :cursor")
 	}
-	if filters.BlockHash != "" {
+	if queryArgs.BlockHash != "" {
 		whereConds = append(whereConds, "block_hash = :block_hash")
 	}
-	if filters.BlockNumber > 0 {
+	if queryArgs.BlockNumber > 0 {
 		whereConds = append(whereConds, "block_number = :block_number")
 	}
-	if filters.ProposerPubkey != "" {
+	if queryArgs.ProposerPubkey != "" {
 		whereConds = append(whereConds, "proposer_pubkey = :proposer_pubkey")
 	}
-	if filters.BuilderPubkey != "" {
+	if queryArgs.BuilderPubkey != "" {
 		whereConds = append(whereConds, "builder_pubkey = :builder_pubkey")
 	}
 
@@ -259,7 +259,14 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(filters GetPayloadsFilters)
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableDeliveredPayload, where))
+	orderBy := "id DESC"
+	if queryArgs.OrderByValue == 1 {
+		orderBy = "value ASC"
+	} else if queryArgs.OrderByValue == -1 {
+		orderBy = "value DESC"
+	}
+
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy))
 	if err != nil {
 		return nil, err
 	}

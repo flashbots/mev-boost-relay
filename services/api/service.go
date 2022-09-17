@@ -964,6 +964,12 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		filters.Limit = _limit
 	}
 
+	if args.Get("order_by") == "value" {
+		filters.OrderByValue = 1
+	} else if args.Get("order_by") == "-value" {
+		filters.OrderByValue = -1
+	}
+
 	deliveredPayloads, err := api.db.GetRecentDeliveredPayloads(filters)
 	if err != nil {
 		api.log.WithError(err).Error("error getting recent payloads")
