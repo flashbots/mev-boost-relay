@@ -20,6 +20,7 @@ type StatusHTMLData struct {
 	HeadSlot                    string
 	NumPayloadsDelivered        string
 	Payloads                    []*database.DeliveredPayloadEntry
+	ValueLink                   string
 }
 
 func weiToEth(wei string) string {
@@ -159,7 +160,7 @@ func parseIndexTemplate() (*template.Template, error) {
                         <th>Epoch</th>
                         <th>Slot</th>
                         <th>Block number</th>
-                        <th>Value (ETH)</th>
+                        <th><a href="{{.ValueLink}}">Value (ETH)</a></th>
                         <th>Num tx</th>
                         <th>Block hash</th>
                     </tr>

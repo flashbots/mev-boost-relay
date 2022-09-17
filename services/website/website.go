@@ -2,6 +2,7 @@
 package website
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
 	"strconv"
@@ -55,6 +56,10 @@ type Webserver struct {
 	indexTemplate      *template.Template
 	statusHTMLData     StatusHTMLData
 	statusHTMLDataLock sync.RWMutex
+
+	htmlDefault     bytes.Buffer
+	htmlByValueDesc bytes.Buffer
+	htmlByValueAsc  bytes.Buffer
 }
 
 func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
@@ -84,6 +89,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		HeadSlot:                    "",
 		NumPayloadsDelivered:        "",
 		Payloads:                    []*database.DeliveredPayloadEntry{},
+		ValueLink:                   "",
 	}
 
 	return server, nil
@@ -98,7 +104,7 @@ func (srv *Webserver) StartServer() (err error) {
 	go func() {
 		for {
 			srv.updateStatusHTMLData()
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}()
 
@@ -142,6 +148,16 @@ func (srv *Webserver) updateStatusHTMLData() {
 		srv.log.WithError(err).Error("error getting recent payloads")
 	}
 
+	payloadsByValueDesc, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30, OrderByValue: -1})
+	if err != nil {
+		srv.log.WithError(err).Error("error getting recent payloads")
+	}
+
+	payloadsByValueAsc, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30, OrderByValue: 1})
+	if err != nil {
+		srv.log.WithError(err).Error("error getting recent payloads")
+	}
+
 	_numPayloadsDelivered, err := srv.db.GetNumDeliveredPayloads()
 	if err != nil {
 		srv.log.WithError(err).Error("error getting number of delivered payloads")
@@ -161,19 +177,45 @@ func (srv *Webserver) updateStatusHTMLData() {
 	srv.statusHTMLDataLock.Lock()
 	srv.statusHTMLData.ValidatorsTotal = numKnown
 	srv.statusHTMLData.ValidatorsRegistered = numRegistered
-	srv.statusHTMLData.Payloads = payloads
 	srv.statusHTMLData.HeadSlot = latestSlot
 	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
+
+	srv.htmlDefault = bytes.Buffer{}
+	srv.htmlByValueDesc = bytes.Buffer{}
+
+	srv.statusHTMLData.ValueLink = "/?order_by=-value"
+	srv.statusHTMLData.Payloads = payloads
+	if err := srv.indexTemplate.Execute(&srv.htmlDefault, srv.statusHTMLData); err != nil {
+		srv.log.WithError(err).Error("error rendering template")
+	}
+
+	srv.statusHTMLData.ValueLink = "/?order_by=value"
+	srv.statusHTMLData.Payloads = payloadsByValueDesc
+	if err := srv.indexTemplate.Execute(&srv.htmlByValueDesc, srv.statusHTMLData); err != nil {
+		srv.log.WithError(err).Error("error rendering template (by value)")
+	}
+
+	srv.statusHTMLData.ValueLink = "/"
+	srv.statusHTMLData.Payloads = payloadsByValueAsc
+	if err := srv.indexTemplate.Execute(&srv.htmlByValueAsc, srv.statusHTMLData); err != nil {
+		srv.log.WithError(err).Error("error rendering template (by -value)")
+	}
 	srv.statusHTMLDataLock.Unlock()
 }
 
 func (srv *Webserver) handleRoot(w http.ResponseWriter, req *http.Request) {
+	var err error
+
 	srv.statusHTMLDataLock.RLock()
 	defer srv.statusHTMLDataLock.RUnlock()
-
-	if err := srv.indexTemplate.Execute(w, srv.statusHTMLData); err != nil {
-		srv.log.WithError(err).Error("error rendering index template")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	if req.URL.Query().Get("order_by") == "-value" {
+		_, err = w.Write(srv.htmlByValueDesc.Bytes())
+	} else if req.URL.Query().Get("order_by") == "value" {
+		_, err = w.Write(srv.htmlByValueAsc.Bytes())
+	} else {
+		_, err = w.Write(srv.htmlDefault.Bytes())
+	}
+	if err != nil {
+		srv.log.WithError(err).Error("error writing template")
 	}
 }
