@@ -132,7 +132,7 @@ func (c *MultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHe
 
 		validators, err := client.FetchValidators(headSlot)
 		if err != nil {
-			c.log.WithError(err).Error("failed to fetch validators")
+			log.WithError(err).Error("failed to fetch validators")
 			continue
 		}
 
@@ -156,7 +156,7 @@ func (c *MultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResp
 
 		duties, err := client.GetProposerDuties(epoch)
 		if err != nil {
-			c.log.WithError(err).Error("failed to get proposer duties")
+			log.WithError(err).Error("failed to get proposer duties")
 			continue
 		}
 
