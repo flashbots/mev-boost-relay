@@ -551,14 +551,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"blockHash": bid.Data.Message.Header.BlockHash.String(),
 	}).Info("bid delivered")
 	api.RespondOK(w, bid)
-
-	// Increment builder stats
-	go func() {
-		err := api.db.IncBlockBuilderStatsAfterGetHeader(slot, bid.Data.Message.Header.BlockHash.String())
-		if err != nil {
-			log.WithError(err).Error("could not increment builder-stats after getHeader")
-		}
-	}()
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {

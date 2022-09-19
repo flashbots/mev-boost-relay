@@ -138,6 +138,5 @@ type BlockBuilderEntry struct {
 	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"num_submissions_simerror"`
 	NumSubmissionsTopBid   uint64 `db:"num_submissions_topbid"   json:"num_submissions_topbid"`
 
-	NumSentGetHeader  uint64 `db:"num_sent_getheader"  json:"num_sent_getheader"`
 	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"num_sent_getpayload"`
 }

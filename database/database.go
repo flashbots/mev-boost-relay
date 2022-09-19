@@ -30,7 +30,6 @@ type IDatabaseService interface {
 	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
 	SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error
-	IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error
 	IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error
 }
 
@@ -355,14 +354,14 @@ func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission 
 }
 
 func (s *DatabaseService) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
-	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getheader, num_sent_getpayload FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
 	entries := []*BlockBuilderEntry{}
 	err := s.DB.Select(entries, query)
 	return entries, err
 }
 
 func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
-	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getheader, num_sent_getpayload FROM ` + TableBlockBuilder + ` WHERE builder_pubkey=$1;`
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + TableBlockBuilder + ` WHERE builder_pubkey=$1;`
 	entry := &BlockBuilderEntry{}
 	err := s.DB.Get(entry, query, pubkey)
 	return entry, err
@@ -371,17 +370,6 @@ func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderE
 func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
 	query := `UPDATE ` + TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2 WHERE builder_pubkey=$3;`
 	_, err := s.DB.Exec(query, isHighPrio, isBlacklisted, pubkey)
-	return err
-}
-
-func (s *DatabaseService) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash string) error {
-	query := `UPDATE ` + TableBlockBuilder + `
-		SET num_sent_getheader=num_sent_getheader+1
-		FROM (
-			SELECT builder_pubkey FROM ` + TableBuilderBlockSubmission + ` WHERE slot=$1 AND block_hash=$2
-		) AS sub
-		WHERE ` + TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
-	_, err := s.DB.Exec(query, slot, blockhash)
 	return err
 }
 
