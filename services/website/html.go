@@ -167,14 +167,20 @@ func parseIndexTemplate() (*template.Template, error) {
                 <tbody>
                     {{ range .Payloads }}
                     <tr>
-                        <td>{{.Epoch}}</td>
+                        <td>
+                            <a href="https://beaconcha.in/epoch/{{.Epoch}}">{{.Epoch}}</a>
+                        </td>
                         <td>
                             <a href="/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot}}</a>
                         </td>
-                        <td>{{.BlockNumber}}</td>
+                        <td>
+                            <a href="https://beaconcha.in/block/{{.BlockNumber}}">{{.BlockNumber}}</a>
+                        </td>
                         <td>{{.Value | weiToEth}}</td>
                         <td>{{.NumTx}}</td>
-                        <td>{{.BlockHash}}</td>
+                        <td>
+                            <a href="https://beaconcha.in/block/{{.BlockHash}}">{{.BlockHash}}</a>
+                        </td>
                     </tr>
                     {{ end }}
                 </tbody>
