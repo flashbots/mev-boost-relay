@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/ethereum/go-ethereum v1.10.23
-	github.com/flashbots/go-boost-utils v1.0.0
-	github.com/flashbots/go-utils v0.4.7
+	github.com/flashbots/go-boost-utils v1.2.0
+	github.com/flashbots/go-utils v0.4.5
 	github.com/go-redis/redis/v9 v9.0.0-beta.2
 	github.com/gorilla/mux v1.8.0
 	github.com/jinzhu/copier v0.3.5
@@ -36,10 +36,10 @@ require (
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
+	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
-	github.com/mitchellh/mapstructure v1.4.1 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -53,7 +53,7 @@ require (
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+	golang.org/x/sys v0.0.0-20220731174439-a90be440212d // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
