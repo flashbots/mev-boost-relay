@@ -20,3 +20,22 @@ func TestMakePostRequest(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+func TestGetMevBoostVersionFromUserAgent(t *testing.T) {
+	tests := []struct {
+		ua      string
+		version string
+	}{
+		{ua: "", version: ""},
+		{ua: "mev-boost", version: ""},
+		{ua: "mev-boost/v1.0.0", version: "v1.0.0"},
+		{ua: "mev-boost/v1.0.0 ", version: "v1.0.0"},
+		{ua: "mev-boost/v1.0.0 test", version: "v1.0.0"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.ua, func(t *testing.T) {
+			require.Equal(t, test.version, GetMevBoostVersionFromUserAgent(test.ua))
+		})
+	}
+}

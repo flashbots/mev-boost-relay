@@ -390,9 +390,11 @@ func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 }
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
+	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
-		"method": "registerValidator",
-		"ua":     req.UserAgent(),
+		"method":    "registerValidator",
+		"ua":        ua,
+		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
 	respondError := func(code int, msg string) {
@@ -487,12 +489,14 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	slotStr := vars["slot"]
 	parentHashHex := vars["parent_hash"]
 	proposerPubkeyHex := vars["pubkey"]
+	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
 		"method":     "getHeader",
 		"slot":       slotStr,
 		"parentHash": parentHashHex,
 		"pubkey":     proposerPubkeyHex,
-		"ua":         req.UserAgent(),
+		"ua":         ua,
+		"mevBoostV":  common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
@@ -569,12 +573,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	slot := payload.Message.Slot
 	blockHash := payload.Message.Body.ExecutionPayloadHeader.BlockHash
-
+	ua := req.UserAgent()
 	log = log.WithFields(logrus.Fields{
 		"slot":      slot,
 		"blockHash": blockHash.String(),
 		"idArg":     req.URL.Query().Get("id"),
-		"ua":        req.UserAgent(),
+		"ua":        ua,
+		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
 	log.Debug("getPayload request received")

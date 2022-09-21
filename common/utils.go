@@ -92,3 +92,16 @@ func GetIPXForwardedFor(r *http.Request) string {
 	}
 	return r.RemoteAddr
 }
+
+// GetMevBoostVersionFromUserAgent returns the mev-boost version from an user agent string
+// Example ua: "mev-boost/1.0.1 go-http-client" -> returns "1.0.1"
+func GetMevBoostVersionFromUserAgent(ua string) string {
+	parts := strings.Split(ua, " ")
+	if strings.HasPrefix(parts[0], "mev-boost") {
+		parts2 := strings.Split(parts[0], "/")
+		if len(parts2) == 2 {
+			return parts2[1]
+		}
+	}
+	return ""
+}
