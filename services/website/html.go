@@ -42,7 +42,7 @@ var funcMap = template.FuncMap{
 	"weiToEth": weiToEth,
 }
 
-func parseIndexTemplate() (*template.Template, error) {
+func ParseIndexTemplate() (*template.Template, error) {
 	return template.New("index").Funcs(funcMap).Parse(`
 <!DOCTYPE html>
 <html lang="en" class="no-js">
