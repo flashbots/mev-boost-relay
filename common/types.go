@@ -61,15 +61,6 @@ var (
 	EthNetworkSepolia = "sepolia"
 	EthNetworkGoerli  = "goerli"
 	EthNetworkMainnet = "mainnet"
-
-	GenesisValidatorsRootGoerli = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
-	GenesisForkVersionGoerli    = "0x00001020"
-	BellatrixForkVersionGoerli  = "0x02001020"
-
-	// https://github.com/eth-clients/eth2-networks/blob/f3ccbe0cf5798d5cd23e4e6e7119aefa043c0935/shared/mainnet/config.yaml
-	GenesisValidatorsRootMainnet = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
-	GenesisForkVersionMainnet    = "0x00000000"
-	BellatrixForkVersionMainnet  = "0x02000000"
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -93,13 +84,13 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		genesisValidatorsRoot = types.GenesisValidatorsRootSepolia
 		bellatrixForkVersion = types.BellatrixForkVersionSepolia
 	case EthNetworkGoerli:
-		genesisForkVersion = GenesisForkVersionGoerli
-		genesisValidatorsRoot = GenesisValidatorsRootGoerli
-		bellatrixForkVersion = BellatrixForkVersionGoerli
+		genesisForkVersion = types.GenesisForkVersionGoerli
+		genesisValidatorsRoot = types.GenesisValidatorsRootGoerli
+		bellatrixForkVersion = types.BellatrixForkVersionGoerli
 	case EthNetworkMainnet:
-		genesisForkVersion = GenesisForkVersionMainnet
-		genesisValidatorsRoot = GenesisValidatorsRootMainnet
-		bellatrixForkVersion = BellatrixForkVersionMainnet
+		genesisForkVersion = types.GenesisForkVersionMainnet
+		genesisValidatorsRoot = types.GenesisValidatorsRootMainnet
+		bellatrixForkVersion = types.BellatrixForkVersionMainnet
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
