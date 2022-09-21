@@ -113,7 +113,7 @@ type RelayAPI struct {
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
-func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
+func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if opts.Log == nil {
 		return nil, ErrMissingLogOpt
 	}
@@ -134,7 +134,10 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		}
 
 		// If using a secret key, ensure it's the correct one
-		publicKey = types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+		publicKey, err = types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+		if err != nil {
+			return nil, err
+		}
 		opts.Log.Infof("Using BLS key: %s", publicKey.String())
 
 		// ensure pubkey is same across all relay instances
@@ -151,7 +154,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		}
 	}
 
-	api := RelayAPI{
+	api = &RelayAPI{
 		opts:                   opts,
 		log:                    opts.Log,
 		blsSk:                  opts.SecretKey,
@@ -179,7 +182,7 @@ func NewRelayAPI(opts RelayAPIOpts) (*RelayAPI, error) {
 		api.ffDisableLowPrioBuilders = true
 	}
 
-	return &api, nil
+	return api, nil
 }
 
 func (api *RelayAPI) getRouter() http.Handler {

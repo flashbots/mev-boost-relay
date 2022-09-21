@@ -14,7 +14,10 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	pubkey := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk))
+	pubkey, err := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk))
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 
 	fmt.Printf("secret key: 0x%x\n", sk.Serialize())
 	fmt.Printf("public key: %s\n", pubkey.String())
