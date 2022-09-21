@@ -75,7 +75,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		htmlByValueAsc:  &bytes.Buffer{},
 	}
 
-	server.indexTemplate, err = parseIndexTemplate()
+	server.indexTemplate, err = ParseIndexTemplate()
 	if err != nil {
 		return nil, err
 	}
