@@ -65,6 +65,7 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 
 	t.Run("Can save and get validator registrations", func(t *testing.T) {
 		key1 := types.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		expectedTimestamp := 0xffffffff
 		require.NoError(t, cache.SetKnownValidator(key1, 1))
 
 		knownVals, err := cache.GetKnownValidators()
@@ -83,7 +84,7 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 			Message: &types.RegisterValidatorRequestMessage{
 				FeeRecipient: types.Address{0x02},
 				GasLimit:     5000,
-				Timestamp:    0xffffffff,
+				Timestamp:    uint64(expectedTimestamp),
 				Pubkey:       pubkey1,
 			},
 			Signature: types.Signature{},
@@ -98,6 +99,9 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 		reg, err := cache.GetValidatorRegistration(key1)
 		require.NoError(t, err)
 		require.Equal(t, pubkey1.String(), reg.Message.Pubkey.String())
+		timestamp, err := cache.GetValidatorRegistrationTimestamp(key1)
+		require.NoError(t, err)
+		require.Equal(t, uint64(expectedTimestamp), timestamp)
 	})
 }
 
