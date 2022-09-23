@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 
@@ -37,4 +38,6 @@ func main() {
 	if err := os.WriteFile("website-index.html", html.Bytes(), 0o600); err != nil {
 		panic(err)
 	}
+
+	fmt.Println("Wrote website-index.html")
 }

@@ -94,6 +94,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		NumPayloadsDelivered:        "",
 		Payloads:                    []*database.DeliveredPayloadEntry{},
 		ValueLink:                   "",
+		ValueOrderIcon:              "",
 	}
 
 	return server, nil
@@ -188,20 +189,26 @@ func (srv *Webserver) updateHTML() {
 	htmlByValueDesc := bytes.Buffer{}
 	htmlByValueAsc := bytes.Buffer{}
 
-	srv.statusHTMLData.ValueLink = "/?order_by=-value"
+	// default view
 	srv.statusHTMLData.Payloads = payloads
+	srv.statusHTMLData.ValueLink = "/?order_by=-value"
+	srv.statusHTMLData.ValueOrderIcon = ""
 	if err := srv.indexTemplate.Execute(&htmlDefault, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template")
 	}
 
-	srv.statusHTMLData.ValueLink = "/?order_by=value"
+	// descending order view
 	srv.statusHTMLData.Payloads = payloadsByValueDesc
+	srv.statusHTMLData.ValueLink = "/?order_by=value"
+	srv.statusHTMLData.ValueOrderIcon = " <svg style=\"width:12px;\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\" class=\"w-6 h-6\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3\" /></svg>"
 	if err := srv.indexTemplate.Execute(&htmlByValueDesc, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template (by value)")
 	}
 
-	srv.statusHTMLData.ValueLink = "/"
+	// ascending order view
 	srv.statusHTMLData.Payloads = payloadsByValueAsc
+	srv.statusHTMLData.ValueLink = "/"
+	srv.statusHTMLData.ValueOrderIcon = " <svg style=\"width:12px;\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\" stroke-width=\"1.5\" stroke=\"currentColor\" class=\"w-6 h-6\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18\" /></svg>"
 	if err := srv.indexTemplate.Execute(&htmlByValueAsc, srv.statusHTMLData); err != nil {
 		srv.log.WithError(err).Error("error rendering template (by -value)")
 	}
