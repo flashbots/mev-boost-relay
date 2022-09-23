@@ -86,7 +86,7 @@ curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validators-registration-timestamp
 ```
 
-Env vars:
+### Environment variables
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
@@ -96,6 +96,11 @@ Env vars:
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
+
+### Updating the website
+
+You can generate a static version of the website with `go run scripts/website-staticgen/main.go`
+
 
 # Maintainers
 
