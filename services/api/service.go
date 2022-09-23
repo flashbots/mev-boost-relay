@@ -647,10 +647,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp.Data)
-		_, err := api.beaconClient.PublishBlock(signedBeaconBlock)
-		if err != nil {
-			log.WithError(err).Error("failed to publish beacon block")
-		}
+		_, _ = api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	}()
 }
 
@@ -714,14 +711,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	})
 
 	if payload.Message.Slot <= api.headSlot.Load() {
-		api.log.Debug("submitNewBlock failed: submission for past slot")
+		api.log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return
 	}
 
 	// Don't accept blocks with 0 value
 	if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
-		api.log.Debug("submitNewBlock failed: block with 0 value or no txs")
+		api.log.Info("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -767,7 +764,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log.WithError(simErr).WithFields(logrus.Fields{
 			"duration":   time.Since(t).Seconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
-		}).Warn("block validation failed")
+		}).Info("block validation failed")
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	} else {
