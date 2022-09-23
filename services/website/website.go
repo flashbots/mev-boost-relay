@@ -35,12 +35,13 @@ var (
 )
 
 type WebserverOpts struct {
-	ListenAddress  string
-	RelayPubkeyHex string
-	NetworkDetails *common.EthNetworkDetails
-	Redis          *datastore.RedisCache
-	DB             *database.DatabaseService
-	Log            *logrus.Entry
+	ListenAddress     string
+	RelayPubkeyHex    string
+	NetworkDetails    *common.EthNetworkDetails
+	Redis             *datastore.RedisCache
+	DB                *database.DatabaseService
+	Log               *logrus.Entry
+	ShowConfigDetails bool
 }
 
 type Webserver struct {
@@ -95,6 +96,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		Payloads:                    []*database.DeliveredPayloadEntry{},
 		ValueLink:                   "",
 		ValueOrderIcon:              "",
+		ShowConfigDetails:           opts.ShowConfigDetails,
 	}
 
 	return server, nil

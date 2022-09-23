@@ -99,7 +99,7 @@ redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validato
 
 ### Updating the website
 
-You can generate a static version of the website with `go run scripts/website-staticgen/main.go`
+You can generate a static version of the website with `go run scripts/website-staticgen/main.go` (update the values in `testdata/website-htmldata.json` accordingly).
 
 
 # Maintainers

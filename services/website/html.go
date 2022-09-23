@@ -22,6 +22,7 @@ type StatusHTMLData struct {
 	Payloads                    []*database.DeliveredPayloadEntry
 	ValueLink                   string
 	ValueOrderIcon              string
+	ShowConfigDetails           bool
 }
 
 func weiToEth(wei string) string {
@@ -108,7 +109,6 @@ func ParseIndexTemplate() (*template.Template, error) {
 
 <body>
 
-
     <div class="grids">
         <div class="content">
             <img style="float:right;"
@@ -117,21 +117,21 @@ func ParseIndexTemplate() (*template.Template, error) {
                 Flashbots Boost Relay - {{ .Network }}
             </h1>
 
-            <p>
-                Configuration:
-            </p>
-            <ul>
-                <li>Relay Pubkey: <tt>{{ .RelayPubkey }}</tt></li>
-                <li>Bellatrix fork version: <tt>{{ .BellatrixForkVersion }}</tt></li>
-                <li>Genesis fork version: <tt>{{ .GenesisForkVersion }}</tt></li>
-                <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
-                <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
-                <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
-            </ul>
+            {{if .ShowConfigDetails}}
+                <p>Configuration:</p>
+                <ul>
+                    <li>Relay Pubkey: <tt>{{ .RelayPubkey }}</tt></li>
+                    <li>Bellatrix fork version: <tt>{{ .BellatrixForkVersion }}</tt></li>
+                    <li>Genesis fork version: <tt>{{ .GenesisForkVersion }}</tt></li>
+                    <li>Genesis validators root: <tt>{{ .GenesisValidatorsRoot }}</tt></li>
+                    <li>Builder signing domain: <tt>{{ .BuilderSigningDomain }}</tt></li>
+                    <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
+                </ul>
+            {{else}}
+                <p>Relay public key: <tt>{{ .RelayPubkey }}</tt></p>
+            {{end}}
 
-            <p>
-                More infos, issues &amp; feedback:
-            </p>
+            <p>See also:</p>
             <ul>
                 <li><a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5">Relay API
                         docs</a></li>

@@ -13,10 +13,12 @@ import (
 )
 
 var (
-	websiteDefaultListenAddr = common.GetEnv("LISTEN_ADDR", "localhost:9060")
+	websiteDefaultListenAddr        = common.GetEnv("LISTEN_ADDR", "localhost:9060")
+	websiteDefaultShowConfigDetails = os.Getenv("SHOW_CONFIG_DETAILS") == "1"
 
-	websiteListenAddr     string
-	websitePubkeyOverride string
+	websiteListenAddr        string
+	websitePubkeyOverride    string
+	websiteShowConfigDetails bool
 )
 
 func init() {
@@ -30,6 +32,7 @@ func init() {
 	websiteCmd.Flags().StringVar(&websitePubkeyOverride, "pubkey-override", os.Getenv("PUBKEY_OVERRIDE"), "override for public key")
 
 	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
+	websiteCmd.Flags().BoolVar(&websiteShowConfigDetails, "show-config-details", websiteDefaultShowConfigDetails, "show config details")
 }
 
 var websiteCmd = &cobra.Command{
@@ -79,12 +82,13 @@ var websiteCmd = &cobra.Command{
 
 		// Create the website service
 		opts := &website.WebserverOpts{
-			ListenAddress:  websiteListenAddr,
-			RelayPubkeyHex: relayPubkey,
-			NetworkDetails: networkInfo,
-			Redis:          redis,
-			DB:             db,
-			Log:            log,
+			ListenAddress:     websiteListenAddr,
+			RelayPubkeyHex:    relayPubkey,
+			NetworkDetails:    networkInfo,
+			Redis:             redis,
+			DB:                db,
+			Log:               log,
+			ShowConfigDetails: websiteShowConfigDetails,
 		}
 
 		srv, err := website.NewWebserver(opts)
