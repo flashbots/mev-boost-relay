@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/api"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -66,6 +67,8 @@ var apiCmd = &cobra.Command{
 			logLevel = "debug"
 		}
 
+		reg := prometheus.NewRegistry()
+
 		common.LogSetup(logJSON, logLevel)
 		log := logrus.WithField("service", "relay/api")
 		if apiLogTag != "" {
@@ -112,7 +115,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		log.Info("Setting up datastore...")
-		ds, err := datastore.NewDatastore(log, redis, db)
+		ds, err := datastore.NewDatastore(log, reg, redis, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}

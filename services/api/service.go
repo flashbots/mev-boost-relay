@@ -23,6 +23,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -189,6 +190,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	// Proposer API
 	if api.opts.ProposerAPI {

@@ -8,6 +8,8 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/jinzhu/copier"
+	"github.com/prometheus/client_golang/prometheus"
+	client_testutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +23,7 @@ func setupTestDatastore(t *testing.T) *Datastore {
 	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
-	ds, err := NewDatastore(common.TestLog, redisDs, database.MockDB{})
+	ds, err := NewDatastore(common.TestLog, prometheus.NewRegistry(), redisDs, database.MockDB{})
 	require.NoError(t, err)
 
 	return ds
@@ -47,6 +49,9 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, cnt)
 	require.True(t, ds.IsKnownValidator(key))
+
+	// Check the exposed metric
+	require.Equal(t, 1.0, client_testutil.ToFloat64(ds.validatorsRegistered))
 
 	// Copy the original registration
 	var reg2 types.SignedValidatorRegistration

@@ -15,6 +15,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +40,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 
 	db := database.MockDB{}
 
-	ds, err := datastore.NewDatastore(common.TestLog, redisCache, db)
+	ds, err := datastore.NewDatastore(common.TestLog, prometheus.NewRegistry(), redisCache, db)
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()
@@ -143,6 +144,15 @@ func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	rr := backend.request(http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestMetrics(t *testing.T) {
+	backend := newTestBackend(t, 1)
+	path := "/metrics"
+	rr := backend.request(http.MethodGet, path, nil)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "# HELP", rr.Body.String()[:6])
 }
 
 func TestStatus(t *testing.T) {

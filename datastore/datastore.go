@@ -10,6 +10,8 @@ import (
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,9 +47,11 @@ type Datastore struct {
 	// feature flags
 	ffDisableBidMemoryCache bool
 	ffDisableBidRedisCache  bool
+
+	validatorsRegistered prometheus.Gauge
 }
 
-func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
+func NewDatastore(log *logrus.Entry, reg *prometheus.Registry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
 	ds = &Datastore{
 		log:                     log.WithField("component", "datastore"),
 		db:                      db,
@@ -56,6 +60,12 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDataba
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
 		getHeaderResponses:      make(map[GetHeaderResponseKey]*types.GetHeaderResponse),
 		GetPayloadResponses:     make(map[GetPayloadResponseKey]*types.GetPayloadResponse),
+		validatorsRegistered: promauto.With(reg).NewGauge(prometheus.GaugeOpts{
+			Namespace: "relay",
+			Subsystem: "api",
+			Name:      "validators_registered",
+			Help:      "The total registered validators",
+		}),
 	}
 
 	if os.Getenv("DISABLE_BID_MEMORY_CACHE") == "1" {
@@ -87,7 +97,11 @@ func (ds *Datastore) RefreshKnownValidators() (cnt int, err error) {
 	defer ds.knownValidatorsLock.Unlock()
 	ds.knownValidatorsByPubkey = knownValidators
 	ds.knownValidatorsByIndex = knownValidatorsByIndex
-	return len(knownValidators), nil
+
+	cnt = len(knownValidators)
+	ds.validatorsRegistered.Set(float64(cnt))
+
+	return cnt, nil
 }
 
 func (ds *Datastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
