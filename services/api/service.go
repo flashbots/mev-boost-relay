@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/httplogger"
@@ -228,7 +229,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(api.log, r)
-	return loggedRouter
+	withGz := gziphandler.GzipHandler(loggedRouter)
+	return withGz
 }
 
 // StartServer starts the HTTP server for this instance

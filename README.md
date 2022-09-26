@@ -68,13 +68,13 @@ Now start the services:
 
 ```bash
 # The housekeeper sets up the validators, and does various housekeeping
-go run . housekeeper --network kiln --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+go run . housekeeper --network sepolia --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
-# Run APIs for Kiln (using a dummy BLS secret key)
-go run . api --network kiln --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+# Run APIs for sepolia (using a dummy BLS secret key)
+go run . api --network sepolia --secret-key 0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2 --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
-# Run Website for Kiln
-go run . website --network kiln --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+# Run Website for sepolia
+go run . website --network sepolia --db postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
 # Query status
 curl localhost:9062/eth/v1/builder/status
@@ -83,7 +83,7 @@ curl localhost:9062/eth/v1/builder/status
 curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 
 # Delete previous registrations
-redis-cli DEL boost-relay/kiln:validators-registration boost-relay/kiln:validators-registration-timestamp
+redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:validators-registration-timestamp
 ```
 
 ### Environment variables
