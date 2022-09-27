@@ -20,9 +20,13 @@ type StatusHTMLData struct {
 	HeadSlot                    string
 	NumPayloadsDelivered        string
 	Payloads                    []*database.DeliveredPayloadEntry
-	ValueLink                   string
-	ValueOrderIcon              string
-	ShowConfigDetails           bool
+
+	ValueLink      string
+	ValueOrderIcon string
+
+	ShowConfigDetails bool
+	LinkBeaconchain   string
+	LinkEtherscan     string
 }
 
 func weiToEth(wei string) string {
@@ -195,6 +199,8 @@ func ParseIndexTemplate() (*template.Template, error) {
                     </tr>
                 </thead>
                 <tbody>
+                    {{$linkBeaconchain := .LinkBeaconchain}}
+                    {{$linkEtherscan := .LinkBeaconchain}}
                     {{ range .Payloads }}
                     <tr>
                         <td>{{.Epoch}}</td>
@@ -206,9 +212,13 @@ func ParseIndexTemplate() (*template.Template, error) {
                         <td>{{.NumTx}}</td>
                         <td>{{.BlockHash}}</td>
                         <td>
-                            <a class="img-beaconchain" href="https://beaconcha.in/slot/{{.Slot}}" target="_blank" alt="View slot in beaconcha.in" title="View slot in beaconcha.in"></a>
-                            &nbsp;
-                            <a href="https://etherscan.io/block/{{.BlockNumber}}" target="_blank"><img src="https://etherscan.io/images/favicon3.ico" width="18" height="18" alt="View block on Etherscan" title="View block on Etherscan" /></a>
+                            {{ if ne $linkBeaconchain "" }}
+                                <a class="img-beaconchain" href="{{$linkBeaconchain}}/block/{{.BlockNumber}}" target="_blank" alt="View slot in beaconcha.in" title="View slot in beaconcha.in"></a>
+                                &nbsp;
+                            {{ end }}
+                            {{ if ne $linkEtherscan "" }}
+                                <a href="{{$linkEtherscan}}/block/{{.BlockNumber}}" target="_blank"><img src="https://etherscan.io/images/favicon3.ico" width="18" height="18" alt="View block on Etherscan" title="View block on Etherscan" /></a>
+                            {{ end }}
                         </td>
                     </tr>
                     {{ end }}

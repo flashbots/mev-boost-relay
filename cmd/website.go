@@ -19,6 +19,9 @@ var (
 	websiteListenAddr        string
 	websitePubkeyOverride    string
 	websiteShowConfigDetails bool
+
+	websiteLinkBeaconchain string
+	websiteLinkEtherscan   string
 )
 
 func init() {
@@ -33,6 +36,8 @@ func init() {
 
 	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 	websiteCmd.Flags().BoolVar(&websiteShowConfigDetails, "show-config-details", websiteDefaultShowConfigDetails, "show config details")
+	websiteCmd.Flags().StringVar(&websiteLinkBeaconchain, "link-beaconchain", "https://beaconcha.in", "url for beaconcha.in")
+	websiteCmd.Flags().StringVar(&websiteLinkEtherscan, "link-etherscan", "https://etherscan.io", "url for etherscan")
 }
 
 var websiteCmd = &cobra.Command{
@@ -89,6 +94,8 @@ var websiteCmd = &cobra.Command{
 			DB:                db,
 			Log:               log,
 			ShowConfigDetails: websiteShowConfigDetails,
+			LinkBeaconchain:   websiteLinkBeaconchain,
+			LinkEtherscan:     websiteLinkEtherscan,
 		}
 
 		srv, err := website.NewWebserver(opts)
