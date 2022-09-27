@@ -39,8 +39,6 @@ func TestProdProposerValidatorRegistration(t *testing.T) {
 	// Set known validator and save registration
 	err = ds.redis.SetKnownValidator(key, 1)
 	require.NoError(t, err)
-	// err = ds.redis.SetValidatorRegistration(reg1)
-	// require.NoError(t, err)
 
 	// Check if validator is known
 	cnt, err := ds.RefreshKnownValidators()

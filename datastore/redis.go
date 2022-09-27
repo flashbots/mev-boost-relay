@@ -16,7 +16,8 @@ import (
 var (
 	redisPrefix = "boost-relay"
 
-	expiryBidCache = 5 * time.Minute
+	expiryBidCache         = 5 * time.Minute
+	expiryActiveValidators = 6 * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	RedisConfigFieldPubkey    = "pubkey"
 	RedisStatsFieldLatestSlot = "latest-slot"
@@ -49,6 +50,7 @@ type RedisCache struct {
 
 	prefixGetHeaderResponse  string
 	prefixGetPayloadResponse string
+	prefixActiveValidators   string
 
 	keyKnownValidators                string
 	keyValidatorRegistrationTimestamp string
@@ -70,6 +72,7 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 
 		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
+		prefixActiveValidators:   fmt.Sprintf("%s/%s:active-validators", redisPrefix, prefix), // per hour
 
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
@@ -87,6 +90,11 @@ func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposer
 
 func (r *RedisCache) keyCacheGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetPayloadResponse, slot, proposerPubkey, blockHash)
+}
+
+// keyActiveValidators returns the key for the date + hour of the given time
+func (r *RedisCache) keyActiveValidators(t time.Time) string {
+	return fmt.Sprintf("%s:%s", r.prefixActiveValidators, t.UTC().Format("2006-01-02T15"))
 }
 
 func (r *RedisCache) GetObj(key string, obj any) (err error) {
@@ -155,6 +163,35 @@ func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey types.Pubk
 
 func (r *RedisCache) NumRegisteredValidators() (int64, error) {
 	return r.client.HLen(context.Background(), r.keyValidatorRegistrationTimestamp).Result()
+}
+
+func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
+	key := r.keyActiveValidators(time.Now())
+	err := r.client.HSet(context.Background(), key, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
+	if err != nil {
+		return err
+	}
+
+	// set expiry
+	return r.client.Expire(context.Background(), key, expiryActiveValidators).Err()
+}
+
+func (r *RedisCache) GetActiveValidators() (map[types.PubkeyHex]bool, error) {
+	hours := int(expiryActiveValidators.Hours())
+	now := time.Now()
+	validators := make(map[types.PubkeyHex]bool)
+	for i := 0; i < hours; i++ {
+		key := r.keyActiveValidators(now.Add(time.Duration(-i) * time.Hour))
+		entries, err := r.client.HGetAll(context.Background(), key).Result()
+		if err != nil {
+			return nil, err
+		}
+		for pubkey := range entries {
+			validators[types.PubkeyHex(pubkey)] = true
+		}
+	}
+
+	return validators, nil
 }
 
 func (r *RedisCache) SetStats(field string, value any) (err error) {
