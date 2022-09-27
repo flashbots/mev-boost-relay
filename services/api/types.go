@@ -69,7 +69,7 @@ type BidTraceJSON struct {
 type BidTraceWithTimestampJSON struct {
 	BidTraceJSON
 
-	Timestamp int64 `json:"timestamp,omitempty"`
+	Timestamp int64 `json:"timestamp,string,omitempty"`
 }
 
 func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, executionPayload *types.ExecutionPayload) *types.SignedBeaconBlock {
