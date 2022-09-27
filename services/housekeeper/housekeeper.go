@@ -78,10 +78,9 @@ func (hk *Housekeeper) Start() (err error) {
 	// Start initial tasks
 	go hk.updateValidatorRegistrationsInRedis()
 
-	// go hk.test()
 	// Start the periodic task loops
 	go hk.periodicTaskUpdateKnownValidators()
-	go hk.periodicTaskLogNumRegisteredValidators()
+	go hk.periodicTaskLogValidators()
 	go hk.periodicTaskUpdateBuilderStatusInRedis()
 
 	// Process the current slot
@@ -97,7 +96,7 @@ func (hk *Housekeeper) Start() (err error) {
 	}
 }
 
-func (hk *Housekeeper) periodicTaskLogNumRegisteredValidators() {
+func (hk *Housekeeper) periodicTaskLogValidators() {
 	for {
 		numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
 		if err == nil {
@@ -105,6 +104,14 @@ func (hk *Housekeeper) periodicTaskLogNumRegisteredValidators() {
 		} else {
 			hk.log.WithError(err).Error("failed to get number of registered validators")
 		}
+
+		numActiveValidators, err := hk.redis.NumActiveValidators()
+		if err == nil {
+			hk.log.WithField("numActiveValidators", numActiveValidators).Infof("active validators: %d", numActiveValidators)
+		} else {
+			hk.log.WithError(err).Error("failed to get number of active validators")
+		}
+
 		time.Sleep(common.DurationPerEpoch / 2)
 	}
 }

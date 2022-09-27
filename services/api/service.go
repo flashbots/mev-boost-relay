@@ -453,6 +453,14 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			regLog.WithError(err).Infof("error getting last registration timestamp")
 		}
 
+		// Here is the place to track active validators. Ideally should validate the signature here
+		go func() {
+			err := api.redis.SetActiveValidator(pubkey)
+			if err != nil {
+				regLog.WithError(err).Infof("error setting active validator")
+			}
+		}()
+
 		// Do nothing if the registration is already the latest
 		if prevTimestamp >= registration.Message.Timestamp {
 			continue
