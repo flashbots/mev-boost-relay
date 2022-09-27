@@ -19,6 +19,8 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"github.com/tdewolff/minify"
+	"github.com/tdewolff/minify/html"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -62,22 +64,31 @@ type Webserver struct {
 	statusHTMLData   StatusHTMLData
 	rootResponseLock sync.RWMutex
 
-	htmlDefault     *bytes.Buffer
-	htmlByValueDesc *bytes.Buffer
-	htmlByValueAsc  *bytes.Buffer
+	htmlDefault     *[]byte
+	htmlByValueDesc *[]byte
+	htmlByValueAsc  *[]byte
+
+	minifier *minify.M
 }
 
 func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	var err error
+
+	minifier := minify.New()
+	minifier.AddFunc("text/css", html.Minify)
+	minifier.AddFunc("text/html", html.Minify)
+
 	server := &Webserver{
 		opts:  opts,
 		log:   opts.Log,
 		redis: opts.Redis,
 		db:    opts.DB,
 
-		htmlDefault:     &bytes.Buffer{},
-		htmlByValueDesc: &bytes.Buffer{},
-		htmlByValueAsc:  &bytes.Buffer{},
+		htmlDefault:     &[]byte{},
+		htmlByValueDesc: &[]byte{},
+		htmlByValueAsc:  &[]byte{},
+
+		minifier: minifier,
 	}
 
 	server.indexTemplate, err = ParseIndexTemplate()
@@ -222,11 +233,25 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error rendering template (by -value)")
 	}
 
+	// Minify
+	htmlDefaultBytes, err := srv.minifier.Bytes("text/html", htmlDefault.Bytes())
+	if err != nil {
+		srv.log.WithError(err).Error("error minifying htmlDefault")
+	}
+	htmlValueDescBytes, err := srv.minifier.Bytes("text/html", htmlByValueDesc.Bytes())
+	if err != nil {
+		srv.log.WithError(err).Error("error minifying htmlByValueDesc")
+	}
+	htmlValueDescAsc, err := srv.minifier.Bytes("text/html", htmlByValueAsc.Bytes())
+	if err != nil {
+		srv.log.WithError(err).Error("error minifying htmlByValueAsc")
+	}
+
 	// Swap the html pointers
 	srv.rootResponseLock.Lock()
-	srv.htmlDefault = &htmlDefault
-	srv.htmlByValueDesc = &htmlByValueDesc
-	srv.htmlByValueAsc = &htmlByValueAsc
+	srv.htmlDefault = &htmlDefaultBytes
+	srv.htmlByValueDesc = &htmlValueDescBytes
+	srv.htmlByValueAsc = &htmlValueDescAsc
 	srv.rootResponseLock.Unlock()
 }
 
@@ -236,11 +261,11 @@ func (srv *Webserver) handleRoot(w http.ResponseWriter, req *http.Request) {
 	srv.rootResponseLock.RLock()
 	defer srv.rootResponseLock.RUnlock()
 	if req.URL.Query().Get("order_by") == "-value" {
-		_, err = w.Write(srv.htmlByValueDesc.Bytes())
+		_, err = w.Write(*srv.htmlByValueDesc)
 	} else if req.URL.Query().Get("order_by") == "value" {
-		_, err = w.Write(srv.htmlByValueAsc.Bytes())
+		_, err = w.Write(*srv.htmlByValueAsc)
 	} else {
-		_, err = w.Write(srv.htmlDefault.Bytes())
+		_, err = w.Write(*srv.htmlDefault)
 	}
 	if err != nil {
 		srv.log.WithError(err).Error("error writing template")
