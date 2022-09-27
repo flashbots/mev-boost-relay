@@ -86,6 +86,7 @@ curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:validators-registration-timestamp
 ```
 
+
 ### Environment variables
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
@@ -96,6 +97,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
+
 
 ### Updating the website
 
@@ -117,6 +119,12 @@ Aftwareds, there's important ongoing, regular housekeeper tasks:
 1. Update known validators and proposer duties in Redis
 2. Update active validators in database (source: Redis)
 
+
+### Tradeoffs
+
+- Validator registrations in are only saved to the database if `feeRecipient` changes. If a registration has a newer timestamp but same `feeRecipient` it is not saved, to avoid filling up the database with unnecessary data. (Some CL clients create a new validator registration every epoch, not just if the `feeRecipient` changes, as was the original idea).
+
+---
 
 # Maintainers
 

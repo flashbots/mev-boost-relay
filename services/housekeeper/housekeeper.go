@@ -314,7 +314,7 @@ func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
 	timeStarted := time.Now()
 
 	for _, reg := range regs {
-		err = hk.redis.SetValidatorRegistrationTimestamp(types.PubkeyHex(reg.Pubkey), reg.Timestamp)
+		err = hk.redis.SetValidatorRegistrationTimestampIfNewer(types.PubkeyHex(reg.Pubkey), reg.Timestamp)
 		if err != nil {
 			hk.log.WithError(err).Error("failed to set validator registration")
 			continue

@@ -121,7 +121,7 @@ func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
-	err := ds.redis.SetValidatorRegistrationTimestamp(pk, entry.Message.Timestamp)
+	err := ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
 	if err != nil {
 		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
 		return err

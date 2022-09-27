@@ -42,6 +42,37 @@ func TestRedisValidatorRegistration(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), result)
 	})
+
+	t.Run("test SetValidatorRegistrationTimestampIfNewer", func(t *testing.T) {
+		key := common.ValidPayloadRegisterValidator.Message.Pubkey
+		value := common.ValidPayloadRegisterValidator
+
+		pkHex := types.NewPubkeyHex(key.String())
+		timestamp := value.Message.Timestamp
+
+		err := cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp)
+		require.NoError(t, err)
+
+		result, err := cache.GetValidatorRegistrationTimestamp(key.PubkeyHex())
+		require.NoError(t, err)
+		require.Equal(t, result, timestamp)
+
+		// Try to set an older timestamp (should not work)
+		timestamp2 := timestamp - 10
+		err = cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp2)
+		require.NoError(t, err)
+		result, err = cache.GetValidatorRegistrationTimestamp(key.PubkeyHex())
+		require.NoError(t, err)
+		require.Equal(t, result, timestamp)
+
+		// Try to set an older timestamp (should not work)
+		timestamp3 := timestamp + 10
+		err = cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp3)
+		require.NoError(t, err)
+		result, err = cache.GetValidatorRegistrationTimestamp(key.PubkeyHex())
+		require.NoError(t, err)
+		require.Equal(t, result, timestamp3)
+	})
 }
 
 func TestRedisKnownValidators(t *testing.T) {

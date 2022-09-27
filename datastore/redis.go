@@ -138,6 +138,17 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.Pubk
 	return timestamp, err
 }
 
+func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey types.PubkeyHex, timestamp uint64) error {
+	knownTimestamp, err := r.GetValidatorRegistrationTimestamp(proposerPubkey)
+	if err != nil {
+		return err
+	}
+	if knownTimestamp >= timestamp {
+		return nil
+	}
+	return r.SetValidatorRegistrationTimestamp(proposerPubkey, timestamp)
+}
+
 func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex, timestamp uint64) error {
 	return r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, proposerPubkey.String(), timestamp).Err()
 }
