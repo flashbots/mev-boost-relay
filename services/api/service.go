@@ -18,6 +18,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -55,6 +56,9 @@ var (
 
 	// Internal API
 	pathInternalBuilderStatus = "/internal/v1/builder/{pubkey:0x[a-fA-F0-9]+}"
+
+	// number of goroutines to save active validator
+	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -167,7 +171,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
-		activeValidatorC:       make(chan *types.PubkeyHex, 200000),
+		activeValidatorC:       make(chan *types.PubkeyHex, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -254,7 +258,10 @@ func (api *RelayAPI) StartServer() (err error) {
 	go api.startKnownValidatorUpdates()
 
 	// Start the active validator processor
-	go api.startActiveValidatorProcessor()
+	api.log.Infof("starting %d active validator processor", numActiveValidatorProcessors)
+	for i := 0; i < numActiveValidatorProcessors; i++ {
+		go api.startActiveValidatorProcessor()
+	}
 
 	// Process current slot
 	api.processNewSlot(bestSyncStatus.HeadSlot)
