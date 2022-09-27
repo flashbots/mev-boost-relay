@@ -17,7 +17,7 @@ var (
 	redisPrefix = "boost-relay"
 
 	expiryBidCache         = 5 * time.Minute
-	expiryActiveValidators = 6 * time.Hour
+	expiryActiveValidators = 6 * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	RedisConfigFieldPubkey    = "pubkey"
 	RedisStatsFieldLatestSlot = "latest-slot"
