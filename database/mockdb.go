@@ -8,6 +8,18 @@ func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorReg
 	return nil
 }
 
+func (db MockDB) GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error) {
+	return nil, nil
+}
+
+func (db MockDB) GetValidatorRegistrationsForPubkeys(pubkeys []string) (entries []*ValidatorRegistrationEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error) {
+	return nil, nil
+}
+
 func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }

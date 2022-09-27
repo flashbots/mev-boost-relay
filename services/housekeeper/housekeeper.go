@@ -17,6 +17,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -25,6 +26,7 @@ import (
 type HousekeeperOpts struct {
 	Log          *logrus.Entry
 	Redis        *datastore.RedisCache
+	DB           database.IDatabaseService
 	BeaconClient beaconclient.IMultiBeaconClient
 }
 
@@ -33,6 +35,7 @@ type Housekeeper struct {
 	log  *logrus.Entry
 
 	redis        *datastore.RedisCache
+	db           database.IDatabaseService
 	beaconClient beaconclient.IMultiBeaconClient
 
 	isStarted                uberatomic.Bool
@@ -51,6 +54,7 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		opts:                  opts,
 		log:                   opts.Log,
 		redis:                 opts.Redis,
+		db:                    opts.DB,
 		beaconClient:          opts.BeaconClient,
 		proposersAlreadySaved: make(map[string]bool),
 	}
@@ -71,6 +75,10 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
+	// Start initial tasks
+	go hk.updateValidatorRegistrationsInRedis()
+
+	// go hk.test()
 	// Start the periodic task loops
 	go hk.periodicTaskUpdateKnownValidators()
 	go hk.periodicTaskLogNumRegisteredValidators()
@@ -233,43 +241,47 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 		log.WithError(err).Error("failed to get proposer duties for all beacon nodes")
 		return
 	}
-
 	entries := r.Data
 
 	// Query next epoch
 	r2, err := hk.beaconClient.GetProposerDuties(epoch + 1)
-	if r2 != nil {
-		entries = append(entries, r2.Data...)
-	} else {
+	if err != nil {
 		log.WithError(err).Error("failed to get proposer duties for next epoch for all beacon nodes")
+	} else if r2 != nil {
+		entries = append(entries, r2.Data...)
 	}
 
-	// Validator registrations are queried in parallel, and this is the result struct
-	type result struct {
-		val types.BuilderGetValidatorsResponseEntry
-		err error
+	// Get registrations from database
+	pubkeys := []string{}
+	for _, entry := range entries {
+		pubkeys = append(pubkeys, entry.Pubkey)
+	}
+	validatorRegistrationEntries, err := hk.db.GetValidatorRegistrationsForPubkeys(pubkeys)
+	if err != nil {
+		log.WithError(err).Error("failed to get validator registrations")
+		return
 	}
 
-	// Scatter requests to Redis to get validator registrations
-	c := make(chan result, len(entries))
-	for i := 0; i < cap(c); i++ {
-		go func(duty beaconclient.ProposerDutiesResponseData) {
-			reg, err := hk.redis.GetValidatorRegistration(types.NewPubkeyHex(duty.Pubkey))
-			c <- result{types.BuilderGetValidatorsResponseEntry{
+	// Convert db entries to signed validator registration type
+	signedValidatorRegistrations := make(map[string]*types.SignedValidatorRegistration)
+	for _, regEntry := range validatorRegistrationEntries {
+		signedEntry, err := regEntry.ToSignedValidatorRegistration()
+		if err != nil {
+			log.WithError(err).Error("failed to convert validator registration entry to signed validator registration")
+			continue
+		}
+		signedValidatorRegistrations[regEntry.Pubkey] = signedEntry
+	}
+
+	// Prepare proposer duties
+	proposerDuties := []types.BuilderGetValidatorsResponseEntry{}
+	for _, duty := range entries {
+		reg := signedValidatorRegistrations[duty.Pubkey]
+		if reg != nil {
+			proposerDuties = append(proposerDuties, types.BuilderGetValidatorsResponseEntry{
 				Slot:  duty.Slot,
 				Entry: reg,
-			}, err}
-		}(entries[i])
-	}
-
-	// Gather results
-	proposerDuties := make([]types.BuilderGetValidatorsResponseEntry, 0)
-	for i := 0; i < cap(c); i++ {
-		res := <-c
-		if res.err != nil {
-			log.WithError(res.err).Error("error in loading validator registration from redis")
-		} else if res.val.Entry != nil { // only if a known registration
-			proposerDuties = append(proposerDuties, res.val)
+			})
 		}
 	}
 
@@ -288,4 +300,25 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+// updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis
+func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
+	regs, err := hk.db.GetLatestValidatorRegistrations(true)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get latest validator registrations")
+		return
+	}
+
+	hk.log.Infof("updating %d validator registrations in Redis...", len(regs))
+	timeStarted := time.Now()
+
+	for _, reg := range regs {
+		err = hk.redis.SetValidatorRegistrationTimestampIfNewer(types.PubkeyHex(reg.Pubkey), reg.Timestamp)
+		if err != nil {
+			hk.log.WithError(err).Error("failed to set validator registration")
+			continue
+		}
+	}
+	hk.log.Infof("updating %d validator registrations in Redis done - %f sec", len(regs), time.Since(timeStarted).Seconds())
 }

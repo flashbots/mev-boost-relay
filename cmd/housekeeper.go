@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/housekeeper"
 	"github.com/sirupsen/logrus"
@@ -18,6 +20,7 @@ func init() {
 
 	housekeeperCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	housekeeperCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
+	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
 
 	housekeeperCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 }
@@ -55,9 +58,21 @@ var housekeeperCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
+		// Connect to Postgres
+		dbURL, err := url.Parse(postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("couldn't read db URL")
+		}
+		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
+		db, err := database.NewDatabaseService(postgresDSN)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
+		}
+
 		opts := &housekeeper.HousekeeperOpts{
 			Log:          log,
 			Redis:        redis,
+			DB:           db,
 			BeaconClient: beaconClient,
 		}
 		service := housekeeper.NewHousekeeper(opts)

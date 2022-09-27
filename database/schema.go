@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS ` + TableValidatorRegistration + ` (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ` + TableValidatorRegistration + `_pubkey_feerec_idx ON ` + TableValidatorRegistration + `(pubkey, fee_recipient);
+CREATE INDEX IF NOT EXISTS ` + TableValidatorRegistration + `_pubkey_timestamp_idx ON ` + TableValidatorRegistration + `(pubkey, timestamp DESC);
 
 
 CREATE TABLE IF NOT EXISTS ` + TableExecutionPayload + ` (

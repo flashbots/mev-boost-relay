@@ -86,6 +86,7 @@ curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
 redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:validators-registration-timestamp
 ```
 
+
 ### Environment variables
 
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
@@ -97,10 +98,33 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
 
+
 ### Updating the website
 
 You can generate a static version of the website with `go run scripts/website-staticgen/main.go` (update the values in `testdata/website-htmldata.json` accordingly).
 
+
+### System startup
+
+First the housekeeper updates Redis with the main information for the API:
+1. Update known validators in Redis (source: beacon node)
+1. Update proposer duties in Redis (source: beacon node (duties) + Redis (validator registrations))
+1. Update validator registrations in Redis (source: database)
+1. Update builder status in Redis (source: database)
+
+Then the API can start and function.
+
+Aftwareds, there's important ongoing, regular housekeeper tasks:
+
+1. Update known validators and proposer duties in Redis
+2. Update active validators in database (source: Redis)
+
+
+### Tradeoffs
+
+- Validator registrations in are only saved to the database if `feeRecipient` changes. If a registration has a newer timestamp but same `feeRecipient` it is not saved, to avoid filling up the database with unnecessary data. (Some CL clients create a new validator registration every epoch, not just if the `feeRecipient` changes, as was the original idea).
+
+---
 
 # Maintainers
 
