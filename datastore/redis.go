@@ -10,14 +10,17 @@ import (
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-utils/cli"
 	"github.com/go-redis/redis/v9"
 )
 
 var (
 	redisPrefix = "boost-relay"
 
-	expiryBidCache         = 5 * time.Minute
-	expiryActiveValidators = 6 * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
+	expiryBidCache = 5 * time.Minute
+
+	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
+	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	RedisConfigFieldPubkey    = "pubkey"
 	RedisStatsFieldLatestSlot = "latest-slot"
@@ -177,7 +180,7 @@ func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
 }
 
 func (r *RedisCache) GetActiveValidators() (map[types.PubkeyHex]bool, error) {
-	hours := int(expiryActiveValidators.Hours())
+	hours := activeValidatorsHours
 	now := time.Now()
 	validators := make(map[types.PubkeyHex]bool)
 	for i := 0; i < hours; i++ {
