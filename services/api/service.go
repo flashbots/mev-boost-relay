@@ -106,6 +106,7 @@ type RelayAPI struct {
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter *BlockSimulationRateLimiter
+	activeValidatorC    chan *types.PubkeyHex
 
 	// Feature flags
 	ffForceGetHeader204      bool
@@ -166,6 +167,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
+		activeValidatorC:       make(chan *types.PubkeyHex, 200000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -251,6 +253,9 @@ func (api *RelayAPI) StartServer() (err error) {
 	// Update list of known validators, and start refresh loop
 	go api.startKnownValidatorUpdates()
 
+	// Start the active validator processor
+	go api.startActiveValidatorProcessor()
+
 	// Process current slot
 	api.processNewSlot(bestSyncStatus.HeadSlot)
 
@@ -288,6 +293,16 @@ func (api *RelayAPI) StartServer() (err error) {
 		return nil
 	}
 	return err
+}
+
+// startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
+func (api *RelayAPI) startActiveValidatorProcessor() {
+	for pubkey := range api.activeValidatorC {
+		err := api.redis.SetActiveValidator(*pubkey)
+		if err != nil {
+			api.log.WithError(err).Infof("error setting active validator")
+		}
+	}
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
@@ -453,13 +468,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			regLog.WithError(err).Infof("error getting last registration timestamp")
 		}
 
-		// Here is the place to track active validators. Ideally should validate the signature here
-		go func() {
-			err := api.redis.SetActiveValidator(pubkey)
-			if err != nil {
-				regLog.WithError(err).Infof("error setting active validator")
-			}
-		}()
+		// Track active validators here
+		select {
+		case api.activeValidatorC <- &pubkey:
+		default:
+			regLog.Warn("active validator channel full")
+		}
 
 		// Do nothing if the registration is already the latest
 		if prevTimestamp >= registration.Message.Timestamp {
