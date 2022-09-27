@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -136,7 +137,8 @@ func (srv *Webserver) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", srv.handleRoot).Methods(http.MethodGet)
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(srv.log, r)
-	return loggedRouter
+	withGz := gziphandler.GzipHandler(loggedRouter)
+	return withGz
 }
 
 func (srv *Webserver) updateHTML() {
