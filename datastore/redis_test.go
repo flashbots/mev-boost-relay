@@ -167,10 +167,6 @@ func TestActiveValidators(t *testing.T) {
 	err := cache.SetActiveValidator(pk1)
 	require.NoError(t, err)
 
-	n, err := cache.NumActiveValidators()
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), n)
-
 	vals, err := cache.GetActiveValidators()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(vals))

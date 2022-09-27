@@ -105,9 +105,9 @@ func (hk *Housekeeper) periodicTaskLogValidators() {
 			hk.log.WithError(err).Error("failed to get number of registered validators")
 		}
 
-		numActiveValidators, err := hk.redis.NumActiveValidators()
+		activeValidators, err := hk.redis.GetActiveValidators()
 		if err == nil {
-			hk.log.WithField("numActiveValidators", numActiveValidators).Infof("active validators: %d", numActiveValidators)
+			hk.log.WithField("numActiveValidators", len(activeValidators)).Infof("active validators: %d", len(activeValidators))
 		} else {
 			hk.log.WithError(err).Error("failed to get number of active validators")
 		}
