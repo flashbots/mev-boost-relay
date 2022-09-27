@@ -17,7 +17,7 @@ var (
 	redisPrefix = "boost-relay"
 
 	expiryBidCache         = 5 * time.Minute
-	expiryActiveValidators = 26 * time.Hour
+	expiryActiveValidators = 6 * time.Hour
 
 	RedisConfigFieldPubkey    = "pubkey"
 	RedisStatsFieldLatestSlot = "latest-slot"
@@ -177,7 +177,7 @@ func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
 }
 
 func (r *RedisCache) NumActiveValidators() (uint64, error) {
-	hours := 2
+	hours := int(expiryActiveValidators.Hours())
 	now := time.Now()
 	numActiveValidators := uint64(0)
 	for i := 0; i < hours; i++ {
@@ -192,7 +192,7 @@ func (r *RedisCache) NumActiveValidators() (uint64, error) {
 }
 
 func (r *RedisCache) GetActiveValidators() (map[types.PubkeyHex]bool, error) {
-	hours := 2
+	hours := int(expiryActiveValidators.Hours())
 	now := time.Now()
 	validators := make(map[types.PubkeyHex]bool)
 	for i := 0; i < hours; i++ {
