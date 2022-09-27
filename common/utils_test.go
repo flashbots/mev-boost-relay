@@ -26,8 +26,8 @@ func TestGetMevBoostVersionFromUserAgent(t *testing.T) {
 		ua      string
 		version string
 	}{
-		{ua: "", version: ""},
-		{ua: "mev-boost", version: ""},
+		{ua: "", version: "-"},
+		{ua: "mev-boost", version: "-"},
 		{ua: "mev-boost/v1.0.0", version: "v1.0.0"},
 		{ua: "mev-boost/v1.0.0 ", version: "v1.0.0"},
 		{ua: "mev-boost/v1.0.0 test", version: "v1.0.0"},

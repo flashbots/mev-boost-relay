@@ -472,7 +472,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		} else {
 			// Save
 			go func(reg types.SignedValidatorRegistration) {
-				err := api.datastore.SetValidatorRegistration(reg)
+				err := api.datastore.SaveValidatorRegistration(reg)
 				if err != nil {
 					regLog.WithError(err).Error("Failed to set validator registration")
 				}
@@ -1105,17 +1105,23 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 		return
 	}
 
-	registration, err := api.redis.GetValidatorRegistration(types.NewPubkeyHex(pkStr))
+	registrationEntry, err := api.db.GetValidatorRegistration(pkStr)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			api.RespondError(w, http.StatusBadRequest, "no registration found for validator "+pkStr)
+			return
+		}
 		api.log.WithError(err).Error("error getting validator registration")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if registration == nil {
-		api.RespondError(w, http.StatusBadRequest, "no registration found for validator "+pkStr)
+	signedRegistration, err := registrationEntry.ToSignedValidatorRegistration()
+	if err != nil {
+		api.log.WithError(err).Error("error converting registration entry to signed validator registration")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	api.RespondOK(w, registration)
+	api.RespondOK(w, signedRegistration)
 }

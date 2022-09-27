@@ -102,6 +102,22 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 You can generate a static version of the website with `go run scripts/website-staticgen/main.go` (update the values in `testdata/website-htmldata.json` accordingly).
 
 
+### System startup
+
+First the housekeeper updates Redis with the main information for the API:
+1. Update known validators in Redis (source: beacon node)
+1. Update proposer duties in Redis (source: beacon node (duties) + Redis (validator registrations))
+1. Update validator registrations in Redis (source: database)
+1. Update builder status in Redis (source: database)
+
+Then the API can start and function.
+
+Aftwareds, there's important ongoing, regular housekeeper tasks:
+
+1. Update known validators and proposer duties in Redis
+2. Update active validators in database (source: Redis)
+
+
 # Maintainers
 
 - [@metachris](https://github.com/metachris)

@@ -114,19 +114,14 @@ func (ds *Datastore) NumRegisteredValidators() (int64, error) {
 	return ds.redis.NumRegisteredValidators()
 }
 
-// GetValidatorRegistration returns the validator registration for the given proposerPubkey. If not found then it returns (nil, nil). If
-// there's a datastore error, then an error will be returned.
-func (ds *Datastore) GetValidatorRegistration(pubkeyHex types.PubkeyHex) (*types.SignedValidatorRegistration, error) {
-	return ds.redis.GetValidatorRegistration(pubkeyHex)
-}
-
 func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
 	return ds.redis.GetValidatorRegistrationTimestamp(pubkeyHex)
 }
 
-// SetValidatorRegistration saves a validator registration into both Redis and the database
-func (ds *Datastore) SetValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	err := ds.redis.SetValidatorRegistration(entry)
+// SaveValidatorRegistration saves a validator registration into both Redis and the database
+func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
+	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
+	err := ds.redis.SetValidatorRegistrationTimestamp(pk, entry.Message.Timestamp)
 	if err != nil {
 		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
 		return err

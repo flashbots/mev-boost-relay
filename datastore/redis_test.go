@@ -28,18 +28,19 @@ func TestRedisValidatorRegistration(t *testing.T) {
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
 		key := common.ValidPayloadRegisterValidator.Message.Pubkey
 		value := common.ValidPayloadRegisterValidator
-		err := cache.SetValidatorRegistration(value)
+		pkHex := types.NewPubkeyHex(key.String())
+		err := cache.SetValidatorRegistrationTimestamp(pkHex, value.Message.Timestamp)
 		require.NoError(t, err)
-		result, err := cache.GetValidatorRegistration(key.PubkeyHex())
+		result, err := cache.GetValidatorRegistrationTimestamp(key.PubkeyHex())
 		require.NoError(t, err)
-		require.Equal(t, *result, value)
+		require.Equal(t, result, value.Message.Timestamp)
 	})
 
 	t.Run("Returns nil if validator registration is not in cache", func(t *testing.T) {
 		key := types.PublicKey{}
-		result, err := cache.GetValidatorRegistration(key.PubkeyHex())
+		result, err := cache.GetValidatorRegistrationTimestamp(key.PubkeyHex())
 		require.NoError(t, err)
-		require.Nil(t, result)
+		require.Equal(t, uint64(0), result)
 	})
 }
 
@@ -88,16 +89,18 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 			},
 			Signature: types.Signature{},
 		}
-		err = cache.SetValidatorRegistration(entry)
+
+		pkHex := types.NewPubkeyHex(entry.Message.Pubkey.String())
+		err = cache.SetValidatorRegistrationTimestamp(pkHex, entry.Message.Timestamp)
 		require.NoError(t, err)
 
 		numReg, err = cache.NumRegisteredValidators()
 		require.NoError(t, err)
 		require.Equal(t, int64(1), numReg)
 
-		reg, err := cache.GetValidatorRegistration(key1)
+		reg, err := cache.GetValidatorRegistrationTimestamp(key1)
 		require.NoError(t, err)
-		require.Equal(t, pubkey1.String(), reg.Message.Pubkey.String())
+		require.Equal(t, uint64(0xffffffff), reg)
 	})
 }
 
