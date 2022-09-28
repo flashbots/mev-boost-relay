@@ -97,7 +97,8 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BID_REDIS_CACHE` - disable bids to go through redis cache. forces to go through memory/db
-
+* `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
+* `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis
 
 ### Updating the website
 
