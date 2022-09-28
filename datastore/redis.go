@@ -29,6 +29,7 @@ var (
 type BlockBuilderStatus string
 
 var (
+	RedisBlockBuilderStatusLowPrio     BlockBuilderStatus = ""
 	RedisBlockBuilderStatusHighPrio    BlockBuilderStatus = "high-prio"
 	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
 )

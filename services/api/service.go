@@ -895,14 +895,8 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 			"isBlacklisted": isBlacklisted,
 		}).Info("updating builder status")
 
-		var status datastore.BlockBuilderStatus
-		if isBlacklisted {
-			status = datastore.RedisBlockBuilderStatusBlacklisted
-		} else if isHighPrio {
-			status = datastore.RedisBlockBuilderStatusHighPrio
-		}
-
-		err := api.redis.SetBlockBuilderStatus(builderPubkey, status)
+		newStatus := datastore.MakeBlockBuilderStatus(isHighPrio, isBlacklisted)
+		err := api.redis.SetBlockBuilderStatus(builderPubkey, newStatus)
 		if err != nil {
 			api.log.WithError(err).Error("could not set block builder status in redis")
 		}
@@ -912,7 +906,7 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 			api.log.WithError(err).Error("could not set block builder status in database")
 		}
 
-		api.RespondOK(w, struct{ newStatus string }{newStatus: string(status)})
+		api.RespondOK(w, struct{ newStatus string }{newStatus: string(newStatus)})
 	}
 }
 
