@@ -136,6 +136,30 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 	return nil
 }
 
+func (ds *Datastore) SaveValidatorRegistrations(entries []types.SignedValidatorRegistration) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Update in Redis
+	for _, entry := range entries {
+		pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
+		err := ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
+		if err != nil {
+			ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
+			return err
+		}
+	}
+
+	// Upate in database
+	err := ds.db.SaveValidatorRegistrations(entries)
+	if err != nil {
+		ds.log.WithError(err).Error("failed to save validator registrations to database")
+		return err
+	}
+	return nil
+}
+
 // SaveBlockSubmission stores getHeader and getPayload for later use, to memory and Redis. Note: saving to Postgres not needed, because getHeader doesn't currently check the database, getPayload finds the data it needs through a sql query.
 func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
 	_blockHash := strings.ToLower(headerResp.Data.Message.Header.BlockHash.String())

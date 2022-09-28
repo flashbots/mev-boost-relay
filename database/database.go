@@ -15,6 +15,7 @@ import (
 
 type IDatabaseService interface {
 	SaveValidatorRegistration(registration types.SignedValidatorRegistration) error
+	SaveValidatorRegistrations(registrations []types.SignedValidatorRegistration) error
 	GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error)
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
@@ -84,6 +85,26 @@ func (s *DatabaseService) SaveValidatorRegistration(registration types.SignedVal
 		(:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)
 		ON CONFLICT (pubkey, fee_recipient) DO NOTHING;`
 	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
+
+func (s *DatabaseService) SaveValidatorRegistrations(registrations []types.SignedValidatorRegistration) error {
+	entries := make([]ValidatorRegistrationEntry, len(registrations))
+	for i, registration := range registrations {
+		entries[i] = ValidatorRegistrationEntry{
+			Pubkey:       registration.Message.Pubkey.String(),
+			FeeRecipient: registration.Message.FeeRecipient.String(),
+			Timestamp:    registration.Message.Timestamp,
+			GasLimit:     registration.Message.GasLimit,
+			Signature:    registration.Signature.String(),
+		}
+	}
+
+	query := `INSERT INTO ` + TableValidatorRegistration + `
+		(pubkey, fee_recipient, timestamp, gas_limit, signature) VALUES
+		(:pubkey, :fee_recipient, :timestamp, :gas_limit, :signature)
+		ON CONFLICT (pubkey, fee_recipient) DO NOTHING;`
+	_, err := s.DB.NamedExec(query, entries)
 	return err
 }
 

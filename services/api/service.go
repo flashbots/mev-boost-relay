@@ -433,12 +433,21 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	registrationTimeUpperBound := start.Add(10 * time.Second)
 
 	registrations := []types.SignedValidatorRegistration{}
-	numRegNew := 0
-
 	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
 		respondError(http.StatusBadRequest, "failed to decode payload")
 		return
 	}
+
+	// collect validator registrations during processing, and batch save them at end of the request
+	newValidatorRegistrations := []types.SignedValidatorRegistration{}
+	defer func() {
+		go func() {
+			err := api.datastore.SaveValidatorRegistrations(newValidatorRegistrations)
+			if err != nil {
+				log.WithError(err).Error("Failed to save validator registrations")
+			}
+		}()
+	}()
 
 	// Possible optimisations:
 	// - GetValidatorRegistrationTimestamp could keep a cache in memory for some time and check memory first before going to Redis
@@ -487,9 +496,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			continue
 		}
 
-		// Send to workers for signature verification and saving
-		numRegNew++
-
 		// Verify the signature
 		ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
 		if err != nil {
@@ -499,22 +505,15 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
 			return
 		} else {
-			// Save
-			go func(reg types.SignedValidatorRegistration) {
-				err := api.datastore.SaveValidatorRegistration(reg)
-				if err != nil {
-					regLog.WithError(err).Error("Failed to set validator registration")
-				}
-			}(registration)
+			newValidatorRegistrations = append(newValidatorRegistrations, registration)
 		}
 	}
 
-	log = log.WithFields(logrus.Fields{
+	log.WithFields(logrus.Fields{
 		"numRegistrations":    len(registrations),
-		"numRegistrationsNew": numRegNew,
+		"numRegistrationsNew": len(newValidatorRegistrations),
 		"timeNeededSec":       time.Since(start).Seconds(),
-	})
-	log.Info("validator registrations call processed")
+	}).Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
 }
 

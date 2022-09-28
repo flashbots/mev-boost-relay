@@ -8,6 +8,10 @@ func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorReg
 	return nil
 }
 
+func (db MockDB) SaveValidatorRegistrations(registrations []types.SignedValidatorRegistration) error {
+	return nil
+}
+
 func (db MockDB) GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error) {
 	return nil, nil
 }
