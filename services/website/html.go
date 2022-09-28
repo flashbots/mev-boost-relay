@@ -209,7 +209,7 @@ func ParseIndexTemplate() (*template.Template, error) {
                 </thead>
                 <tbody>
                     {{$linkBeaconchain := .LinkBeaconchain}}
-                    {{$linkEtherscan := .LinkBeaconchain}}
+                    {{$linkEtherscan := .LinkEtherscan}}
                     {{ range .Payloads }}
                     <tr>
                         <td>{{.Epoch}}</td>
@@ -223,7 +223,7 @@ func ParseIndexTemplate() (*template.Template, error) {
                         <td>
                             <div class="icons-container">
                                 {{ if ne $linkBeaconchain "" }}
-                                    <a class="img-beaconchain" href="{{$linkBeaconchain}}/block/{{.BlockNumber}}" target="_blank" alt="View slot in beaconcha.in" title="View slot in beaconcha.in"></a>
+                                    <a class="img-beaconchain" href="{{$linkBeaconchain}}/block/{{.BlockNumber}}" target="_blank" alt="View block in beaconcha.in" title="View block in beaconcha.in"></a>
                                     &nbsp;
                                 {{ end }}
                                 {{ if ne $linkEtherscan "" }}
@@ -237,13 +237,11 @@ func ParseIndexTemplate() (*template.Template, error) {
             </table>
             </p>
 
-
             <center>
+                <p>{{.NumPayloadsDelivered}} payloads delivered</p>
                 <p>
-
-                    {{.NumPayloadsDelivered}} payloads delivered</p>
-                <p>
-                    <a href="/relay/v1/data/bidtraces/proposer_payload_delivered?limit=10">Data API</a> / <a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#417abe417dde45caaff3dc15aaae65dd">Docs</a></p>
+                    <a href="/relay/v1/data/bidtraces/proposer_payload_delivered?limit=10">Data API</a> / <a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#417abe417dde45caaff3dc15aaae65dd">Docs</a>
+                </p>
             </center>
         </div>
     </div>
