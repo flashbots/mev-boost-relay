@@ -59,6 +59,7 @@ var (
 
 	// number of goroutines to save active validator
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
+	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -111,7 +112,9 @@ type RelayAPI struct {
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter *BlockSimulationRateLimiter
-	activeValidatorC    chan *types.PubkeyHex
+
+	activeValidatorC chan types.PubkeyHex
+	validatorRegC    chan types.SignedValidatorRegistration
 
 	// Feature flags
 	ffForceGetHeader204      bool
@@ -172,7 +175,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		db:                     opts.DB,
 		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
-		activeValidatorC:       make(chan *types.PubkeyHex, 450_000),
+
+		activeValidatorC: make(chan types.PubkeyHex, 450_000),
+		validatorRegC:    make(chan types.SignedValidatorRegistration, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -259,9 +264,15 @@ func (api *RelayAPI) StartServer() (err error) {
 	go api.startKnownValidatorUpdates()
 
 	// Start the active validator processor
-	api.log.Infof("starting %d active validator processor", numActiveValidatorProcessors)
+	api.log.Infof("starting %d active validator processors", numActiveValidatorProcessors)
 	for i := 0; i < numActiveValidatorProcessors; i++ {
 		go api.startActiveValidatorProcessor()
+	}
+
+	// Start the validator registration db-save processor
+	api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
+	for i := 0; i < numValidatorRegProcessors; i++ {
+		go api.startValidatorRegistrationDBProcessor()
 	}
 
 	// Process current slot
@@ -306,9 +317,20 @@ func (api *RelayAPI) StartServer() (err error) {
 // startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
 func (api *RelayAPI) startActiveValidatorProcessor() {
 	for pubkey := range api.activeValidatorC {
-		err := api.redis.SetActiveValidator(*pubkey)
+		err := api.redis.SetActiveValidator(pubkey)
 		if err != nil {
 			api.log.WithError(err).Infof("error setting active validator")
+		}
+	}
+}
+
+// startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
+func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
+	for valReg := range api.validatorRegC {
+		entry := database.SignedValidatorRegistrationToEntry(valReg)
+		err := api.db.SaveValidatorRegistration(entry)
+		if err != nil {
+			api.log.WithError(err).WithField("proposerPubkey", entry.Pubkey).Infof("error saving validator registration")
 		}
 	}
 }
@@ -483,9 +505,9 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Track active validators here
 		select {
-		case api.activeValidatorC <- &pubkey:
+		case api.activeValidatorC <- pubkey:
 		default:
-			regLog.Warn("active validator channel full")
+			regLog.Error("active validator channel full")
 		}
 
 		// Do nothing if the registration is already the latest
@@ -505,13 +527,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
 			return
 		} else {
-			// Save
-			go func(reg types.SignedValidatorRegistration) {
-				err := api.datastore.SaveValidatorRegistration(reg)
-				if err != nil {
-					regLog.WithError(err).Error("Failed to set validator registration")
-				}
-			}(registration)
+			// Save to database
+			select {
+			case api.validatorRegC <- registration:
+			default:
+				regLog.Error("validator registration channel full")
+			}
 		}
 	}
 

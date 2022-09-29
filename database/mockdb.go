@@ -4,7 +4,7 @@ import "github.com/flashbots/go-boost-utils/types"
 
 type MockDB struct{}
 
-func (db MockDB) SaveValidatorRegistration(registration types.SignedValidatorRegistration) error {
+func (db MockDB) SaveValidatorRegistration(entry ValidatorRegistrationEntry) error {
 	return nil
 }
 
