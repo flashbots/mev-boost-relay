@@ -327,10 +327,9 @@ func (api *RelayAPI) startActiveValidatorProcessor() {
 // startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	for valReg := range api.validatorRegC {
-		entry := database.SignedValidatorRegistrationToEntry(valReg)
-		err := api.db.SaveValidatorRegistration(entry)
+		err := api.datastore.SaveValidatorRegistration(valReg)
 		if err != nil {
-			api.log.WithError(err).WithField("proposerPubkey", entry.Pubkey).Infof("error saving validator registration")
+			api.log.WithError(err).WithField("proposerPubkey", valReg.Message.Pubkey.String()).Infof("error saving validator registration")
 		}
 	}
 }
