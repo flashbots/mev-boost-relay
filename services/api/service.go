@@ -507,7 +507,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		select {
 		case api.activeValidatorC <- pubkey:
 		default:
-			regLog.Warn("active validator channel full")
+			regLog.Error("active validator channel full")
 		}
 
 		// Do nothing if the registration is already the latest
@@ -528,7 +528,11 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		} else {
 			// Save to database
-			api.validatorRegC <- registration
+			select {
+			case api.validatorRegC <- registration:
+			default:
+				regLog.Error("validator registration channel full")
+			}
 		}
 	}
 
