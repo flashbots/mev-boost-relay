@@ -164,10 +164,6 @@ func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey types.Pubk
 	return r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, proposerPubkey.String(), timestamp).Err()
 }
 
-func (r *RedisCache) NumRegisteredValidators() (int64, error) {
-	return r.client.HLen(context.Background(), r.keyValidatorRegistrationTimestamp).Result()
-}
-
 func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
 	key := r.keyActiveValidators(time.Now())
 	err := r.client.HSet(context.Background(), key, PubkeyHexToLowerStr(pubkeyHex), "1").Err()

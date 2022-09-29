@@ -14,6 +14,7 @@ import (
 )
 
 type IDatabaseService interface {
+	NumRegisteredValidators() (count uint64, err error)
 	SaveValidatorRegistration(entry ValidatorRegistrationEntry) error
 	GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error)
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
@@ -68,6 +69,14 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 
 func (s *DatabaseService) Close() error {
 	return s.DB.Close()
+}
+
+// NumRegisteredValidators returns the number of unique pubkeys that have registered
+func (s *DatabaseService) NumRegisteredValidators() (count uint64, err error) {
+	query := `SELECT COUNT(*) FROM (SELECT DISTINCT pubkey FROM ` + TableValidatorRegistration + `) AS temp;`
+	row := s.DB.QueryRow(query)
+	err = row.Scan(&count)
+	return count, err
 }
 
 func (s *DatabaseService) NumValidatorRegistrationRows() (count uint64, err error) {

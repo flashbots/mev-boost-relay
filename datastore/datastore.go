@@ -110,8 +110,8 @@ func (ds *Datastore) NumKnownValidators() int {
 	return len(ds.knownValidatorsByIndex)
 }
 
-func (ds *Datastore) NumRegisteredValidators() (int64, error) {
-	return ds.redis.NumRegisteredValidators()
+func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
+	return ds.db.NumRegisteredValidators()
 }
 
 func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {

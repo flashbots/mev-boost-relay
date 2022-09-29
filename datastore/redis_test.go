@@ -104,10 +104,6 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 		require.Equal(t, 1, len(knownVals))
 		require.Contains(t, knownVals, key1)
 
-		numReg, err := cache.NumRegisteredValidators()
-		require.NoError(t, err)
-		require.Equal(t, int64(0), numReg)
-
 		// Create a signed registration for key1
 		pubkey1, err := types.HexToPubkey(key1.String())
 		require.NoError(t, err)
@@ -124,10 +120,6 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 		pkHex := types.NewPubkeyHex(entry.Message.Pubkey.String())
 		err = cache.SetValidatorRegistrationTimestamp(pkHex, entry.Message.Timestamp)
 		require.NoError(t, err)
-
-		numReg, err = cache.NumRegisteredValidators()
-		require.NoError(t, err)
-		require.Equal(t, int64(1), numReg)
 
 		reg, err := cache.GetValidatorRegistrationTimestamp(key1)
 		require.NoError(t, err)
