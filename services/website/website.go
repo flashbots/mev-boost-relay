@@ -48,6 +48,7 @@ type WebserverOpts struct {
 	ShowConfigDetails bool
 	LinkBeaconchain   string
 	LinkEtherscan     string
+	RelayURL          string
 }
 
 type Webserver struct {
@@ -99,6 +100,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	server.statusHTMLData = StatusHTMLData{
 		Network:                     caser.String(opts.NetworkDetails.Name),
 		RelayPubkey:                 opts.RelayPubkeyHex,
+		ValidatorsActive:            "",
 		ValidatorsTotal:             "",
 		ValidatorsRegistered:        "",
 		BellatrixForkVersion:        opts.NetworkDetails.BellatrixForkVersionHex,
@@ -114,6 +116,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		ShowConfigDetails:           opts.ShowConfigDetails,
 		LinkBeaconchain:             opts.LinkBeaconchain,
 		LinkEtherscan:               opts.LinkEtherscan,
+		RelayURL:                    opts.RelayURL,
 	}
 
 	return server, nil
@@ -168,6 +171,11 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
+	_activeVals, err := srv.redis.GetActiveValidators()
+	if err != nil {
+		srv.log.WithError(err).Error("error getting active validators in updateStatusHTMLData")
+	}
+
 	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")
@@ -194,15 +202,11 @@ func (srv *Webserver) updateHTML() {
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
 
-	numRegistered := printer.Sprintf("%d", _numRegistered)
-	numKnown := printer.Sprintf("%d", len(knownValidators))
-	numPayloads := printer.Sprintf("%d", _numPayloadsDelivered)
-	latestSlot := printer.Sprintf("%d", _latestSlotInt)
-
-	srv.statusHTMLData.ValidatorsTotal = numKnown
-	srv.statusHTMLData.ValidatorsRegistered = numRegistered
-	srv.statusHTMLData.HeadSlot = latestSlot
-	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
+	srv.statusHTMLData.ValidatorsActive = printer.Sprintf("%d", len(_activeVals))
+	srv.statusHTMLData.ValidatorsRegistered = printer.Sprintf("%d", _numRegistered)
+	srv.statusHTMLData.ValidatorsTotal = printer.Sprintf("%d", len(knownValidators))
+	srv.statusHTMLData.NumPayloadsDelivered = printer.Sprintf("%d", _numPayloadsDelivered)
+	srv.statusHTMLData.HeadSlot = printer.Sprintf("%d", _latestSlotInt)
 
 	// Now generate the HTML
 	htmlDefault := bytes.Buffer{}

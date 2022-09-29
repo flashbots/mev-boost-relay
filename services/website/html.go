@@ -12,6 +12,7 @@ type StatusHTMLData struct {
 	RelayPubkey                 string
 	ValidatorsTotal             string
 	ValidatorsRegistered        string
+	ValidatorsActive            string
 	BellatrixForkVersion        string
 	GenesisForkVersion          string
 	GenesisValidatorsRoot       string
@@ -27,6 +28,7 @@ type StatusHTMLData struct {
 	ShowConfigDetails bool
 	LinkBeaconchain   string
 	LinkEtherscan     string
+	RelayURL          string
 }
 
 func weiToEth(wei string) string {
@@ -105,6 +107,12 @@ func ParseIndexTemplate() (*template.Template, error) {
             background-color: #129fea1f;
         }
 
+
+        .pure-table-striped tr:nth-child(2n-1) td {
+            background: #30d2f80d !important;
+        }
+
+
         .pure-table tr:hover td {
             background: #129fea1f !important;
         }
@@ -134,7 +142,8 @@ func ParseIndexTemplate() (*template.Template, error) {
 
     <div class="grids">
         <div class="content">
-            <img style="float:right;"
+
+            <img style="float:right; background:white; margin-left: 64px;"
                 src="https://d33wubrfki0l68.cloudfront.net/ae8530415158fbbbbe17fb033855452f792606c7/fe19f/img/logo.png" />
             <h1>
                 Flashbots Boost Relay - {{ .Network }}
@@ -151,36 +160,56 @@ func ParseIndexTemplate() (*template.Template, error) {
                     <li>Beacon proposer signing domain: <tt>{{ .BeaconProposerSigningDomain }}</tt></li>
                 </ul>
             {{else}}
-                <p>Relay public key: <tt>{{ .RelayPubkey }}</tt></p>
+                {{if .RelayURL}}
+                    <div style="background: #ffffff;/* overflow:auto; */width:auto;border: solid #30d2f8;border-width:.1em .1em .1em .8em;padding:.2em .6em;white-space: pre-wrap;overflow-x: hidden;padding: 12px 16px; word-break: break-all;"><pre style="margin: 0;line-height: 125%;white-space: pre-wrap;">https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@boost-relay.flashbots.net</pre></div>
+                {{else}}
+                    <p>Relay public key: <tt>{{ .RelayPubkey }}</tt></p>
+                {{end}}
             {{end}}
 
-            <p>See also:</p>
-            <ul>
-                <li><a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5">Relay API
-                        docs</a></li>
-                <li><a href="http://boost.flashbots.net">boost.flashbots.net</a></li>
-                <li><a href="https://github.com/flashbots/mev-boost">github.com/flashbots/mev-boost</a></li>
-                <li><a
-                        href="https://github.com/flashbots/boost-geth-builder">github.com/flashbots/boost-geth-builder</a>
-                </li>
-            </ul>
 
-            <hr>
+            <br>
+            <br>
+            <br>
 
             <p>
+
+            <div class="pure-g">
+    <div class="pure-u-2-3 stats">
             <h2>
                 Stats
             </h2>
 
+            <table class="pure-table pure-table-horizontal pure-table-striped">
+                <tbody>
+                    <tr><td>Validators total</td> <td>{{ .ValidatorsTotal }}</td></tr>
+                    <tr><td>Validators registered</td> <td>{{ .ValidatorsRegistered }}</td></tr>
+                    <tr><td>Validators active</td> <td>{{ .ValidatorsActive }}</td></tr>
+                    <tr><td>Latest slot</td> <td>{{ .HeadSlot }}</td></tr>
+                </tbody>
+            </table>
+
+
+                </div>
+    <div class="pure-u-1-3">
+
+                <h2>Links</h2>
             <ul>
-                <li>Validators total: {{ .ValidatorsTotal }}</li>
-                <li>Validators registered: {{ .ValidatorsRegistered }}</li>
-                <li>Latest slot: {{ .HeadSlot }}</li>
+                <li><a href="http://boost.flashbots.net">boost.flashbots.net</a></li>
+                <li><a href="https://github.com/flashbots/mev-boost-relay">Source code</a></li>
+                <li><a href="https://github.com/flashbots/mev-boost">github.com/flashbots/mev-boost</a></li>
+                <li><a href="https://github.com/flashbots/boost-geth-builder">github.com/flashbots/boost-geth-builder</a>
+                <li><a href="https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5">Relay API docs</a></li>
             </ul>
+
+    </div>
+</div>
 
             </p>
 
-            <hr>
+            <br>
+            <br>
+            <br>
 
             <p>
             <h2>
