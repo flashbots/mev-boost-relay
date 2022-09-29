@@ -98,7 +98,7 @@ func (hk *Housekeeper) Start() (err error) {
 
 func (hk *Housekeeper) periodicTaskLogValidators() {
 	for {
-		numRegisteredValidators, err := hk.redis.NumRegisteredValidators()
+		numRegisteredValidators, err := hk.db.NumRegisteredValidators()
 		if err == nil {
 			hk.log.WithField("numRegisteredValidators", numRegisteredValidators).Infof("registered validators: %d", numRegisteredValidators)
 		} else {

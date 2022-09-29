@@ -163,7 +163,7 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting known validators in updateStatusHTMLData")
 	}
 
-	_numRegistered, err := srv.redis.NumRegisteredValidators()
+	_numRegistered, err := srv.db.NumRegisteredValidators()
 	if err != nil {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}

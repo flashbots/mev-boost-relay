@@ -4,6 +4,10 @@ import "github.com/flashbots/go-boost-utils/types"
 
 type MockDB struct{}
 
+func (db MockDB) NumRegisteredValidators() (count uint64, err error) {
+	return 0, nil
+}
+
 func (db MockDB) SaveValidatorRegistration(entry ValidatorRegistrationEntry) error {
 	return nil
 }
