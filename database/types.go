@@ -79,6 +79,16 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*types.Si
 	}, nil
 }
 
+func SignedValidatorRegistrationToEntry(valReg types.SignedValidatorRegistration) ValidatorRegistrationEntry {
+	return ValidatorRegistrationEntry{
+		Pubkey:       valReg.Message.Pubkey.String(),
+		FeeRecipient: valReg.Message.FeeRecipient.String(),
+		Timestamp:    valReg.Message.Timestamp,
+		GasLimit:     valReg.Message.GasLimit,
+		Signature:    valReg.Signature.String(),
+	}
+}
+
 type ExecutionPayloadEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`

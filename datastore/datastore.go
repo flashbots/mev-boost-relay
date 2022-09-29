@@ -121,13 +121,7 @@ func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	// First save in the database
-	err := ds.db.SaveValidatorRegistration(database.ValidatorRegistrationEntry{
-		Pubkey:       entry.Message.Pubkey.String(),
-		FeeRecipient: entry.Message.FeeRecipient.String(),
-		Timestamp:    entry.Message.Timestamp,
-		GasLimit:     entry.Message.GasLimit,
-		Signature:    entry.Signature.String(),
-	})
+	err := ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
 	if err != nil {
 		ds.log.WithError(err).Error("failed to save validator registration to database")
 		return err
