@@ -106,6 +106,7 @@ type RelayAPI struct {
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   []types.BuilderGetValidatorsResponseEntry
+	proposerDutiesMap        map[uint64]*types.RegisterValidatorRequestMessage
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
@@ -350,10 +351,15 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 
 	// Get duties from mem
 	duties, err := api.redis.GetProposerDuties()
+	dutiesMap := make(map[uint64]*types.RegisterValidatorRequestMessage)
+	for _, duty := range duties {
+		dutiesMap[duty.Slot] = duty.Entry.Message
+	}
 
 	if err == nil {
 		api.proposerDutiesLock.Lock()
 		api.proposerDutiesResponse = duties
+		api.proposerDutiesMap = dutiesMap
 		api.proposerDutiesSlot = headSlot
 		api.proposerDutiesLock.Unlock()
 
@@ -715,6 +721,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.Message.BuilderPubkey.String())
 	if err != nil {
 		log.WithError(err).Error("could not get block builder status")
+	}
+
+	// ensure correct feeRecipient is used
+	api.proposerDutiesLock.RLock()
+	slotDuty := api.proposerDutiesMap[payload.Message.Slot]
+	api.proposerDutiesLock.RUnlock()
+	if slotDuty == nil {
+		log.Warn("could not find slot duty")
+		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
+		return
+	} else if slotDuty.FeeRecipient != payload.Message.ProposerFeeRecipient {
+		log.Warn("fee recipient does not match")
+		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
+		return
 	}
 
 	if builderIsBlacklisted {
