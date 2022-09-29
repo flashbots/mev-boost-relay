@@ -120,24 +120,24 @@ func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex
 
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
-	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
-	err := ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
-	if err != nil {
-		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
-		return err
-	}
-
-	regEntry := database.ValidatorRegistrationEntry{
+	// First save in the database
+	err := ds.db.SaveValidatorRegistration(database.ValidatorRegistrationEntry{
 		Pubkey:       entry.Message.Pubkey.String(),
 		FeeRecipient: entry.Message.FeeRecipient.String(),
 		Timestamp:    entry.Message.Timestamp,
 		GasLimit:     entry.Message.GasLimit,
 		Signature:    entry.Signature.String(),
-	}
-
-	err = ds.db.SaveValidatorRegistration(regEntry)
+	})
 	if err != nil {
 		ds.log.WithError(err).Error("failed to save validator registration to database")
+		return err
+	}
+
+	// then save in redis
+	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
+	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
+	if err != nil {
+		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
 		return err
 	}
 
