@@ -206,7 +206,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		// Disallow +11 sec
 		td = uint64(time.Now().Unix())
-		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+11)
+		payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
 		require.NoError(t, err)
 		err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 		require.NoError(t, err)

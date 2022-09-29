@@ -127,7 +127,15 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 		return err
 	}
 
-	err = ds.db.SaveValidatorRegistration(entry)
+	regEntry := database.ValidatorRegistrationEntry{
+		Pubkey:       entry.Message.Pubkey.String(),
+		FeeRecipient: entry.Message.FeeRecipient.String(),
+		Timestamp:    entry.Message.Timestamp,
+		GasLimit:     entry.Message.GasLimit,
+		Signature:    entry.Signature.String(),
+	}
+
+	err = ds.db.SaveValidatorRegistration(regEntry)
 	if err != nil {
 		ds.log.WithError(err).Error("failed to save validator registration to database")
 		return err
