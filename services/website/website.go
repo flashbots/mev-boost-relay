@@ -22,20 +22,9 @@ import (
 	"github.com/tdewolff/minify"
 	"github.com/tdewolff/minify/html"
 	uberatomic "go.uber.org/atomic"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
 )
 
 var ErrServerAlreadyStarted = errors.New("server was already started")
-
-var (
-	// Printer for pretty printing numbers
-	printer = message.NewPrinter(language.English)
-
-	// Caser is used for casing strings
-	caser = cases.Title(language.English)
-)
 
 type WebserverOpts struct {
 	ListenAddress  string
@@ -98,18 +87,18 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	}
 
 	server.statusHTMLData = StatusHTMLData{
-		Network:                     caser.String(opts.NetworkDetails.Name),
+		Network:                     opts.NetworkDetails.Name,
 		RelayPubkey:                 opts.RelayPubkeyHex,
-		ValidatorsActive:            "",
-		ValidatorsTotal:             "",
-		ValidatorsRegistered:        "",
+		ValidatorsActive:            0,
+		ValidatorsTotal:             0,
+		ValidatorsRegistered:        0,
 		BellatrixForkVersion:        opts.NetworkDetails.BellatrixForkVersionHex,
 		GenesisForkVersion:          opts.NetworkDetails.GenesisForkVersionHex,
 		GenesisValidatorsRoot:       opts.NetworkDetails.GenesisValidatorsRootHex,
 		BuilderSigningDomain:        hexutil.Encode(opts.NetworkDetails.DomainBuilder[:]),
 		BeaconProposerSigningDomain: hexutil.Encode(opts.NetworkDetails.DomainBeaconProposer[:]),
-		HeadSlot:                    "",
-		NumPayloadsDelivered:        "",
+		HeadSlot:                    0,
+		NumPayloadsDelivered:        0,
 		Payloads:                    []*database.DeliveredPayloadEntry{},
 		ValueLink:                   "",
 		ValueOrderIcon:              "",
@@ -202,11 +191,11 @@ func (srv *Webserver) updateHTML() {
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
 
-	srv.statusHTMLData.ValidatorsActive = printer.Sprintf("%d", len(_activeVals))
-	srv.statusHTMLData.ValidatorsRegistered = printer.Sprintf("%d", _numRegistered)
-	srv.statusHTMLData.ValidatorsTotal = printer.Sprintf("%d", len(knownValidators))
-	srv.statusHTMLData.NumPayloadsDelivered = printer.Sprintf("%d", _numPayloadsDelivered)
-	srv.statusHTMLData.HeadSlot = printer.Sprintf("%d", _latestSlotInt)
+	srv.statusHTMLData.ValidatorsActive = uint64(len(_activeVals))
+	srv.statusHTMLData.ValidatorsRegistered = _numRegistered
+	srv.statusHTMLData.ValidatorsTotal = uint64(len(knownValidators))
+	srv.statusHTMLData.NumPayloadsDelivered = _numPayloadsDelivered
+	srv.statusHTMLData.HeadSlot = _latestSlotInt
 
 	// Now generate the HTML
 	htmlDefault := bytes.Buffer{}

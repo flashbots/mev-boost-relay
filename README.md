@@ -28,10 +28,13 @@ See also:
 
 - [Background](#background)
 - [Usage](#usage)
+- [Technical notes](#technical-notes)
 - [Maintainers](#maintainers)
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
+
+---
 
 # Background
 
@@ -44,6 +47,8 @@ The mev-boost relay is a trusted mediator between block producers and block buil
 In the future, [proposer/builder separation](https://ethresear.ch/t/two-slot-proposer-builder-separation/10980) will be enshrined in the Ethereum protocol itself to further harden its trust model.
 
 Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-run-mevboost/) and in the [Frequently Asked Questions](https://github.com/flashbots/mev-boost/wiki/Frequently-Asked-Questions).
+
+---
 
 # Usage
 
@@ -100,12 +105,24 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis
 
+
 ### Updating the website
 
-You can generate a static version of the website with `go run scripts/website-staticgen/main.go` (update the values in `testdata/website-htmldata.json` accordingly).
+* Edit the HTML in `services/website/website.html`
+* Edit template values in `testdata/website-htmldata.json`
+* Generate a static version of the website with `go run scripts/website-staticgen/main.go`
 
+This builds a local copy of the template and saves it in `website-index.html`
 
-### System startup
+The website is using:
+* [PureCSS](https://purecss.io/)
+* [Font Awesome](https://fontawesome.com/docs) [icons](https://fontawesome.com/icons)
+
+---
+
+# Technical Notes
+
+### System startup sequence (housekeeper)
 
 First the housekeeper updates Redis with the main information for the API:
 1. Update known validators in Redis (source: beacon node)
