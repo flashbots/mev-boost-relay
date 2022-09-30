@@ -185,9 +185,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Store total number of validators
 	err = hk.redis.SetStats("validators_known_total", fmt.Sprint(numValidators))
 	if err != nil {
-		log.WithError(err).WithField(
-			"field", "validators_known_total",
-		).Error("failed to set status")
+		log.WithError(err).Error("failed to set validators_known_total status")
 	}
 
 	// Update Redis with validators

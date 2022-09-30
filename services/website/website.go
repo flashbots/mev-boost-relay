@@ -150,11 +150,6 @@ func (srv *Webserver) getRouter() http.Handler {
 }
 
 func (srv *Webserver) updateHTML() {
-	knownValidators, err := srv.redis.GetKnownValidators()
-	if err != nil {
-		srv.log.WithError(err).Error("error getting known validators in updateStatusHTMLData")
-	}
-
 	_numRegistered, err := srv.db.NumRegisteredValidators()
 	if err != nil {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
@@ -191,9 +186,15 @@ func (srv *Webserver) updateHTML() {
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
 
-	srv.statusHTMLData.ValidatorsActive = uint64(len(_activeVals))
+	_validatorsTotal, err := srv.redis.GetStats(datastore.RedisStatsFieldValidatorsTotal)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		srv.log.WithError(err).Error("error getting latest stats: validators_total")
+	}
+	_validatorsTotalInt, _ := strconv.ParseUint(_validatorsTotal, 10, 64)
+
+	srv.statusHTMLData.ValidatorsTotal = _validatorsTotalInt
 	srv.statusHTMLData.ValidatorsRegistered = _numRegistered
-	srv.statusHTMLData.ValidatorsTotal = uint64(len(knownValidators))
+	srv.statusHTMLData.ValidatorsActive = uint64(len(_activeVals))
 	srv.statusHTMLData.NumPayloadsDelivered = _numPayloadsDelivered
 	srv.statusHTMLData.HeadSlot = _latestSlotInt
 
