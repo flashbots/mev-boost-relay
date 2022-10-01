@@ -185,6 +185,9 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting latest slot")
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
+	if len(payloads) > 0 && payloads[0].Slot > _latestSlotInt {
+		_latestSlotInt = payloads[0].Slot
+	}
 
 	_validatorsTotal, err := srv.redis.GetStats(datastore.RedisStatsFieldValidatorsTotal)
 	if err != nil && !errors.Is(err, redis.Nil) {
