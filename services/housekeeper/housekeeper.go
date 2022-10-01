@@ -183,9 +183,9 @@ func (hk *Housekeeper) updateKnownValidators() {
 	log.WithField("durationFetchValidators", time.Since(timeStartFetching).Seconds()).Infof("received validators from beacon-node")
 
 	// Store total number of validators
-	err = hk.redis.SetStats("validators_known_total", fmt.Sprint(numValidators))
+	err = hk.redis.SetStats(datastore.RedisStatsFieldValidatorsTotal, fmt.Sprint(numValidators))
 	if err != nil {
-		log.WithError(err).Error("failed to set validators_known_total status")
+		log.WithError(err).Error("failed to set stats for RedisStatsFieldValidatorsTotal")
 	}
 
 	// Update Redis with validators

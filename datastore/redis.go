@@ -24,7 +24,7 @@ var (
 
 	RedisConfigFieldPubkey         = "pubkey"
 	RedisStatsFieldLatestSlot      = "latest-slot"
-	RedisStatsFieldValidatorsTotal = "validators_known_total"
+	RedisStatsFieldValidatorsTotal = "validators-total"
 )
 
 type BlockBuilderStatus string
