@@ -268,7 +268,7 @@
                         <td>
                             <div class="icons-container">
                                 {{ if ne $linkBeaconchain "" }}
-                                <a class="img-beaconchain" href="{{$linkBeaconchain}}/block/{{.BlockNumber}}" target="_blank" alt="View block in beaconcha.in" title="View block in beaconcha.in"></a>
+                                <a class="img-beaconchain" href="{{$linkBeaconchain}}/slot/{{.Slot}}" target="_blank" alt="View slot in beaconcha.in" title="View slot in beaconcha.in"></a>
                                 &nbsp;
                                 {{ end }}
                                 {{ if ne $linkEtherscan "" }}
