@@ -22,20 +22,9 @@ import (
 	"github.com/tdewolff/minify"
 	"github.com/tdewolff/minify/html"
 	uberatomic "go.uber.org/atomic"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
 )
 
 var ErrServerAlreadyStarted = errors.New("server was already started")
-
-var (
-	// Printer for pretty printing numbers
-	printer = message.NewPrinter(language.English)
-
-	// Caser is used for casing strings
-	caser = cases.Title(language.English)
-)
 
 type WebserverOpts struct {
 	ListenAddress  string
@@ -48,6 +37,7 @@ type WebserverOpts struct {
 	ShowConfigDetails bool
 	LinkBeaconchain   string
 	LinkEtherscan     string
+	RelayURL          string
 }
 
 type Webserver struct {
@@ -97,23 +87,25 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	}
 
 	server.statusHTMLData = StatusHTMLData{
-		Network:                     caser.String(opts.NetworkDetails.Name),
+		Network:                     opts.NetworkDetails.Name,
 		RelayPubkey:                 opts.RelayPubkeyHex,
-		ValidatorsTotal:             "",
-		ValidatorsRegistered:        "",
+		ValidatorsActive:            0,
+		ValidatorsTotal:             0,
+		ValidatorsRegistered:        0,
 		BellatrixForkVersion:        opts.NetworkDetails.BellatrixForkVersionHex,
 		GenesisForkVersion:          opts.NetworkDetails.GenesisForkVersionHex,
 		GenesisValidatorsRoot:       opts.NetworkDetails.GenesisValidatorsRootHex,
 		BuilderSigningDomain:        hexutil.Encode(opts.NetworkDetails.DomainBuilder[:]),
 		BeaconProposerSigningDomain: hexutil.Encode(opts.NetworkDetails.DomainBeaconProposer[:]),
-		HeadSlot:                    "",
-		NumPayloadsDelivered:        "",
+		HeadSlot:                    0,
+		NumPayloadsDelivered:        0,
 		Payloads:                    []*database.DeliveredPayloadEntry{},
 		ValueLink:                   "",
 		ValueOrderIcon:              "",
 		ShowConfigDetails:           opts.ShowConfigDetails,
 		LinkBeaconchain:             opts.LinkBeaconchain,
 		LinkEtherscan:               opts.LinkEtherscan,
+		RelayURL:                    opts.RelayURL,
 	}
 
 	return server, nil
@@ -158,14 +150,14 @@ func (srv *Webserver) getRouter() http.Handler {
 }
 
 func (srv *Webserver) updateHTML() {
-	knownValidators, err := srv.redis.GetKnownValidators()
-	if err != nil {
-		srv.log.WithError(err).Error("error getting known validators in updateStatusHTMLData")
-	}
-
 	_numRegistered, err := srv.db.NumRegisteredValidators()
 	if err != nil {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
+	}
+
+	_activeVals, err := srv.redis.GetActiveValidators()
+	if err != nil {
+		srv.log.WithError(err).Error("error getting active validators in updateStatusHTMLData")
 	}
 
 	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
@@ -193,16 +185,21 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting latest slot")
 	}
 	_latestSlotInt, _ := strconv.ParseUint(_latestSlot, 10, 64)
+	if len(payloads) > 0 && payloads[0].Slot > _latestSlotInt {
+		_latestSlotInt = payloads[0].Slot
+	}
 
-	numRegistered := printer.Sprintf("%d", _numRegistered)
-	numKnown := printer.Sprintf("%d", len(knownValidators))
-	numPayloads := printer.Sprintf("%d", _numPayloadsDelivered)
-	latestSlot := printer.Sprintf("%d", _latestSlotInt)
+	_validatorsTotal, err := srv.redis.GetStats(datastore.RedisStatsFieldValidatorsTotal)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		srv.log.WithError(err).Error("error getting latest stats: validators_total")
+	}
+	_validatorsTotalInt, _ := strconv.ParseUint(_validatorsTotal, 10, 64)
 
-	srv.statusHTMLData.ValidatorsTotal = numKnown
-	srv.statusHTMLData.ValidatorsRegistered = numRegistered
-	srv.statusHTMLData.HeadSlot = latestSlot
-	srv.statusHTMLData.NumPayloadsDelivered = numPayloads
+	srv.statusHTMLData.ValidatorsTotal = _validatorsTotalInt
+	srv.statusHTMLData.ValidatorsRegistered = _numRegistered
+	srv.statusHTMLData.ValidatorsActive = uint64(len(_activeVals))
+	srv.statusHTMLData.NumPayloadsDelivered = _numPayloadsDelivered
+	srv.statusHTMLData.HeadSlot = _latestSlotInt
 
 	// Now generate the HTML
 	htmlDefault := bytes.Buffer{}

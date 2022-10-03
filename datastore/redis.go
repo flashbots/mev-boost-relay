@@ -22,8 +22,9 @@ var (
 	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
 	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
-	RedisConfigFieldPubkey    = "pubkey"
-	RedisStatsFieldLatestSlot = "latest-slot"
+	RedisConfigFieldPubkey         = "pubkey"
+	RedisStatsFieldLatestSlot      = "latest-slot"
+	RedisStatsFieldValidatorsTotal = "validators-total"
 )
 
 type BlockBuilderStatus string
