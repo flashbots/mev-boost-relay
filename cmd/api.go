@@ -3,7 +3,9 @@ package cmd
 import (
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -156,8 +158,24 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatal("failed to create service")
 		}
 
+		// Create a signal handler
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			sig := <-sigs
+			log.Infof("signal received: %s", sig)
+			err := srv.StopServer()
+			if err != nil {
+				log.WithError(err).Fatal("error stopping server")
+			}
+		}()
+
 		// Start the server
 		log.Infof("Webserver starting on %s ...", apiListenAddr)
-		log.Fatal(srv.StartServer())
+		err = srv.StartServer()
+		if err != nil {
+			log.WithError(err).Fatal("server error")
+		}
+		log.Info("bye")
 	},
 }

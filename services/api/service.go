@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -312,6 +313,23 @@ func (api *RelayAPI) StartServer() (err error) {
 		return nil
 	}
 	return err
+}
+
+// StopServer disables sending any bids on getHeader calls, waits a few seconds to catch any remaining getPayload call, and then shuts down the webserver
+func (api *RelayAPI) StopServer() (err error) {
+	api.log.Info("Stopping server...")
+
+	if api.opts.ProposerAPI {
+		// stop sending bids
+		api.ffForceGetHeader204 = true
+		api.log.Info("Disabled sending bids, waiting a few seconds...")
+
+		// wait a few seconds, for any pending getPayload call to complete
+		time.Sleep(5 * time.Second)
+	}
+
+	// shutdown
+	return api.srv.Shutdown(context.Background())
 }
 
 // startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
