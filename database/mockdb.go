@@ -20,7 +20,15 @@ func (db MockDB) GetValidatorRegistrationsForPubkeys(pubkeys []string) (entries 
 	return nil, nil
 }
 
-func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error) {
+func (db MockDB) GetLatestValidatorRegistrations() (registrations []*ValidatorRegistrationEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) GetLatestValidatorRegistrationsOnlyTimestamp() (registrations []*ValidatorRegistrationEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) GetLatestValidatorRegistrationsOnlyFeeRecipient() (registrations []*ValidatorRegistrationEntry, err error) {
 	return nil, nil
 }
 

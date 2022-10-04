@@ -310,7 +310,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 
 // updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis
 func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
-	regs, err := hk.db.GetLatestValidatorRegistrations(true)
+	regs, err := hk.db.GetLatestValidatorRegistrationsOnlyTimestamp()
 	if err != nil {
 		hk.log.WithError(err).Error("failed to get latest validator registrations")
 		return

@@ -16,7 +16,9 @@ import (
 type IDatabaseService interface {
 	NumRegisteredValidators() (count uint64, err error)
 	SaveValidatorRegistration(entry ValidatorRegistrationEntry) error
-	GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error)
+	GetLatestValidatorRegistrations() (registrations []*ValidatorRegistrationEntry, err error)
+	GetLatestValidatorRegistrationsOnlyTimestamp() (registrations []*ValidatorRegistrationEntry, err error)
+	GetLatestValidatorRegistrationsOnlyFeeRecipient() (registrations []*ValidatorRegistrationEntry, err error)
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
@@ -123,16 +125,22 @@ func (s *DatabaseService) GetValidatorRegistrationsForPubkeys(pubkeys []string) 
 	return entries, err
 }
 
-func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error) {
+func (s *DatabaseService) GetLatestValidatorRegistrations() (registrations []*ValidatorRegistrationEntry, err error) {
 	// query details: https://stackoverflow.com/questions/3800551/select-first-row-in-each-group-by-group/7630564#7630564
-	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature`
-	if timestampOnly {
-		query = `SELECT DISTINCT ON (pubkey) pubkey, timestamp`
-	}
-	query += ` FROM ` + TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
+	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature FROM ` + TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
+	err = s.DB.Select(&registrations, query)
+	return registrations, err
+}
 
-	var registrations []*ValidatorRegistrationEntry
-	err := s.DB.Select(&registrations, query)
+func (s *DatabaseService) GetLatestValidatorRegistrationsOnlyTimestamp() (registrations []*ValidatorRegistrationEntry, err error) {
+	query := `SELECT DISTINCT ON (pubkey) pubkey, timestamp FROM ` + TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
+	err = s.DB.Select(&registrations, query)
+	return registrations, err
+}
+
+func (s *DatabaseService) GetLatestValidatorRegistrationsOnlyFeeRecipient() (registrations []*ValidatorRegistrationEntry, err error) {
+	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient FROM ` + TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
+	err = s.DB.Select(&registrations, query)
 	return registrations, err
 }
 

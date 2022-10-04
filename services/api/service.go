@@ -53,6 +53,7 @@ var (
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 	pathDataBuilderBidsReceived      = "/relay/v1/data/bidtraces/builder_blocks_received"
 	pathDataValidatorRegistration    = "/relay/v1/data/validator_registration"
+	pathDataActiveValidators         = "/relay/v1/data/active_validators"
 
 	// Internal API
 	pathInternalBuilderStatus = "/internal/v1/builder/{pubkey:0x[a-fA-F0-9]+}"
@@ -60,6 +61,9 @@ var (
 	// number of goroutines to save active validator
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
+
+	// other constants
+	minBetweenActivateValidatorDataAPIUpdate = cli.GetEnvInt("DATA_API_UPDATE_ACTIVE_VALIDATORS_MIN", 10)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -120,6 +124,9 @@ type RelayAPI struct {
 	ffForceGetHeader204      bool
 	ffDisableBlockPublishing bool
 	ffDisableLowPrioBuilders bool
+
+	cachedActiveValidatorsLock     sync.RWMutex
+	cachedActiveValidatorsResponse *[]byte
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -178,6 +185,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 
 		activeValidatorC: make(chan types.PubkeyHex, 450_000),
 		validatorRegC:    make(chan types.SignedValidatorRegistration, 450_000),
+
+		cachedActiveValidatorsResponse: &[]byte{},
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -225,6 +234,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathDataProposerPayloadDelivered, api.handleDataProposerPayloadDelivered).Methods(http.MethodGet)
 		r.HandleFunc(pathDataBuilderBidsReceived, api.handleDataBuilderBidsReceived).Methods(http.MethodGet)
 		r.HandleFunc(pathDataValidatorRegistration, api.handleDataValidatorRegistration).Methods(http.MethodGet)
+		r.HandleFunc(pathDataActiveValidators, api.handleDataActiveValidators).Methods(http.MethodGet)
 	}
 
 	// Pprof
@@ -296,6 +306,11 @@ func (api *RelayAPI) StartServer() (err error) {
 			api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
 		}
 	}()
+
+	if api.opts.DataAPI {
+		api.dataAPICacheActiveValidators()
+		go api.startDataAPICacheLoop()
+	}
 
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
@@ -411,6 +426,53 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 	}
 }
 
+func (api *RelayAPI) startDataAPICacheLoop() {
+	for {
+		time.Sleep(time.Duration(minBetweenActivateValidatorDataAPIUpdate) * time.Minute)
+		api.dataAPICacheActiveValidators()
+	}
+}
+
+func (api *RelayAPI) dataAPICacheActiveValidators() {
+	api.log.Info("updating active validators cache...")
+	timeStarted := time.Now()
+
+	// Get the list of active validators from redis
+	activeValidators, err := api.redis.GetActiveValidators()
+	if err != nil {
+		api.log.WithError(err).Error("error getting active validators")
+		return
+	}
+
+	// Get the list of all feeRecipients from the database (verified source of truth, only updated after signature verification)
+	latestValidatorRegistrations, err := api.db.GetLatestValidatorRegistrationsOnlyFeeRecipient()
+	if err != nil {
+		api.log.WithError(err).Error("error getting latest validator registrations")
+		return
+	}
+
+	// Combine data from Redis + DB
+	activeValidatorsWithFeeRecipient := make(map[string]string)
+	for _, valReg := range latestValidatorRegistrations {
+		if _, ok := activeValidators[types.PubkeyHex(valReg.Pubkey)]; ok {
+			activeValidatorsWithFeeRecipient[valReg.Pubkey] = valReg.FeeRecipient
+		}
+	}
+
+	// JSON-encode
+	bytes, err := json.Marshal(activeValidatorsWithFeeRecipient)
+	if err != nil {
+		api.log.WithError(err).Error("error marshalling active validators")
+		return
+	}
+
+	// Cache
+	api.cachedActiveValidatorsLock.Lock()
+	api.cachedActiveValidatorsResponse = &bytes
+	api.cachedActiveValidatorsLock.Unlock()
+	api.log.WithField("duration", time.Since(timeStarted).Seconds()).Info("updating active validators cache finished.")
+}
+
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -502,7 +564,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			regLog.WithError(err).Infof("error getting last registration timestamp")
 		}
 
-		// Track active validators here
+		// Track active validators here. Send only the pubkey, because the feeRecipient cannot be trusted before validating the signature
 		select {
 		case api.activeValidatorC <- pubkey:
 		default:
@@ -1187,4 +1249,13 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 	}
 
 	api.RespondOK(w, signedRegistration)
+}
+
+func (api *RelayAPI) handleDataActiveValidators(w http.ResponseWriter, req *http.Request) {
+	api.cachedActiveValidatorsLock.RLock()
+	defer api.cachedActiveValidatorsLock.RUnlock()
+	_, err := w.Write(*api.cachedActiveValidatorsResponse)
+	if err != nil {
+		api.log.WithError(err).Error("error responding to data api with active validators")
+	}
 }

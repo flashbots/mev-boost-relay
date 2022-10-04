@@ -265,6 +265,6 @@ func (srv *Webserver) handleRoot(w http.ResponseWriter, req *http.Request) {
 		_, err = w.Write(*srv.htmlDefault)
 	}
 	if err != nil {
-		srv.log.WithError(err).Error("error writing template")
+		srv.log.WithError(err).Error("error responding to root request")
 	}
 }
