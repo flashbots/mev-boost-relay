@@ -701,7 +701,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Increment builder stats
 		err = api.db.IncBlockBuilderStatsAfterGetPayload(slot, blockHash.String())
 		if err != nil {
-			log.WithError(err).Error("could not increment builder-stats after getHeader")
+			log.WithError(err).Error("could not increment builder-stats after getPayload")
 		}
 	}()
 
