@@ -14,7 +14,6 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/api"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -68,8 +67,7 @@ var apiCmd = &cobra.Command{
 			logLevel = "debug"
 		}
 
-		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("service", "relay/api")
+		log := common.LogSetup(logJSON, logLevel).WithField("service", "relay/api")
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
 		}

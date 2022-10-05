@@ -8,7 +8,6 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/website"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -51,8 +50,7 @@ var websiteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		common.LogSetup(logJSON, logLevel)
-		log := logrus.WithField("service", "relay/website")
+		log := common.LogSetup(logJSON, logLevel).WithField("service", "relay/website")
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)
