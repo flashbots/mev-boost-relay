@@ -1,19 +1,19 @@
 package common
 
 import (
-	"log"
 	"os"
 
 	"github.com/sirupsen/logrus"
 )
 
-func LogSetup(json bool, logLevel string) {
-	logrus.SetOutput(os.Stdout)
+func LogSetup(json bool, logLevel string) *logrus.Entry {
+	log := logrus.NewEntry(logrus.New())
+	log.Logger.SetOutput(os.Stdout)
 
 	if json {
-		logrus.SetFormatter(&logrus.JSONFormatter{})
+		log.Logger.SetFormatter(&logrus.JSONFormatter{})
 	} else {
-		logrus.SetFormatter(&logrus.TextFormatter{
+		log.Logger.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 		})
 	}
@@ -23,6 +23,7 @@ func LogSetup(json bool, logLevel string) {
 		if err != nil {
 			log.Fatalf("Invalid loglevel: %s", logLevel)
 		}
-		logrus.SetLevel(lvl)
+		log.Logger.SetLevel(lvl)
 	}
+	return log
 }
