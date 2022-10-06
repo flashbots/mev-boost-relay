@@ -419,7 +419,7 @@ func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission 
 func (s *DatabaseService) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
 	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
 	entries := []*BlockBuilderEntry{}
-	err := s.DB.Select(entries, query)
+	err := s.DB.Select(&entries, query)
 	return entries, err
 }
 
