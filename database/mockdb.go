@@ -44,6 +44,10 @@ func (db MockDB) GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*Deli
 	return nil, nil
 }
 
+func (db MockDB) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
+	return nil, nil
+}
+
 func (db MockDB) GetNumDeliveredPayloads() (uint64, error) {
 	return 0, nil
 }

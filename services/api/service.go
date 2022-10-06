@@ -1057,20 +1057,9 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		return
 	}
 
-	response := []BidTraceJSON{}
-	for _, payload := range deliveredPayloads {
-		trace := BidTraceJSON{
-			Slot:                 payload.Slot,
-			ParentHash:           payload.ParentHash,
-			BlockHash:            payload.BlockHash,
-			BuilderPubkey:        payload.BuilderPubkey,
-			ProposerPubkey:       payload.ProposerPubkey,
-			ProposerFeeRecipient: payload.ProposerFeeRecipient,
-			GasLimit:             payload.GasLimit,
-			GasUsed:              payload.GasUsed,
-			Value:                payload.Value,
-		}
-		response = append(response, trace)
+	response := make([]common.BidTraceJSON, len(deliveredPayloads))
+	for i, payload := range deliveredPayloads {
+		response[i] = database.DeliveredPayloadEntryToBidTraceJSON(payload)
 	}
 
 	api.RespondOK(w, response)
@@ -1143,30 +1132,16 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		filters.Limit = _limit
 	}
 
-	deliveredPayloads, err := api.db.GetBuilderSubmissions(filters)
+	blockSubmissions, err := api.db.GetBuilderSubmissions(filters)
 	if err != nil {
 		api.log.WithError(err).Error("error getting recent payloads")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response := []BidTraceWithTimestampJSON{}
-	for _, payload := range deliveredPayloads {
-		trace := BidTraceWithTimestampJSON{
-			Timestamp: payload.InsertedAt.Unix(),
-			BidTraceJSON: BidTraceJSON{
-				Slot:                 payload.Slot,
-				ParentHash:           payload.ParentHash,
-				BlockHash:            payload.BlockHash,
-				BuilderPubkey:        payload.BuilderPubkey,
-				ProposerPubkey:       payload.ProposerPubkey,
-				ProposerFeeRecipient: payload.ProposerFeeRecipient,
-				GasLimit:             payload.GasLimit,
-				GasUsed:              payload.GasUsed,
-				Value:                payload.Value,
-			},
-		}
-		response = append(response, trace)
+	response := make([]common.BidTraceWithTimestampJSON, len(blockSubmissions))
+	for i, payload := range blockSubmissions {
+		response[i] = database.BuilderSubmissionEntryToBidTraceWithTimestampJSON(payload)
 	}
 
 	api.RespondOK(w, response)

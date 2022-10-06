@@ -27,8 +27,9 @@ type IDatabaseService interface {
 	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
 
 	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
-	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetNumDeliveredPayloads() (uint64, error)
+	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
+	GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error)
 
 	GetBlockBuilders() ([]*BlockBuilderEntry, error)
 	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
@@ -283,7 +284,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		"builder_pubkey":  queryArgs.BuilderPubkey,
 	}
 
-	tasks := []*DeliveredPayloadEntry{}
+	entries := []*DeliveredPayloadEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
 
 	whereConds := []string{}
@@ -322,8 +323,18 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		return nil, err
 	}
 
-	err = nstmt.Select(&tasks, arg)
-	return tasks, err
+	err = nstmt.Select(&entries, arg)
+	return entries, err
+}
+
+func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
+	FROM ` + TableDeliveredPayload + `
+	WHERE id >= $1 AND id <= $2
+	ORDER BY slot ASC`
+
+	err = s.DB.Select(&entries, query, idFirst, idLast)
+	return entries, err
 }
 
 func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {

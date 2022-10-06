@@ -170,3 +170,49 @@ type SlotSummary struct {
 	NumPayloadSent        uint64 `json:"num_payload_sent"         db:"num_payload_sent"`
 	NumBuilderBidReceived uint64 `json:"num_builder_bid_received" db:"num_builder_bid_received"`
 }
+
+type BidTraceJSON struct {
+	Slot                 uint64 `json:"slot,string"`
+	ParentHash           string `json:"parent_hash"`
+	BlockHash            string `json:"block_hash"`
+	BuilderPubkey        string `json:"builder_pubkey"`
+	ProposerPubkey       string `json:"proposer_pubkey"`
+	ProposerFeeRecipient string `json:"proposer_fee_recipient"`
+	GasLimit             uint64 `json:"gas_limit,string"`
+	GasUsed              uint64 `json:"gas_used,string"`
+	Value                string `json:"value"`
+}
+
+func (b *BidTraceJSON) CSVHeader() []string {
+	return []string{
+		"slot",
+		"parent_hash",
+		"block_hash",
+		"builder_pubkey",
+		"proposer_pubkey",
+		"proposer_fee_recipient",
+		"gas_limit",
+		"gas_used",
+		"value",
+	}
+}
+
+func (b *BidTraceJSON) ToCSVRecord() []string {
+	return []string{
+		fmt.Sprint(b.Slot),
+		b.ParentHash,
+		b.BlockHash,
+		b.BuilderPubkey,
+		b.ProposerPubkey,
+		b.ProposerFeeRecipient,
+		fmt.Sprint(b.GasLimit),
+		fmt.Sprint(b.GasUsed),
+		b.Value,
+	}
+}
+
+type BidTraceWithTimestampJSON struct {
+	BidTraceJSON
+
+	Timestamp int64 `json:"timestamp,string,omitempty"`
+}
