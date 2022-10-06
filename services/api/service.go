@@ -61,6 +61,7 @@ var (
 	// number of goroutines to save active validator
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
+	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -690,16 +691,21 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Get the response - from memory, Redis or DB
 	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
 	getPayloadResp, err := api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
-	if err != nil {
-		log.WithError(err).Error("failed getting execution payload")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	if err != nil || getPayloadResp == nil {
+		log.WithError(err).Warn("failed getting execution payload (1/2)")
+		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
 
-	if getPayloadResp == nil {
-		log.Warn("failed getting execution payload")
-		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
-		return
+		// Try again
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
+		if err != nil {
+			log.WithError(err).Error("failed getting execution payload (2/2) - due to error")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		} else if getPayloadResp == nil {
+			log.Warn("failed getting execution payload (2/2)")
+			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
+			return
+		}
 	}
 
 	api.RespondOK(w, getPayloadResp)
