@@ -44,7 +44,6 @@ type Datastore struct {
 
 	// feature flags
 	ffDisableBidMemoryCache bool
-	ffDisableBidRedisCache  bool
 }
 
 func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
@@ -61,11 +60,6 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDataba
 	if os.Getenv("DISABLE_BID_MEMORY_CACHE") == "1" {
 		ds.log.Warn("env: DISABLE_BID_MEMORY_CACHE - disabling in-memory bid cache")
 		ds.ffDisableBidMemoryCache = true
-	}
-
-	if os.Getenv("DISABLE_BID_REDIS_CACHE") == "1" {
-		ds.log.Warn("env: DISABLE_BID_REDIS_CACHE - disabling redis bid cache")
-		ds.ffDisableBidRedisCache = true
 	}
 
 	return ds, err
@@ -167,13 +161,13 @@ func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, h
 		ds.GetPayloadResponsesLock.Unlock()
 	}
 
-	// Save to Redis
-	err := ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
+	// Save to Redis: first the payload then the header
+	err := ds.redis.SaveGetPayloadResponse(signedBidTrace.Message.Slot, _proposerPubkey, payloadResp)
 	if err != nil {
 		return err
 	}
 
-	return ds.redis.SaveGetPayloadResponse(signedBidTrace.Message.Slot, _proposerPubkey, payloadResp)
+	return ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
 }
 
 func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved, numRemaining int) {
@@ -252,12 +246,12 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	}
 
 	// 2. try to get from Redis
-	if !ds.ffDisableBidRedisCache {
-		resp, err := ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
-		if err == nil {
-			ds.log.Debug("getPayload response from redis")
-			return resp, nil
-		}
+	resp, err := ds.redis.GetGetPayloadResponse(slot, _proposerPubkey, _blockHash)
+	if err != nil {
+		ds.log.WithError(err).Error("error getting getPayload response from redis")
+	} else {
+		ds.log.Debug("getPayload response from redis")
+		return resp, nil
 	}
 
 	// 3. try to get from database
