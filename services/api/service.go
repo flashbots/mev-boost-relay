@@ -258,22 +258,28 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
-	// Get current proposer duties
-	api.updateProposerDuties(bestSyncStatus.HeadSlot)
-
-	// Update list of known validators, and start refresh loop
-	go api.startKnownValidatorUpdates()
-
-	// Start the active validator processor
-	api.log.Infof("starting %d active validator processors", numActiveValidatorProcessors)
-	for i := 0; i < numActiveValidatorProcessors; i++ {
-		go api.startActiveValidatorProcessor()
+	// start things for the block-builder API
+	if api.opts.BlockBuilderAPI {
+		// Get current proposer duties blocking before starting, to have them ready
+		api.updateProposerDuties(bestSyncStatus.HeadSlot)
 	}
 
-	// Start the validator registration db-save processor
-	api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
-	for i := 0; i < numValidatorRegProcessors; i++ {
-		go api.startValidatorRegistrationDBProcessor()
+	// start things specific for the proposer API
+	if api.opts.ProposerAPI {
+		// Update list of known validators, and start refresh loop
+		go api.startKnownValidatorUpdates()
+
+		// Start the worker pool to process active validators
+		api.log.Infof("starting %d active validator processors", numActiveValidatorProcessors)
+		for i := 0; i < numActiveValidatorProcessors; i++ {
+			go api.startActiveValidatorProcessor()
+		}
+
+		// Start the validator registration db-save processor
+		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
+		for i := 0; i < numValidatorRegProcessors; i++ {
+			go api.startValidatorRegistrationDBProcessor()
+		}
 	}
 
 	// Process current slot
@@ -372,8 +378,10 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotStartNextEpoch": (epoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
 
-	// Regularly update proposer duties in the background
-	go api.updateProposerDuties(headSlot)
+	if api.opts.BlockBuilderAPI {
+		// Update proposer duties in the background
+		go api.updateProposerDuties(headSlot)
+	}
 }
 
 func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
@@ -711,7 +719,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Increment builder stats
 		err = api.db.IncBlockBuilderStatsAfterGetPayload(slot, blockHash.String())
 		if err != nil {
-			log.WithError(err).Error("could not increment builder-stats after getHeader")
+			log.WithError(err).Error("could not increment builder-stats after getPayload")
 		}
 	}()
 
