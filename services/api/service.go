@@ -118,6 +118,9 @@ type RelayAPI struct {
 	activeValidatorC chan types.PubkeyHex
 	validatorRegC    chan types.SignedValidatorRegistration
 
+	// used to wait on any active getPayload calls on shutdown
+	getPayloadCallsInFlight sync.WaitGroup
+
 	// Feature flags
 	ffForceGetHeader204      bool
 	ffDisableBlockPublishing bool
@@ -333,6 +336,9 @@ func (api *RelayAPI) StopServer() (err error) {
 
 		// wait a few seconds, for any pending getPayload call to complete
 		time.Sleep(5 * time.Second)
+
+		// wait for any active getPayload call to finish
+		api.getPayloadCallsInFlight.Wait()
 	}
 
 	// shutdown
@@ -641,6 +647,9 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+	api.getPayloadCallsInFlight.Add(1)
+	defer api.getPayloadCallsInFlight.Done()
+
 	log := api.log.WithField("method", "getPayload")
 
 	payload := new(types.SignedBlindedBeaconBlock)
