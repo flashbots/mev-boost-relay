@@ -478,15 +478,6 @@ func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "MEV-Boost Relay API")
 }
 
-type UserError struct {
-	err error
-}
-
-func (ue *UserError) Error() string {
-	return err.Error()
-}
-
-
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
@@ -510,62 +501,67 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		api.RespondError(w, code, msg)
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		respondError(http.StatusBadRequest, "failed to read request body")
+	if req.ContentLength == 0 {
+		respondError(http.StatusBadRequest, "empty request")
 		return
 	}
 
-	parseFn := func() (types.PubkeyHex, string, int64, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		log.WithField("contentLength", req.ContentLength).Warn("failed to read request body")
+		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	parseRegistration := func(value []byte) (pkHex types.PubkeyHex, timestampInt int64, err error) {
 		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
-			respondError(http.StatusBadRequest, fmt.Sprintf("registration error message (pubkey): %s", err.Error()))
-			return
-		}
-
-		feeRecipient, err := jsonparser.GetUnsafeString(value, "message", "fee_recipient")
-		if err != nil {
-			respondError(http.StatusBadRequest, fmt.Sprintf("registration error message (fee_recipient): %s", err.Error()))
-			return
+			return pkHex, timestampInt, fmt.Errorf("registration message error (pubkey): %w", err)
 		}
 
 		timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
 		if err != nil {
-			return UserError{fmt.Errorf("registration error message (timestamp): %w", err)}
+			return pkHex, timestampInt, fmt.Errorf("registration message error (timestamp): %w", err)
 		}
 
-		timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
+		timestampInt, err = strconv.ParseInt(timestamp, 10, 64)
 		if err != nil {
-			return ..., fmt.Errorf("invalid timestamp: %w", err)
+			return pkHex, timestampInt, fmt.Errorf("invalid timestamp: %w", err)
 		}
 
-		return types.PubkeyHex(pubkey), feeRecipient, timestampInt
+		return types.PubkeyHex(pubkey), timestampInt, nil
 	}
 
-	verifySig := func() {
-		// Verify the signature - now extract the full json object if needed
-		signedValidatorRegistration := new(types.SignedValidatorRegistration)
-		err = json.Unmarshal(value, signedValidatorRegistration)
+	// Iterate over the registrations
+	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
+		numRegTotal += 1
+		if processingStoppedByError {
+			return
+		}
+		numRegProcessed += 1
+
+		// Extract immediately necessary registration fields
+		pkHex, timestampInt, err := parseRegistration(value)
 		if err != nil {
-			regLog.WithError(err).Infof("error unmarshalling signed validator registration")
+			respondError(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		ok, err := types.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
-		if err != nil {
-			regLog.WithError(err).Error("error verifying registerValidator signature")
-			return
-		} else if !ok {
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+		// Add validator pubkey to logs
+		regLog := api.log.WithField("pubkey", pkHex.String())
+
+		// Ensure registration is not too far in the future
+		registrationTime := time.Unix(timestampInt, 0)
+		if registrationTime.After(registrationTimeUpperBound) {
+			respondError(http.StatusBadRequest, "timestamp too far in the future")
 			return
 		}
-	}
-	
-	processParsedRegistration := func(pkHex types.PubkeyHex) {
+
 		// Check if a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
-			return fmt.Errorf("not a known validator: %s", pubkey))
+			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex.String()))
+			return
 		}
 
 		// Track active validators here
@@ -579,48 +575,34 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Check for a previous registration timestamp
 		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(pkHex)
 		if err != nil {
-			regLog.WithError(err).Infof("error getting last registration timestamp")
+			regLog.WithError(err).Error("error getting last registration timestamp")
 		} else if prevTimestamp >= uint64(timestampInt) {
-			// do nothing if the timestamp is not newer
+			// abort if the current registration timestamp is older or equal to the last known one
 			return
 		}
 
 		// Now we have a new registration to process
 		numRegNew += 1
-	}
 
-	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
-		numRegTotal += 1
-		if processingStoppedByError {
-			return
-		}
-		numRegProcessed += 1
-
-		pkHex, feeRecipient, timestampInt, err := parseFn()
-		if errors.Is(err, UserError) {
-		}
+		// JSON-decode the registration now (needed for signature verification)
+		signedValidatorRegistration := new(types.SignedValidatorRegistration)
+		err = json.Unmarshal(value, signedValidatorRegistration)
 		if err != nil {
-			respondError(http.StatusBadRequest, fmt.Sprintf("registration error message (timestamp): %s", err.Error()))
+			regLog.WithError(err).Error("error unmarshalling signed validator registration")
+			respondError(http.StatusBadRequest, fmt.Sprintf("error unmarshalling signed validator registration: %s", err.Error()))
 			return
 		}
 
-		registrationTime := time.Unix(timestampInt, 0)
-		if registrationTime.After(registrationTimeUpperBound) {
-			respondError(http.StatusBadRequest, "timestamp too far in the future")
+		// Verify the signature
+		ok, err := types.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
+		if err != nil {
+			regLog.WithError(err).Error("error verifying registerValidator signature")
+			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
+			return
+		} else if !ok {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
 			return
 		}
-
-		regLog := api.log.WithFields(logrus.Fields{
-			"pubkey":       pkHex,
-			"feeRecipient": feeRecipient,
-		})
-
-		if err := processParsedRegistration(pkHex); err != nil {
-			respondError(http.StatusBadRequest, err)
-			return
-		}
-
-		err := verifySig() ...
 
 		// Save to database
 		select {
