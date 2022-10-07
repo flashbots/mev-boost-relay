@@ -507,13 +507,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
-		numRegTotal += 1
-		if processingStoppedByError {
-			return
-		}
-		numRegProcessed += 1
-
+	parseFn := func() (types.PubkeyHex, string, int64) {
 		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
 			respondError(http.StatusBadRequest, fmt.Sprintf("registration error message (pubkey): %s", err.Error()))
@@ -534,7 +528,22 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
 		if err != nil {
-			respondError(http.StatusBadRequest, fmt.Sprintf("invalid timestamp: %s", err.Error()))
+			return ..., fmt.Errorf("invalid timestamp: %w", err)
+		}
+
+		return types.PubkeyHex(pubkey), feeRecipient, timestampInt
+	}
+
+	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
+		numRegTotal += 1
+		if processingStoppedByError {
+			return
+		}
+		numRegProcessed += 1
+
+		pkHex, feeRecipient, timestampInt, err := parseFn()
+		if err != nil {
+			respondError(http.StatusBadRequest, fmt.Sprintf("registration error message (timestamp): %s", err.Error()))
 			return
 		}
 
@@ -544,9 +553,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
-		pkHex := types.NewPubkeyHex(pubkey)
 		regLog := api.log.WithFields(logrus.Fields{
-			"pubkey":       pubkey,
+			"pubkey":       pkHex,
 			"feeRecipient": feeRecipient,
 		})
 
