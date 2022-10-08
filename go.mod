@@ -6,7 +6,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/ethereum/go-ethereum v1.10.25
-	github.com/flashbots/go-boost-utils v1.2.0
+	github.com/flashbots/go-boost-utils v1.2.1
 	github.com/flashbots/go-utils v0.4.8
 	github.com/go-redis/redis/v9 v9.0.0-beta.2
 	github.com/gorilla/mux v1.8.0
