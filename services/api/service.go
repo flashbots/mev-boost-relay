@@ -314,8 +314,8 @@ func (api *RelayAPI) StartServer() (err error) {
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
 
-		ReadTimeout:       600 * time.Millisecond,
-		ReadHeaderTimeout: 400 * time.Millisecond,
+		ReadTimeout:       1500 * time.Millisecond,
+		ReadHeaderTimeout: 600 * time.Millisecond,
 		WriteTimeout:      3 * time.Second,
 		IdleTimeout:       3 * time.Second,
 	}
@@ -508,10 +508,11 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.WithField("contentLength", req.ContentLength).Warn("failed to read request body")
+		log.WithError(err).WithField("contentLength", req.ContentLength).Warn("failed to read request body")
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
+	req.Body.Close()
 
 	parseRegistration := func(value []byte) (pkHex types.PubkeyHex, timestampInt int64, err error) {
 		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
