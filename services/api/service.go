@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
@@ -484,94 +486,144 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
-	respondError := func(code int, msg string) {
-		log.Warn("bad request: ", msg)
-		api.RespondError(w, code, msg)
-	}
-
 	start := time.Now()
 	registrationTimeUpperBound := start.Add(10 * time.Second)
 
-	registrations := []types.SignedValidatorRegistration{}
+	numRegTotal := 0
+	numRegProcessed := 0
+	numRegActive := 0
 	numRegNew := 0
+	processingStoppedByError := false
 
-	if err := json.NewDecoder(req.Body).Decode(&registrations); err != nil {
-		respondError(http.StatusBadRequest, "failed to decode payload")
+	respondError := func(code int, msg string) {
+		processingStoppedByError = true
+		log.Warnf("error: %s", msg)
+		api.RespondError(w, code, msg)
+	}
+
+	if req.ContentLength == 0 {
+		respondError(http.StatusBadRequest, "empty request")
 		return
 	}
 
-	// Possible optimisations:
-	// - GetValidatorRegistrationTimestamp could keep a cache in memory for some time and check memory first before going to Redis
-	// - Do multiple loops and filter down set of registrations, and batch checks for all registrations instead of locking for each individually:
-	//   (1) sanity checks, (2) IsKnownValidator, (3) CheckTimestamp, (4) Batch SetValidatorRegistration
-	for _, registration := range registrations {
-		if registration.Message == nil {
-			respondError(http.StatusBadRequest, "registration without message")
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		log.WithField("contentLength", req.ContentLength).Warn("failed to read request body")
+		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	parseRegistration := func(value []byte) (pkHex types.PubkeyHex, timestampInt int64, err error) {
+		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
+		if err != nil {
+			return pkHex, timestampInt, fmt.Errorf("registration message error (pubkey): %w", err)
+		}
+
+		timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
+		if err != nil {
+			return pkHex, timestampInt, fmt.Errorf("registration message error (timestamp): %w", err)
+		}
+
+		timestampInt, err = strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			return pkHex, timestampInt, fmt.Errorf("invalid timestamp: %w", err)
+		}
+
+		return types.PubkeyHex(pubkey), timestampInt, nil
+	}
+
+	// Iterate over the registrations
+	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
+		numRegTotal += 1
+		if processingStoppedByError {
+			return
+		}
+		numRegProcessed += 1
+
+		// Extract immediately necessary registration fields
+		pkHex, timestampInt, err := parseRegistration(value)
+		if err != nil {
+			respondError(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		pubkey := registration.Message.Pubkey.PubkeyHex()
-		regLog := api.log.WithFields(logrus.Fields{
-			"pubkey":       pubkey,
-			"feeRecipient": registration.Message.FeeRecipient.String(),
-		})
+		// Add validator pubkey to logs
+		regLog := api.log.WithField("pubkey", pkHex.String())
 
-		registrationTime := time.Unix(int64(registration.Message.Timestamp), 0)
+		// Ensure registration is not too far in the future
+		registrationTime := time.Unix(timestampInt, 0)
 		if registrationTime.After(registrationTimeUpperBound) {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
 			return
 		}
 
-		// Check if actually a real validator
-		isKnownValidator := api.datastore.IsKnownValidator(pubkey)
+		// Check if a real validator
+		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
-			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pubkey))
+			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex.String()))
 			return
 		}
 
-		// Check for a previous registration timestamp
-		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(pubkey)
-		if err != nil {
-			regLog.WithError(err).Infof("error getting last registration timestamp")
-		}
-
 		// Track active validators here
+		numRegActive += 1
 		select {
-		case api.activeValidatorC <- pubkey:
+		case api.activeValidatorC <- pkHex:
 		default:
 			regLog.Error("active validator channel full")
 		}
 
-		// Do nothing if the registration is already the latest
-		if prevTimestamp >= registration.Message.Timestamp {
-			continue
+		// Check for a previous registration timestamp
+		prevTimestamp, err := api.datastore.GetValidatorRegistrationTimestamp(pkHex)
+		if err != nil {
+			regLog.WithError(err).Error("error getting last registration timestamp")
+		} else if prevTimestamp >= uint64(timestampInt) {
+			// abort if the current registration timestamp is older or equal to the last known one
+			return
 		}
 
-		// Send to workers for signature verification and saving
-		numRegNew++
+		// Now we have a new registration to process
+		numRegNew += 1
+
+		// JSON-decode the registration now (needed for signature verification)
+		signedValidatorRegistration := new(types.SignedValidatorRegistration)
+		err = json.Unmarshal(value, signedValidatorRegistration)
+		if err != nil {
+			regLog.WithError(err).Error("error unmarshalling signed validator registration")
+			respondError(http.StatusBadRequest, fmt.Sprintf("error unmarshalling signed validator registration: %s", err.Error()))
+			return
+		}
 
 		// Verify the signature
-		ok, err := types.VerifySignature(registration.Message, api.opts.EthNetDetails.DomainBuilder, registration.Message.Pubkey[:], registration.Signature[:])
+		ok, err := types.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
 			regLog.WithError(err).Error("error verifying registerValidator signature")
-			continue
-		} else if !ok {
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", registration.Message.Pubkey.String()))
+			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
 			return
-		} else {
-			// Save to database
-			select {
-			case api.validatorRegC <- registration:
-			default:
-				regLog.Error("validator registration channel full")
-			}
+		} else if !ok {
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+			return
 		}
+
+		// Save to database
+		select {
+		case api.validatorRegC <- *signedValidatorRegistration:
+		default:
+			regLog.Error("validator registration channel full")
+		}
+	})
+
+	if err != nil {
+		respondError(http.StatusBadRequest, "error in traversing json")
+		return
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"numRegistrations":    len(registrations),
-		"numRegistrationsNew": numRegNew,
-		"timeNeededSec":       time.Since(start).Seconds(),
+		"timeNeededSec":             time.Since(start).Seconds(),
+		"numRegistrations":          numRegTotal,
+		"numRegistrationsActive":    numRegActive,
+		"numRegistrationsProcessed": numRegProcessed,
+		"numRegistrationsNew":       numRegNew,
+		"processingStoppedByError":  processingStoppedByError,
 	})
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
