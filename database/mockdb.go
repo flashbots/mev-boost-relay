@@ -39,6 +39,14 @@ func (db MockDB) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubke
 	return nil, nil
 }
 
+func (db MockDB) GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error) {
+	return nil, nil
+}
+
+func (db MockDB) DeleteExecutionPayloads(idFirst, idLast uint64) error {
+	return nil
+}
+
 func (db MockDB) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }

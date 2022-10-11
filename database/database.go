@@ -25,6 +25,8 @@ type IDatabaseService interface {
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
 	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
+	GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error)
+	DeleteExecutionPayloads(idFirst, idLast uint64) error
 
 	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 	GetNumDeliveredPayloads() (uint64, error)
@@ -325,7 +327,7 @@ func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries 
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
 	FROM ` + TableDeliveredPayload + `
 	WHERE id >= $1 AND id <= $2
-	ORDER BY slot ASC`
+	ORDER BY id ASC`
 
 	err = s.DB.Select(&entries, query, idFirst, idLast)
 	return entries, err
@@ -438,5 +440,17 @@ func (s *DatabaseService) IncBlockBuilderStatsAfterGetPayload(slot uint64, block
 		) AS sub
 		WHERE ` + TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
 	_, err := s.DB.Exec(query, slot, blockhash)
+	return err
+}
+
+func (s *DatabaseService) GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error) {
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + TableExecutionPayload + ` WHERE id >= $1 AND id <= $2 ORDER BY id ASC`
+	err = s.DB.Select(&entries, query, idFirst, idLast)
+	return entries, err
+}
+
+func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error {
+	query := `DELETE FROM ` + TableExecutionPayload + ` WHERE id >= $1 AND id <= $2`
+	_, err := s.DB.Exec(query, idFirst, idLast)
 	return err
 }

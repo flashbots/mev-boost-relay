@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -99,6 +100,20 @@ type ExecutionPayloadEntry struct {
 
 	Version string `db:"version"`
 	Payload string `db:"payload"`
+}
+
+var ExecutionPayloadEntryCSVHeader = []string{"id", "inserted_at", "slot", "proposer_pubkey", "block_hash", "version", "payload"}
+
+func (e *ExecutionPayloadEntry) ToCSVRecord() []string {
+	return []string{
+		fmt.Sprint(e.ID),
+		e.InsertedAt.UTC().String(),
+		fmt.Sprint(e.Slot),
+		e.ProposerPubkey,
+		e.BlockHash,
+		e.Version,
+		e.Payload,
+	}
 }
 
 type BuilderBlockSubmissionEntry struct {
