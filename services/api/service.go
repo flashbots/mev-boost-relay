@@ -703,24 +703,27 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
 
-	log := api.log.WithField("method", "getPayload")
+	ua := req.UserAgent()
+	log := api.log.WithFields(logrus.Fields{
+		"method":        "getPayload",
+		"ua":            ua,
+		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
+		"contentLength": req.ContentLength,
+	})
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		log.Warn("getPayload request failed to decode")
+		log.WithError(err).Warn("getPayload request failed to decode")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	slot := payload.Message.Slot
 	blockHash := payload.Message.Body.ExecutionPayloadHeader.BlockHash
-	ua := req.UserAgent()
 	log = log.WithFields(logrus.Fields{
 		"slot":      slot,
 		"blockHash": blockHash.String(),
 		"idArg":     req.URL.Query().Get("id"),
-		"ua":        ua,
-		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
 	log.Debug("getPayload request received")
