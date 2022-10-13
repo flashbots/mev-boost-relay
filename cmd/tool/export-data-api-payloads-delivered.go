@@ -62,7 +62,7 @@ var DataAPIExportPayloads = &cobra.Command{
 			}
 		}
 		if dateEnd != "" {
-			// find last enry before dateEnd
+			// find last entry before dateEnd
 			query := `SELECT id FROM ` + database.TableDeliveredPayload + ` WHERE inserted_at::date < date '` + dateEnd + `' ORDER BY id DESC LIMIT 1;`
 			err = db.DB.QueryRow(query).Scan(&idLast)
 			if err != nil {

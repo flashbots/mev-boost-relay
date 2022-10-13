@@ -117,5 +117,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 				log.WithError(err).Fatal("error deleting execution payloads")
 			}
 		}
+
+		log.Infof("all done")
 	},
 }
