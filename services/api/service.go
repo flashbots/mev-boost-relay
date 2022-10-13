@@ -782,7 +782,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Save information about delivered payload
 	go func() {
-		err := api.db.SaveDeliveredPayload(slot, proposerPubkey, blockHash, payload)
+		bidTrace, err := api.redis.GetBidTrace(slot, proposerPubkey.String(), blockHash.String())
+		if err != nil {
+			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
+		}
+
+		err = api.db.SaveDeliveredPayload(bidTrace, payload)
 		if err != nil {
 			log.WithError(err).Error("failed to save delivered payload")
 		}
@@ -976,12 +981,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Data:    payload.ExecutionPayload,
 	}
 
-	signedBidTrace := types.SignedBidTrace{
-		Message:   payload.Message,
-		Signature: payload.Signature,
+	bidTrace := common.BidTraceV2{
+		BidTrace:    *payload.Message,
+		BlockNumber: payload.ExecutionPayload.BlockNumber,
+		NumTx:       uint64(len(payload.ExecutionPayload.Transactions)),
 	}
-
-	err = api.datastore.SaveBlockSubmission(&signedBidTrace, &getHeaderResponse, &getPayloadResponse)
+	err = api.datastore.SaveBid(&bidTrace, &getHeaderResponse, &getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and block")
 		api.RespondError(w, http.StatusBadRequest, err.Error())

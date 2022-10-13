@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/sirupsen/logrus"
 )
@@ -132,22 +133,22 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 	return nil
 }
 
-// SaveBlockSubmission stores getHeader and getPayload for later use, to memory and Redis. Note: saving to Postgres not needed, because getHeader doesn't currently check the database, getPayload finds the data it needs through a sql query.
-func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
+// SaveBid stores getHeader and getPayload for later use, to memory and Redis. Note: saving to Postgres not needed, because getHeader doesn't currently check the database, getPayload finds the data it needs through a sql query.
+func (ds *Datastore) SaveBid(bidTrace *common.BidTraceV2, headerResp *types.GetHeaderResponse, payloadResp *types.GetPayloadResponse) error {
 	_blockHash := strings.ToLower(headerResp.Data.Message.Header.BlockHash.String())
 	_parentHash := strings.ToLower(headerResp.Data.Message.Header.ParentHash.String())
-	_proposerPubkey := strings.ToLower(signedBidTrace.Message.ProposerPubkey.String())
+	_proposerPubkey := strings.ToLower(bidTrace.ProposerPubkey.String())
 
 	// Save to memory
 	if !ds.ffDisableBidMemoryCache {
 		bidKey := GetHeaderResponseKey{
-			Slot:           signedBidTrace.Message.Slot,
+			Slot:           bidTrace.Slot,
 			ParentHash:     _parentHash,
 			ProposerPubkey: _proposerPubkey,
 		}
 
 		blockKey := GetPayloadResponseKey{
-			Slot:           signedBidTrace.Message.Slot,
+			Slot:           bidTrace.Slot,
 			ProposerPubkey: _proposerPubkey,
 			BlockHash:      _blockHash,
 		}
@@ -161,13 +162,18 @@ func (ds *Datastore) SaveBlockSubmission(signedBidTrace *types.SignedBidTrace, h
 		ds.GetPayloadResponsesLock.Unlock()
 	}
 
-	// Save to Redis: first the payload then the header
-	err := ds.redis.SaveGetPayloadResponse(signedBidTrace.Message.Slot, _proposerPubkey, payloadResp)
+	// Save to Redis: first the trace, then payload, then header
+	err := ds.redis.SaveBidTrace(bidTrace)
 	if err != nil {
 		return err
 	}
 
-	return ds.redis.SaveGetHeaderResponse(signedBidTrace.Message.Slot, _parentHash, _proposerPubkey, headerResp)
+	err = ds.redis.SaveGetPayloadResponse(bidTrace.Slot, _proposerPubkey, payloadResp)
+	if err != nil {
+		return err
+	}
+
+	return ds.redis.SaveGetHeaderResponse(bidTrace.Slot, _parentHash, _proposerPubkey, headerResp)
 }
 
 func (ds *Datastore) CleanupOldBidsAndBlocks(headSlot uint64) (numRemoved, numRemaining int) {
@@ -240,7 +246,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		resp, found := ds.GetPayloadResponses[bidKey]
 		ds.getHeaderResponsesLock.RUnlock()
 		if found {
-			ds.log.Debug("getPayload response from in-memory")
+			ds.log.Debug("getPayload response from memory")
 			return resp, nil
 		}
 	}

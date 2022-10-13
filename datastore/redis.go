@@ -11,6 +11,7 @@ import (
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/go-redis/redis/v9"
 )
 
@@ -55,6 +56,7 @@ type RedisCache struct {
 
 	prefixGetHeaderResponse  string
 	prefixGetPayloadResponse string
+	prefixBidTrace           string
 	prefixActiveValidators   string
 
 	keyKnownValidators                string
@@ -77,6 +79,7 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 
 		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
+		prefixBidTrace:           fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 		prefixActiveValidators:   fmt.Sprintf("%s/%s:active-validators", redisPrefix, prefix), // per hour
 
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
@@ -95,6 +98,10 @@ func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposer
 
 func (r *RedisCache) keyCacheGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetPayloadResponse, slot, proposerPubkey, blockHash)
+}
+
+func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBidTrace, slot, proposerPubkey, blockHash)
 }
 
 // keyActiveValidators returns the key for the date + hour of the given time
@@ -251,6 +258,21 @@ func (r *RedisCache) SaveGetPayloadResponse(slot uint64, proposerPubkey string, 
 func (r *RedisCache) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
 	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
 	resp := new(types.GetPayloadResponse)
+	err := r.GetObj(key, resp)
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	}
+	return resp, err
+}
+
+func (r *RedisCache) SaveBidTrace(trace *common.BidTraceV2) (err error) {
+	key := r.keyCacheBidTrace(trace.Slot, trace.ProposerPubkey.String(), trace.BlockHash.String())
+	return r.SetObj(key, trace, expiryBidCache)
+}
+
+func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
+	key := r.keyCacheBidTrace(slot, proposerPubkey, blockHash)
+	resp := new(common.BidTraceV2)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil

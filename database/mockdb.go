@@ -1,6 +1,9 @@
 package database
 
-import "github.com/flashbots/go-boost-utils/types"
+import (
+	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
+)
 
 type MockDB struct{}
 
@@ -56,7 +59,7 @@ func (db MockDB) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]
 	return nil, nil
 }
 
-func (db MockDB) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
+func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
 	return nil
 }
 
