@@ -216,3 +216,9 @@ type BidTraceWithTimestampJSON struct {
 
 	Timestamp int64 `json:"timestamp,string,omitempty"`
 }
+
+type BidTraceV2 struct {
+	types.BidTrace
+	BlockNumber uint64 `json:"block_number,string" db:"block_number"`
+	NumTx       uint64 `json:"num_tx,string" db:"num_tx"`
+}

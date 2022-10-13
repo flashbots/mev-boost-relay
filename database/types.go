@@ -126,7 +126,7 @@ type BuilderBlockSubmissionEntry struct {
 	GasUsed  uint64 `db:"gas_used"`
 	GasLimit uint64 `db:"gas_limit"`
 
-	NumTx int    `db:"num_tx"`
+	NumTx uint64 `db:"num_tx"`
 	Value string `db:"value"`
 
 	// Helpers
@@ -139,7 +139,6 @@ type DeliveredPayloadEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
 
-	ExecutionPayloadID       sql.NullInt64  `db:"execution_payload_id"`
 	SignedBlindedBeaconBlock sql.NullString `db:"signed_blinded_beacon_block"`
 
 	Slot  uint64 `db:"slot"`
@@ -156,7 +155,7 @@ type DeliveredPayloadEntry struct {
 	GasUsed  uint64 `db:"gas_used"`
 	GasLimit uint64 `db:"gas_limit"`
 
-	NumTx int    `db:"num_tx"`
+	NumTx uint64 `db:"num_tx"`
 	Value string `db:"value"`
 }
 

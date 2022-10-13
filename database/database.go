@@ -26,7 +26,7 @@ type IDatabaseService interface {
 	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
 	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
 
-	SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
+	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 	GetNumDeliveredPayloads() (uint64, error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error)
@@ -182,7 +182,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 		GasUsed:  payload.Message.GasUsed,
 		GasLimit: payload.Message.GasLimit,
 
-		NumTx: len(payload.ExecutionPayload.Transactions),
+		NumTx: uint64(len(payload.ExecutionPayload.Transactions)),
 		Value: payload.Message.Value.String(),
 
 		Epoch:             payload.Message.Slot / uint64(common.SlotsPerEpoch),
@@ -232,42 +232,36 @@ func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, prop
 	return entry, err
 }
 
-func (s *DatabaseService) SaveDeliveredPayload(slot uint64, proposerPubkey types.PubkeyHex, blockHash types.Hash, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
-	blockSubmissionEntry, err := s.GetBlockSubmissionEntry(slot, proposerPubkey.String(), blockHash.String())
-	if err != nil {
-		return err
-	}
-
+func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
 	_signedBlindedBeaconBlock, err := json.Marshal(signedBlindedBeaconBlock)
 	if err != nil {
 		return err
 	}
 
 	deliveredPayloadEntry := DeliveredPayloadEntry{
-		ExecutionPayloadID:       blockSubmissionEntry.ExecutionPayloadID,
 		SignedBlindedBeaconBlock: NewNullString(string(_signedBlindedBeaconBlock)),
 
-		Slot:  blockSubmissionEntry.Slot,
-		Epoch: blockSubmissionEntry.Epoch,
+		Slot:  bidTrace.Slot,
+		Epoch: bidTrace.Slot / uint64(common.SlotsPerEpoch),
 
-		BuilderPubkey:        blockSubmissionEntry.BuilderPubkey,
-		ProposerPubkey:       blockSubmissionEntry.ProposerPubkey,
-		ProposerFeeRecipient: blockSubmissionEntry.ProposerFeeRecipient,
+		BuilderPubkey:        bidTrace.BuilderPubkey.String(),
+		ProposerPubkey:       bidTrace.ProposerPubkey.String(),
+		ProposerFeeRecipient: bidTrace.ProposerFeeRecipient.String(),
 
-		ParentHash:  blockSubmissionEntry.ParentHash,
-		BlockHash:   blockSubmissionEntry.BlockHash,
-		BlockNumber: blockSubmissionEntry.BlockNumber,
+		ParentHash:  bidTrace.ParentHash.String(),
+		BlockHash:   bidTrace.BlockHash.String(),
+		BlockNumber: bidTrace.BlockNumber,
 
-		GasUsed:  blockSubmissionEntry.GasUsed,
-		GasLimit: blockSubmissionEntry.GasLimit,
+		GasUsed:  bidTrace.GasUsed,
+		GasLimit: bidTrace.GasLimit,
 
-		NumTx: blockSubmissionEntry.NumTx,
-		Value: blockSubmissionEntry.Value,
+		NumTx: bidTrace.NumTx,
+		Value: bidTrace.Value.String(),
 	}
 
 	query := `INSERT INTO ` + TableDeliveredPayload + `
-		(execution_payload_id, signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value) VALUES
-		(:execution_payload_id, :signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value)
+		(signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value) VALUES
+		(:signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value)
 		ON CONFLICT DO NOTHING`
 	_, err = s.DB.NamedExec(query, deliveredPayloadEntry)
 	return err

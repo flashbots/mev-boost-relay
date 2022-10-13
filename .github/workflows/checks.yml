@@ -26,7 +26,7 @@ jobs:
         uses: codecov/codecov-action@v2
         with:
           files: ./coverage.out
-          verbose: true
+          verbose: false
           flags: unittests
 
   lint:
