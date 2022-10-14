@@ -1141,9 +1141,9 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		return
 	}
 
-	response := make([]common.BidTraceJSON, len(deliveredPayloads))
+	response := make([]common.BidTraceV2JSON, len(deliveredPayloads))
 	for i, payload := range deliveredPayloads {
-		response[i] = database.DeliveredPayloadEntryToBidTraceJSON(payload)
+		response[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
 	}
 
 	api.RespondOK(w, response)
@@ -1223,9 +1223,9 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	response := make([]common.BidTraceWithTimestampJSON, len(blockSubmissions))
+	response := make([]common.BidTraceV2WithTimestampJSON, len(blockSubmissions))
 	for i, payload := range blockSubmissions {
-		response[i] = database.BuilderSubmissionEntryToBidTraceWithTimestampJSON(payload)
+		response[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload)
 	}
 
 	api.RespondOK(w, response)
