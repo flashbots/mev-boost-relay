@@ -327,7 +327,7 @@ func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries 
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
 	FROM ` + TableDeliveredPayload + `
 	WHERE id >= $1 AND id <= $2
-	ORDER BY id ASC`
+	ORDER BY slot ASC`
 
 	err = s.DB.Select(&entries, query, idFirst, idLast)
 	return entries, err

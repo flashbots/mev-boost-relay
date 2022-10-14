@@ -789,7 +789,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		err = api.db.SaveDeliveredPayload(bidTrace, payload)
 		if err != nil {
-			log.WithError(err).Error("failed to save delivered payload")
+			log.WithError(err).WithField("bidTrace", bidTrace).Error("failed to save delivered payload")
 		}
 
 		// Increment builder stats
@@ -821,7 +821,10 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 }
 
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-	log := api.log.WithField("method", "submitNewBlock")
+	log := api.log.WithFields(logrus.Fields{
+		"method":        "submitNewBlock",
+		"contentLength": req.ContentLength,
+	})
 
 	payload := new(types.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
@@ -919,7 +922,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	defer func() {
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
 		if err != nil {
-			log.WithError(err).Error("saving builder block submission to database failed")
+			log.WithError(err).WithField("bidTrace", payload.Message).Error("saving builder block submission to database failed")
 			return
 		}
 
