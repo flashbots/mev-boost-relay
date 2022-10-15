@@ -789,7 +789,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		err = api.db.SaveDeliveredPayload(bidTrace, payload)
 		if err != nil {
-			log.WithError(err).WithField("bidTrace", bidTrace).Error("failed to save delivered payload")
+			log.WithError(err).WithFields(logrus.Fields{
+				"bidTrace": bidTrace,
+				"payload":  payload,
+			}).Error("failed to save delivered payload")
 		}
 
 		// Increment builder stats
@@ -910,7 +913,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Verify the signature
 	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
 	if !ok || err != nil {
-		log.WithError(err).Warnf("could not verify builder signature")
+		log.WithError(err).Warn("could not verify builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
 		return
 	}
@@ -922,7 +925,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	defer func() {
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
 		if err != nil {
-			log.WithError(err).WithField("bidTrace", payload.Message).Error("saving builder block submission to database failed")
+			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
 		}
 
@@ -937,6 +940,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	simErr = api.blockSimRateLimiter.send(req.Context(), payload, builderIsHighPrio)
 
 	if simErr != nil {
+		log = log.WithField("simErr", simErr.Error())
 		log.WithError(simErr).WithFields(logrus.Fields{
 			"duration":   time.Since(t).Seconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
