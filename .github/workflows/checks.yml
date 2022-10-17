@@ -19,8 +19,11 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
+      - name: Run Docker compose to spin up services
+        run: docker compose build && docker compose up -d db
+
       - name: Run unit tests and generate the coverage report
-        run: make test-coverage
+        run: RUN_DB_TESTS=1 make test-coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2
