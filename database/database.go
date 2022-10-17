@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/jmoiron/sqlx"
@@ -63,7 +63,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
 
-	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
+	if config.GetString("dbDontApplySchema") == "" {
 		migrate.SetTable(vars.TableMigrations)
 		_, err := migrate.Exec(db.DB, "postgres", migrations.Migrations, migrate.Up)
 		if err != nil {

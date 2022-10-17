@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,10 +21,10 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/go-redis/redis/v9"
@@ -63,9 +62,9 @@ var (
 	pathInternalBuilderStatus = "/internal/v1/builder/{pubkey:0x[a-fA-F0-9]+}"
 
 	// number of goroutines to save active validator
-	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
-	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
-	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
+	numActiveValidatorProcessors = config.GetInt("numActiveValidatorProcessors")
+	numValidatorRegProcessors    = config.GetInt("numValidatorRegProcessors")
+	timeoutGetPayloadRetryMs     = config.GetInt("getpayloadRetryTimeoutMs")
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -199,17 +198,17 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		validatorRegC:    make(chan types.SignedValidatorRegistration, 450_000),
 	}
 
-	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
+	if config.GetBool("forceGetHeader204") {
 		api.log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
 		api.ffForceGetHeader204 = true
 	}
 
-	if os.Getenv("DISABLE_BLOCK_PUBLISHING") == "1" {
+	if config.GetBool("disableBlockPublishing") {
 		api.log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
 		api.ffDisableBlockPublishing = true
 	}
 
-	if os.Getenv("DISABLE_LOWPRIO_BUILDERS") == "1" {
+	if config.GetBool("disableLowprioBuilders") {
 		api.log.Warn("env: DISABLE_LOWPRIO_BUILDERS - allowing only high-level builders")
 		api.ffDisableLowPrioBuilders = true
 	}

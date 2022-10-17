@@ -3,22 +3,28 @@ package tool
 import (
 	"net/url"
 
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/jmoiron/sqlx"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
-	Migrate.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	Migrate.Flags().String("db", config.DefaultPostgresDSN, "PostgreSQL DSN")
 }
 
 var Migrate = &cobra.Command{
 	Use:   "migrate",
 	Short: "migrate the database to the latest schema",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		// Connect to Postgres
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")

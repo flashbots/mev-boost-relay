@@ -2,58 +2,56 @@ package cmd
 
 import (
 	"net/url"
-	"os"
 
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/website"
 	"github.com/spf13/cobra"
-)
-
-var (
-	websiteDefaultListenAddr        = common.GetEnv("LISTEN_ADDR", "localhost:9060")
-	websiteDefaultShowConfigDetails = os.Getenv("SHOW_CONFIG_DETAILS") == "1"
-	websiteDefaultLinkBeaconchain   = common.GetEnv("LINK_BEACONCHAIN", "https://beaconcha.in")
-	websiteDefaultLinkEtherscan     = common.GetEnv("LINK_ETHERSCAN", "https://etherscan.io")
-	websiteDefaultRelayURL          = common.GetEnv("RELAY_URL", "")
-
-	websiteListenAddr        string
-	websitePubkeyOverride    string
-	websiteShowConfigDetails bool
-
-	websiteLinkBeaconchain string
-	websiteLinkEtherscan   string
-	websiteRelayURL        string
+	"github.com/spf13/viper"
 )
 
 func init() {
 	rootCmd.AddCommand(websiteCmd)
-	websiteCmd.Flags().BoolVar(&logJSON, "json", defaultLogJSON, "log in JSON format instead of text")
-	websiteCmd.Flags().StringVar(&logLevel, "loglevel", defaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
 
-	websiteCmd.Flags().StringVar(&websiteListenAddr, "listen-addr", websiteDefaultListenAddr, "listen address for webserver")
-	websiteCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
-	websiteCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
-	websiteCmd.Flags().StringVar(&websitePubkeyOverride, "pubkey-override", os.Getenv("PUBKEY_OVERRIDE"), "override for public key")
-
-	websiteCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
-	websiteCmd.Flags().BoolVar(&websiteShowConfigDetails, "show-config-details", websiteDefaultShowConfigDetails, "show config details")
-	websiteCmd.Flags().StringVar(&websiteLinkBeaconchain, "link-beaconchain", websiteDefaultLinkBeaconchain, "url for beaconcha.in")
-	websiteCmd.Flags().StringVar(&websiteLinkEtherscan, "link-etherscan", websiteDefaultLinkEtherscan, "url for etherscan")
-	websiteCmd.Flags().StringVar(&websiteRelayURL, "relay-url", websiteDefaultRelayURL, "full url for the relay (https://pubkey@host)")
+	websiteCmd.Flags().String("network", config.DefaultNetwork, "Which network to use")
+	websiteCmd.Flags().String("redis-uri", config.DefaultRedisURI, "redis uri")
+	websiteCmd.Flags().String("db", config.DefaultPostgresDSN, "PostgreSQL DSN")
+	websiteCmd.Flags().Bool("json", config.DefaultLogJSON, "log in JSON format instead of text")
+	websiteCmd.Flags().String("loglevel", config.DefaultLogLevel, "log-level: trace, debug, info, warn/warning, error, fatal, panic")
+	websiteCmd.Flags().String("listen-addr", config.WebsiteDefaultListenAddr, "listen address for webserver")
+	websiteCmd.Flags().Bool("show-config-details", config.WebsiteDefaultShowConfigDetails, "show config details")
+	websiteCmd.Flags().String("link-beaconchain", config.WebsiteDefaultLinkBeaconchain, "url for beaconcha.in")
+	websiteCmd.Flags().String("link-etherscan", config.WebsiteDefaultLinkEtherscan, "url for etherscan")
+	websiteCmd.Flags().String("relay-url", config.WebsiteDefaultRelayURL, "full url for the relay (https://pubkey@host)")
+	websiteCmd.Flags().String("pubkey-override", config.WebsiteDefaultPubkeyOverride, "override for public key")
 }
 
 var websiteCmd = &cobra.Command{
 	Use:   "website",
 	Short: "Start the website server",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		_ = viper.BindPFlag("network", cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag("redisURI", cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag("postgresDSN", cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag("logJSON", cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag("logLevel", cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag("websiteListenAddr", cmd.Flags().Lookup("listen-addr"))
+		_ = viper.BindPFlag("websiteShowConfigDetails", cmd.Flags().Lookup("show-config-details"))
+		_ = viper.BindPFlag("websiteLinkBeaconchain", cmd.Flags().Lookup("link-beaconchain"))
+		_ = viper.BindPFlag("websiteLinkEtherscan", cmd.Flags().Lookup("link-etherscan"))
+		_ = viper.BindPFlag("websiteRelayURL", cmd.Flags().Lookup("relay-url"))
+		_ = viper.BindPFlag("websitePubkeyOverride", cmd.Flags().Lookup("pubkey-override"))
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		log := common.LogSetup(logJSON, logLevel).WithField("service", "relay/website")
+		log := common.LogSetup(config.GetBool("logJSON"), config.GetString("logLevel")).WithField("service", "relay/website")
+		log.Infof("Config: %+v", config.GetConfig())
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(network)
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString("network"))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
@@ -61,12 +59,14 @@ var websiteCmd = &cobra.Command{
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to Redis
+		redisURI := config.GetString("redisURI")
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
 		relayPubkey := ""
+		websitePubkeyOverride := config.GetString("websitePubkeyOverride")
 		if websitePubkeyOverride != "" {
 			relayPubkey = websitePubkeyOverride
 		} else {
@@ -78,6 +78,7 @@ var websiteCmd = &cobra.Command{
 
 		// Connect to Postgres
 		log.Infof("Connecting to Postgres database...")
+		postgresDSN := config.GetString("postgresDSN")
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
@@ -88,6 +89,7 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
+		websiteListenAddr := config.GetString("websiteListenAddr")
 		// Create the website service
 		opts := &website.WebserverOpts{
 			ListenAddress:     websiteListenAddr,
@@ -96,10 +98,10 @@ var websiteCmd = &cobra.Command{
 			Redis:             redis,
 			DB:                db,
 			Log:               log,
-			ShowConfigDetails: websiteShowConfigDetails,
-			LinkBeaconchain:   websiteLinkBeaconchain,
-			LinkEtherscan:     websiteLinkEtherscan,
-			RelayURL:          websiteRelayURL,
+			ShowConfigDetails: config.GetBool("websiteShowConfigDetails"),
+			LinkBeaconchain:   config.GetString("websiteLinkBeaconchain"),
+			LinkEtherscan:     config.GetString("websiteLinkEtherscan"),
+			RelayURL:          config.GetString("websiteRelayURL"),
 		}
 
 		srv, err := website.NewWebserver(opts)

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/go-redis/redis/v9"
 )
 
@@ -21,7 +21,7 @@ var (
 
 	expiryBidCache = 45 * time.Second
 
-	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
+	activeValidatorsHours  = config.GetInt("activeValidatorHours")
 	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	RedisConfigFieldPubkey                  = "pubkey"
