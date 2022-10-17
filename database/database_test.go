@@ -4,10 +4,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
 )
 
-var runDBTests = os.Getenv("RUN_DB_TESTS") == "1"
+var (
+	runDBTests = os.Getenv("RUN_DB_TESTS") == "1"
+	testDBDSN  = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+)
 
 func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 	return ValidatorRegistrationEntry{
@@ -24,8 +28,7 @@ func TestSaveValidatorRegistration(t *testing.T) {
 		t.Skip("Skipping database tests")
 	}
 
-	dsn := "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
-	db, err := NewDatabaseService(dsn)
+	db, err := NewDatabaseService(testDBDSN)
 	require.NoError(t, err)
 
 	// reg1 is the initial registration
