@@ -307,7 +307,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	orderBy := "id DESC"
+	orderBy := "slot DESC"
 	if queryArgs.OrderByValue == 1 {
 		orderBy = "value ASC"
 	} else if queryArgs.OrderByValue == -1 {
@@ -373,7 +373,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY id DESC LIMIT :limit", fields, TableBuilderBlockSubmission, where))
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC LIMIT :limit", fields, TableBuilderBlockSubmission, where))
 	if err != nil {
 		return nil, err
 	}
