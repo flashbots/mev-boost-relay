@@ -301,15 +301,6 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
-	// Periodically remove expired headers
-	go func() {
-		for {
-			time.Sleep(2 * time.Minute)
-			numRemoved, numRemaining := api.datastore.CleanupOldBidsAndBlocks(api.headSlot.Load())
-			api.log.Infof("Removed %d old bids and blocks. Remaining: %d", numRemoved, numRemaining)
-		}
-	}()
-
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
@@ -674,7 +665,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bid, err := api.datastore.GetGetHeaderResponse(slot, parentHashHex, proposerPubkeyHex)
+	bid, err := api.redis.GetBestBid(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -939,17 +930,17 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	var simErr error
-	isMostProfitableBlock := false
+	isBestBid := false
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isMostProfitableBlock)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isBestBid)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
 		}
 
-		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil, isMostProfitableBlock)
+		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil, isBestBid)
 		if err != nil {
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
@@ -974,21 +965,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}).Info("block validation successful")
 	}
 
-	// Check if there's already a bid
-	prevBid, err := api.datastore.GetGetHeaderResponse(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
-	if err != nil {
-		log.WithError(err).Error("error getting previous bid")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Only proceed if this bid is higher than previous one
-	isMostProfitableBlock = prevBid == nil || payload.Message.Value.Cmp(&prevBid.Data.Message.Value) == 1
-	if !isMostProfitableBlock {
-		log.Debug("block submission with same or lower value")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// 1. Overwrite this builders latest bid
+	// 2. Update the best bid
 
 	// Prepare the response data
 	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
@@ -1013,18 +991,50 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		BlockNumber: payload.ExecutionPayload.BlockNumber,
 		NumTx:       uint64(len(payload.ExecutionPayload.Transactions)),
 	}
-	err = api.datastore.SaveBid(&bidTrace, &getHeaderResponse, &getPayloadResponse)
+
+	//
+	// Save to Redis
+	//
+	// first the trace
+	err = api.redis.SaveBidTrace(&bidTrace)
 	if err != nil {
-		log.WithError(err).Error("could not save bid and block")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
+		log.WithError(err).Error("failed saving bidTrace in redis")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	// save execution payload (getPayload response)
+	err = api.redis.SaveExecutionPayload(payload.Message.Slot, payload.Message.ProposerPubkey.String(), payload.Message.BlockHash.String(), &getPayloadResponse)
+	if err != nil {
+		log.WithError(err).Error("failed saving execution payload in redis")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// save this builder's latest bid
+	err = api.redis.SaveLatestBuilderBid(payload.Message.Slot, payload.Message.BuilderPubkey.String(), payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String(), &getHeaderResponse)
+	if err != nil {
+		log.WithError(err).Error("could not save latest builder bid")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// recalculate top bid
+	err = api.redis.UpdateTopBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
+	if err != nil {
+		log.WithError(err).Error("could not compute top bid")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	//
+	// all done
+	//
 	log.WithFields(logrus.Fields{
 		"proposerPubkey":   payload.Message.ProposerPubkey.String(),
 		"value":            payload.Message.Value.String(),
 		"tx":               len(payload.ExecutionPayload.Transactions),
-		"isMostProfitable": isMostProfitableBlock,
+		"isMostProfitable": isBestBid,
 	}).Info("received block from builder")
 
 	// Respond with OK (TODO: proper response response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
