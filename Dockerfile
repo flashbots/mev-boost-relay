@@ -9,5 +9,5 @@ FROM alpine
 RUN apk add --no-cache libstdc++ libc6-compat
 WORKDIR /app
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /build/boost-relay /app/boost-relay
-ENTRYPOINT ["/app/boost-relay"]
+COPY --from=builder /build/boost-relay /app/mev-boost-relay
+ENTRYPOINT ["/app/mev-boost-relay"]

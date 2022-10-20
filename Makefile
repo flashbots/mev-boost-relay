@@ -9,7 +9,7 @@ clean:
 	git clean -fdx
 
 build:
-	go build -trimpath -ldflags "-s -X cmd.Version=${VERSION} -X main.Version=${VERSION}" -v -o boost-relay .
+	go build -trimpath -ldflags "-s -X cmd.Version=${VERSION} -X main.Version=${VERSION}" -v -o mev-boost-relay .
 
 test:
 	go test ./...
