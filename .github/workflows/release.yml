@@ -30,8 +30,9 @@ jobs:
         with:
           images: flashbots/mev-boost-relay
           tags: |
+            type=sha
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(steps.vars.outputs.tag, '-') }}
 
       - name: Login to DockerHub
         uses: docker/login-action@v2
