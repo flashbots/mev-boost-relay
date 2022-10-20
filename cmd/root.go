@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 	Long:  `https://github.com/flashbots/mev-boost-relay`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("mev-boost-relay %s\n", Version)
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
