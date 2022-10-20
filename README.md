@@ -3,23 +3,26 @@
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/mev-boost-relay)](https://goreportcard.com/report/github.com/flashbots/mev-boost-relay)
 [![Test status](https://github.com/flashbots/mev-boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/mev-boost-relay/actions?query=workflow%3A%22Checks%22)
 
-Flashbots mev-boost relay for proposer/builder separation in Ethereum.
+Flashbots MEV-Boost relay for proposer/builder separation in Ethereum. Currently live at:
 
-Provides the builder-specs API for Ethereum proof-of-stake validators, an API for block builders to submit blocks, as well as a data API, as running for [Goerli](https://builder-relay-goerli.flashbots.net/) and the other test networks.
+* https://boost-relay.flashbots.net
+* https://boost-relay-sepolia.flashbots.net
+* https://boost-relay-goerli.flashbots.net
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
+1. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): for proposer, block builder, data.
+1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
 1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties.
-2. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): for proposer, block builder, data.
-3. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
 
-This software is currently in **alpha state**, and slowly stabilizing. There may still be significant changes.
+Dependencies: Redis, PostgreSQL, one or more beacon nodes, and block submission validation nodes.
+
+This software is currently in **beta state**, and slowly stabilizing.
 
 See also:
 
 * [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
-* [Mainnet relay](https://boost-relay.flashbots.net)
 * [mev-boost](https://github.com/flashbots/mev-boost)
 
 ---
@@ -53,17 +56,20 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 # Usage
 
 ```bash
-# Start PostgreSQL & Redis in Docker
-docker-compose up
-
-# Or start services individually:
+# Start PostgreSQL & Redis individually:
 docker run -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres postgres
 docker run -p 6379:6379 redis
+
+# Or with docker-compose:
+docker-compose up
 ```
 
-Note: this also runs an Adminer (a web frontend for Postgres) on http://localhost:8093/?username=postgres (db: `postgres`, username: `postgres`, password: `postgres`)
+Note: docker-compose also runs an Adminer (a web frontend for Postgres) on http://localhost:8093/?username=postgres (db: `postgres`, username: `postgres`, password: `postgres`)
 
-The services need access to a beacon node for event subscriptions. You can also specify multiple beacon nodes by providing a comma separated list of beacon node URIs. The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port). You can proxy the port from a server like this:
+The services need access to a beacon node for event subscriptions. You can also specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
+The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port).
+
+You can proxy the beacon-API port (eg. 3500 for Prysm) from a server like this:
 
 ```bash
 ssh -L 3500:localhost:3500 your_server
@@ -116,37 +122,22 @@ This builds a local copy of the template and saves it in `website-index.html`
 
 The website is using:
 * [PureCSS](https://purecss.io/)
+* [HeroIcons](https://heroicons.com/)
 * [Font Awesome](https://fontawesome.com/docs) [icons](https://fontawesome.com/icons)
 
 ---
 
 # Technical Notes
 
-### System startup sequence (housekeeper)
-
-First the housekeeper updates Redis with the main information for the API:
-1. Update known validators in Redis (source: beacon node)
-1. Update proposer duties in Redis (source: beacon node (duties) + Redis (validator registrations))
-1. Update validator registrations in Redis (source: database)
-1. Update builder status in Redis (source: database)
-
-Then the API can start and function.
-
-Aftwareds, there's important ongoing, regular housekeeper tasks:
-
-1. Update known validators and proposer duties in Redis
-2. Update active validators in database (source: Redis)
-
-
-### Tradeoffs
-
-- Validator registrations in are only saved to the database if `feeRecipient` changes. If a registration has a newer timestamp but same `feeRecipient` it is not saved, to avoid filling up the database with unnecessary data. (Some CL clients create a new validator registration every epoch, not just if the `feeRecipient` changes, as was the original idea).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for more technical details!
 
 ---
 
 # Maintainers
 
-- [@metachris](https://github.com/metachris)
+- [@metachris](https://twitter.com/metachris)
+- [@Ruteri](https://twitter.com/mmrosum)
+- [@avalonche](https://github.com/avalonche)
 
 # Contributing
 
