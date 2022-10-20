@@ -353,7 +353,7 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	for valReg := range api.validatorRegC {
 		err := api.datastore.SaveValidatorRegistration(valReg)
 		if err != nil {
-			api.log.WithError(err).WithField("proposerPubkey", valReg.Message.Pubkey.String()).Infof("error saving validator registration")
+			api.log.WithError(err).WithField("entry", fmt.Sprintf("%+v", valReg)).Error("error saving validator registration")
 		}
 	}
 }

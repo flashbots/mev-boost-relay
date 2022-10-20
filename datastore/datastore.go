@@ -3,12 +3,12 @@ package datastore
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -100,16 +100,14 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 	// First save in the database
 	err := ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
 	if err != nil {
-		ds.log.WithError(err).Error("failed to save validator registration to database")
-		return err
+		return errors.Wrap(err, "failed saving validator registration to database")
 	}
 
 	// then save in redis
 	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
 	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
 	if err != nil {
-		ds.log.WithError(err).WithField("registration", fmt.Sprintf("%+v", entry)).Error("error updating validator registration")
-		return err
+		return errors.Wrap(err, "failed saving validator registration to redis")
 	}
 
 	return nil
