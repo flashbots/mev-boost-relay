@@ -100,3 +100,9 @@ linters-settings:
       - 'MockBeaconClient'
       - 'RelayAPI'
       - 'Webserver'
+
+issues:
+  exclude-rules:
+    - path: (.+)_test.go
+      linters:
+        - exhaustruct
