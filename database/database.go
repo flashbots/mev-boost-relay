@@ -353,7 +353,6 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 
 	whereConds := []string{
 		"sim_success = true",
-		"was_most_profitable = true",
 	}
 	if filters.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
