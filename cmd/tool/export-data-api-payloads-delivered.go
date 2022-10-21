@@ -32,8 +32,6 @@ var DataAPIExportPayloads = &cobra.Command{
 		_ = viper.BindPFlag("postgresDSN", cmd.Flags().Lookup("db"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Infof("Config: %+v", config.GetConfig())
-
 		if len(outFiles) == 0 {
 			log.Fatal("no output files specified")
 		}

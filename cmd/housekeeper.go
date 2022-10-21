@@ -40,7 +40,6 @@ var housekeeperCmd = &cobra.Command{
 		var err error
 
 		log := common.LogSetup(config.GetBool("logJSON"), config.GetString("logLevel")).WithField("service", "relay/housekeeper")
-		log.Infof("Config: %+v", config.GetConfig())
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(config.GetString("network"))

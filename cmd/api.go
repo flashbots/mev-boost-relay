@@ -68,6 +68,7 @@ var apiCmd = &cobra.Command{
 			"service": "relay/api",
 			"version": Version,
 		})
+
 		apiLogTag := config.GetString("apiLogTag")
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
