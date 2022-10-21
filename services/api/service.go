@@ -2,6 +2,7 @@
 package api
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -826,8 +827,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"contentLength": req.ContentLength,
 	})
 
+	var err error
+	var r io.Reader = req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		r, err = gzip.NewReader(req.Body)
+		if err != nil {
+			log.WithError(err).Warn("could not create gzip reader")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		log = log.WithField("gzip-req", true)
+	}
+
 	payload := new(types.BuilderSubmitBlockRequest)
-	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
+	if err := json.NewDecoder(r).Decode(payload); err != nil {
 		log.WithError(err).Warn("could not decode payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return

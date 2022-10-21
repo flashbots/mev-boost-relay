@@ -57,8 +57,8 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 
 ```bash
 # Start PostgreSQL & Redis individually:
-docker run -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres postgres
-docker run -p 6379:6379 redis
+docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres postgres
+docker run -d -p 6379:6379 redis
 
 # Or with docker-compose:
 docker-compose up
