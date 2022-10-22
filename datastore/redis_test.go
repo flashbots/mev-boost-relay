@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/flashbots/go-boost-utils/types"
@@ -189,10 +190,12 @@ func TestBuilderBids(t *testing.T) {
 	builder2pk := "0xb2"
 	builder3pk := "0xb3"
 
+	receivedAt := time.Now()
+
 	// 2 initial bids: 99 and 100 value
-	err := cache.SaveLatestBuilderBid(slot, builder1pk, parentHash, proposerPk, _buildGetHeaderResponse(100))
+	err := cache.SaveLatestBuilderBid(slot, builder1pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(100))
 	require.NoError(t, err)
-	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, _buildGetHeaderResponse(99))
+	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(99))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -201,7 +204,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, "100", topBid.Data.Message.Value.String())
 
 	// new top bid by builder3: 101
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, _buildGetHeaderResponse(101))
+	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(101))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -210,7 +213,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, "101", topBid.Data.Message.Value.String())
 
 	// builder3 cancels 101 bid, by sending 100 value
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, _buildGetHeaderResponse(99))
+	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(99))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
