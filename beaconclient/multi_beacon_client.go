@@ -20,6 +20,8 @@ var (
 type IMultiBeaconClient interface {
 	BestSyncStatus() (*SyncStatusPayloadData, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
+
+	// FetchValidators returns all active and pending validators from the beacon node
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
