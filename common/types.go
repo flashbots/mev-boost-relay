@@ -169,5 +169,6 @@ func (b *BidTraceV2JSON) ToCSVRecord() []string {
 
 type BidTraceV2WithTimestampJSON struct {
 	BidTraceV2JSON
-	Timestamp int64 `json:"timestamp,string,omitempty"`
+	Timestamp   int64 `json:"timestamp,string,omitempty"`
+	TimestampMs int64 `json:"timestamp_ms,string,omitempty"`
 }
