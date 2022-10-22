@@ -44,7 +44,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 		}
 
 		// Connect to Postgres
-		postgresDSN := config.GetString("postgresDSN")
+		postgresDSN := config.GetString(config.PostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")

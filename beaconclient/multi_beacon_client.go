@@ -64,7 +64,7 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 	}
 
 	// feature flags
-	if config.GetString("allowSyncingBeaconNode") != "" {
+	if config.GetString(config.AllowSyncingBeaconNode) != "" {
 		client.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
 		client.ffAllowSyncingBeaconNode = true
 	}

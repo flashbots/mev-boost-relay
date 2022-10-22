@@ -63,7 +63,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
 
-	if config.GetString("dbDontApplySchema") == "" {
+	if config.GetString(config.DBDontApplySchema) == "" {
 		migrate.SetTable(vars.TableMigrations)
 		_, err := migrate.Exec(db.DB, "postgres", migrations.Migrations, migrate.Up)
 		if err != nil {

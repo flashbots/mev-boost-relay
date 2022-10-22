@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	// Default values
 	DefaultNetwork     = ""
 	DefaultRedisURI    = "localhost:6379"
 	DefaultPostgresDSN = ""
@@ -28,6 +29,55 @@ const (
 	WebsiteDefaultLinkEtherscan     = "https://etherscan.io"
 	WebsiteDefaultRelayURL          = ""
 	WebsiteDefaultPubkeyOverride    = ""
+
+	// Common: Api, HouseKeeper & Website
+	Network        = "Network"
+	RedisURI       = "RedisURI"
+	PostgresDSN    = "PostgresDSN"
+	BeaconNodeURIs = "BeaconNodeURIs"
+	LogJSON        = "LogJSON"
+	LogLevel       = "LogLevel"
+
+	// API cmd
+	APIListenAddr   = "APIListenAddr"
+	APIBlockSimURL  = "APIBlockSimURL"
+	APISecretKey    = "APISecretKey"
+	APILogTag       = "APILogTag"
+	APILogVersion   = "APILogVersion"
+	APIPprofEnabled = "APIPprofEnabled"
+	APIInternalAPI  = "APIInternalAPI"
+	APIDebug        = "APIDebug"
+
+	// API services
+	BlockSimMaxConcurrent        = "BlockSimMaxConcurrent"
+	ForceGetHeader204            = "ForceGetHeader204"
+	DisableBlockPublishing       = "DisableBlockPublishing"
+	DisableLowprioBuilders       = "DisableLowprioBuilders"
+	NumActiveValidatorProcessors = "NumActiveValidatorProcessors"
+	NumValidatorRegProcessors    = "NumValidatorRegProcessors"
+	GetpayloadRetryTimeoutMs     = "GetpayloadRetryTimeoutMs"
+
+	// Website
+	WebsiteListenAddr        = "WebsiteListenAddr"
+	WebsiteShowConfigDetails = "WebsiteShowConfigDetails"
+	WebsiteLinkBeaconchain   = "WebsiteLinkBeaconchain"
+	WebsiteLinkEtherscan     = "WebsiteLinkEtherscan"
+	WebsiteRelayURL          = "WebsiteRelayURL"
+	WebsitePubkeyOverride    = "WebsitePubkeyOverride"
+
+	// Database
+	DBPrintSchema     = "DBPrintSchema"
+	DBDontApplySchema = "DBDontApplySchema"
+	DBTablePrefix     = "DBTablePrefix"
+
+	// Datastore
+	DisableBidMemoryCache = "DisableBidMemoryCache"
+
+	// Redis
+	ActiveValidatorHours = "ActiveValidatorHours"
+
+	// Beacon
+	AllowSyncingBeaconNode = "AllowSyncingBeaconNode"
 )
 
 var (
@@ -38,50 +88,50 @@ var (
 
 func init() {
 	// Common: Api, HouseKeeper & Website
-	bindAndSet("network", "NETWORK", DefaultNetwork)
-	bindAndSet("redisURI", "REDIS_URI", DefaultRedisURI)
-	bindAndSet("postgresDSN", "POSTGRES_DSN", DefaultPostgresDSN)
-	bindAndSet("beaconNodeURIs", "BEACON_URIS", DefaultBeaconURIs)
-	bindAndSet("logJSON", "LOG_JSON", DefaultLogJSON)
-	bindAndSet("logLevel", "LOG_LEVEL", DefaultLogLevel)
+	bindAndSet(Network, "NETWORK", DefaultNetwork)
+	bindAndSet(RedisURI, "REDIS_URI", DefaultRedisURI)
+	bindAndSet(PostgresDSN, "POSTGRES_DSN", DefaultPostgresDSN)
+	bindAndSet(BeaconNodeURIs, "BEACON_URIS", DefaultBeaconURIs)
+	bindAndSet(LogJSON, "LOG_JSON", DefaultLogJSON)
+	bindAndSet(LogLevel, "LOG_LEVEL", DefaultLogLevel)
 
 	// API cmd
-	bindAndSet("apiListenAddr", "LISTEN_ADDR", APIDefaultListenAddr)
-	bindAndSet("apiBlockSimURL", "BLOCKSIM_URI", APIDefaultBlockSim)
-	bindAndSet("apiSecretKey", "SECRET_KEY", APIDefaultSecretKey)
-	bindAndSet("apiLogTag", "LOG_TAG", APIDefaultLogTag)
-	bindAndSet("apiPprofEnabled", "PPROF", APIDefaultPprofEnabled)
-	bindAndSet("apiInternalAPI", "ENABLE_INTERNAL_API", APIDefaultInternalAPIEnabled)
-	bindAndSet("apiDebug", "DEBUG_API", APIDefaultDebug)
+	bindAndSet(APIListenAddr, "LISTEN_ADDR", APIDefaultListenAddr)
+	bindAndSet(APIBlockSimURL, "BLOCKSIM_URI", APIDefaultBlockSim)
+	bindAndSet(APISecretKey, "SECRET_KEY", APIDefaultSecretKey)
+	bindAndSet(APILogTag, "LOG_TAG", APIDefaultLogTag)
+	bindAndSet(APIPprofEnabled, "PPROF", APIDefaultPprofEnabled)
+	bindAndSet(APIInternalAPI, "ENABLE_INTERNAL_API", APIDefaultInternalAPIEnabled)
+	bindAndSet(APIDebug, "DEBUG_API", APIDefaultDebug)
 
 	// API services
-	bindAndSet("blockSimMaxConcurrent", "BLOCKSIM_MAX_CONCURRENT", 4)
-	bindAndSet("forceGetHeader204", "FORCE_GET_HEADER_204", false)
-	bindAndSet("disableBlockPublishing", "DISABLE_BLOCK_PUBLISHING", false)
-	bindAndSet("disableLowprioBuilders", "DISABLE_LOWPRIO_BUILDERS", false)
-	bindAndSet("numActiveValidatorProcessors", "NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
-	bindAndSet("numValidatorRegProcessors", "NUM_VALIDATOR_REG_PROCESSORS", 10)
-	bindAndSet("getpayloadRetryTimeoutMs", "GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
+	bindAndSet(BlockSimMaxConcurrent, "BLOCKSIM_MAX_CONCURRENT", 4)
+	bindAndSet(ForceGetHeader204, "FORCE_GET_HEADER_204", false)
+	bindAndSet(DisableBlockPublishing, "DISABLE_BLOCK_PUBLISHING", false)
+	bindAndSet(DisableLowprioBuilders, "DISABLE_LOWPRIO_BUILDERS", false)
+	bindAndSet(NumActiveValidatorProcessors, "NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
+	bindAndSet(NumValidatorRegProcessors, "NUM_VALIDATOR_REG_PROCESSORS", 10)
+	bindAndSet(GetpayloadRetryTimeoutMs, "GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
 
 	// Website
 	// FIXME: Website & API share the same environment variable
-	bindAndSet("websitetListenAddr", "LISTEN_ADDR", WebsiteDefaultListenAddr)
-	bindAndSet("websiteShowConfigDetails", "SHOW_CONFIG_DETAILS", WebsiteDefaultShowConfigDetails)
-	bindAndSet("websiteLinkBeaconchain", "LINK_BEACONCHAIN", WebsiteDefaultLinkBeaconchain)
-	bindAndSet("websiteLinkEtherscan", "LINK_ETHERSCAN", WebsiteDefaultLinkEtherscan)
-	bindAndSet("websiteRelayURL", "RELAY_URL", WebsiteDefaultRelayURL)
-	bindAndSet("websitePubkeyOverride", "PUBKEY_OVERRIDE", WebsiteDefaultPubkeyOverride)
+	bindAndSet(WebsiteListenAddr, "LISTEN_ADDR", WebsiteDefaultListenAddr)
+	bindAndSet(WebsiteShowConfigDetails, "SHOW_CONFIG_DETAILS", WebsiteDefaultShowConfigDetails)
+	bindAndSet(WebsiteLinkBeaconchain, "LINK_BEACONCHAIN", WebsiteDefaultLinkBeaconchain)
+	bindAndSet(WebsiteLinkEtherscan, "LINK_ETHERSCAN", WebsiteDefaultLinkEtherscan)
+	bindAndSet(WebsiteRelayURL, "RELAY_URL", WebsiteDefaultRelayURL)
+	bindAndSet(WebsitePubkeyOverride, "PUBKEY_OVERRIDE", WebsiteDefaultPubkeyOverride)
 
 	// Database
-	bindAndSet("dbPrintSchema", "PRINT_SCHEMA", false)
-	bindAndSet("dbDontApplySchema", "DB_DONT_APPLY_SCHEMA", "")
-	bindAndSet("dbTablePrefix", "DB_TABLE_PREFIX", "dev")
+	bindAndSet(DBPrintSchema, "PRINT_SCHEMA", false)
+	bindAndSet(DBDontApplySchema, "DB_DONT_APPLY_SCHEMA", "")
+	bindAndSet(DBTablePrefix, "DB_TABLE_PREFIX", "dev")
 
 	// Redis
-	bindAndSet("activeValidatorHours", "ACTIVE_VALIDATOR_HOURS", 3)
+	bindAndSet(ActiveValidatorHours, "ACTIVE_VALIDATOR_HOURS", 3)
 
 	// Beacon
-	bindAndSet("allowSyncingBeaconNode", "ALLOW_SYNCING_BEACON_NODE", "")
+	bindAndSet(AllowSyncingBeaconNode, "ALLOW_SYNCING_BEACON_NODE", "")
 }
 
 func bindAndSet(key, envVariable string, defaultValue interface{}) {

@@ -59,30 +59,30 @@ var apiCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		logLevel := config.GetString("logLevel")
-		if config.GetBool("apiDebug") {
+		logLevel := config.GetString(config.LogLevel)
+		if config.GetBool(config.APIDebug) {
 			logLevel = "debug"
 		}
 
-		log := common.LogSetup(config.GetBool("logJSON"), logLevel).WithFields(logrus.Fields{
+		log := common.LogSetup(config.GetBool(config.LogJSON), logLevel).WithFields(logrus.Fields{
 			"service": "relay/api",
 			"version": Version,
 		})
 
-		apiLogTag := config.GetString("apiLogTag")
+		apiLogTag := config.GetString(config.APILogTag)
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
 		}
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(config.GetString("network"))
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.Network))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to beacon clients and ensure it's synced
-		beaconNodeURIs := config.GetStringSlice("beaconNodeURIs")
+		beaconNodeURIs := config.GetStringSlice(config.BeaconNodeURIs)
 		if len(beaconNodeURIs) == 0 {
 			log.Fatalf("no beacon endpoints specified")
 		}
@@ -94,7 +94,7 @@ var apiCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis
-		redisURI := config.GetString("redisURI")
+		redisURI := config.GetString(config.RedisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
@@ -102,7 +102,7 @@ var apiCmd = &cobra.Command{
 		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Postgres
-		postgresDSN := config.GetString("postgresDSN")
+		postgresDSN := config.GetString(config.PostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
@@ -119,7 +119,7 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
 
-		apiListenAddr := config.GetString("apiListenAddr")
+		apiListenAddr := config.GetString(config.APIListenAddr)
 
 		opts := api.RelayAPIOpts{
 			Log:           log,
@@ -129,17 +129,17 @@ var apiCmd = &cobra.Command{
 			Redis:         redis,
 			DB:            db,
 			EthNetDetails: *networkInfo,
-			BlockSimURL:   config.GetString("apiBlockSimURL"),
+			BlockSimURL:   config.GetString(config.APIBlockSimURL),
 
 			ProposerAPI:     true,
 			BlockBuilderAPI: true,
 			DataAPI:         true,
-			InternalAPI:     config.GetBool("apiInternalAPI"),
-			PprofAPI:        config.GetBool("apiPprofEnabled"),
+			InternalAPI:     config.GetBool(config.APIInternalAPI),
+			PprofAPI:        config.GetBool(config.APIPprofEnabled),
 		}
 
 		// Decode the private key
-		apiSecretKey := config.GetString("apiSecretKey")
+		apiSecretKey := config.GetString(config.APISecretKey)
 		if apiSecretKey == "" {
 			log.Warn("No secret key specified, block builder API is disabled")
 			opts.BlockBuilderAPI = false

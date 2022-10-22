@@ -47,10 +47,10 @@ var websiteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		log := common.LogSetup(config.GetBool("logJSON"), config.GetString("logLevel")).WithField("service", "relay/website")
+		log := common.LogSetup(config.GetBool(config.LogJSON), config.GetString(config.LogLevel)).WithField("service", "relay/website")
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(config.GetString("network"))
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.Network))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
@@ -58,14 +58,14 @@ var websiteCmd = &cobra.Command{
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to Redis
-		redisURI := config.GetString("redisURI")
+		redisURI := config.GetString(config.RedisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
 		relayPubkey := ""
-		websitePubkeyOverride := config.GetString("websitePubkeyOverride")
+		websitePubkeyOverride := config.GetString(config.WebsitePubkeyOverride)
 		if websitePubkeyOverride != "" {
 			relayPubkey = websitePubkeyOverride
 		} else {
@@ -88,7 +88,7 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
-		websiteListenAddr := config.GetString("websiteListenAddr")
+		websiteListenAddr := config.GetString(config.WebsiteListenAddr)
 		// Create the website service
 		opts := &website.WebserverOpts{
 			ListenAddress:     websiteListenAddr,
@@ -97,10 +97,10 @@ var websiteCmd = &cobra.Command{
 			Redis:             redis,
 			DB:                db,
 			Log:               log,
-			ShowConfigDetails: config.GetBool("websiteShowConfigDetails"),
-			LinkBeaconchain:   config.GetString("websiteLinkBeaconchain"),
-			LinkEtherscan:     config.GetString("websiteLinkEtherscan"),
-			RelayURL:          config.GetString("websiteRelayURL"),
+			ShowConfigDetails: config.GetBool(config.WebsiteShowConfigDetails),
+			LinkBeaconchain:   config.GetString(config.WebsiteLinkBeaconchain),
+			LinkEtherscan:     config.GetString(config.WebsiteLinkEtherscan),
+			RelayURL:          config.GetString(config.WebsiteRelayURL),
 		}
 
 		srv, err := website.NewWebserver(opts)

@@ -19,7 +19,7 @@ var (
 	ErrSimulationFailed = errors.New("simulation failed")
 )
 
-var maxConcurrentBlocks = config.GetInt64("blockSimMaxConcurrent") // 0 for no maximum
+var maxConcurrentBlocks = config.GetInt64(config.BlockSimMaxConcurrent) // 0 for no maximum
 
 type BlockSimulationRateLimiter struct {
 	cv          *sync.Cond

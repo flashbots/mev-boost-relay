@@ -21,7 +21,7 @@ var (
 
 	expiryBidCache = 45 * time.Second
 
-	activeValidatorsHours  = config.GetInt("activeValidatorHours")
+	activeValidatorsHours  = config.GetInt(config.ActiveValidatorHours)
 	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	RedisConfigFieldPubkey                  = "pubkey"
