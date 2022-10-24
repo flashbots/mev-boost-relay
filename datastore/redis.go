@@ -65,6 +65,7 @@ type RedisCache struct {
 	prefixActiveValidators            string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
+	prefixBlockBuilderLatestBidsTime  string // when the request was received, to avoid older requests overwriting newer ones after a slot validation
 
 	// keys
 	keyKnownValidators                string
@@ -92,6 +93,7 @@ func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
 		prefixBlockBuilderLatestBidsValue: fmt.Sprintf("%s/%s:block-builder-latest-bid-value", redisPrefix, prefix), // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
+		prefixBlockBuilderLatestBidsTime:  fmt.Sprintf("%s/%s:block-builder-latest-bid-time", redisPrefix, prefix),  // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
 
 		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
@@ -127,6 +129,11 @@ func (r *RedisCache) keyBlockBuilderLatestBids(slot uint64, parentHash, proposer
 
 // keyBlockBuilderLatestBidValue returns the hashmap key for the value of the latest bid by a specific builder
 func (r *RedisCache) keyBlockBuilderLatestBidsValue(slot uint64, parentHash, proposerPubkey string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBlockBuilderLatestBidsValue, slot, parentHash, proposerPubkey)
+}
+
+// keyBlockBuilderLatestBidValue returns the hashmap key for the time of the latest bid by a specific builder
+func (r *RedisCache) keyBlockBuilderLatestBidsTime(slot uint64, parentHash, proposerPubkey string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBlockBuilderLatestBidsValue, slot, parentHash, proposerPubkey)
 }
 
@@ -324,14 +331,35 @@ func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, is
 	return isHighPrio, isBlacklisted, err
 }
 
+func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(slot uint64, builderPubkey, parentHash, proposerPubkey string) (int64, error) {
+	keyLatestBidsTime := r.keyBlockBuilderLatestBidsTime(slot, parentHash, proposerPubkey)
+	timestamp, err := r.client.HGet(context.Background(), keyLatestBidsTime, builderPubkey).Int64()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+	return timestamp, err
+}
+
 // SaveLatestBuilderBid saves the latest bid by a specific builder
-func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, headerResp *types.GetHeaderResponse) (err error) {
+func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *types.GetHeaderResponse) (err error) {
 	keyLatestBids := r.keyBlockBuilderLatestBids(slot, parentHash, proposerPubkey)
 	err = r.HSetObj(keyLatestBids, builderPubkey, headerResp, expiryBidCache)
 	if err != nil {
 		return err
 	}
 
+	// set the time of the request
+	keyLatestBidsTime := r.keyBlockBuilderLatestBidsTime(slot, parentHash, proposerPubkey)
+	err = r.client.HSet(context.Background(), keyLatestBidsTime, builderPubkey, receivedAt.UnixMilli()).Err()
+	if err != nil {
+		return err
+	}
+	err = r.client.Expire(context.Background(), keyLatestBidsTime, expiryBidCache).Err()
+	if err != nil {
+		return err
+	}
+
+	// set the value last, because that's iterated over when updating the best bid, and the payload has to be available
 	keyLatestBidsValue := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
 	err = r.client.HSet(context.Background(), keyLatestBidsValue, builderPubkey, headerResp.Data.Message.Value.String()).Err()
 	if err != nil {

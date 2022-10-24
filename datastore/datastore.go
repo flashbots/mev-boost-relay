@@ -91,10 +91,6 @@ func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
 	return ds.db.NumRegisteredValidators()
 }
 
-func (ds *Datastore) GetValidatorRegistrationTimestamp(pubkeyHex types.PubkeyHex) (uint64, error) {
-	return ds.redis.GetValidatorRegistrationTimestamp(pubkeyHex)
-}
-
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
 	// First save in the database
