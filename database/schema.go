@@ -84,6 +84,7 @@ CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_builderpubkey_idx
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_simsuccess_idx ON ` + TableBuilderBlockSubmission + `("sim_success");
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_mostprofit_idx ON ` + TableBuilderBlockSubmission + `("was_most_profitable");
 CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_executionpayloadid_idx ON ` + TableBuilderBlockSubmission + `("execution_payload_id");
+CREATE INDEX IF NOT EXISTS ` + TableBuilderBlockSubmission + `_insertedat_idx ON ` + TableBuilderBlockSubmission + `("inserted_at");
 
 
 CREATE TABLE IF NOT EXISTS ` + TableDeliveredPayload + ` (
@@ -118,6 +119,7 @@ CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_blocknumber_idx ON ` + 
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_proposerpubkey_idx ON ` + TableDeliveredPayload + `("proposer_pubkey");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_builderpubkey_idx ON ` + TableDeliveredPayload + `("builder_pubkey");
 CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_value_idx ON ` + TableDeliveredPayload + `("value");
+CREATE INDEX IF NOT EXISTS ` + TableDeliveredPayload + `_insertedat_idx ON ` + TableDeliveredPayload + `("inserted_at");
 
 
 CREATE TABLE IF NOT EXISTS ` + TableBlockBuilder + ` (
