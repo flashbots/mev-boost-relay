@@ -102,17 +102,56 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 
 ### Environment variables
 
-* `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
-* `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
-* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum)
-* `FORCE_GET_HEADER_204` - force 204 as getHeader response
-* `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
-* `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
-* `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
-* `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
-* `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
-* `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: 3)
-* `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
+#### Common: API, HouseKeeper & Website
+
+| Name | Description | Default |
+|------|-------------|---------|
+| NETWORK | which network to use | `""` |
+| REDIS_URI | Redis URI | `localhost:6379` |
+| POSTGRES_DSN | PostgreSQL DSN | `""` |
+| BEACON_URIS | comma separated beacon endpoints | `http://localhost:3500` |
+| LOG_JSON | log in JSON format instead of text | `false` |
+| LOG_LEVEL | log-level: trace, debug, info, warn/warning, error, fatal, panic | `info` |
+| ACTIVE_VALIDATOR_HOURS | number of hours to track active proposers in Redis | `3` |
+| ALLOW_SYNCING_BEACON_NODE | allow syncing beacon node | `""` |
+
+#### API
+
+| Name | Description | Default |
+|------|-------------|---------|
+| LISTEN_ADDR | listen address for API | `localhost:9062` |
+| BLOCKSIM_URI | URL for block simulator | `http://localhost:8545` |
+| SECRET_KEY | secret key for signing bids | `""` |
+| LOG_TAG | if set, a 'tag' field will be added to all log entries | `""` |
+| PPROF | enable pprof API | `false` |
+| ENABLE_INTERNAL_API | enable internal API (/internal/...) | `false` |
+| DEBUG_API | debug logging | `false` |
+| BLOCKSIM_MAX_CONCURRENT | maximum number of concurrent block-sim requests (0 for no maximum) | `4` |
+| FORCE_GET_HEADER_204 | force 204 as getHeader response | `false` |
+| DISABLE_BLOCK_PUBLISHING | disable publishing blocks to the beacon node at the end of getPayload | `false` |
+| DISABLE_LOWPRIO_BUILDERS | reject block submissions by low-prio builders | `false` |
+| NUM_ACTIVE_VALIDATOR_PROCESSORS | proposer API - number of goroutines to listen to the active validators channel | `10` |
+| NUM_VALIDATOR_REG_PROCESSORS | proposer API - number of goroutines to listen to the validator registration channel | `10` |
+| GETPAYLOAD_RETRY_TIMEOUT_MS | getPayload retry getting a payload if first try failed | `100` |
+
+#### Website
+
+| Name | Description | Default |
+|------|-------------|---------|
+| LISTEN_ADDR | listen address for webserver | `localhost:9060` |
+| SHOW_CONFIG_DETAILS | show config details | `false` |
+| LINK_BEACONCHAIN | url for beaconcha.in | `https://beaconcha.in` |
+| LINK_ETHERSCAN | url for etherscan | `https://etherscan.io` |
+| RELAY_URL | full url for the relay (https://pubkey@host) | `""` |
+| PUBKEY_OVERRIDE | override for public key | `""` |
+
+#### Database
+
+| Name | Description | Default |
+|------|-------------|---------|
+| DB_TABLE_PREFIX | prefix to use for db tables | `dev` |
+| DB_DONT_APPLY_SCHEMA | disable applying DB schema on startup (useful for connecting data API to read-only replica) | `""` |
+| PRINT_SCHEMA | print DB schema | `false` |
 
 ### Updating the website
 
