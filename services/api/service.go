@@ -990,7 +990,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.WithError(err).Error("failed getting latest payload receivedAt from redis")
 	} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
-		log.Info("already using a newer payload")
+		log.Infof("already have a newer payload: now=%d / prev=%d", receivedAt.UnixMilli(), latestPayloadReceivedAt)
 		api.RespondError(w, http.StatusBadRequest, "already using a newer payload")
 		return
 	}

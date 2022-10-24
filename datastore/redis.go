@@ -134,7 +134,7 @@ func (r *RedisCache) keyBlockBuilderLatestBidsValue(slot uint64, parentHash, pro
 
 // keyBlockBuilderLatestBidValue returns the hashmap key for the time of the latest bid by a specific builder
 func (r *RedisCache) keyBlockBuilderLatestBidsTime(slot uint64, parentHash, proposerPubkey string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBlockBuilderLatestBidsValue, slot, parentHash, proposerPubkey)
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBlockBuilderLatestBidsTime, slot, parentHash, proposerPubkey)
 }
 
 func (r *RedisCache) GetObj(key string, obj any) (err error) {
