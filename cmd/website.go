@@ -32,17 +32,17 @@ var websiteCmd = &cobra.Command{
 	Use:   "website",
 	Short: "Start the website server",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag("network", cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag("redisURI", cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag("postgresDSN", cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag("logJSON", cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag("logLevel", cmd.Flags().Lookup("loglevel"))
-		_ = viper.BindPFlag("websiteListenAddr", cmd.Flags().Lookup("listen-addr"))
-		_ = viper.BindPFlag("websiteShowConfigDetails", cmd.Flags().Lookup("show-config-details"))
-		_ = viper.BindPFlag("websiteLinkBeaconchain", cmd.Flags().Lookup("link-beaconchain"))
-		_ = viper.BindPFlag("websiteLinkEtherscan", cmd.Flags().Lookup("link-etherscan"))
-		_ = viper.BindPFlag("websiteRelayURL", cmd.Flags().Lookup("relay-url"))
-		_ = viper.BindPFlag("websitePubkeyOverride", cmd.Flags().Lookup("pubkey-override"))
+		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.WebsiteListenAddr, cmd.Flags().Lookup("listen-addr"))
+		_ = viper.BindPFlag(config.WebsiteShowConfigDetails, cmd.Flags().Lookup("show-config-details"))
+		_ = viper.BindPFlag(config.WebsiteLinkBeaconchain, cmd.Flags().Lookup("link-beaconchain"))
+		_ = viper.BindPFlag(config.WebsiteLinkEtherscan, cmd.Flags().Lookup("link-etherscan"))
+		_ = viper.BindPFlag(config.WebsiteRelayURL, cmd.Flags().Lookup("relay-url"))
+		_ = viper.BindPFlag(config.WebsitePubkeyOverride, cmd.Flags().Lookup("pubkey-override"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error

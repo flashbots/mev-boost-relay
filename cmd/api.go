@@ -41,20 +41,20 @@ var apiCmd = &cobra.Command{
 	Use:   "api",
 	Short: "Start the API server",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag("logJSON", cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag("logLevel", cmd.Flags().Lookup("loglevel"))
-		_ = viper.BindPFlag("apiLogTag", cmd.Flags().Lookup("log-tag"))
-		_ = viper.BindPFlag("apiLogVersion", cmd.Flags().Lookup("log-version"))
-		_ = viper.BindPFlag("apiDebug", cmd.Flags().Lookup("debug"))
-		_ = viper.BindPFlag("apiListenAddr", cmd.Flags().Lookup("listen-addr"))
-		_ = viper.BindPFlag("beaconNodeURIs", cmd.Flags().Lookup("beacon-uris"))
-		_ = viper.BindPFlag("redisURI", cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag("postgresDSN", cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag("apiSecretKey", cmd.Flags().Lookup("secret-key"))
-		_ = viper.BindPFlag("apiBlockSimURL", cmd.Flags().Lookup("blocksim"))
-		_ = viper.BindPFlag("network", cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag("apiPprofEnabled", cmd.Flags().Lookup("pprof"))
-		_ = viper.BindPFlag("apiInternalAPI", cmd.Flags().Lookup("internal-api"))
+		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.APILogTag, cmd.Flags().Lookup("log-tag"))
+		_ = viper.BindPFlag(config.APILogVersion, cmd.Flags().Lookup("log-version"))
+		_ = viper.BindPFlag(config.APIDebug, cmd.Flags().Lookup("debug"))
+		_ = viper.BindPFlag(config.APIListenAddr, cmd.Flags().Lookup("listen-addr"))
+		_ = viper.BindPFlag(config.BeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
+		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.APISecretKey, cmd.Flags().Lookup("secret-key"))
+		_ = viper.BindPFlag(config.APIBlockSimURL, cmd.Flags().Lookup("blocksim"))
+		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.APIPprofEnabled, cmd.Flags().Lookup("pprof"))
+		_ = viper.BindPFlag(config.APIInternalAPI, cmd.Flags().Lookup("internal-api"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error

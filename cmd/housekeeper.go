@@ -29,12 +29,12 @@ var housekeeperCmd = &cobra.Command{
 	Use:   "housekeeper",
 	Short: "Service that runs in the background and does various housekeeping (removing old bids, updating proposer duties, saving metrics, etc.)",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag("network", cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag("redisURI", cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag("postgresDSN", cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag("beaconNodeURIs", cmd.Flags().Lookup("beacon-uris"))
-		_ = viper.BindPFlag("logJSON", cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag("logLevel", cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.BeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
+		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
