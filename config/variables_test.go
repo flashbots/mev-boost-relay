@@ -32,7 +32,7 @@ func TestBindAndSet(t *testing.T) {
 func TestGetConfig(t *testing.T) {
 	config := map[string]string{
 		"FLASHBOTS_URL": "https://www.flashbots.net/",
-		"RELAY_URL":     "https://relay.flashbots.net/",
+		"FB_RELAY_URL":  "https://relay.flashbots.net",
 	}
 	for env, value := range config {
 		bindAndSet(env, env, value)
