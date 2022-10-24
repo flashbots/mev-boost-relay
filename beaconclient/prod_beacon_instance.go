@@ -165,6 +165,14 @@ func (c *ProdBeaconInstance) GetHeader() (*GetHeaderResponse, error) {
 	return resp, err
 }
 
+// GetHeaderForSlot returns the header for a given slot - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockHeader
+func (c *ProdBeaconInstance) GetHeaderForSlot(slot uint64) (*GetHeaderResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/headers/%d", c.beaconURI, slot)
+	resp := new(GetHeaderResponse)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
 type GetBlockResponse struct {
 	Data struct {
 		Message struct {
@@ -179,6 +187,14 @@ type GetBlockResponse struct {
 // GetBlock returns the latest block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
 func (c *ProdBeaconInstance) GetBlock() (*GetBlockResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
+	resp := new(GetBlockResponse)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
+// GetBlockForSlot returns the block for a given slot - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+func (c *ProdBeaconInstance) GetBlockForSlot(slot uint64) (*GetBlockResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/%d", c.beaconURI, slot)
 	resp := new(GetBlockResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
