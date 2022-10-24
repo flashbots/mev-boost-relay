@@ -220,4 +220,9 @@ func TestBuilderBids(t *testing.T) {
 	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
 	require.Equal(t, "100", topBid.Data.Message.Value.String())
+
+	// double-check the receivedAt timestamp
+	ts, err := cache.GetBuilderLatestPayloadReceivedAt(slot, builder3pk, parentHash, proposerPk)
+	require.NoError(t, err)
+	require.Equal(t, receivedAt.UnixMilli(), ts)
 }
