@@ -114,6 +114,9 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 | LOG_LEVEL | log-level: trace, debug, info, warn/warning, error, fatal, panic | `info` |
 | ACTIVE_VALIDATOR_HOURS | number of hours to track active proposers in Redis | `3` |
 | ALLOW_SYNCING_BEACON_NODE | allow syncing beacon node | `""` |
+| DB_TABLE_PREFIX | prefix to use for db tables | `dev` |
+| DB_DONT_APPLY_SCHEMA | disable applying DB schema on startup (useful for connecting data API to read-only replica) | `""` |
+| PRINT_SCHEMA | print DB schema | `false` |
 
 #### API
 
@@ -144,14 +147,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 | LINK_ETHERSCAN | url for etherscan | `https://etherscan.io` |
 | RELAY_URL | full url for the relay (https://pubkey@host) | `""` |
 | PUBKEY_OVERRIDE | override for public key | `""` |
-
-#### Database
-
-| Name | Description | Default |
-|------|-------------|---------|
-| DB_TABLE_PREFIX | prefix to use for db tables | `dev` |
-| DB_DONT_APPLY_SCHEMA | disable applying DB schema on startup (useful for connecting data API to read-only replica) | `""` |
-| PRINT_SCHEMA | print DB schema | `false` |
 
 ### Updating the website
 
