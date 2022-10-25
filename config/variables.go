@@ -134,7 +134,7 @@ func init() {
 	bindAndSet(AllowSyncingBeaconNode, "ALLOW_SYNCING_BEACON_NODE", "")
 }
 
-func bindAndSet(key, envVariable string, defaultValue interface{}) {
+func bindAndSet(key, envVariable string, defaultValue any) {
 	log := common.LogSetup(viper.GetBool("logJSON"), viper.GetString("logLevel"))
 	if err := viper.BindEnv(key, envVariable); err != nil {
 		log.WithError(err).Fatalf("Failed to BindEnv: %s", envVariable)
@@ -152,9 +152,6 @@ func GetConfig() map[string]string {
 	// FIXME: Needs to mask or skip sensitive data
 	return config
 }
-
-// Get returns an interface. For a specific value use one of the Get____ methods.
-func Get(key string) interface{} { return viper.Get(key) }
 
 // GetInt returns the value associated with the key as an integer.
 func GetInt(key string) int { return viper.GetInt(key) }
