@@ -41,48 +41,48 @@ var apiCmd = &cobra.Command{
 	Use:   "api",
 	Short: "Start the API server",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
-		_ = viper.BindPFlag(config.APILogTag, cmd.Flags().Lookup("log-tag"))
-		_ = viper.BindPFlag(config.APILogVersion, cmd.Flags().Lookup("log-version"))
-		_ = viper.BindPFlag(config.APIDebug, cmd.Flags().Lookup("debug"))
-		_ = viper.BindPFlag(config.APIListenAddr, cmd.Flags().Lookup("listen-addr"))
-		_ = viper.BindPFlag(config.BeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
-		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag(config.APISecretKey, cmd.Flags().Lookup("secret-key"))
-		_ = viper.BindPFlag(config.APIBlockSimURL, cmd.Flags().Lookup("blocksim"))
-		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag(config.APIPprofEnabled, cmd.Flags().Lookup("pprof"))
-		_ = viper.BindPFlag(config.APIInternalAPI, cmd.Flags().Lookup("internal-api"))
+		_ = viper.BindPFlag(config.KeyLogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.KeyLogLevel, cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.KeyAPILogTag, cmd.Flags().Lookup("log-tag"))
+		_ = viper.BindPFlag(config.KeyAPILogVersion, cmd.Flags().Lookup("log-version"))
+		_ = viper.BindPFlag(config.KeyAPIDebug, cmd.Flags().Lookup("debug"))
+		_ = viper.BindPFlag(config.KeyAPIListenAddr, cmd.Flags().Lookup("listen-addr"))
+		_ = viper.BindPFlag(config.KeyBeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
+		_ = viper.BindPFlag(config.KeyRedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.KeyAPISecretKey, cmd.Flags().Lookup("secret-key"))
+		_ = viper.BindPFlag(config.KeyAPIBlockSimURL, cmd.Flags().Lookup("blocksim"))
+		_ = viper.BindPFlag(config.KeyNetwork, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.KeyAPIPprofEnabled, cmd.Flags().Lookup("pprof"))
+		_ = viper.BindPFlag(config.KeyAPIInternalAPI, cmd.Flags().Lookup("internal-api"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		logLevel := config.GetString(config.LogLevel)
-		if config.GetBool(config.APIDebug) {
+		logLevel := config.GetString(config.KeyLogLevel)
+		if config.GetBool(config.KeyAPIDebug) {
 			logLevel = "debug"
 		}
 
-		log := common.LogSetup(config.GetBool(config.LogJSON), logLevel).WithFields(logrus.Fields{
+		log := common.LogSetup(config.GetBool(config.KeyLogJSON), logLevel).WithFields(logrus.Fields{
 			"service": "relay/api",
 			"version": Version,
 		})
 
-		apiLogTag := config.GetString(config.APILogTag)
+		apiLogTag := config.GetString(config.KeyAPILogTag)
 		if apiLogTag != "" {
 			log = log.WithField("tag", apiLogTag)
 		}
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.Network))
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.KeyNetwork))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to beacon clients and ensure it's synced
-		beaconNodeURIs := config.GetStringSlice(config.BeaconNodeURIs)
+		beaconNodeURIs := config.GetStringSlice(config.KeyBeaconNodeURIs)
 		if len(beaconNodeURIs) == 0 {
 			log.Fatalf("no beacon endpoints specified")
 		}
@@ -94,7 +94,7 @@ var apiCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis
-		redisURI := config.GetString(config.RedisURI)
+		redisURI := config.GetString(config.KeyRedisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
@@ -102,7 +102,7 @@ var apiCmd = &cobra.Command{
 		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Postgres
-		postgresDSN := config.GetString(config.PostgresDSN)
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
@@ -119,7 +119,7 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
 
-		apiListenAddr := config.GetString(config.APIListenAddr)
+		apiListenAddr := config.GetString(config.KeyAPIListenAddr)
 
 		opts := api.RelayAPIOpts{
 			Log:           log,
@@ -129,17 +129,17 @@ var apiCmd = &cobra.Command{
 			Redis:         redis,
 			DB:            db,
 			EthNetDetails: *networkInfo,
-			BlockSimURL:   config.GetString(config.APIBlockSimURL),
+			BlockSimURL:   config.GetString(config.KeyAPIBlockSimURL),
 
 			ProposerAPI:     true,
 			BlockBuilderAPI: true,
 			DataAPI:         true,
-			InternalAPI:     config.GetBool(config.APIInternalAPI),
-			PprofAPI:        config.GetBool(config.APIPprofEnabled),
+			InternalAPI:     config.GetBool(config.KeyAPIInternalAPI),
+			PprofAPI:        config.GetBool(config.KeyAPIPprofEnabled),
 		}
 
 		// Decode the private key
-		apiSecretKey := config.GetString(config.APISecretKey)
+		apiSecretKey := config.GetString(config.KeyAPISecretKey)
 		if apiSecretKey == "" {
 			log.Warn("No secret key specified, block builder API is disabled")
 			opts.BlockBuilderAPI = false

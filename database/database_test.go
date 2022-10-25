@@ -1,10 +1,9 @@
 package database
 
 import (
-	"os"
 	"testing"
 
-	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/jmoiron/sqlx"
@@ -12,8 +11,8 @@ import (
 )
 
 var (
-	runDBTests = os.Getenv("RUN_DB_TESTS") == "1" //|| true
-	testDBDSN  = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	runDBTests = config.GetBool(config.KeyDBRunTests)
+	testDBDSN  = config.GetString(config.KeyDBTestDSN)
 )
 
 func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {

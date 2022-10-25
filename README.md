@@ -116,7 +116,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 | ALLOW_SYNCING_BEACON_NODE | allow syncing beacon node | `""` |
 | DB_TABLE_PREFIX | prefix to use for db tables | `dev` |
 | DB_DONT_APPLY_SCHEMA | disable applying DB schema on startup (useful for connecting data API to read-only replica) | `""` |
-| PRINT_SCHEMA | print DB schema | `false` |
 
 #### API
 

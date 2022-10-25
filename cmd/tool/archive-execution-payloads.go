@@ -31,7 +31,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 	Use:   "archive-execution-payloads",
 	Short: "export execution payloads from the DB to a CSV or JSON file and archive by deleting the payloads",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(outFiles) == 0 {
@@ -44,7 +44,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 		}
 
 		// Connect to Postgres
-		postgresDSN := config.GetString(config.PostgresDSN)
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")

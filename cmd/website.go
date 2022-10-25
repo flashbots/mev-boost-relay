@@ -32,25 +32,25 @@ var websiteCmd = &cobra.Command{
 	Use:   "website",
 	Short: "Start the website server",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
-		_ = viper.BindPFlag(config.WebsiteListenAddr, cmd.Flags().Lookup("listen-addr"))
-		_ = viper.BindPFlag(config.WebsiteShowConfigDetails, cmd.Flags().Lookup("show-config-details"))
-		_ = viper.BindPFlag(config.WebsiteLinkBeaconchain, cmd.Flags().Lookup("link-beaconchain"))
-		_ = viper.BindPFlag(config.WebsiteLinkEtherscan, cmd.Flags().Lookup("link-etherscan"))
-		_ = viper.BindPFlag(config.WebsiteRelayURL, cmd.Flags().Lookup("relay-url"))
-		_ = viper.BindPFlag(config.WebsitePubkeyOverride, cmd.Flags().Lookup("pubkey-override"))
+		_ = viper.BindPFlag(config.KeyNetwork, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.KeyRedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.KeyLogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.KeyLogLevel, cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.KeyWebsiteListenAddr, cmd.Flags().Lookup("listen-addr"))
+		_ = viper.BindPFlag(config.KeyWebsiteShowConfigDetails, cmd.Flags().Lookup("show-config-details"))
+		_ = viper.BindPFlag(config.KeyWebsiteLinkBeaconchain, cmd.Flags().Lookup("link-beaconchain"))
+		_ = viper.BindPFlag(config.KeyWebsiteLinkEtherscan, cmd.Flags().Lookup("link-etherscan"))
+		_ = viper.BindPFlag(config.KeyWebsiteRelayURL, cmd.Flags().Lookup("relay-url"))
+		_ = viper.BindPFlag(config.KeyWebsitePubkeyOverride, cmd.Flags().Lookup("pubkey-override"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		log := common.LogSetup(config.GetBool(config.LogJSON), config.GetString(config.LogLevel)).WithField("service", "relay/website")
+		log := common.LogSetup(config.GetBool(config.KeyLogJSON), config.GetString(config.KeyLogLevel)).WithField("service", "relay/website")
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.Network))
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.KeyNetwork))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
@@ -58,14 +58,14 @@ var websiteCmd = &cobra.Command{
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to Redis
-		redisURI := config.GetString(config.RedisURI)
+		redisURI := config.GetString(config.KeyRedisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
 		relayPubkey := ""
-		websitePubkeyOverride := config.GetString(config.WebsitePubkeyOverride)
+		websitePubkeyOverride := config.GetString(config.KeyWebsitePubkeyOverride)
 		if websitePubkeyOverride != "" {
 			relayPubkey = websitePubkeyOverride
 		} else {
@@ -77,7 +77,7 @@ var websiteCmd = &cobra.Command{
 
 		// Connect to Postgres
 		log.Infof("Connecting to Postgres database...")
-		postgresDSN := config.GetString("postgresDSN")
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
@@ -88,7 +88,7 @@ var websiteCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
-		websiteListenAddr := config.GetString(config.WebsiteListenAddr)
+		websiteListenAddr := config.GetString(config.KeyWebsiteListenAddr)
 		// Create the website service
 		opts := &website.WebserverOpts{
 			ListenAddress:     websiteListenAddr,
@@ -97,10 +97,10 @@ var websiteCmd = &cobra.Command{
 			Redis:             redis,
 			DB:                db,
 			Log:               log,
-			ShowConfigDetails: config.GetBool(config.WebsiteShowConfigDetails),
-			LinkBeaconchain:   config.GetString(config.WebsiteLinkBeaconchain),
-			LinkEtherscan:     config.GetString(config.WebsiteLinkEtherscan),
-			RelayURL:          config.GetString(config.WebsiteRelayURL),
+			ShowConfigDetails: config.GetBool(config.KeyWebsiteShowConfigDetails),
+			LinkBeaconchain:   config.GetString(config.KeyWebsiteLinkBeaconchain),
+			LinkEtherscan:     config.GetString(config.KeyWebsiteLinkEtherscan),
+			RelayURL:          config.GetString(config.KeyWebsiteRelayURL),
 		}
 
 		srv, err := website.NewWebserver(opts)

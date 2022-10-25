@@ -29,27 +29,27 @@ var housekeeperCmd = &cobra.Command{
 	Use:   "housekeeper",
 	Short: "Service that runs in the background and does various housekeeping (removing old bids, updating proposer duties, saving metrics, etc.)",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		_ = viper.BindPFlag(config.Network, cmd.Flags().Lookup("network"))
-		_ = viper.BindPFlag(config.RedisURI, cmd.Flags().Lookup("redis-uri"))
-		_ = viper.BindPFlag(config.PostgresDSN, cmd.Flags().Lookup("db"))
-		_ = viper.BindPFlag(config.BeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
-		_ = viper.BindPFlag(config.LogJSON, cmd.Flags().Lookup("json"))
-		_ = viper.BindPFlag(config.LogLevel, cmd.Flags().Lookup("loglevel"))
+		_ = viper.BindPFlag(config.KeyNetwork, cmd.Flags().Lookup("network"))
+		_ = viper.BindPFlag(config.KeyRedisURI, cmd.Flags().Lookup("redis-uri"))
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
+		_ = viper.BindPFlag(config.KeyBeaconNodeURIs, cmd.Flags().Lookup("beacon-uris"))
+		_ = viper.BindPFlag(config.KeyLogJSON, cmd.Flags().Lookup("json"))
+		_ = viper.BindPFlag(config.KeyLogLevel, cmd.Flags().Lookup("loglevel"))
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		log := common.LogSetup(config.GetBool(config.LogJSON), config.GetString(config.LogLevel)).WithField("service", "relay/housekeeper")
+		log := common.LogSetup(config.GetBool(config.KeyLogJSON), config.GetString(config.KeyLogLevel)).WithField("service", "relay/housekeeper")
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.Network))
+		networkInfo, err := common.NewEthNetworkDetails(config.GetString(config.KeyNetwork))
 		if err != nil {
 			log.WithError(err).Fatalf("error getting network details")
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
 
 		// Connect to beacon clients and ensure it's synced
-		beaconNodeURIs := config.GetStringSlice(config.BeaconNodeURIs)
+		beaconNodeURIs := config.GetStringSlice(config.KeyBeaconNodeURIs)
 		if len(beaconNodeURIs) == 0 {
 			log.Fatalf("no beacon endpoints specified")
 		}
@@ -61,14 +61,14 @@ var housekeeperCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis and setup the datastore
-		redisURI := config.GetString(config.RedisURI)
+		redisURI := config.GetString(config.KeyRedisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
 
 		// Connect to Postgres
-		postgresDSN := config.GetString(config.PostgresDSN)
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")

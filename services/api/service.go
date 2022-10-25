@@ -62,9 +62,9 @@ var (
 	pathInternalBuilderStatus = "/internal/v1/builder/{pubkey:0x[a-fA-F0-9]+}"
 
 	// number of goroutines to save active validator
-	numActiveValidatorProcessors = config.GetInt(config.NumActiveValidatorProcessors)
-	numValidatorRegProcessors    = config.GetInt(config.NumValidatorRegProcessors)
-	timeoutGetPayloadRetryMs     = config.GetInt(config.GetpayloadRetryTimeoutMs)
+	numActiveValidatorProcessors = config.GetInt(config.KeyNumActiveValidatorProcessors)
+	numValidatorRegProcessors    = config.GetInt(config.KeyNumValidatorRegProcessors)
+	timeoutGetPayloadRetryMs     = config.GetInt(config.KeyGetpayloadRetryTimeoutMs)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -198,17 +198,17 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		validatorRegC:    make(chan types.SignedValidatorRegistration, 450_000),
 	}
 
-	if config.GetBool(config.ForceGetHeader204) {
+	if config.GetBool(config.KeyForceGetHeader204) {
 		api.log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
 		api.ffForceGetHeader204 = true
 	}
 
-	if config.GetBool(config.DisableBlockPublishing) {
+	if config.GetBool(config.KeyDisableBlockPublishing) {
 		api.log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
 		api.ffDisableBlockPublishing = true
 	}
 
-	if config.GetBool(config.DisableLowprioBuilders) {
+	if config.GetBool(config.KeyDisableLowprioBuilders) {
 		api.log.Warn("env: DISABLE_LOWPRIO_BUILDERS - allowing only high-level builders")
 		api.ffDisableLowPrioBuilders = true
 	}
