@@ -1,0 +1,39 @@
+version: 0.2
+
+env:
+  variables:
+    GO111MODULE: "on"
+    GOSUMDB: "off"
+  parameter-store:
+    GAME_API_TOKEN: "/CodeBuild/GAME_API_TOKEN"
+
+phases:
+  install:
+    commands:
+      - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://127.0.0.1:2375 --storage-driver=overlay2 &
+      - timeout 15 sh -c "until docker info; do echo .; sleep 1; done"
+  # pre_build: 
+  #   commands:
+
+  #     #
+  #     # Format the code correctly
+  #     #
+  #     - go fmt
+
+  #     #
+  #     # Run all tests included with our application
+  #     #
+  #     - go test
+
+  build:
+    commands:
+
+      #
+      # Build our application
+      #
+      - DOCKER_BUILDKIT=1 docker build --file CodeBuildDockerFile --output bin .
+
+artifacts:
+  files:
+    - ./bin/relay
+    - ./bin/application
