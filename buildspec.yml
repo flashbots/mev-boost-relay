@@ -5,7 +5,6 @@ env:
     GO111MODULE: "on"
     GOSUMDB: "off"
   parameter-store:
-    GAME_API_TOKEN: "/CodeBuild/GAME_API_TOKEN"
 
 phases:
   install:
