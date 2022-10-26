@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	websiteDefaultListenAddr        = common.GetEnv("LISTEN_ADDR", "localhost:9060")
+	websiteDefaultListenAddr        = common.GetEnv("WEB_LISTEN_ADDR", "localhost:9060")
 	websiteDefaultShowConfigDetails = os.Getenv("SHOW_CONFIG_DETAILS") == "1"
 	websiteDefaultLinkBeaconchain   = common.GetEnv("LINK_BEACONCHAIN", "https://beaconcha.in")
 	websiteDefaultLinkEtherscan     = common.GetEnv("LINK_ETHERSCAN", "https://etherscan.io")
