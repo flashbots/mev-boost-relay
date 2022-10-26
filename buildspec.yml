@@ -29,9 +29,8 @@ phases:
       #
       # Build our application
       #
-      - DOCKER_BUILDKIT=1 docker build --file Dockerfile --output bin .
+      - DOCKER_BUILDKIT=1 docker build --file Dockerfile --output ./bin/application .
 
 artifacts:
   files:
-    - ./bin/relay
     - ./bin/application
