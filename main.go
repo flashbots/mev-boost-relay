@@ -8,5 +8,5 @@ var Version = "dev" // is set during build process
 
 func main() {
 	cmd.Version = Version
-	cmd.Execute()
+	cmd.Mono()
 }
