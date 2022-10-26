@@ -29,7 +29,7 @@ phases:
       #
       # Build our application
       #
-      - DOCKER_BUILDKIT=1 docker build --file Dockerfile --output ./bin/application .
+      - DOCKER_BUILDKIT=1 docker build --file Dockerfile --output bin .
 
 artifacts:
   files:
