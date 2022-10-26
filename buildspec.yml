@@ -4,7 +4,6 @@ env:
   variables:
     GO111MODULE: "on"
     GOSUMDB: "off"
-  parameter-store:
 
 phases:
   install:
