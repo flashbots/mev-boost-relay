@@ -23,7 +23,8 @@ func init() {
 }
 
 var DataAPIExportPayloads = &cobra.Command{
-	Use: "data-api-export-payloads",
+	Use:   "data-api-export-payloads",
+	Short: "export delivered payloads to the proposer from the DB to a CSV or JSON file",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(outFiles) == 0 {
 			log.Fatal("no output files specified")

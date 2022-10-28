@@ -25,7 +25,8 @@ func init() {
 }
 
 var ArchiveExecutionPayloads = &cobra.Command{
-	Use: "archive-execution-payloads",
+	Use:   "archive-execution-payloads",
+	Short: "export execution payloads from the DB to a CSV or JSON file and archive by deleting the payloads",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(outFiles) == 0 {
 			log.Fatal("no output files specified")
