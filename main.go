@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "github.com/btcsuite/btcd/btcutil"
 	"github.com/flashbots/mev-boost-relay/cmd"
 )
 
