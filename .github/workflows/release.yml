@@ -32,6 +32,8 @@ jobs:
           tags: |
             type=sha
             type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ !contains(steps.vars.outputs.tag, '-') }}
+            type=semver,pattern={{major}},enable=${{ !contains(steps.vars.outputs.tag, '-') }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(steps.vars.outputs.tag, '-') }}
 
       - name: Login to DockerHub
