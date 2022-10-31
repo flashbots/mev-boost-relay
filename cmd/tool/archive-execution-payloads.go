@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +52,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 		// if date, then find corresponding id
 		if dateStart != "" {
 			// find first enrty at or after dateStart
-			query := `SELECT id FROM ` + database.TableExecutionPayload + ` WHERE inserted_at::date >= date '` + dateStart + `' ORDER BY id ASC LIMIT 1;`
+			query := `SELECT id FROM ` + vars.TableExecutionPayload + ` WHERE inserted_at::date >= date '` + dateStart + `' ORDER BY id ASC LIMIT 1;`
 			err = db.DB.QueryRow(query).Scan(&idFirst)
 			if err != nil {
 				log.WithError(err).Fatalf("failed to find start id for date %s", dateStart)
@@ -59,7 +60,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 		}
 		if dateEnd != "" {
 			// find last enry before dateEnd
-			query := `SELECT id FROM ` + database.TableExecutionPayload + ` WHERE inserted_at::date < date '` + dateEnd + `' ORDER BY id DESC LIMIT 1;`
+			query := `SELECT id FROM ` + vars.TableExecutionPayload + ` WHERE inserted_at::date < date '` + dateEnd + `' ORDER BY id DESC LIMIT 1;`
 			err = db.DB.QueryRow(query).Scan(&idLast)
 			if err != nil {
 				log.WithError(err).Fatalf("failed to find end id for date %s", dateEnd)

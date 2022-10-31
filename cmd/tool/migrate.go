@@ -3,8 +3,8 @@ package tool
 import (
 	"net/url"
 
-	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
+	"github.com/jmoiron/sqlx"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
 )
@@ -23,13 +23,13 @@ var Migrate = &cobra.Command{
 			log.WithError(err).Fatalf("couldn't read db URL")
 		}
 		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
-		db, err := database.NewDatabaseService(postgresDSN)
+		db, err := sqlx.Connect("postgres", postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
 		log.Infof("Migrating database ...")
-		numAppliedMigrations, err := migrate.Exec(db.DB.DB, "postgres", migrations.GetMigrations(), migrate.Up)
+		numAppliedMigrations, err := migrate.Exec(db.DB, "postgres", migrations.GetMigrations(), migrate.Up)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to migrate database")
 		}
