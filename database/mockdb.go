@@ -67,6 +67,10 @@ func (db MockDB) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]
 	return nil, nil
 }
 
+func (db MockDB) GetBuilderSubmissionsByID(idFirst, idLast uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
+	return nil, nil
+}
+
 func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
 	return nil
 }

@@ -13,22 +13,22 @@ import (
 )
 
 func init() {
-	DataAPIExportPayloads.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
-	DataAPIExportPayloads.Flags().Uint64Var(&idFirst, "id-from", 0, "start id (inclusive")
-	DataAPIExportPayloads.Flags().Uint64Var(&idLast, "id-to", 0, "end id (inclusive)")
-	DataAPIExportPayloads.Flags().StringVar(&dateStart, "date-start", "", "start date (inclusive)")
-	DataAPIExportPayloads.Flags().StringVar(&dateEnd, "date-end", "", "end date (exclusive)")
-	DataAPIExportPayloads.Flags().StringSliceVar(&outFiles, "out", []string{}, "output filename")
-	_ = DataAPIExportPayloads.MarkFlagRequired("out")
+	DataAPIExportBids.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	DataAPIExportBids.Flags().Uint64Var(&idFirst, "id-from", 0, "start id (inclusive")
+	DataAPIExportBids.Flags().Uint64Var(&idLast, "id-to", 0, "end id (inclusive)")
+	DataAPIExportBids.Flags().StringVar(&dateStart, "date-start", "", "start date (inclusive)")
+	DataAPIExportBids.Flags().StringVar(&dateEnd, "date-end", "", "end date (exclusive)")
+	DataAPIExportBids.Flags().StringSliceVar(&outFiles, "out", []string{}, "output filename")
+	_ = DataAPIExportBids.MarkFlagRequired("out")
 }
 
-var DataAPIExportPayloads = &cobra.Command{
-	Use: "data-api-export-payloads",
+var DataAPIExportBids = &cobra.Command{
+	Use: "data-api-export-bids",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(outFiles) == 0 {
 			log.Fatal("no output files specified")
 		}
-		log.Infof("exporting data-api payloads to %s", strings.Join(outFiles, ", "))
+		log.Infof("exporting data-api bods to %s", strings.Join(outFiles, ", "))
 
 		if idLast == 0 && dateEnd == "" {
 			log.Fatal("must specify --id-to or --date-end")
@@ -48,7 +48,7 @@ var DataAPIExportPayloads = &cobra.Command{
 		// if date, then find corresponding id
 		if dateStart != "" {
 			// find first enrty at or after dateStart
-			query := `SELECT id FROM ` + database.TableDeliveredPayload + ` WHERE inserted_at::date >= date '` + dateStart + `' ORDER BY id ASC LIMIT 1;`
+			query := `SELECT id FROM ` + database.TableBuilderBlockSubmission + ` WHERE inserted_at::date >= date '` + dateStart + `' ORDER BY id ASC LIMIT 1;`
 			err = db.DB.QueryRow(query).Scan(&idFirst)
 			if err != nil {
 				log.WithError(err).Fatalf("failed to find start id for date %s", dateStart)
@@ -56,7 +56,7 @@ var DataAPIExportPayloads = &cobra.Command{
 		}
 		if dateEnd != "" {
 			// find last entry before dateEnd
-			query := `SELECT id FROM ` + database.TableDeliveredPayload + ` WHERE inserted_at::date < date '` + dateEnd + `' ORDER BY id DESC LIMIT 1;`
+			query := `SELECT id FROM ` + database.TableBuilderBlockSubmission + ` WHERE inserted_at::date < date '` + dateEnd + `' ORDER BY id DESC LIMIT 1;`
 			err = db.DB.QueryRow(query).Scan(&idLast)
 			if err != nil {
 				log.WithError(err).Fatalf("failed to find end id for date %s", dateEnd)
@@ -64,15 +64,15 @@ var DataAPIExportPayloads = &cobra.Command{
 		}
 		log.Infof("exporting ids %d to %d", idFirst, idLast)
 
-		deliveredPayloads, err := db.GetDeliveredPayloads(idFirst, idLast)
+		bids, err := db.GetBuilderSubmissionsByID(idFirst, idLast)
 		if err != nil {
 			log.WithError(err).Fatal("error getting recent payloads")
 		}
 
-		log.Infof("got %d payloads", len(deliveredPayloads))
-		entries := make([]common.BidTraceV2JSON, len(deliveredPayloads))
-		for i, payload := range deliveredPayloads {
-			entries[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
+		log.Infof("got %d bids", len(bids))
+		entries := make([]common.BidTraceV2WithTimestampJSON, len(bids))
+		for i, bid := range bids {
+			entries[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(bid)
 		}
 
 		if len(entries) == 0 {
