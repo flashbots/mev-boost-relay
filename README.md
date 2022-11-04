@@ -19,6 +19,8 @@ Dependencies: Redis, PostgreSQL, one or more beacon nodes, and block submission 
 
 This software is currently in **beta state**, and slowly stabilizing.
 
+A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
+
 See also:
 
 * [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
@@ -152,6 +154,10 @@ You are welcome here <3.
 # Security
 
 If you find a security vulnerability on this project or any other initiative related to Flashbots, please let us know sending an email to security@flashbots.net.
+
+## Audits
+
+- [20220822](docs/audit-20220822.md), by [lotusbumi](https://github.com/lotusbumi).
 
 # License
 
