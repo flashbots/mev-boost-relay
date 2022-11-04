@@ -67,7 +67,7 @@ func (db MockDB) GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]
 	return nil, nil
 }
 
-func (db MockDB) GetBuilderSubmissionsByID(idFirst, idLast uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }
 

@@ -23,7 +23,7 @@ type IDatabaseService interface {
 	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, isMostProfitable bool) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
-	GetBuilderSubmissionsByID(idFirst, idLast uint64) (entries []*BuilderBlockSubmissionEntry, err error)
+	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
 	GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error)
 	GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error)
 	GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error)
@@ -385,13 +385,13 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	return tasks, err
 }
 
-func (s *DatabaseService) GetBuilderSubmissionsByID(idFirst, idLast uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
+func (s *DatabaseService) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
 	FROM ` + TableBuilderBlockSubmission + `
-	WHERE sim_success = true AND id >= $1 AND id <= $2
-	ORDER BY slot ASC`
+	WHERE sim_success = true AND slot >= $1 AND slot <= $2
+	ORDER BY slot ASC, inserted_at ASC`
 
-	err = s.DB.Select(&entries, query, idFirst, idLast)
+	err = s.DB.Select(&entries, query, slotFrom, slotTo)
 	return entries, err
 }
 
