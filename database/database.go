@@ -350,18 +350,21 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 
 	tasks := []*BuilderBlockSubmissionEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
+	limit := "LIMIT :limit"
 
 	whereConds := []string{
 		"sim_success = true",
 	}
 	if filters.Slot > 0 {
 		whereConds = append(whereConds, "slot = :slot")
-	}
-	if filters.BlockHash != "" {
-		whereConds = append(whereConds, "block_hash = :block_hash")
+		limit = "" // remove the limit when filtering by slot
 	}
 	if filters.BlockNumber > 0 {
 		whereConds = append(whereConds, "block_number = :block_number")
+		limit = "" // remove the limit when filtering by block_number
+	}
+	if filters.BlockHash != "" {
+		whereConds = append(whereConds, "block_hash = :block_hash")
 	}
 	if filters.BuilderPubkey != "" {
 		whereConds = append(whereConds, "builder_pubkey = :builder_pubkey")
@@ -372,7 +375,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC LIMIT :limit", fields, TableBuilderBlockSubmission, where))
+	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, TableBuilderBlockSubmission, where, limit))
 	if err != nil {
 		return nil, err
 	}
