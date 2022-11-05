@@ -154,6 +154,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	if err != nil {
 		return nil, err
 	}
+	defer nstmt.Close()
 	err = nstmt.QueryRow(execPayloadEntry).Scan(&execPayloadEntry.ID)
 	if err != nil {
 		return nil, err
@@ -195,11 +196,12 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
 	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
 	RETURNING id`
-	nstmt, err = s.DB.PrepareNamed(query)
+	nstmt2, err := s.DB.PrepareNamed(query)
 	if err != nil {
 		return nil, err
 	}
-	err = nstmt.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
+	defer nstmt2.Close()
+	err = nstmt2.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -318,6 +320,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 	if err != nil {
 		return nil, err
 	}
+	defer nstmt.Close()
 
 	err = nstmt.Select(&entries, arg)
 	return entries, err
@@ -379,6 +382,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	if err != nil {
 		return nil, err
 	}
+	defer nstmt.Close()
 
 	err = nstmt.Select(&tasks, arg)
 	return tasks, err
