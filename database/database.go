@@ -316,7 +316,8 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		orderBy = "value DESC"
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy))
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy)
+	nstmt, err := s.DB.PrepareNamed(query)
 	if err != nil {
 		return nil, err
 	}
