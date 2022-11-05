@@ -7,7 +7,7 @@ if [[ "${TRACE-0}" == "1" ]]; then
 fi
 
 # number of bids to export per bucket
-BUCKET_SIZE=2000
+BUCKET_SIZE=1500
 
 if [ -z $DB ]; then
         echo "missing postgres dns in DB env var"

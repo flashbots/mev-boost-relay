@@ -51,7 +51,7 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		log.Info("Connected to Postgres database, starting queries")
-		log.Infof("exporting slots %d to %d (%d slots in total)", slotFrom, slotTo, slotTo-slotFrom+1)
+		log.Infof("exporting slots %d to %d (%d slots in total)...", slotFrom, slotTo, slotTo-slotFrom+1)
 
 		bids, err := db.GetBuilderSubmissionsBySlots(slotFrom, slotTo)
 		if err != nil {
