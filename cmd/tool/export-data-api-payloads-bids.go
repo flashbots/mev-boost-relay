@@ -20,8 +20,8 @@ var (
 
 func init() {
 	DataAPIExportBids.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
-	DataAPIExportBids.Flags().Uint64Var(&slotFrom, "slot-from", 0, "slot id (inclusive")
-	DataAPIExportBids.Flags().Uint64Var(&slotTo, "slot-to", 0, "slot id (inclusive)")
+	DataAPIExportBids.Flags().Uint64Var(&slotFrom, "slot-from", 0, "start slot (inclusive")
+	DataAPIExportBids.Flags().Uint64Var(&slotTo, "slot-to", 0, "end slot (inclusive)")
 	DataAPIExportBids.Flags().StringSliceVar(&outFiles, "out", []string{}, "output filename")
 }
 
@@ -51,7 +51,7 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		log.Info("Connected to Postgres database, starting queries")
-		log.Infof("exporting slots %d to %d (%d slots in total)", slotFrom, slotTo, slotTo-slotFrom)
+		log.Infof("exporting slots %d to %d (%d slots in total)", slotFrom, slotTo, slotTo-slotFrom+1)
 
 		bids, err := db.GetBuilderSubmissionsBySlots(slotFrom, slotTo)
 		if err != nil {

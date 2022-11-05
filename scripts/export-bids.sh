@@ -6,6 +6,9 @@ if [[ "${TRACE-0}" == "1" ]]; then
     set -o xtrace
 fi
 
+# number of bids to export per bucket
+BUCKET_SIZE=2000
+
 if [ -z $DB ]; then
         echo "missing postgres dns in DB env var"
         exit 1
@@ -43,7 +46,7 @@ start=$1
 slot_end=$2
 
 while [[ $start -le $slot_end ]]; do
-        end=$((start+2499))
+        end=$((start+BUCKET_SIZE-1))
         if [[ $end -gt $slot_end ]]; then
                 end=$slot_end
         fi
