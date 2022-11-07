@@ -2,10 +2,12 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -42,6 +44,9 @@ type IDatabaseService interface {
 
 type DatabaseService struct {
 	DB *sqlx.DB
+
+	nstmtInsertExecutionPayload       *sqlx.NamedStmt
+	nstmtInsertBlockBuilderSubmission *sqlx.NamedStmt
 }
 
 func NewDatabaseService(dsn string) (*DatabaseService, error) {
@@ -65,9 +70,30 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 		}
 	}
 
-	return &DatabaseService{
-		DB: db,
-	}, nil
+	dbService := &DatabaseService{DB: db} //nolint:exhaustruct
+	err = dbService.prepareNamedQueries()
+	return dbService, err
+}
+
+func (s *DatabaseService) prepareNamedQueries() (err error) {
+	// Insert execution payload
+	query := `INSERT INTO ` + TableExecutionPayload + `
+	(slot, proposer_pubkey, block_hash, version, payload) VALUES
+	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
+	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
+	RETURNING id`
+	s.nstmtInsertExecutionPayload, err = s.DB.PrepareNamed(query)
+	if err != nil {
+		return err
+	}
+
+	// Insert block builder submission
+	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
+	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
+	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
+	RETURNING id`
+	s.nstmtInsertBlockBuilderSubmission, err = s.DB.PrepareNamed(query)
+	return err
 }
 
 func (s *DatabaseService) Close() error {
@@ -145,16 +171,8 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 	if err != nil {
 		return nil, err
 	}
-	query := `INSERT INTO ` + TableExecutionPayload + `
-	(slot, proposer_pubkey, block_hash, version, payload) VALUES
-	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
-	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
-	RETURNING id`
-	nstmt, err := s.DB.PrepareNamed(query)
-	if err != nil {
-		return nil, err
-	}
-	err = nstmt.QueryRow(execPayloadEntry).Scan(&execPayloadEntry.ID)
+
+	err = s.nstmtInsertExecutionPayload.QueryRow(execPayloadEntry).Scan(&execPayloadEntry.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -191,19 +209,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 		BlockNumber:       payload.ExecutionPayload.BlockNumber,
 		WasMostProfitable: isMostProfitable,
 	}
-	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
-	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
-	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
-	RETURNING id`
-	nstmt, err = s.DB.PrepareNamed(query)
-	if err != nil {
-		return nil, err
-	}
-	err = nstmt.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
-	if err != nil {
-		return nil, err
-	}
-
+	err = s.nstmtInsertBlockBuilderSubmission.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
 	return blockSubmissionEntry, err
 }
 
@@ -280,7 +286,6 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		"builder_pubkey":  queryArgs.BuilderPubkey,
 	}
 
-	entries := []*DeliveredPayloadEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
 
 	whereConds := []string{}
@@ -314,13 +319,24 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		orderBy = "value DESC"
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy))
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	entries := []*DeliveredPayloadEntry{}
+	rows, err := s.DB.NamedQueryContext(ctx, query, arg)
 	if err != nil {
 		return nil, err
 	}
-
-	err = nstmt.Select(&entries, arg)
-	return entries, err
+	for rows.Next() {
+		entry := new(DeliveredPayloadEntry)
+		err = rows.StructScan(entry)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
 
 func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
@@ -348,7 +364,6 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		"builder_pubkey": filters.BuilderPubkey,
 	}
 
-	tasks := []*BuilderBlockSubmissionEntry{}
 	fields := "id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit"
 	limit := "LIMIT :limit"
 
@@ -375,13 +390,24 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	nstmt, err := s.DB.PrepareNamed(fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, TableBuilderBlockSubmission, where, limit))
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, TableBuilderBlockSubmission, where, limit)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	entries := []*BuilderBlockSubmissionEntry{}
+	rows, err := s.DB.NamedQueryContext(ctx, query, arg)
 	if err != nil {
 		return nil, err
 	}
-
-	err = nstmt.Select(&tasks, arg)
-	return tasks, err
+	for rows.Next() {
+		entry := new(BuilderBlockSubmissionEntry)
+		err = rows.StructScan(entry)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
 
 func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError, isTopbid bool) error {
