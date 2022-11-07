@@ -5,7 +5,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-var GetInitDatabase = &migrate.Migration{
+var Migration001InitDatabase = &migrate.Migration{
 	Id: "001-init-database",
 	Up: []string{`
 		CREATE TABLE IF NOT EXISTS ` + vars.TableValidatorRegistration + ` (
