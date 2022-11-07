@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var (
 )
 
 func init() {
-	DataAPIExportBids.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	DataAPIExportPayloads.Flags().String("db", config.DefaultPostgresDSN, "PostgreSQL DSN")
 	DataAPIExportBids.Flags().Uint64Var(&slotFrom, "slot-from", 0, "start slot (inclusive")
 	DataAPIExportBids.Flags().Uint64Var(&slotTo, "slot-to", 0, "end slot (inclusive)")
 	DataAPIExportBids.Flags().StringSliceVar(&outFiles, "out", []string{}, "output filename")
@@ -40,12 +41,12 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		// Connect to Postgres
-		dbURL, err := url.Parse(postgresDSN)
+		dbURL, err := url.Parse(config.KeyPostgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
 		}
 		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
-		db, err := database.NewDatabaseService(postgresDSN)
+		db, err := database.NewDatabaseService(config.KeyPostgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
