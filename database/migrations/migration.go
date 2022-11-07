@@ -5,15 +5,13 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-var migrations = []func() *migrate.Migration{
+var migrations = []*migrate.Migration{
 	GetInitDatabase,
 }
 
 func GetMigrations() *migrate.MemoryMigrationSource {
 	m := make([]*migrate.Migration, len(migrations))
-	for i := range migrations {
-		m[i] = migrations[i]()
-	}
+	copy(m, migrations)
 	return &migrate.MemoryMigrationSource{
 		Migrations: m,
 	}

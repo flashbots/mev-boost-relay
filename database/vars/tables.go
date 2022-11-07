@@ -11,4 +11,5 @@ var (
 	TableBuilderBlockSubmission = tableBase + "_builder_block_submission"
 	TableDeliveredPayload       = tableBase + "_payload_delivered"
 	TableBlockBuilder           = tableBase + "_blockbuilder"
+	TableMigrations             = tableBase + "_migrations"
 )

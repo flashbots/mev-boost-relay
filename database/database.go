@@ -64,6 +64,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetConnMaxIdleTime(0)
 
 	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
+		migrate.SetTable(vars.TableMigrations)
 		_, err := migrate.Exec(db.DB, "postgres", migrations.GetMigrations(), migrate.Up)
 		if err != nil {
 			return nil, err
@@ -77,7 +78,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 
 func (s *DatabaseService) prepareNamedQueries() (err error) {
 	// Insert execution payload
-	query := `INSERT INTO ` + TableExecutionPayload + `
+	query := `INSERT INTO ` + vars.TableExecutionPayload + `
 	(slot, proposer_pubkey, block_hash, version, payload) VALUES
 	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
 	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
@@ -88,7 +89,7 @@ func (s *DatabaseService) prepareNamedQueries() (err error) {
 	}
 
 	// Insert block builder submission
-	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
+	query = `INSERT INTO ` + vars.TableBuilderBlockSubmission + `
 	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
 	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
 	RETURNING id`
@@ -319,7 +320,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		orderBy = "value DESC"
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy)
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, vars.TableDeliveredPayload, where, orderBy)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -390,7 +391,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, TableBuilderBlockSubmission, where, limit)
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, vars.TableBuilderBlockSubmission, where, limit)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -412,7 +413,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 
 func (s *DatabaseService) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
-	FROM ` + TableBuilderBlockSubmission + `
+	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE sim_success = true AND slot >= $1 AND slot <= $2
 	ORDER BY slot ASC, inserted_at ASC`
 
