@@ -6,13 +6,11 @@ import (
 )
 
 var migrations = []*migrate.Migration{
-	GetInitDatabase,
+	Migration001InitDatabase,
 }
 
 func GetMigrations() *migrate.MemoryMigrationSource {
-	m := make([]*migrate.Migration, len(migrations))
-	copy(m, migrations)
 	return &migrate.MemoryMigrationSource{
-		Migrations: m,
+		Migrations: migrations,
 	}
 }
