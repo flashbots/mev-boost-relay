@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/config"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -20,7 +21,7 @@ var (
 )
 
 func init() {
-	DataAPIExportPayloads.Flags().String("db", config.DefaultPostgresDSN, "PostgreSQL DSN")
+	DataAPIExportBids.Flags().String("db", config.DefaultPostgresDSN, "PostgreSQL DSN")
 	DataAPIExportBids.Flags().Uint64Var(&slotFrom, "slot-from", 0, "start slot (inclusive")
 	DataAPIExportBids.Flags().Uint64Var(&slotTo, "slot-to", 0, "end slot (inclusive)")
 	DataAPIExportBids.Flags().StringSliceVar(&outFiles, "out", []string{}, "output filename")
@@ -28,6 +29,9 @@ func init() {
 
 var DataAPIExportBids = &cobra.Command{
 	Use: "data-api-export-bids",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		_ = viper.BindPFlag(config.KeyPostgresDSN, cmd.Flags().Lookup("db"))
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(outFiles) == 0 {
 			outFnBase := fmt.Sprintf("builder-submissions_slot-%d-to-%d", slotFrom, slotTo)
@@ -41,12 +45,13 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		// Connect to Postgres
-		dbURL, err := url.Parse(config.KeyPostgresDSN)
+		postgresDSN := config.GetString(config.KeyPostgresDSN)
+		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("couldn't read db URL")
 		}
 		log.Infof("Connecting to Postgres database at %s%s ...", dbURL.Host, dbURL.Path)
-		db, err := database.NewDatabaseService(config.KeyPostgresDSN)
+		db, err := database.NewDatabaseService(postgresDSN)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
