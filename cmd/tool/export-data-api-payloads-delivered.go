@@ -12,13 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	idFirst   uint64
-	idLast    uint64
-	dateStart string
-	dateEnd   string
-)
-
 func init() {
 	DataAPIExportPayloads.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
 	DataAPIExportPayloads.Flags().Uint64Var(&idFirst, "id-from", 0, "start id (inclusive")
@@ -86,7 +79,7 @@ var DataAPIExportPayloads = &cobra.Command{
 			return
 		}
 
-		writeToFile := func(outFile string) {
+		writeToFile := func(outFile string) { //nolint:dupl
 			f, err := os.Create(outFile)
 			if err != nil {
 				log.WithError(err).Fatal("failed to open file")

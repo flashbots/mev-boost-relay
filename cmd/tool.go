@@ -9,6 +9,7 @@ import (
 
 func init() {
 	toolCmd.AddCommand(tool.DataAPIExportPayloads)
+	toolCmd.AddCommand(tool.DataAPIExportBids)
 	toolCmd.AddCommand(tool.ArchiveExecutionPayloads)
 	rootCmd.AddCommand(toolCmd)
 }

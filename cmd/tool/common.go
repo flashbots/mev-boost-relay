@@ -9,4 +9,9 @@ var (
 
 	postgresDSN string
 	outFiles    []string
+
+	idFirst   uint64
+	idLast    uint64
+	dateStart string
+	dateEnd   string
 )
