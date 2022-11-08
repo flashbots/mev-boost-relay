@@ -5,12 +5,9 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-var migrations = []*migrate.Migration{
-	Migration001InitDatabase,
-}
-
-func GetMigrations() *migrate.MemoryMigrationSource {
-	return &migrate.MemoryMigrationSource{
-		Migrations: migrations,
-	}
+var Migrations = migrate.MemoryMigrationSource{
+	Migrations: []*migrate.Migration{
+		Migration001InitDatabase,
+		Migration002RemoveIsBestAddReceivedAt,
+	},
 }

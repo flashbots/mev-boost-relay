@@ -22,6 +22,13 @@ func NewNullString(s string) sql.NullString {
 	}
 }
 
+func NewNullTime(t time.Time) sql.NullTime {
+	return sql.NullTime{
+		Time:  t,
+		Valid: true,
+	}
+}
+
 type GetPayloadsFilters struct {
 	Slot           uint64
 	Cursor         uint64
@@ -117,8 +124,9 @@ func (e *ExecutionPayloadEntry) ToCSVRecord() []string {
 }
 
 type BuilderBlockSubmissionEntry struct {
-	ID         int64     `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
+	ID         int64        `db:"id"`
+	InsertedAt time.Time    `db:"inserted_at"`
+	ReceivedAt sql.NullTime `db:"received_at"`
 
 	// Delivered ExecutionPayload
 	ExecutionPayloadID sql.NullInt64 `db:"execution_payload_id"`
@@ -145,9 +153,8 @@ type BuilderBlockSubmissionEntry struct {
 	Value string `db:"value"`
 
 	// Helpers
-	Epoch             uint64 `db:"epoch"`
-	BlockNumber       uint64 `db:"block_number"`
-	WasMostProfitable bool   `db:"was_most_profitable"`
+	Epoch       uint64 `db:"epoch"`
+	BlockNumber uint64 `db:"block_number"`
 }
 
 type DeliveredPayloadEntry struct {
@@ -189,7 +196,6 @@ type BlockBuilderEntry struct {
 
 	NumSubmissionsTotal    uint64 `db:"num_submissions_total"    json:"num_submissions_total"`
 	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"num_submissions_simerror"`
-	NumSubmissionsTopBid   uint64 `db:"num_submissions_topbid"   json:"num_submissions_topbid"`
 
 	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"num_sent_getpayload"`
 }

@@ -799,9 +799,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 
 		// Increment builder stats
-		err = api.db.IncBlockBuilderStatsAfterGetPayload(slot, blockHash.String())
+		err = api.db.IncBlockBuilderStatsAfterGetPayload(bidTrace.BuilderPubkey.String())
 		if err != nil {
-			log.WithError(err).Error("could not increment builder-stats after getPayload")
+			log.WithError(err).Error("failed to increment builder-stats after getPayload")
 		}
 	}()
 
@@ -950,17 +950,16 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	var simErr error
-	isBestBid := true // not needed anymore since cancellations
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, isBestBid)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
 		}
 
-		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil, isBestBid)
+		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil)
 		if err != nil {
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
