@@ -27,6 +27,7 @@ func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 }
 
 func resetDatabase(t *testing.T) *DatabaseService {
+	t.Helper()
 	if !runDBTests {
 		t.Skip("Skipping database tests")
 	}
@@ -132,6 +133,7 @@ func TestMigrations(t *testing.T) {
 	db := resetDatabase(t)
 	query := `SELECT COUNT(*) FROM ` + vars.TableMigrations + `;`
 	rowCount := 0
-	db.DB.QueryRow(query).Scan(&rowCount)
+	err := db.DB.QueryRow(query).Scan(&rowCount)
+	require.NoError(t, err)
 	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
 }
