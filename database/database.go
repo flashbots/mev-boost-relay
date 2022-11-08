@@ -11,8 +11,11 @@ import (
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database/migrations"
+	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 )
 
 type IDatabaseService interface {
@@ -60,12 +63,9 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
 
-	if os.Getenv("PRINT_SCHEMA") == "1" {
-		fmt.Println(schema)
-	}
-
 	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
-		_, err = db.Exec(schema)
+		migrate.SetTable(vars.TableMigrations)
+		_, err := migrate.Exec(db.DB, "postgres", migrations.GetMigrations(), migrate.Up)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +78,7 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 
 func (s *DatabaseService) prepareNamedQueries() (err error) {
 	// Insert execution payload
-	query := `INSERT INTO ` + TableExecutionPayload + `
+	query := `INSERT INTO ` + vars.TableExecutionPayload + `
 	(slot, proposer_pubkey, block_hash, version, payload) VALUES
 	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
 	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
@@ -89,7 +89,7 @@ func (s *DatabaseService) prepareNamedQueries() (err error) {
 	}
 
 	// Insert block builder submission
-	query = `INSERT INTO ` + TableBuilderBlockSubmission + `
+	query = `INSERT INTO ` + vars.TableBuilderBlockSubmission + `
 	(execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, was_most_profitable) VALUES
 	(:execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :was_most_profitable)
 	RETURNING id`
@@ -103,14 +103,14 @@ func (s *DatabaseService) Close() error {
 
 // NumRegisteredValidators returns the number of unique pubkeys that have registered
 func (s *DatabaseService) NumRegisteredValidators() (count uint64, err error) {
-	query := `SELECT COUNT(*) FROM (SELECT DISTINCT pubkey FROM ` + TableValidatorRegistration + `) AS temp;`
+	query := `SELECT COUNT(*) FROM (SELECT DISTINCT pubkey FROM ` + vars.TableValidatorRegistration + `) AS temp;`
 	row := s.DB.QueryRow(query)
 	err = row.Scan(&count)
 	return count, err
 }
 
 func (s *DatabaseService) NumValidatorRegistrationRows() (count uint64, err error) {
-	query := `SELECT COUNT(*) FROM ` + TableValidatorRegistration + `;`
+	query := `SELECT COUNT(*) FROM ` + vars.TableValidatorRegistration + `;`
 	row := s.DB.QueryRow(query)
 	err = row.Scan(&count)
 	return count, err
@@ -118,9 +118,9 @@ func (s *DatabaseService) NumValidatorRegistrationRows() (count uint64, err erro
 
 func (s *DatabaseService) SaveValidatorRegistration(entry ValidatorRegistrationEntry) error {
 	query := `WITH latest_registration AS (
-		SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature FROM ` + TableValidatorRegistration + ` WHERE pubkey=:pubkey ORDER BY pubkey, timestamp DESC limit 1
+		SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature FROM ` + vars.TableValidatorRegistration + ` WHERE pubkey=:pubkey ORDER BY pubkey, timestamp DESC limit 1
 	)
-	INSERT INTO ` + TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature)
+	INSERT INTO ` + vars.TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature)
 	SELECT :pubkey, :fee_recipient, :timestamp, :gas_limit, :signature
 	WHERE NOT EXISTS (
 		SELECT 1 from latest_registration WHERE pubkey=:pubkey AND :timestamp <= latest_registration.timestamp OR (:fee_recipient = latest_registration.fee_recipient AND :gas_limit = latest_registration.gas_limit)
@@ -131,7 +131,7 @@ func (s *DatabaseService) SaveValidatorRegistration(entry ValidatorRegistrationE
 
 func (s *DatabaseService) GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error) {
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature
-		FROM ` + TableValidatorRegistration + `
+		FROM ` + vars.TableValidatorRegistration + `
 		WHERE pubkey=$1
 		ORDER BY pubkey, timestamp DESC;`
 	entry := &ValidatorRegistrationEntry{}
@@ -141,7 +141,7 @@ func (s *DatabaseService) GetValidatorRegistration(pubkey string) (*ValidatorReg
 
 func (s *DatabaseService) GetValidatorRegistrationsForPubkeys(pubkeys []string) (entries []*ValidatorRegistrationEntry, err error) {
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature
-		FROM ` + TableValidatorRegistration + `
+		FROM ` + vars.TableValidatorRegistration + `
 		WHERE pubkey IN (?)
 		ORDER BY pubkey, timestamp DESC;`
 
@@ -159,7 +159,7 @@ func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([
 	if timestampOnly {
 		query = `SELECT DISTINCT ON (pubkey) pubkey, timestamp`
 	}
-	query += ` FROM ` + TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
+	query += ` FROM ` + vars.TableValidatorRegistration + ` ORDER BY pubkey, timestamp DESC;`
 
 	var registrations []*ValidatorRegistrationEntry
 	err := s.DB.Select(&registrations, query)
@@ -216,7 +216,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number
-	FROM ` + TableBuilderBlockSubmission + `
+	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
 	ORDER BY builder_pubkey ASC
 	LIMIT 1`
@@ -226,7 +226,7 @@ func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, b
 }
 
 func (s *DatabaseService) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error) {
-	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + TableExecutionPayload + ` WHERE id=$1`
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + vars.TableExecutionPayload + ` WHERE id=$1`
 	entry = &ExecutionPayloadEntry{}
 	err = s.DB.Get(entry, query, executionPayloadID)
 	return entry, err
@@ -234,7 +234,7 @@ func (s *DatabaseService) GetExecutionPayloadEntryByID(executionPayloadID int64)
 
 func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error) {
 	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload
-	FROM ` + TableExecutionPayload + `
+	FROM ` + vars.TableExecutionPayload + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3`
 	entry = &ExecutionPayloadEntry{}
 	err = s.DB.Get(entry, query, slot, proposerPubkey, blockHash)
@@ -268,7 +268,7 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, sign
 		Value: bidTrace.Value.String(),
 	}
 
-	query := `INSERT INTO ` + TableDeliveredPayload + `
+	query := `INSERT INTO ` + vars.TableDeliveredPayload + `
 		(signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value) VALUES
 		(:signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value)
 		ON CONFLICT DO NOTHING`
@@ -320,7 +320,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		orderBy = "value DESC"
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, TableDeliveredPayload, where, orderBy)
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY %s LIMIT :limit", fields, vars.TableDeliveredPayload, where, orderBy)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -342,7 +342,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 
 func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
-	FROM ` + TableDeliveredPayload + `
+	FROM ` + vars.TableDeliveredPayload + `
 	WHERE id >= $1 AND id <= $2
 	ORDER BY slot ASC`
 
@@ -352,7 +352,7 @@ func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries 
 
 func (s *DatabaseService) GetNumDeliveredPayloads() (uint64, error) {
 	var count uint64
-	err := s.DB.QueryRow("SELECT COUNT(*) FROM " + TableDeliveredPayload).Scan(&count)
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM " + vars.TableDeliveredPayload).Scan(&count)
 	return count, err
 }
 
@@ -391,7 +391,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		where = "WHERE " + strings.Join(whereConds, " AND ")
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, TableBuilderBlockSubmission, where, limit)
+	query := fmt.Sprintf("SELECT %s FROM %s %s ORDER BY slot DESC, inserted_at DESC %s", fields, vars.TableBuilderBlockSubmission, where, limit)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -413,7 +413,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 
 func (s *DatabaseService) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error) {
 	query := `SELECT id, inserted_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit
-	FROM ` + TableBuilderBlockSubmission + `
+	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE sim_success = true AND slot >= $1 AND slot <= $2
 	ORDER BY slot ASC, inserted_at ASC`
 
@@ -438,58 +438,58 @@ func (s *DatabaseService) UpsertBlockBuilderEntryAfterSubmission(lastSubmission 
 	}
 
 	// Upsert
-	query := `INSERT INTO ` + TableBlockBuilder + `
+	query := `INSERT INTO ` + vars.TableBlockBuilder + `
 		(builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid) VALUES
 		(:builder_pubkey, :description, :is_high_prio, :is_blacklisted, :last_submission_id, :last_submission_slot, :num_submissions_total, :num_submissions_simerror, :num_submissions_topbid)
 		ON CONFLICT (builder_pubkey) DO UPDATE SET
 			last_submission_id = :last_submission_id,
 			last_submission_slot = :last_submission_slot,
-			num_submissions_total = ` + TableBlockBuilder + `.num_submissions_total + 1,
-			num_submissions_simerror = ` + TableBlockBuilder + `.num_submissions_simerror + :num_submissions_simerror,
-			num_submissions_topbid = ` + TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
+			num_submissions_total = ` + vars.TableBlockBuilder + `.num_submissions_total + 1,
+			num_submissions_simerror = ` + vars.TableBlockBuilder + `.num_submissions_simerror + :num_submissions_simerror,
+			num_submissions_topbid = ` + vars.TableBlockBuilder + `.num_submissions_topbid + :num_submissions_topbid;`
 	_, err := s.DB.NamedExec(query, entry)
 	return err
 }
 
 func (s *DatabaseService) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
-	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + TableBlockBuilder + ` ORDER BY id ASC;`
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + vars.TableBlockBuilder + ` ORDER BY id ASC;`
 	entries := []*BlockBuilderEntry{}
 	err := s.DB.Select(&entries, query)
 	return entries, err
 }
 
 func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
-	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + TableBlockBuilder + ` WHERE builder_pubkey=$1;`
+	query := `SELECT id, inserted_at, builder_pubkey, description, is_high_prio, is_blacklisted, last_submission_id, last_submission_slot, num_submissions_total, num_submissions_simerror, num_submissions_topbid, num_sent_getpayload FROM ` + vars.TableBlockBuilder + ` WHERE builder_pubkey=$1;`
 	entry := &BlockBuilderEntry{}
 	err := s.DB.Get(entry, query, pubkey)
 	return entry, err
 }
 
 func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
-	query := `UPDATE ` + TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2 WHERE builder_pubkey=$3;`
+	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2 WHERE builder_pubkey=$3;`
 	_, err := s.DB.Exec(query, isHighPrio, isBlacklisted, pubkey)
 	return err
 }
 
 func (s *DatabaseService) IncBlockBuilderStatsAfterGetPayload(slot uint64, blockhash string) error {
-	query := `UPDATE ` + TableBlockBuilder + `
+	query := `UPDATE ` + vars.TableBlockBuilder + `
 		SET num_sent_getpayload=num_sent_getpayload+1
 		FROM (
-			SELECT builder_pubkey FROM ` + TableBuilderBlockSubmission + ` WHERE slot=$1 AND block_hash=$2
+			SELECT builder_pubkey FROM ` + vars.TableBuilderBlockSubmission + ` WHERE slot=$1 AND block_hash=$2
 		) AS sub
-		WHERE ` + TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
+		WHERE ` + vars.TableBlockBuilder + `.builder_pubkey=sub.builder_pubkey;`
 	_, err := s.DB.Exec(query, slot, blockhash)
 	return err
 }
 
 func (s *DatabaseService) GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error) {
-	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + TableExecutionPayload + ` WHERE id >= $1 AND id <= $2 ORDER BY id ASC`
+	query := `SELECT id, inserted_at, slot, proposer_pubkey, block_hash, version, payload FROM ` + vars.TableExecutionPayload + ` WHERE id >= $1 AND id <= $2 ORDER BY id ASC`
 	err = s.DB.Select(&entries, query, idFirst, idLast)
 	return entries, err
 }
 
 func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error {
-	query := `DELETE FROM ` + TableExecutionPayload + ` WHERE id >= $1 AND id <= $2`
+	query := `DELETE FROM ` + vars.TableExecutionPayload + ` WHERE id >= $1 AND id <= $2`
 	_, err := s.DB.Exec(query, idFirst, idLast)
 	return err
 }
