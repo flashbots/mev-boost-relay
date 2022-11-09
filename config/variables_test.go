@@ -28,14 +28,3 @@ func TestBindAndSet(t *testing.T) {
 		require.Equal(t, previousValue, GetString(key))
 	})
 }
-
-func TestGetConfig(t *testing.T) {
-	config := map[string]string{
-		"FLASHBOTS_URL": "https://www.flashbots.net/",
-		"FB_RELAY_URL":  "https://relay.flashbots.net",
-	}
-	for env, value := range config {
-		bindAndSet(env, env, value)
-		require.Equal(t, value, GetConfig()[env])
-	}
-}

@@ -133,9 +133,7 @@ const (
 	KeyAllowSyncingBeaconNode = "KeyAllowSyncingBeaconNode"
 )
 
-var (
-	DefaultBeaconURIs = []string{"http://localhost:3500"}
-)
+var DefaultBeaconURIs = []string{"http://localhost:3500"}
 
 func init() {
 	// Common: Api, HouseKeeper & Website
