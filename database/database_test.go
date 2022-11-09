@@ -5,11 +5,14 @@ import (
 	"testing"
 
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database/migrations"
+	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	runDBTests = os.Getenv("RUN_DB_TESTS") == "1"
+	runDBTests = os.Getenv("RUN_DB_TESTS") == "1" //|| true
 	testDBDSN  = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
 )
 
@@ -23,13 +26,25 @@ func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 	}
 }
 
-func TestSaveValidatorRegistration(t *testing.T) {
+func resetDatabase(t *testing.T) *DatabaseService {
+	t.Helper()
 	if !runDBTests {
 		t.Skip("Skipping database tests")
 	}
 
+	// Wipe test database
+	_db, err := sqlx.Connect("postgres", testDBDSN)
+	require.NoError(t, err)
+	_, err = _db.Exec(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`)
+	require.NoError(t, err)
+
 	db, err := NewDatabaseService(testDBDSN)
 	require.NoError(t, err)
+	return db
+}
+
+func TestSaveValidatorRegistration(t *testing.T) {
+	db := resetDatabase(t)
 
 	// reg1 is the initial registration
 	reg1 := createValidatorRegistration("0x8996515293fcd87ca09b5c6ffe5c17f043c6a1a3639cc9494a82ec8eb50a9b55c34b47675e573be40d9be308b1ca2908")
@@ -112,4 +127,13 @@ func TestSaveValidatorRegistration(t *testing.T) {
 	cnt, err = db.NumValidatorRegistrationRows()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), cnt)
+}
+
+func TestMigrations(t *testing.T) {
+	db := resetDatabase(t)
+	query := `SELECT COUNT(*) FROM ` + vars.TableMigrations + `;`
+	rowCount := 0
+	err := db.DB.QueryRow(query).Scan(&rowCount)
+	require.NoError(t, err)
+	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
 }

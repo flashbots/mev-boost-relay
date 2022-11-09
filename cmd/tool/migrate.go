@@ -31,7 +31,7 @@ var Migrate = &cobra.Command{
 
 		log.Infof("Migrating database ...")
 		migrate.SetTable(vars.TableMigrations)
-		numAppliedMigrations, err := migrate.Exec(db.DB, "postgres", migrations.GetMigrations(), migrate.Up)
+		numAppliedMigrations, err := migrate.Exec(db.DB, "postgres", migrations.Migrations, migrate.Up)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to migrate database")
 		}

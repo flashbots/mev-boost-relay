@@ -40,9 +40,14 @@ func DeliveredPayloadEntryToBidTraceV2JSON(payload *DeliveredPayloadEntry) commo
 }
 
 func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV2WithTimestampJSON {
+	timestamp := payload.InsertedAt
+	if payload.ReceivedAt.Valid {
+		timestamp = payload.ReceivedAt.Time
+	}
+
 	return common.BidTraceV2WithTimestampJSON{
-		Timestamp:   payload.InsertedAt.Unix(),
-		TimestampMs: payload.InsertedAt.UnixMilli(),
+		Timestamp:   timestamp.Unix(),
+		TimestampMs: timestamp.UnixMilli(),
 		BidTraceV2JSON: common.BidTraceV2JSON{
 			Slot:                 payload.Slot,
 			ParentHash:           payload.ParentHash,
