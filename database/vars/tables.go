@@ -1,10 +1,10 @@
 // Package vars contains the database variables such as dynamic table names
 package vars
 
-import "github.com/flashbots/mev-boost-relay/common"
+import "github.com/flashbots/mev-boost-relay/config"
 
 var (
-	tableBase = common.GetEnv("DB_TABLE_PREFIX", "dev")
+	tableBase = config.GetString(config.KeyDBTablePrefix)
 
 	TableMigrations             = tableBase + "_migrations"
 	TableValidatorRegistration  = tableBase + "_validator_registration"

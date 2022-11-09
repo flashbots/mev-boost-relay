@@ -54,7 +54,6 @@
 //
 //	$ FIRST_FLAG="Hello from the environment" go run . command
 //	Hello from the environment
-//
 package config
 
 import (
