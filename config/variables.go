@@ -1,4 +1,60 @@
 // Package config defines the default configuration and binds to environment variables
+//
+// To setup a new config variable:
+// 1. Define a default value (config.*Default*): shared by the cmd flag and the env variable
+// 2. Define a mapping key (config.Key*): to bind the cmd flag and the env variable
+// 3. Blend both using bindAndSet(Mappingkey, ENV, defaultValue)
+//
+// To setup a new command flag using the values from the config:
+//  1. Define a command flag without assigning it to a variable (without the Var())
+//  2. Use the default value from the config (config.*Default*)
+//  3. Use Viper to bind the command flag to the mapping key (config.Key*)
+//     The BindPFlag() should be done in the PreRun stage to workaround: https://github.com/spf13/viper/issues/233
+//     Lookup() receives the flag name
+//  4. Get and cast the value using the config.Get*
+//
+// Example:
+// Definition of a command with 2 flags where only the first one supports fetching the value from an environment variable
+//
+// config.go
+//
+//	const (
+//		DefaultFirstFlag = "default value for fist flag"
+//		KeyFirstFlag     = "KeyAPIDebug"
+//	)
+//	bindAndSet(KeyFirstFlag, "FIRST_FLAG", DefaultFirstFlag)
+//
+// command.go
+//
+//	var secondFlag uint64
+//
+//	func init() {
+//		rootCmd.AddCommand(Cmd)
+//		Cmd.Flags().String("firstFlag", config.DefaultFirstFlag, "first flag")
+//		Cmd.Flags().Uint64Var(&secondFlag, "other-flag", 2, "second flag")
+//	}
+//
+//	var Cmd = &cobra.Command{
+//		Use: "command",
+//		PreRun: func(cmd *cobra.Command, args []string) {
+//			_ = viper.BindPFlag(config.KeyFirstFlag, cmd.Flags().Lookup("firstFlag"))
+//		},
+//		Run: func(cmd *cobra.Command, args []string) {
+//			fmt.Println(config.GetString(config.KeyFirstFlag))
+//		},
+//	}
+//
+// The command can be run either using a flag or an environment variable:
+//
+//	$ go run . command
+//	default value for fist flag
+//
+//	$ go run . command --firstFlag "Hello from the flag"
+//	Hello from the flag
+//
+//	$ FIRST_FLAG="Hello from the environment" go run . command
+//	Hello from the environment
+//
 package config
 
 import (
@@ -68,11 +124,8 @@ const (
 	// Database
 	KeyDBDontApplySchema = "KeyDBDontApplySchema"
 	KeyDBTablePrefix     = "KeyDBTablePrefix"
-	KeyDBRunTests        = "KeyKeyDBRunTests"
-	KeyDBTestDSN         = "KeyKeyDBTestDSN"
-
-	// Datastore
-	KeyDisableBidMemoryCache = "KeyDisableBidMemoryCache"
+	KeyDBRunTests        = "KeyDBRunTests"
+	KeyDBTestDSN         = "KeyDBTestDSN"
 
 	// Redis
 	KeyActiveValidatorHours = "KeyActiveValidatorHours"
@@ -83,8 +136,6 @@ const (
 
 var (
 	DefaultBeaconURIs = []string{"http://localhost:3500"}
-
-	configEnvs = make(map[string]string)
 )
 
 func init() {
@@ -136,23 +187,13 @@ func init() {
 	bindAndSet(KeyAllowSyncingBeaconNode, "ALLOW_SYNCING_BEACON_NODE", "")
 }
 
+// bindAndSet maps the command flag with the env variable through the key
 func bindAndSet(key, envVariable string, defaultValue any) {
 	log := common.LogSetup(viper.GetBool("logJSON"), viper.GetString("logLevel"))
 	if err := viper.BindEnv(key, envVariable); err != nil {
 		log.WithError(err).Fatalf("Failed to BindEnv: %s", envVariable)
 	}
 	viper.SetDefault(key, defaultValue)
-	configEnvs[key] = envVariable
-}
-
-// GetConfig returns the key/values for the config
-func GetConfig() map[string]string {
-	config := make(map[string]string)
-	for k, v := range configEnvs {
-		config[v] = viper.GetString(k)
-	}
-	// FIXME: Needs to mask or skip sensitive data
-	return config
 }
 
 // GetInt returns the value associated with the key as an integer.
