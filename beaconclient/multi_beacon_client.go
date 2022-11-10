@@ -283,6 +283,6 @@ func (c *MultiBeaconClient) GetRandao(slot uint64) (randaoResp *GetRandaoRespons
 		return randaoResp, nil
 	}
 
-	c.log.WithField("slot", slot).WithError(err).Error("failed to get randao from any CL node")
+	c.log.WithField("slot", slot).WithError(err).Warn("failed to get randao from any CL node")
 	return nil, err
 }

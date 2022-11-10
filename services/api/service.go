@@ -857,9 +857,10 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	api.expectedPrevRandaoLock.Unlock()
 
 	// get randao from BN
+	api.log.Debugf("- querying BN for randao for slot %d", slot)
 	randao, err := api.beaconClient.GetRandao(slot)
 	if err != nil {
-		api.log.WithField("slot", slot).WithError(err).Error("failed to get randao from beacon node")
+		api.log.WithField("slot", slot).WithError(err).Warn("failed to get randao from beacon node")
 		api.expectedPrevRandaoLock.Lock()
 		api.expectedPrevRandaoUpdating = 0
 		api.expectedPrevRandaoLock.Unlock()
