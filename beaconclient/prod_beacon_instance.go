@@ -208,3 +208,19 @@ func (c *ProdBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code 
 	uri := fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 	return fetchBeacon(http.MethodPost, uri, block, nil)
 }
+
+type GetGenesisResponse struct {
+	Data struct {
+		GenesisTime           uint64 `json:"genesis_time,string"`
+		GenesisValidatorsRoot string `json:"genesis_validators_root"`
+		GenesisForkVersion    string `json:"genesis_fork_version"`
+	}
+}
+
+// GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
+func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/genesis", c.beaconURI)
+	resp := new(GetGenesisResponse)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}

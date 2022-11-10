@@ -25,6 +25,7 @@ type IMultiBeaconClient interface {
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	GetGenesis() (*GetGenesisResponse, error)
 }
 
 // IBeaconInstance is the interface for a single beacon client instance
@@ -36,6 +37,7 @@ type IBeaconInstance interface {
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	GetGenesis() (*GetGenesisResponse, error)
 }
 
 type MultiBeaconClient struct {
@@ -209,4 +211,23 @@ func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code i
 
 	log.WithField("statusCode", code).WithError(err).Error("failed to publish block on any CL node")
 	return code, err
+}
+
+// GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
+func (c *MultiBeaconClient) GetGenesis() (genesisInfo *GetGenesisResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		log.Debug("publishing block")
+
+		if genesisInfo, err = client.GetGenesis(); err != nil {
+			log.WithError(err).Warn("failed to get genesis info")
+			continue
+		}
+
+		return genesisInfo, nil
+	}
+
+	c.log.WithError(err).Error("failed to publish block on any CL node")
+	return genesisInfo, err
 }

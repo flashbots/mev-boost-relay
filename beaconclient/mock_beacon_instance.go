@@ -101,3 +101,7 @@ func (c *MockBeaconInstance) addDelay() {
 func (c *MockBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
 	return 0, nil
 }
+
+func (c *MockBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
+	return nil, nil
+}
