@@ -109,7 +109,8 @@ type RelayAPI struct {
 	redis        *datastore.RedisCache
 	db           database.IDatabaseService
 
-	headSlot uberatomic.Uint64
+	headSlot    uberatomic.Uint64
+	genesisInfo *beaconclient.GetGenesisResponse
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   []types.BuilderGetValidatorsResponseEntry
@@ -265,6 +266,12 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
+
+	api.genesisInfo, err = api.beaconClient.GetGenesis()
+	if err != nil {
+		return err
+	}
+	api.log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
 
 	// start things for the block-builder API
 	if api.opts.BlockBuilderAPI {
@@ -862,6 +869,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"builderPubkey": payload.Message.BuilderPubkey.String(),
 		"blockHash":     payload.Message.BlockHash.String(),
 	})
+
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Message.Slot * 12)
+	if payload.ExecutionPayload.Timestamp != expectedTimestamp {
+		log.Warnf("builder submission with wrong timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp))
+		return
+	}
 
 	// Reject new submissions once the payload for this slot was delivered
 	slotStr, err := api.redis.GetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered)
