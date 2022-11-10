@@ -396,11 +396,12 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	// store the head slot
 	api.headSlot.Store(headSlot)
 
-	// query the expected prev_randao field
-	go api.updatedExpectedRandao(headSlot)
-
-	// only for builder-api: update proposer duties in the background
+	// only for builder-api
 	if api.opts.BlockBuilderAPI {
+		// query the expected prev_randao field
+		go api.updatedExpectedRandao(headSlot)
+
+		// update proposer duties in the background
 		go api.updateProposerDuties(headSlot)
 	}
 
@@ -844,9 +845,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 // updatedExpectedRandao updates the prev_randao field we expect from builder block submissions
 func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
+	api.log.Infof("updating randao for %d ...", slot)
 	api.expectedPrevRandaoLock.Lock()
 	latestKnownSlot := api.expectedPrevRandao.slot
-	if slot <= latestKnownSlot || slot <= api.expectedPrevRandaoUpdating { // do nothing slot is already known or currently being updated
+	if slot < latestKnownSlot || slot <= api.expectedPrevRandaoUpdating { // do nothing slot is already known or currently being updated
+		api.log.Debugf("- abort updating randao - slot %d, latest: %d, updating: %d", slot, latestKnownSlot, api.expectedPrevRandaoUpdating)
 		api.expectedPrevRandaoLock.Unlock()
 		return
 	}
@@ -857,6 +860,9 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	randao, err := api.beaconClient.GetRandao(slot)
 	if err != nil {
 		api.log.WithField("slot", slot).WithError(err).Error("failed to get randao from beacon node")
+		api.expectedPrevRandaoLock.Lock()
+		api.expectedPrevRandaoUpdating = 0
+		api.expectedPrevRandaoLock.Unlock()
 		return
 	}
 
@@ -864,14 +870,16 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	api.expectedPrevRandaoLock.Lock()
 	defer api.expectedPrevRandaoLock.Unlock()
 	targetSlot := slot + 1
-	if targetSlot <= api.expectedPrevRandao.slot {
-		return
+	api.log.Debugf("- after BN randao: slot %d, targetSlot: %d latest: %d", slot, targetSlot, api.expectedPrevRandao.slot)
+
+	// update if still the latest
+	if targetSlot >= api.expectedPrevRandao.slot {
+		api.expectedPrevRandao = randaoHelper{
+			slot:       targetSlot, // the retrieved prev_randao is for the next slot
+			prevRandao: randao.Data.Randao,
+		}
+		api.log.WithField("slot", slot).Infof("updated expected prev_randao to %s for slot %d", randao.Data.Randao, targetSlot)
 	}
-	api.expectedPrevRandao = randaoHelper{
-		slot:       targetSlot, // the retrieved prev_randao is for the next slot
-		prevRandao: randao.Data.Randao,
-	}
-	api.log.WithField("slot", slot).Infof("updated expected prev_randao to %s for slot %d", randao.Data.Randao, slot+1)
 }
 
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
