@@ -227,13 +227,12 @@ func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
 }
 
 type GetSpecResponse struct {
-	//	{
-	//	  "DEPOSIT_CONTRACT_ADDRESS": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
-	//	  "DEPOSIT_NETWORK_ID": "1",
-	//	  "DOMAIN_AGGREGATE_AND_PROOF": "0x06000000",
-	//	  "INACTIVITY_PENALTY_QUOTIENT": "67108864",
-	//	  "INACTIVITY_PENALTY_QUOTIENT_ALTAIR": "50331648"
-	//	}
+	SecondsPerSlot                  uint64 `json:"SECONDS_PER_SLOT,string"`
+	DepositContractAddress          string `json:"DEPOSIT_CONTRACT_ADDRESS"`
+	DepositNetworkID                string `json:"DEPOSIT_NETWORK_ID"`
+	DomainAggregateAndProof         string `json:"DOMAIN_AGGREGATE_AND_PROOF"`
+	InactivityPenaltyQuotient       string `json:"INACTIVITY_PENALTY_QUOTIENT"`
+	InactivityPenaltyQuotientAltair string `json:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"`
 }
 
 // GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec

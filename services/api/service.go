@@ -957,11 +957,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// randao check
+	// randao check 1:
+	// - querying the randao from the BN if payload has a newer slot (might be faster than headSlot event)
+	// - check for validity happens later, again after validation (to use some time for BN request to finish...)
 	api.expectedPrevRandaoLock.RLock()
-	if api.expectedPrevRandao.slot != payload.Message.Slot { // trigger querying the randao now (might be before headSlot event)
+	if payload.Message.Slot > api.expectedPrevRandao.slot {
 		go api.updatedExpectedRandao(payload.Message.Slot - 1)
-		// check for validity happens later, again after validation (to use some time for BN request to finish...)
 	}
 	api.expectedPrevRandaoLock.RUnlock()
 
