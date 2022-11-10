@@ -184,11 +184,12 @@ type GetBlockResponse struct {
 	}
 }
 
-// GetBlock returns the latest block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-func (c *ProdBeaconInstance) GetBlock() (*GetBlockResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
+// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+// blockID can be 'head' or slot number
+func (c *ProdBeaconInstance) GetBlock(blockID string) (block *GetBlockResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/%s", c.beaconURI, blockID)
 	resp := new(GetBlockResponse)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
 
@@ -222,5 +223,23 @@ func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/genesis", c.beaconURI)
 	resp := new(GetGenesisResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
+type GetSpecResponse struct {
+	//	{
+	//	  "DEPOSIT_CONTRACT_ADDRESS": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
+	//	  "DEPOSIT_NETWORK_ID": "1",
+	//	  "DOMAIN_AGGREGATE_AND_PROOF": "0x06000000",
+	//	  "INACTIVITY_PENALTY_QUOTIENT": "67108864",
+	//	  "INACTIVITY_PENALTY_QUOTIENT_ALTAIR": "50331648"
+	//	}
+}
+
+// GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
+func (c *ProdBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/config/spec", c.beaconURI)
+	resp := new(GetSpecResponse)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }

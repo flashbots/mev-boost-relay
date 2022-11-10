@@ -870,13 +870,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"blockHash":     payload.Message.BlockHash.String(),
 	})
 
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Message.Slot * 12)
-	if payload.ExecutionPayload.Timestamp != expectedTimestamp {
-		log.Warnf("builder submission with wrong timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp)
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp))
-		return
-	}
-
 	// Reject new submissions once the payload for this slot was delivered
 	slotStr, err := api.redis.GetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered)
 	if err != nil && !errors.Is(err, redis.Nil) {
@@ -893,8 +886,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.Message.BuilderPubkey.String())
+	log = log.WithFields(logrus.Fields{
+		"builderIsHighPrio":    builderIsHighPrio,
+		"builderIsBlacklisted": builderIsBlacklisted,
+	})
 	if err != nil {
 		log.WithError(err).Error("could not get block builder status")
+	}
+
+	// Timestamp check
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Message.Slot * 12)
+	if payload.ExecutionPayload.Timestamp != expectedTimestamp {
+		log.Warnf("builder submission with wrong timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp))
+		return
 	}
 
 	// ensure correct feeRecipient is used

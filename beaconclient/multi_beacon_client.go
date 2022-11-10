@@ -26,6 +26,8 @@ type IMultiBeaconClient interface {
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
+	GetSpec() (spec *GetSpecResponse, err error)
+	GetBlock(blockID string) (block *GetBlockResponse, err error)
 }
 
 // IBeaconInstance is the interface for a single beacon client instance
@@ -38,6 +40,8 @@ type IBeaconInstance interface {
 	GetURI() string
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
+	GetSpec() (spec *GetSpecResponse, err error)
+	GetBlock(blockID string) (*GetBlockResponse, error)
 }
 
 type MultiBeaconClient struct {
@@ -228,6 +232,44 @@ func (c *MultiBeaconClient) GetGenesis() (genesisInfo *GetGenesisResponse, err e
 		return genesisInfo, nil
 	}
 
-	c.log.WithError(err).Error("failed to publish block on any CL node")
+	c.log.WithError(err).Error("failed to get genesis info on any CL node")
 	return genesisInfo, err
+}
+
+// GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
+func (c *MultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		log.Debug("publishing block")
+
+		if spec, err = client.GetSpec(); err != nil {
+			log.WithError(err).Warn("failed to get spec")
+			continue
+		}
+
+		return spec, nil
+	}
+
+	c.log.WithError(err).Error("failed to get spec on any CL node")
+	return spec, err
+}
+
+// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+func (c *MultiBeaconClient) GetBlock(blockID string) (block *GetBlockResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		log.Debug("publishing block")
+
+		if block, err = client.GetBlock(blockID); err != nil {
+			log.WithField("blockID", blockID).WithError(err).Warn("failed to get block")
+			continue
+		}
+
+		return block, nil
+	}
+
+	c.log.WithField("blockID", blockID).WithError(err).Error("failed to get block from any CL node")
+	return block, err
 }
