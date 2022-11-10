@@ -138,7 +138,7 @@ type RelayAPI struct {
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
-	expectedPrevRandaoUpdateWG sync.WaitGroup
+	expectedPrevRandaoUpdating uint64
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -844,6 +844,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 // updatedExpectedRandao updates the prev_randao field we expect from builder block submissions
 func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
+	api.expectedPrevRandaoLock.Lock()
+	latestKnownSlot := api.expectedPrevRandao.slot
+	if slot <= latestKnownSlot || slot <= api.expectedPrevRandaoUpdating { // do nothing slot is already known or currently being updated
+		api.expectedPrevRandaoLock.Unlock()
+		return
+	}
+	api.expectedPrevRandaoUpdating = slot
+	api.expectedPrevRandaoLock.Unlock()
+
 	// get randao from BN
 	randao, err := api.beaconClient.GetRandao(slot)
 	if err != nil {
@@ -851,14 +860,15 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 		return
 	}
 
-	// update expected randao if actually newer
+	// after request, check if still the latest, then update
 	api.expectedPrevRandaoLock.Lock()
 	defer api.expectedPrevRandaoLock.Unlock()
-	if slot <= api.expectedPrevRandao.slot {
+	targetSlot := slot + 1
+	if targetSlot <= api.expectedPrevRandao.slot {
 		return
 	}
 	api.expectedPrevRandao = randaoHelper{
-		slot:       slot + 1, // the retrieved prev_randao is for the next slot
+		slot:       targetSlot, // the retrieved prev_randao is for the next slot
 		prevRandao: randao.Data.Randao,
 	}
 	api.log.WithField("slot", slot).Infof("updated expected prev_randao to %s for slot %d", randao.Data.Randao, slot+1)
@@ -941,19 +951,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// randao check
 	api.expectedPrevRandaoLock.RLock()
-	expectedRandao := api.expectedPrevRandao
-	api.expectedPrevRandaoLock.RUnlock()
-
-	if expectedRandao.slot != payload.Message.Slot { // we don't have the prevrandao yet!
-		log.Warnf("prev_randao is not known yet")
-		api.RespondError(w, http.StatusInternalServerError, "prev_randao is not known yet")
-		return
-	} else if expectedRandao.prevRandao != payload.ExecutionPayload.Random.String() {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.ExecutionPayload.Random.String(), expectedRandao.prevRandao)
-		log.Warnf(msg)
-		api.RespondError(w, http.StatusBadRequest, msg)
-		return
+	if api.expectedPrevRandao.slot != payload.Message.Slot { // trigger querying the randao now (might be before headSlot event)
+		go api.updatedExpectedRandao(payload.Message.Slot - 1)
+		// check for validity happens later, again after validation (to use some time for BN request to finish...)
 	}
+	api.expectedPrevRandaoLock.RUnlock()
 
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
@@ -1010,6 +1012,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.WithError(err).Warn("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// get the latest randao and check again, it might have updated in the meantime)
+	api.expectedPrevRandaoLock.RLock()
+	expectedRandao := api.expectedPrevRandao
+	api.expectedPrevRandaoLock.RUnlock()
+	if expectedRandao.slot != payload.Message.Slot { // we still don't have the prevrandao yet
+		log.Warnf("prev_randao is not known yet")
+		api.RespondError(w, http.StatusInternalServerError, "prev_randao is not known yet")
+		return
+	} else if expectedRandao.prevRandao != payload.ExecutionPayload.Random.String() {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.ExecutionPayload.Random.String(), expectedRandao.prevRandao)
+		log.Warnf(msg)
+		api.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
