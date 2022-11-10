@@ -243,3 +243,17 @@ func (c *ProdBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
 	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
+
+type GetRandaoResponse struct {
+	Data struct {
+		Randao string `json:"randao"`
+	}
+}
+
+// GetRandao - 3500/eth/v1/beacon/states/<slot>/randao
+func (c *ProdBeaconInstance) GetRandao(slot uint64) (randaoResp *GetRandaoResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/randao", c.beaconURI, slot)
+	resp := new(GetRandaoResponse)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
