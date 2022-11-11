@@ -976,7 +976,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
 		return
 	} else if slotDuty.FeeRecipient != payload.Message.ProposerFeeRecipient {
-		log.Warn("fee recipient does not match")
+		log.Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
 		return
 	}
@@ -1018,9 +1018,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Sanity check the submission
-	err = VerifyBuilderBlockSubmission(payload)
+	err = SanityCheckBuilderBlockSubmission(payload)
 	if err != nil {
-		log.WithError(err).Warn("block submission sanity checks failed")
+		log.WithError(err).Info("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1030,12 +1030,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	expectedRandao := api.expectedPrevRandao
 	api.expectedPrevRandaoLock.RUnlock()
 	if expectedRandao.slot != payload.Message.Slot { // we still don't have the prevrandao yet
-		log.Warnf("prev_randao is not known yet")
+		log.Warn("prev_randao is not known yet")
 		api.RespondError(w, http.StatusInternalServerError, "prev_randao is not known yet")
 		return
 	} else if expectedRandao.prevRandao != payload.ExecutionPayload.Random.String() {
 		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.ExecutionPayload.Random.String(), expectedRandao.prevRandao)
-		log.Warnf(msg)
+		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
