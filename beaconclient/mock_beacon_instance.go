@@ -105,3 +105,15 @@ func (c *MockBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code 
 func (c *MockBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
 	return nil, nil
 }
+
+func (c *MockBeaconInstance) GetBlock(blockID string) (block *GetBlockResponse, err error) {
+	return nil, nil
+}
+
+func (c *MockBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
+	return nil, nil
+}
+
+func (c *MockBeaconInstance) GetRandao(slot uint64) (spec *GetRandaoResponse, err error) {
+	return nil, nil
+}

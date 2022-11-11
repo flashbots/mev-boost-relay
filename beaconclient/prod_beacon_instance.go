@@ -184,11 +184,12 @@ type GetBlockResponse struct {
 	}
 }
 
-// GetBlock returns the latest block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-func (c *ProdBeaconInstance) GetBlock() (*GetBlockResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/head", c.beaconURI)
+// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+// blockID can be 'head' or slot number
+func (c *ProdBeaconInstance) GetBlock(blockID string) (block *GetBlockResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/%s", c.beaconURI, blockID)
 	resp := new(GetBlockResponse)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
 
@@ -222,5 +223,36 @@ func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/genesis", c.beaconURI)
 	resp := new(GetGenesisResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
+type GetSpecResponse struct {
+	SecondsPerSlot                  uint64 `json:"SECONDS_PER_SLOT,string"`            //nolint:tagliatelle
+	DepositContractAddress          string `json:"DEPOSIT_CONTRACT_ADDRESS"`           //nolint:tagliatelle
+	DepositNetworkID                string `json:"DEPOSIT_NETWORK_ID"`                 //nolint:tagliatelle
+	DomainAggregateAndProof         string `json:"DOMAIN_AGGREGATE_AND_PROOF"`         //nolint:tagliatelle
+	InactivityPenaltyQuotient       string `json:"INACTIVITY_PENALTY_QUOTIENT"`        //nolint:tagliatelle
+	InactivityPenaltyQuotientAltair string `json:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"` //nolint:tagliatelle
+}
+
+// GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
+func (c *ProdBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/config/spec", c.beaconURI)
+	resp := new(GetSpecResponse)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
+type GetRandaoResponse struct {
+	Data struct {
+		Randao string `json:"randao"`
+	}
+}
+
+// GetRandao - /eth/v1/beacon/states/<slot>/randao
+func (c *ProdBeaconInstance) GetRandao(slot uint64) (randaoResp *GetRandaoResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/randao", c.beaconURI, slot)
+	resp := new(GetRandaoResponse)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }
