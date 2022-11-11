@@ -249,7 +249,7 @@ type GetRandaoResponse struct {
 	}
 }
 
-// GetRandao - 3500/eth/v1/beacon/states/<slot>/randao
+// GetRandao - /eth/v1/beacon/states/<slot>/randao
 func (c *ProdBeaconInstance) GetRandao(slot uint64) (randaoResp *GetRandaoResponse, err error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/randao", c.beaconURI, slot)
 	resp := new(GetRandaoResponse)
