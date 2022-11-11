@@ -967,7 +967,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 	api.expectedPrevRandaoLock.RUnlock()
 
-	// ensure correct feeRecipient is used
+	// ensure correct feeRecipient and gas_limit is used
 	api.proposerDutiesLock.RLock()
 	slotDuty := api.proposerDutiesMap[payload.Message.Slot]
 	api.proposerDutiesLock.RUnlock()
@@ -978,6 +978,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	} else if slotDuty.FeeRecipient != payload.Message.ProposerFeeRecipient {
 		log.Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
+		return
+	} else if slotDuty.GasLimit != payload.Message.GasLimit {
+		log.Info("gas_limit does not match")
+		api.RespondError(w, http.StatusBadRequest, "gas_limit does not match")
 		return
 	}
 
