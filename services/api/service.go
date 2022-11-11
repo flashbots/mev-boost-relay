@@ -1066,7 +1066,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Simulate the block submission and save to db
 	t := time.Now()
-	simErr = api.blockSimRateLimiter.send(req.Context(), payload, builderIsHighPrio)
+	validationRequestPayload := &BuilderBlockValidationRequest{
+		BuilderSubmitBlockRequest: *payload,
+		RegisteredGasLimit:        slotDuty.GasLimit,
+	}
+	simErr = api.blockSimRateLimiter.send(req.Context(), validationRequestPayload, builderIsHighPrio)
 
 	if simErr != nil {
 		log = log.WithField("simErr", simErr.Error())
