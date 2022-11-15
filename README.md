@@ -19,7 +19,6 @@ Prioritizing credible neutrality sends a clear message about what Gnosis values 
 # Agnostic Relay Features 
 
 * Resilient and credible neutral block building/producing
-* Decentralized and resistant to censorship.
 * Permissionless
 * Without privilege or prejudice
 
