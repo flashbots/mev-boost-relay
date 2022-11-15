@@ -381,6 +381,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 	}
 	if filters.BlockHash != "" {
 		whereConds = append(whereConds, "block_hash = :block_hash")
+		limit = "" // remove the limit when filtering by block_hash
 	}
 	if filters.BuilderPubkey != "" {
 		whereConds = append(whereConds, "builder_pubkey = :builder_pubkey")

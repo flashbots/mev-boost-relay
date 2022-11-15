@@ -1327,14 +1327,11 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("cursor") != "" {
-		api.RespondError(w, http.StatusBadRequest, "cursor argument not supported on this API")
+		api.RespondError(w, http.StatusBadRequest, "cursor argument not supported")
 		return
 	}
 
-	if args.Get("slot") != "" && args.Get("cursor") != "" {
-		api.RespondError(w, http.StatusBadRequest, "cannot specify both slot and cursor")
-		return
-	} else if args.Get("slot") != "" {
+	if args.Get("slot") == "" {
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
@@ -1366,6 +1363,12 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 			return
 		}
 		filters.BuilderPubkey = args.Get("builder_pubkey")
+	}
+
+	// if no other arguments are provided, then slot is mandatory
+	if filters.Slot == 0 && filters.BlockHash == "" && filters.BlockNumber == 0 && filters.BuilderPubkey == "" {
+		api.RespondError(w, http.StatusBadRequest, "need to query for specific slot or block_hash or block_number or builder_pubkey")
+		return
 	}
 
 	if args.Get("limit") != "" {
