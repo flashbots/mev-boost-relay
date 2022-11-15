@@ -14,8 +14,8 @@ fi
 week_last=$(date -d"last week" +%U)
 monday_last_week=$(date -d"last week monday" +%Y-%m-%d)
 monday_this_week=$(date -d"this week monday" +%Y-%m-%d)
-fn1=$(date -d"last week" +%Y_%U.csv)
-fn2=$(date -d"last week" +%Y_%U.json)
+fn1=$(date -d"last week" +%Y_w%U.csv)
+fn2=$(date -d"last week" +%Y_w%U.json)
 echo "week $week_last = $monday_last_week to $monday_this_week"
 echo $fn1
 echo $fn2
