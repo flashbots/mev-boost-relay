@@ -45,9 +45,15 @@ func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
 }
 
 func connectRedis(redisURI string) (*redis.Client, error) {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisURI,
-	})
+	// Handle both URIs and full URLs, assume unencrypted connections
+	if !strings.HasPrefix(redisURI, "redis://") && !strings.HasPrefix(redisURI, "rediss://") {
+		redisURI = "redis://" + redisURI
+	}
+	opt, err := redis.ParseURL(redisURI)
+	if err != nil {
+		return nil, err
+	}
+	redisClient := redis.NewClient(opt)
 	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
 		// unable to connect to redis
 		return nil, err
