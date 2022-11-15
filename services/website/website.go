@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	_ "net/http/pprof"
+	"os"
 	"strconv"
 	"sync"
 	"text/template"
@@ -24,7 +26,10 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
-var ErrServerAlreadyStarted = errors.New("server was already started")
+var (
+	ErrServerAlreadyStarted = errors.New("server was already started")
+	EnablePprof             = os.Getenv("PPROF") == "1"
+)
 
 type WebserverOpts struct {
 	ListenAddress  string
@@ -144,6 +149,11 @@ func (srv *Webserver) StartServer() (err error) {
 func (srv *Webserver) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", srv.handleRoot).Methods(http.MethodGet)
+	if EnablePprof {
+		srv.log.Info("pprof API enabled")
+		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	}
+
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(srv.log, r)
 	withGz := gziphandler.GzipHandler(loggedRouter)
 	return withGz
