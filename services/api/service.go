@@ -1319,7 +1319,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	args := req.URL.Query()
 
 	filters := database.GetBuilderSubmissionsFilters{
-		Limit:         200,
+		Limit:         500,
 		Slot:          0,
 		BlockHash:     "",
 		BlockNumber:   0,
@@ -1331,7 +1331,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	if args.Get("slot") == "" {
+	if args.Get("slot") != "" {
 		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
@@ -1365,7 +1365,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		filters.BuilderPubkey = args.Get("builder_pubkey")
 	}
 
-	// if no other arguments are provided, then slot is mandatory
+	// at least one query arguments is required
 	if filters.Slot == 0 && filters.BlockHash == "" && filters.BlockNumber == 0 && filters.BuilderPubkey == "" {
 		api.RespondError(w, http.StatusBadRequest, "need to query for specific slot or block_hash or block_number or builder_pubkey")
 		return
