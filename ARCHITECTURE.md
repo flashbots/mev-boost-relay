@@ -5,6 +5,8 @@ See also:
 * https://github.com/flashbots/mev-boost-relay
 * https://github.com/flashbots/mev-boost-relay/issues
 
+This document covers more details about running a relay at scale: https://flashbots.notion.site/Draft-Running-a-relay-4040ccd5186c425d9a860cbb29bbfe09
+
 ## Overview
 
 The relay consists of three main components:
@@ -50,7 +52,7 @@ The housekeeper updates Redis with important information:
 1. Validator registrations (source: database)
 1. Builder status (source: database)
 
-Aftwareds, there's important ongoing, regular housekeeper tasks:
+Afterwards, there's important ongoing, regular housekeeper tasks:
 
 1. Update known validators and proposer duties in Redis
 2. Update active validators in database (source: Redis) (TODO)
@@ -69,12 +71,12 @@ Aftwareds, there's important ongoing, regular housekeeper tasks:
 A full infrastructure might include these components:
 
 1. Load balancer + Firewall
-1. 2x proposer API (4-8 CPU, 8GB RAM)
-1. 2x builder API (4-8 CPU, 8GB RAM)
-1. 2x data API (1 CPU, 4GB RAM)
+1. 2x proposer API (4 CPU, 1GB RAM)
+1. 2x builder API (2-4 CPU, 1GB RAM)
+1. 2x data API (1 CPU, 1GB RAM)
 1. 2x website (1 CPU, 2GB RAM)
-1. 1x housekeeper (2 CPU, 8GB RAM)
-1. Redis (1GB)
+1. 1x housekeeper (2 CPU, 1GB RAM)
+1. Redis (4GB)
 1. Postgres DB (100GB+)
 1. A bunch of beacon-nodes (3 for redundancy?)
 1. Block validation EL nodes
