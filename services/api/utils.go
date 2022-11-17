@@ -11,7 +11,7 @@ var (
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 )
 
-func VerifyBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
+func SanityCheckBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
 	if payload.Message.BlockHash != payload.ExecutionPayload.BlockHash {
 		return ErrBlockHashMismatch
 	}

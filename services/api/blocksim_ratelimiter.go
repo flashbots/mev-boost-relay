@@ -10,7 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/jsonrpc"
 )
@@ -36,7 +35,7 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 	}
 }
 
-func (b *BlockSimulationRateLimiter) send(context context.Context, payload *types.BuilderSubmitBlockRequest, isHighPrio bool) error {
+func (b *BlockSimulationRateLimiter) send(context context.Context, payload *BuilderBlockValidationRequest, isHighPrio bool) error {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
 	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {

@@ -25,6 +25,10 @@ type IMultiBeaconClient interface {
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	GetGenesis() (*GetGenesisResponse, error)
+	GetSpec() (spec *GetSpecResponse, err error)
+	GetBlock(blockID string) (block *GetBlockResponse, err error)
+	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 }
 
 // IBeaconInstance is the interface for a single beacon client instance
@@ -36,6 +40,10 @@ type IBeaconInstance interface {
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
 	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	GetGenesis() (*GetGenesisResponse, error)
+	GetSpec() (spec *GetSpecResponse, err error)
+	GetBlock(blockID string) (*GetBlockResponse, error)
+	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 }
 
 type MultiBeaconClient struct {
@@ -209,4 +217,72 @@ func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code i
 
 	log.WithField("statusCode", code).WithError(err).Error("failed to publish block on any CL node")
 	return code, err
+}
+
+// GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
+func (c *MultiBeaconClient) GetGenesis() (genesisInfo *GetGenesisResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		if genesisInfo, err = client.GetGenesis(); err != nil {
+			log.WithError(err).Warn("failed to get genesis info")
+			continue
+		}
+
+		return genesisInfo, nil
+	}
+
+	c.log.WithError(err).Error("failed to get genesis info on any CL node")
+	return nil, err
+}
+
+// GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
+func (c *MultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		if spec, err = client.GetSpec(); err != nil {
+			log.WithError(err).Warn("failed to get spec")
+			continue
+		}
+
+		return spec, nil
+	}
+
+	c.log.WithError(err).Error("failed to get spec on any CL node")
+	return nil, err
+}
+
+// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
+func (c *MultiBeaconClient) GetBlock(blockID string) (block *GetBlockResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		if block, err = client.GetBlock(blockID); err != nil {
+			log.WithField("blockID", blockID).WithError(err).Warn("failed to get block")
+			continue
+		}
+
+		return block, nil
+	}
+
+	c.log.WithField("blockID", blockID).WithError(err).Error("failed to get block from any CL node")
+	return nil, err
+}
+
+// GetRandao - 3500/eth/v1/beacon/states/<slot>/randao
+func (c *MultiBeaconClient) GetRandao(slot uint64) (randaoResp *GetRandaoResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		if randaoResp, err = client.GetRandao(slot); err != nil {
+			log.WithField("slot", slot).WithError(err).Warn("failed to get randao")
+			continue
+		}
+
+		return randaoResp, nil
+	}
+
+	c.log.WithField("slot", slot).WithError(err).Warn("failed to get randao from any CL node")
+	return nil, err
 }
