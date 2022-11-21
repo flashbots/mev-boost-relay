@@ -226,3 +226,33 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, receivedAt.UnixMilli(), ts)
 }
+
+func TestRedisURIs(t *testing.T) {
+	t.Helper()
+	var err error
+
+	redisTestServer, err := miniredis.Run()
+	require.NoError(t, err)
+
+	// test connection with and without protocol
+	_, err = NewRedisCache(redisTestServer.Addr(), "")
+	require.NoError(t, err)
+	_, err = NewRedisCache("redis://"+redisTestServer.Addr(), "")
+	require.NoError(t, err)
+
+	// test connection w/ credentials
+	username := "user"
+	password := "pass"
+	redisTestServer.RequireUserAuth(username, password)
+	fullURL := "redis://" + username + ":" + password + "@" + redisTestServer.Addr()
+	_, err = NewRedisCache(fullURL, "")
+	require.NoError(t, err)
+
+	// ensure malformed URL throws error
+	malformURL := "http://" + username + ":" + password + "@" + redisTestServer.Addr()
+	_, err = NewRedisCache(malformURL, "")
+	require.Error(t, err)
+	malformURL = "redis://" + username + ":" + "wrongpass" + "@" + redisTestServer.Addr()
+	_, err = NewRedisCache(malformURL, "")
+	require.Error(t, err)
+}
