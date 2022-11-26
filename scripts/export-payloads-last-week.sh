@@ -11,15 +11,14 @@ if [ -z $DB ]; then
         exit 1
 fi
 
-week_last=$(date -d"last week" +%U)
-monday_last_week=$(date -d"last week monday" +%Y-%m-%d)
-monday_this_week=$(date -d"this week monday" +%Y-%m-%d)
+monday_start=$(date -d"last Sunday -6 days" +%Y-%m-%d)
+monday_end=$(date -d"last Sunday +1 days" +%Y-%m-%d)
 fn1=$(date -d"last week" +%Y_w%U.csv)
 fn2=$(date -d"last week" +%Y_w%U.json)
-echo "week $week_last = $monday_last_week to $monday_this_week"
+echo "exporting $monday_start to $monday_end -> $fn1 / $fn2"
 echo $fn1
 echo $fn2
-DB_DONT_APPLY_SCHEMA=1 DB_TABLE_PREFIX=mainnet go run . tool data-api-export-payloads --db $DB --date-start $monday_last_week --date-end $monday_this_week --out $fn1 --out $fn2
+DB_DONT_APPLY_SCHEMA=1 DB_TABLE_PREFIX=mainnet go run . tool data-api-export-payloads --db $DB --date-start $monday_start --date-end $monday_end --out $fn1 --out $fn2
 
 echo "press enter to upload to S3..."
 read -r
