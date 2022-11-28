@@ -1,9 +1,9 @@
-# mev-boost Relay
+# MEV-Boost Relay
 
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/mev-boost-relay)](https://goreportcard.com/report/github.com/flashbots/mev-boost-relay)
 [![Test status](https://github.com/flashbots/mev-boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/mev-boost-relay/actions?query=workflow%3A%22Checks%22)
 
-Flashbots MEV-Boost relay for proposer/builder separation in Ethereum. Currently live at:
+MEV-Boost relay for Ethereum proposer/builder separation in Ethereum. Currently live at:
 
 * https://boost-relay.flashbots.net
 * https://boost-relay-sepolia.flashbots.net
@@ -23,9 +23,9 @@ A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](h
 
 See also:
 
-* [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
 * [mev-boost](https://github.com/flashbots/mev-boost)
+* [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 
 ---
 
