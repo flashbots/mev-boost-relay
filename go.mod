@@ -10,7 +10,7 @@ require (
 	github.com/ethereum/go-ethereum v1.10.25
 	github.com/flashbots/go-boost-utils v1.2.2
 	github.com/flashbots/go-utils v0.4.8
-	github.com/go-redis/redis/v9 v9.0.0-rc.1
+	github.com/go-redis/redis/v9 v9.0.0-rc.2
 	github.com/gorilla/mux v1.8.0
 	github.com/jinzhu/copier v0.3.5
 	github.com/jmoiron/sqlx v1.3.5
@@ -63,8 +63,8 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
-	golang.org/x/net v0.1.0 // indirect
-	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/net v0.2.0 // indirect
+	golang.org/x/sys v0.2.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
