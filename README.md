@@ -3,11 +3,16 @@
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/mev-boost-relay)](https://goreportcard.com/report/github.com/flashbots/mev-boost-relay)
 [![Test status](https://github.com/flashbots/mev-boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/mev-boost-relay/actions?query=workflow%3A%22Checks%22)
 
-MEV-Boost relay for Ethereum proposer/builder separation in Ethereum. Currently live at:
+MEV-Boost Relay for Ethereum proposer/builder separation (PBS).
+
+Currently live at:
 
 * https://boost-relay.flashbots.net
 * https://boost-relay-sepolia.flashbots.net
 * https://boost-relay-goerli.flashbots.net
+* https://relay.edennetwork.io/info
+* https://relayooor.wtf
+* https://mainnet-relay.securerpc.com
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
@@ -15,17 +20,21 @@ The relay consists of several components that are designed to run and scale inde
 1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
 1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties.
 
-Dependencies: Redis, PostgreSQL, one or more beacon nodes, and block submission validation nodes.
+Dependencies:
 
-This software is currently in **beta state**, and slowly stabilizing.
+1. Redis
+1. PostgreSQL
+1. one or more beacon nodes
+1. block submission validation nodes
 
 A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
 
-See also:
+**See also:**
 
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
 * [mev-boost](https://github.com/flashbots/mev-boost)
 * [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+* [Guider for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
 
 ---
 
