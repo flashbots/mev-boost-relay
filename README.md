@@ -7,12 +7,13 @@ MEV-Boost Relay for Ethereum proposer/builder separation (PBS).
 
 Currently live at:
 
-* https://boost-relay.flashbots.net
-* https://boost-relay-sepolia.flashbots.net
-* https://boost-relay-goerli.flashbots.net
+* https://boost-relay.flashbots.net (also on [Goerli](https://boost-relay-sepolia.flashbots.net) and [Sepolia](https://boost-relay-goerli.flashbots.net))
+* https://relay.ultrasound.money
+* https://agnostic-relay.net
 * https://relay.edennetwork.io/info
 * https://relayooor.wtf
 * https://mainnet-relay.securerpc.com
+* https://mainnet.aestus.live
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
@@ -33,7 +34,7 @@ A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](h
 
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
 * [mev-boost](https://github.com/flashbots/mev-boost)
-* [Relay API docs](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+* [Relay API specs](https://flashbots.github.io/relay-specs)
 * [Guider for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
 
 ---
