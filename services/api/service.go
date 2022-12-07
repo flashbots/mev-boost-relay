@@ -734,7 +734,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	payload := new(types.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		log.WithError(err).Warn("getPayload request failed to decode")
+		if strings.Contains(err.Error(), "i/o timeout") {
+			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
+		} else {
+			log.WithError(err).Warn("getPayload request failed to decode")
+		}
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
