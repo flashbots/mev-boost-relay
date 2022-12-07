@@ -23,8 +23,8 @@ func PayloadToExecPayloadEntry(payload *types.BuilderSubmitBlockRequest) (*Execu
 	}, nil
 }
 
-func DeliveredPayloadEntryToBidTraceV2JSON(payload *DeliveredPayloadEntry) common.BidTraceV2JSON {
-	return common.BidTraceV2JSON{
+func DeliveredPayloadEntryToBidTraceV3JSON(payload *DeliveredPayloadEntry) common.BidTraceV3JSON {
+	return common.BidTraceV3JSON{
 		Slot:                 payload.Slot,
 		ParentHash:           payload.ParentHash,
 		BlockHash:            payload.BlockHash,
@@ -36,30 +36,30 @@ func DeliveredPayloadEntryToBidTraceV2JSON(payload *DeliveredPayloadEntry) commo
 		Value:                payload.Value,
 		NumTx:                payload.NumTx,
 		BlockNumber:          payload.BlockNumber,
+		Timestamp:            payload.InsertedAt.Unix(),
+		TimestampMs:          payload.InsertedAt.UnixMilli(),
 	}
 }
 
-func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV2WithTimestampJSON {
+func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV3JSON {
 	timestamp := payload.InsertedAt
 	if payload.ReceivedAt.Valid {
 		timestamp = payload.ReceivedAt.Time
 	}
 
-	return common.BidTraceV2WithTimestampJSON{
-		Timestamp:   timestamp.Unix(),
-		TimestampMs: timestamp.UnixMilli(),
-		BidTraceV2JSON: common.BidTraceV2JSON{
-			Slot:                 payload.Slot,
-			ParentHash:           payload.ParentHash,
-			BlockHash:            payload.BlockHash,
-			BuilderPubkey:        payload.BuilderPubkey,
-			ProposerPubkey:       payload.ProposerPubkey,
-			ProposerFeeRecipient: payload.ProposerFeeRecipient,
-			GasLimit:             payload.GasLimit,
-			GasUsed:              payload.GasUsed,
-			Value:                payload.Value,
-			NumTx:                payload.NumTx,
-			BlockNumber:          payload.BlockNumber,
-		},
+	return common.BidTraceV3JSON{
+		Slot:                 payload.Slot,
+		ParentHash:           payload.ParentHash,
+		BlockHash:            payload.BlockHash,
+		BuilderPubkey:        payload.BuilderPubkey,
+		ProposerPubkey:       payload.ProposerPubkey,
+		ProposerFeeRecipient: payload.ProposerFeeRecipient,
+		GasLimit:             payload.GasLimit,
+		GasUsed:              payload.GasUsed,
+		Value:                payload.Value,
+		NumTx:                payload.NumTx,
+		BlockNumber:          payload.BlockNumber,
+		Timestamp:            timestamp.Unix(),
+		TimestampMs:          timestamp.UnixMilli(),
 	}
 }

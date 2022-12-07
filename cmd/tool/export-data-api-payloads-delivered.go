@@ -72,9 +72,9 @@ var DataAPIExportPayloads = &cobra.Command{
 		}
 
 		log.Infof("got %d payloads", len(deliveredPayloads))
-		entries := make([]common.BidTraceV2JSON, len(deliveredPayloads))
+		entries := make([]common.BidTraceV3JSON, len(deliveredPayloads))
 		for i, payload := range deliveredPayloads {
-			entries[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
+			entries[i] = database.DeliveredPayloadEntryToBidTraceV3JSON(payload)
 		}
 
 		if len(entries) == 0 {

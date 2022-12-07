@@ -34,7 +34,7 @@ type IDatabaseService interface {
 	GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error)
 	DeleteExecutionPayloads(idFirst, idLast uint64) error
 
-	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
+	SaveDeliveredPayload(bidTrace *common.BidTraceV3JSON, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error
 	GetNumDeliveredPayloads() (uint64, error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error)
@@ -241,7 +241,7 @@ func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, prop
 	return entry, err
 }
 
-func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
+func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV3JSON, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
 	_signedBlindedBeaconBlock, err := json.Marshal(signedBlindedBeaconBlock)
 	if err != nil {
 		return err
@@ -253,19 +253,19 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, sign
 		Slot:  bidTrace.Slot,
 		Epoch: bidTrace.Slot / uint64(common.SlotsPerEpoch),
 
-		BuilderPubkey:        bidTrace.BuilderPubkey.String(),
-		ProposerPubkey:       bidTrace.ProposerPubkey.String(),
-		ProposerFeeRecipient: bidTrace.ProposerFeeRecipient.String(),
+		BuilderPubkey:        bidTrace.BuilderPubkey,
+		ProposerPubkey:       bidTrace.ProposerPubkey,
+		ProposerFeeRecipient: bidTrace.ProposerFeeRecipient,
 
-		ParentHash:  bidTrace.ParentHash.String(),
-		BlockHash:   bidTrace.BlockHash.String(),
+		ParentHash:  bidTrace.ParentHash,
+		BlockHash:   bidTrace.BlockHash,
 		BlockNumber: bidTrace.BlockNumber,
 
 		GasUsed:  bidTrace.GasUsed,
 		GasLimit: bidTrace.GasLimit,
 
 		NumTx: bidTrace.NumTx,
-		Value: bidTrace.Value.String(),
+		Value: bidTrace.Value,
 	}
 
 	query := `INSERT INTO ` + vars.TableDeliveredPayload + `

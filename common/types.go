@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
@@ -115,13 +116,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	}, nil
 }
 
-type BidTraceV2 struct {
-	types.BidTrace
-	BlockNumber uint64 `json:"block_number,string" db:"block_number"`
-	NumTx       uint64 `json:"num_tx,string" db:"num_tx"`
-}
-
-type BidTraceV2JSON struct {
+type BidTraceV3JSON struct {
 	Slot                 uint64 `json:"slot,string"`
 	ParentHash           string `json:"parent_hash"`
 	BlockHash            string `json:"block_hash"`
@@ -133,47 +128,29 @@ type BidTraceV2JSON struct {
 	Value                string `json:"value"`
 	NumTx                uint64 `json:"num_tx,string"`
 	BlockNumber          uint64 `json:"block_number,string"`
+	Timestamp            int64  `json:"timestamp,string,omitempty"`
+	TimestampMs          int64  `json:"timestamp_ms,string,omitempty"`
 }
 
-func (b *BidTraceV2JSON) CSVHeader() []string {
-	return []string{
-		"slot",
-		"parent_hash",
-		"block_hash",
-		"builder_pubkey",
-		"proposer_pubkey",
-		"proposer_fee_recipient",
-		"gas_limit",
-		"gas_used",
-		"value",
-		"num_tx",
-		"block_number",
+func NewBidTraceV3JSONFromBidTrace(bidTrace *types.BidTrace, blockNumber, numTx uint64, timestamp time.Time) *BidTraceV3JSON {
+	return &BidTraceV3JSON{
+		Slot:                 bidTrace.Slot,
+		ParentHash:           bidTrace.ParentHash.String(),
+		BlockHash:            bidTrace.BlockHash.String(),
+		BuilderPubkey:        bidTrace.BuilderPubkey.String(),
+		ProposerPubkey:       bidTrace.ProposerPubkey.String(),
+		ProposerFeeRecipient: bidTrace.ProposerFeeRecipient.String(),
+		GasLimit:             bidTrace.GasLimit,
+		GasUsed:              bidTrace.GasUsed,
+		Value:                bidTrace.Value.String(),
+		BlockNumber:          blockNumber,
+		NumTx:                numTx,
+		Timestamp:            timestamp.UTC().Unix(),
+		TimestampMs:          timestamp.UTC().UnixMilli(),
 	}
 }
 
-func (b *BidTraceV2JSON) ToCSVRecord() []string {
-	return []string{
-		fmt.Sprint(b.Slot),
-		b.ParentHash,
-		b.BlockHash,
-		b.BuilderPubkey,
-		b.ProposerPubkey,
-		b.ProposerFeeRecipient,
-		fmt.Sprint(b.GasLimit),
-		fmt.Sprint(b.GasUsed),
-		b.Value,
-		fmt.Sprint(b.NumTx),
-		fmt.Sprint(b.BlockNumber),
-	}
-}
-
-type BidTraceV2WithTimestampJSON struct {
-	BidTraceV2JSON
-	Timestamp   int64 `json:"timestamp,string,omitempty"`
-	TimestampMs int64 `json:"timestamp_ms,string,omitempty"`
-}
-
-func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
+func (b *BidTraceV3JSON) CSVHeader() []string {
 	return []string{
 		"slot",
 		"parent_hash",
@@ -191,7 +168,7 @@ func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
 	}
 }
 
-func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
+func (b *BidTraceV3JSON) ToCSVRecord() []string {
 	return []string{
 		fmt.Sprint(b.Slot),
 		b.ParentHash,

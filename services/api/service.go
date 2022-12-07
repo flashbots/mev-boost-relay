@@ -826,7 +826,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 
 		// Increment builder stats
-		err = api.db.IncBlockBuilderStatsAfterGetPayload(bidTrace.BuilderPubkey.String())
+		err = api.db.IncBlockBuilderStatsAfterGetPayload(bidTrace.BuilderPubkey)
 		if err != nil {
 			log.WithError(err).Error("failed to increment builder-stats after getPayload")
 		}
@@ -1119,17 +1119,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		Data:    payload.ExecutionPayload,
 	}
 
-	bidTrace := common.BidTraceV2{
-		BidTrace:    *payload.Message,
-		BlockNumber: payload.ExecutionPayload.BlockNumber,
-		NumTx:       uint64(len(payload.ExecutionPayload.Transactions)),
-	}
+	// Create the bidtrace
+	bidTrace := common.NewBidTraceV3JSONFromBidTrace(payload.Message, payload.ExecutionPayload.BlockNumber, uint64(len(payload.ExecutionPayload.Transactions)), receivedAt)
 
 	//
 	// Save to Redis
 	//
 	// first the trace
-	err = api.redis.SaveBidTrace(&bidTrace)
+	err = api.redis.SaveBidTrace(bidTrace)
 	if err != nil {
 		log.WithError(err).Error("failed saving bidTrace in redis")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1310,9 +1307,9 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		return
 	}
 
-	response := make([]common.BidTraceV2JSON, len(deliveredPayloads))
+	response := make([]common.BidTraceV3JSON, len(deliveredPayloads))
 	for i, payload := range deliveredPayloads {
-		response[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
+		response[i] = database.DeliveredPayloadEntryToBidTraceV3JSON(payload)
 	}
 
 	api.RespondOK(w, response)
@@ -1395,7 +1392,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	response := make([]common.BidTraceV2WithTimestampJSON, len(blockSubmissions))
+	response := make([]common.BidTraceV3JSON, len(blockSubmissions))
 	for i, payload := range blockSubmissions {
 		response[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload)
 	}

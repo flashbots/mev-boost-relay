@@ -308,14 +308,14 @@ func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash 
 	return resp, err
 }
 
-func (r *RedisCache) SaveBidTrace(trace *common.BidTraceV2) (err error) {
-	key := r.keyCacheBidTrace(trace.Slot, trace.ProposerPubkey.String(), trace.BlockHash.String())
+func (r *RedisCache) SaveBidTrace(trace *common.BidTraceV3JSON) (err error) {
+	key := r.keyCacheBidTrace(trace.Slot, trace.ProposerPubkey, trace.BlockHash)
 	return r.SetObj(key, trace, expiryBidCache)
 }
 
-func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
+func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV3JSON, error) {
 	key := r.keyCacheBidTrace(slot, proposerPubkey, blockHash)
-	resp := new(common.BidTraceV2)
+	resp := new(common.BidTraceV3JSON)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
