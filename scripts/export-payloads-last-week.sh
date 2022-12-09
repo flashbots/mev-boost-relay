@@ -11,9 +11,18 @@ if [ -z $DB ]; then
         exit 1
 fi
 
+year_last=$(date -d"last week" +%Y)
 week_last=$(date -d"last week" +%U)
-monday_last_week=$(date -d"last week monday" +%Y-%m-%d)
-monday_this_week=$(date -d"this week monday" +%Y-%m-%d)
+cmd="from datetime import date; d=date.fromisocalendar($year_last, $week_last, 1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
+monday_last_week=$(python3 -c "$cmd")
+# echo $monday_last_week
+
+year_this=$(date +%Y)
+week_this=$(date +%U)
+cmd="from datetime import date; d=date.fromisocalendar($year_this, $week_this, 1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
+monday_this_week=$(python3 -c "$cmd")
+# echo $monday_this_week
+
 fn1=$(date -d"last week" +%Y_w%U.csv)
 fn2=$(date -d"last week" +%Y_w%U.json)
 echo "week $week_last = $monday_last_week to $monday_this_week"
