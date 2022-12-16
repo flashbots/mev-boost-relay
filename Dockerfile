@@ -2,7 +2,14 @@
 FROM golang:1.19 as builder
 ARG VERSION
 WORKDIR /build
-ADD . /build/
+
+# Cache for the modules
+COPY go.mod ./
+COPY go.sum ./
+RUN go mod download
+
+# Now adding all the code and building
+ADD . .
 RUN --mount=type=cache,target=/root/.cache/go-build GOOS=linux go build -trimpath -ldflags "-s -X cmd.Version=$VERSION -X main.Version=$VERSION" -v -o mev-boost-relay .
 
 FROM alpine
