@@ -123,6 +123,10 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 * `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: 3)
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
+* `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: 1500)
+* `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: 600)
+* `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: 10000)
+* `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
 
 ### Updating the website
 
