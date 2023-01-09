@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/jsonrpc"
@@ -17,14 +18,16 @@ import (
 var (
 	ErrRequestClosed    = errors.New("request context closed")
 	ErrSimulationFailed = errors.New("simulation failed")
-)
 
-var maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
+	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
+	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 3000)) * time.Millisecond
+)
 
 type BlockSimulationRateLimiter struct {
 	cv          *sync.Cond
 	counter     int64
 	blockSimURL string
+	client      http.Client
 }
 
 func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimiter {
@@ -32,6 +35,9 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 		cv:          sync.NewCond(&sync.Mutex{}),
 		counter:     0,
 		blockSimURL: blockSimURL,
+		client: http.Client{ //nolint:exhaustruct
+			Timeout: simRequestTimeout,
+		},
 	}
 }
 
@@ -55,7 +61,7 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *Buil
 	}
 
 	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-	simResp, err := SendJSONRPCRequest(*simReq, b.blockSimURL, isHighPrio)
+	simResp, err := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio)
 	if err != nil {
 		return err
 	} else if simResp.Error != nil {
@@ -71,7 +77,7 @@ func (b *BlockSimulationRateLimiter) currentCounter() int64 {
 }
 
 // SendJSONRPCRequest sends the request to URL and returns the general JsonRpcResponse, or an error (note: not the JSONRPCError)
-func SendJSONRPCRequest(req jsonrpc.JSONRPCRequest, url string, isHighPrio bool) (res *jsonrpc.JSONRPCResponse, err error) {
+func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url string, isHighPrio bool) (res *jsonrpc.JSONRPCResponse, err error) {
 	buf, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -89,7 +95,7 @@ func SendJSONRPCRequest(req jsonrpc.JSONRPCRequest, url string, isHighPrio bool)
 	}
 
 	// execute request
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

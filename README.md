@@ -127,6 +127,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: 600)
 * `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: 10000)
 * `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
+* `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: 3000)
 
 ### Updating the website
 
