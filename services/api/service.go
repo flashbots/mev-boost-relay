@@ -1082,6 +1082,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"duration":   time.Since(t).Seconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
 		}).Info("block validation failed")
+
+		if os.IsTimeout(simErr) {
+			api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
+			return
+		}
+
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
 	} else {
