@@ -12,20 +12,19 @@ if [ -z $DB ]; then
 fi
 
 year_last=$(date -d"last week" +%Y)
+year_last=${YEAR:-$year_last}
 week_last=$(date -d"last week" +%U)
-cmd="from datetime import date; d=date.fromisocalendar($year_last, $week_last, 1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
+week_last=${WEEK:-$week_last}
+
+cmd="from datetime import date; d=date.fromisocalendar($year_last, int('$week_last'), 1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
 monday_last_week=$(python3 -c "$cmd")
-# echo $monday_last_week
-
-year_this=$(date +%Y)
-week_this=$(date +%U)
-cmd="from datetime import date; d=date.fromisocalendar($year_this, $week_this, 1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
+cmd="from datetime import date, timedelta; d=date.fromisocalendar($year_last, int('$week_last'), 1); d=d+timedelta(weeks=1); print('%s-%s-%02d' % (d.year, d.month, d.day));"
 monday_this_week=$(python3 -c "$cmd")
-# echo $monday_this_week
+echo "$year_last $week_last = $monday_last_week -> $monday_this_week"
+# exit 0
 
-fn1=$(date -d"last week" +%Y_w%U.csv)
-fn2=$(date -d"last week" +%Y_w%U.json)
-echo "week $week_last = $monday_last_week to $monday_this_week"
+fn1="${year_last}_w${week_last}.csv"
+fn2="${year_last}_w${week_last}.json"
 echo $fn1
 echo $fn2
 DB_DONT_APPLY_SCHEMA=1 DB_TABLE_PREFIX=mainnet go run . tool data-api-export-payloads --db $DB --date-start $monday_last_week --date-end $monday_this_week --out $fn1 --out $fn2
