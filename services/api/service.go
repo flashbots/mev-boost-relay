@@ -66,6 +66,7 @@ var (
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
+	timeoutServerWriteMs         = cli.GetEnvInt("SERVER_WRITE_TIMEOUT_MS", 3000)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -325,7 +326,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 		ReadTimeout:       1500 * time.Millisecond,
 		ReadHeaderTimeout: 600 * time.Millisecond,
-		WriteTimeout:      3 * time.Second,
+		WriteTimeout:      time.Duration(timeoutServerWriteMs) * time.Millisecond,
 		IdleTimeout:       3 * time.Second,
 	}
 
