@@ -2,6 +2,7 @@
 package api
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -737,30 +739,46 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"contentLength": req.ContentLength,
 	})
 
-	payload := new(types.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(req.Body).Decode(payload); err != nil {
-		if strings.Contains(err.Error(), "i/o timeout") {
-			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
-		} else {
-			log.WithError(err).Warn("getPayload request failed to decode")
-		}
+	// Read the body first, so we can decode it later
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		log.WithError(err).Error("could not read body of request from the beacon node")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	slot := payload.Message.Slot
-	blockHash := payload.Message.Body.ExecutionPayloadHeader.BlockHash
+	payload := new(common.SignedBeaconBlindedBlock)
+
+	capellaPayload := new(capella.SignedBlindedBeaconBlock)
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(capellaPayload); err != nil {
+		if strings.Contains(err.Error(), "i/o timeout") {
+			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		log.WithError(err).Debug("capella getPayload request failed to decode")
+		bellatrixPayload := new(types.SignedBlindedBeaconBlock)
+		if err := json.NewDecoder(bytes.NewReader(body)).Decode(bellatrixPayload); err != nil {
+			log.WithError(err).Warn("bellatrix getPayload request failed to decode")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		payload.Bellatrix = bellatrixPayload
+	} else {
+		payload.Capella = capellaPayload
+	}
+
 	log = log.WithFields(logrus.Fields{
-		"slot":      slot,
-		"blockHash": blockHash.String(),
+		"slot":      payload.Slot(),
+		"blockHash": payload.BlockHash(),
 		"idArg":     req.URL.Query().Get("id"),
 	})
 
 	log.Debug("getPayload request received")
 
-	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.Message.ProposerIndex)
+	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
 	if !found {
-		log.Errorf("could not find proposer pubkey for index %d", payload.Message.ProposerIndex)
+		log.Errorf("could not find proposer pubkey for index %d", payload.ProposerIndex())
 		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 		return
 	}
@@ -776,7 +794,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Verify the signature
-	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature[:])
+	ok, err := types.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature())
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify payload signature")
 		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
@@ -785,13 +803,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Get the response - from memory, Redis or DB
 	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
-	getPayloadResp, err := api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
+	getPayloadResp, err := api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed getting execution payload (1/2)")
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
 
 		// Try again
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(slot, proposerPubkey.String(), blockHash.String())
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 		if err != nil {
 			log.WithError(err).Error("failed getting execution payload (2/2) - due to error")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -805,19 +823,19 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
-		"numTx":       len(getPayloadResp.Data.Transactions),
-		"blockNumber": payload.Message.Body.ExecutionPayloadHeader.BlockNumber,
+		"numTx":       getPayloadResp.ExecutionPayload.TxNum(),
+		"blockNumber": payload.BlockNumber(),
 	})
 	log.Info("execution payload delivered")
 
 	// Save information about delivered payload
 	go func() {
-		err = api.redis.SetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered, slot)
+		err = api.redis.SetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered, payload.Slot())
 		if err != nil {
 			log.WithError(err).Error("failed to save delivered payload slot to redis")
 		}
 
-		bidTrace, err := api.redis.GetBidTrace(slot, proposerPubkey.String(), blockHash.String())
+		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 		if err != nil {
 			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
 		}
@@ -843,7 +861,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.Info("publishing the block is disabled")
 			return
 		}
-		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp.Data)
+		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 		_, _ = api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	}()
 }

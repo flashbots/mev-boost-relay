@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -24,7 +25,7 @@ type IMultiBeaconClient interface {
 	// FetchValidators returns all active and pending validators from the beacon node
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
-	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetBlock(blockID string) (block *GetBlockResponse, err error)
@@ -39,7 +40,7 @@ type IBeaconInstance interface {
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
-	PublishBlock(block *types.SignedBeaconBlock) (code int, err error)
+	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetBlock(blockID string) (*GetBlockResponse, error)
@@ -195,10 +196,10 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 }
 
 // PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
-func (c *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
+func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
 	log := c.log.WithFields(logrus.Fields{
-		"slot":      block.Message.Slot,
-		"blockHash": block.Message.Body.ExecutionPayload.BlockHash.String(),
+		"slot":      block.Slot(),
+		"blockHash": block.BlockHash(),
 	})
 
 	clients := c.beaconInstancesByLastResponse()

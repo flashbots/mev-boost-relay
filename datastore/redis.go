@@ -298,9 +298,9 @@ func (r *RedisCache) SaveExecutionPayload(slot uint64, proposerPubkey, blockHash
 	return r.SetObj(key, resp, expiryBidCache)
 }
 
-func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
+func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
 	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
-	resp := new(types.GetPayloadResponse)
+	resp := new(common.VersionedExecutionPayload)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil

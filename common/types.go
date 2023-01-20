@@ -1,11 +1,15 @@
 package common
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
+	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 )
@@ -207,4 +211,149 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 		fmt.Sprint(b.Timestamp),
 		fmt.Sprint(b.TimestampMs),
 	}
+}
+
+type SignedBeaconBlindedBlock struct {
+	Bellatrix *types.SignedBlindedBeaconBlock
+	Capella   *apiv1capella.SignedBlindedBeaconBlock
+}
+
+func (s *SignedBeaconBlindedBlock) MarshalJSON() ([]byte, error) {
+	if s.Capella != nil {
+		return json.Marshal(s.Capella)
+	}
+	return json.Marshal(s.Bellatrix)
+}
+
+func (s *SignedBeaconBlindedBlock) Slot() uint64 {
+	if s.Capella != nil {
+		return uint64(s.Capella.Message.Slot)
+	}
+	return s.Bellatrix.Message.Slot
+}
+
+func (s *SignedBeaconBlindedBlock) BlockHash() string {
+	if s.Capella != nil {
+		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockHash.String()
+	}
+	return s.Bellatrix.Message.Body.ExecutionPayloadHeader.BlockHash.String()
+}
+
+func (s *SignedBeaconBlindedBlock) BlockNumber() uint64 {
+	if s.Capella != nil {
+		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockNumber
+	}
+	return s.Bellatrix.Message.Body.ExecutionPayloadHeader.BlockNumber
+}
+
+func (s *SignedBeaconBlindedBlock) ProposerIndex() uint64 {
+	if s.Capella != nil {
+		return uint64(s.Capella.Message.ProposerIndex)
+	}
+	return s.Bellatrix.Message.ProposerIndex
+}
+
+func (s *SignedBeaconBlindedBlock) Signature() []byte {
+	if s.Capella != nil {
+		return s.Capella.Signature[:]
+	}
+	return s.Bellatrix.Signature[:]
+}
+
+//nolint:nolintlint,ireturn
+func (s *SignedBeaconBlindedBlock) Message() types.HashTreeRoot {
+	if s.Capella != nil {
+		return s.Capella.Message
+	}
+	return s.Bellatrix.Message
+}
+
+type SignedBeaconBlock struct {
+	Bellatrix *types.SignedBeaconBlock
+	Capella   *capella.SignedBeaconBlock
+}
+
+func (s *SignedBeaconBlock) MarshalJSON() ([]byte, error) {
+	if s.Capella != nil {
+		return json.Marshal(s.Capella)
+	}
+	return json.Marshal(s.Bellatrix)
+}
+
+func (s *SignedBeaconBlock) Slot() uint64 {
+	if s.Capella != nil {
+		return uint64(s.Capella.Message.Slot)
+	}
+	return s.Bellatrix.Message.Slot
+}
+
+func (s *SignedBeaconBlock) BlockHash() string {
+	if s.Capella != nil {
+		return s.Capella.Message.Body.ExecutionPayload.BlockHash.String()
+	}
+	return s.Bellatrix.Message.Body.ExecutionPayload.BlockHash.String()
+}
+
+type ExecutionPayloadHeader struct {
+	Bellatrix *types.ExecutionPayloadHeader
+	Capella   *capella.ExecutionPayloadHeader
+}
+
+type ExecutionPayload struct {
+	Bellatrix *types.ExecutionPayload
+	Capella   *capella.ExecutionPayload
+}
+
+func (e *ExecutionPayload) MarshalJSON() ([]byte, error) {
+	if e.Capella != nil {
+		return json.Marshal(e.Capella)
+	}
+	return json.Marshal(e.Bellatrix)
+}
+
+func (e *ExecutionPayload) UnmarshalJSON(data []byte) error {
+	if e.Capella != nil {
+		return json.Unmarshal(data, e.Capella)
+	}
+	return json.Unmarshal(data, e.Bellatrix)
+}
+
+func (e *ExecutionPayload) BlockHash() string {
+	if e.Capella != nil {
+		return e.Capella.BlockHash.String()
+	}
+	return e.Bellatrix.BlockHash.String()
+}
+
+func (e *ExecutionPayload) ParentHash() string {
+	if e.Capella != nil {
+		return e.Capella.ParentHash.String()
+	}
+	return e.Bellatrix.ParentHash.String()
+}
+
+func (e *ExecutionPayload) BlockNumber() uint64 {
+	if e.Capella != nil {
+		return e.Capella.BlockNumber
+	}
+	return e.Bellatrix.BlockNumber
+}
+
+func (e *ExecutionPayload) Timestamp() uint64 {
+	if e.Capella != nil {
+		return e.Capella.Timestamp
+	}
+	return e.Bellatrix.Timestamp
+}
+
+type VersionedExecutionPayload struct {
+	Version          *consensusspec.DataVersion
+	ExecutionPayload *ExecutionPayload
+}
+
+func (e *ExecutionPayload) TxNum() int {
+	if e.Capella != nil {
+		return len(e.Capella.Transactions)
+	}
+	return len(e.Bellatrix.Transactions)
 }

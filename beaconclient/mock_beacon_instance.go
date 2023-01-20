@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 )
 
 type MockBeaconInstance struct {
@@ -98,7 +99,7 @@ func (c *MockBeaconInstance) addDelay() {
 	}
 }
 
-func (c *MockBeaconInstance) PublishBlock(block *types.SignedBeaconBlock) (code int, err error) {
+func (c *MockBeaconInstance) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
 	return 0, nil
 }
 
