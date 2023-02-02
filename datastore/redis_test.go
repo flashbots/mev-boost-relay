@@ -166,16 +166,18 @@ func TestActiveValidators(t *testing.T) {
 	require.True(t, vals[pk1])
 }
 
-func _buildGetHeaderResponse(value uint64) *types.GetHeaderResponse {
-	return &types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data: &types.SignedBuilderBid{
-			Message: &types.BuilderBid{
-				Header: &types.ExecutionPayloadHeader{},
-				Value:  types.IntToU256(value),
-				Pubkey: types.PublicKey{0x01},
+func _buildGetHeaderResponse(value uint64) *common.GetHeaderResponse {
+	return &common.GetHeaderResponse{
+		Bellatrix: &types.GetHeaderResponse{
+			Version: "bellatrix",
+			Data: &types.SignedBuilderBid{
+				Message: &types.BuilderBid{
+					Header: &types.ExecutionPayloadHeader{},
+					Value:  types.IntToU256(value),
+					Pubkey: types.PublicKey{0x01},
+				},
+				Signature: types.Signature{0x01},
 			},
-			Signature: types.Signature{0x01},
 		},
 	}
 }

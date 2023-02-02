@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/flashbots/mev-boost-relay/types"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +59,7 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		log.Infof("got %d bids", len(bids))
-		entries := make([]common.BidTraceV2WithTimestampJSON, len(bids))
+		entries := make([]types.BidTraceV2WithTimestampJSON, len(bids))
 		for i, bid := range bids {
 			entries[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(bid)
 		}

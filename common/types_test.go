@@ -1,0 +1,28 @@
+package common
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestBuilderSubmitBlockRequestJSON(t *testing.T) {
+	jsonInput := `{
+		"signature": "0x8209b5391cd69f392b1f02dbc03bab61f574bb6bb54bf87b59e2a85bdc0756f7db6a71ce1b41b727a1f46ccc77b213bf0df1426177b5b29926b39956114421eaa36ec4602969f6f6370a44de44a6bce6dae2136e5fb594cce2a476354264d1ea",
+		"message": {
+			"slot": "123",
+			"parent_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"block_hash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+		},
+		"execution_payload": {
+			"parent_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"coinbase": "0x0000000000000000000000000000000000000000",
+			"state_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"receipt_root": "0x0000000000000000000000000000000000000000000000000000000000000000"
+		}
+	}`
+	var builderSubmitBlockRequest BuilderSubmitBlockRequest
+	err := json.Unmarshal([]byte(jsonInput), &builderSubmitBlockRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

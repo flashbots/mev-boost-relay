@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (
@@ -11,12 +12,12 @@ var (
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 )
 
-func SanityCheckBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest) error {
-	if payload.Message.BlockHash != payload.ExecutionPayload.BlockHash {
+func SanityCheckBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest) error {
+	if payload.BlockHash() != payload.ExecutionPayloadBlockHash() {
 		return ErrBlockHashMismatch
 	}
 
-	if payload.Message.ParentHash != payload.ExecutionPayload.ParentHash {
+	if payload.ParentHash() != payload.ExecutionPayloadParentHash() {
 		return ErrParentHashMismatch
 	}
 

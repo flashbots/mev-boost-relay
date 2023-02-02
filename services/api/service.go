@@ -23,13 +23,14 @@ import (
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/types"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -111,7 +112,7 @@ type RelayAPI struct {
 	log  *logrus.Entry
 
 	blsSk     *bls.SecretKey
-	publicKey *types.PublicKey
+	publicKey *boostTypes.PublicKey
 
 	srv        *http.Server
 	srvStarted uberatomic.Bool
@@ -125,15 +126,15 @@ type RelayAPI struct {
 	genesisInfo *beaconclient.GetGenesisResponse
 
 	proposerDutiesLock       sync.RWMutex
-	proposerDutiesResponse   []types.BuilderGetValidatorsResponseEntry
-	proposerDutiesMap        map[uint64]*types.RegisterValidatorRequestMessage
+	proposerDutiesResponse   []boostTypes.BuilderGetValidatorsResponseEntry
+	proposerDutiesMap        map[uint64]*boostTypes.RegisterValidatorRequestMessage
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter *BlockSimulationRateLimiter
 
-	activeValidatorC chan types.PubkeyHex
-	validatorRegC    chan types.SignedValidatorRegistration
+	activeValidatorC chan boostTypes.PubkeyHex
+	validatorRegC    chan boostTypes.SignedValidatorRegistration
 
 	// used to wait on any active getPayload calls on shutdown
 	getPayloadCallsInFlight sync.WaitGroup
@@ -163,14 +164,14 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	}
 
 	// If block-builder API is enabled, then ensure secret key is all set
-	var publicKey types.PublicKey
+	var publicKey boostTypes.PublicKey
 	if opts.BlockBuilderAPI {
 		if opts.SecretKey == nil {
 			return nil, ErrBuilderAPIWithoutSecretKey
 		}
 
 		// If using a secret key, ensure it's the correct one
-		publicKey, err = types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+		publicKey, err = boostTypes.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
 		if err != nil {
 			return nil, err
 		}
@@ -199,11 +200,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		beaconClient:           opts.BeaconClient,
 		redis:                  opts.Redis,
 		db:                     opts.DB,
-		proposerDutiesResponse: []types.BuilderGetValidatorsResponseEntry{},
+		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
-		activeValidatorC: make(chan types.PubkeyHex, 450_000),
-		validatorRegC:    make(chan types.SignedValidatorRegistration, 450_000),
+		activeValidatorC: make(chan boostTypes.PubkeyHex, 450_000),
+		validatorRegC:    make(chan boostTypes.SignedValidatorRegistration, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -435,7 +436,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 
 	// Get duties from mem
 	duties, err := api.redis.GetProposerDuties()
-	dutiesMap := make(map[uint64]*types.RegisterValidatorRequestMessage)
+	dutiesMap := make(map[uint64]*boostTypes.RegisterValidatorRequestMessage)
 	for _, duty := range duties {
 		dutiesMap[duty.Slot] = duty.Entry.Message
 	}
@@ -542,7 +543,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
-	parseRegistration := func(value []byte) (pkHex types.PubkeyHex, timestampInt int64, err error) {
+	parseRegistration := func(value []byte) (pkHex boostTypes.PubkeyHex, timestampInt int64, err error) {
 		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
 			return pkHex, timestampInt, fmt.Errorf("registration message error (pubkey): %w", err)
@@ -558,7 +559,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return pkHex, timestampInt, fmt.Errorf("invalid timestamp: %w", err)
 		}
 
-		return types.PubkeyHex(pubkey), timestampInt, nil
+		return boostTypes.PubkeyHex(pubkey), timestampInt, nil
 	}
 
 	// Iterate over the registrations
@@ -614,7 +615,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		numRegNew += 1
 
 		// JSON-decode the registration now (needed for signature verification)
-		signedValidatorRegistration := new(types.SignedValidatorRegistration)
+		signedValidatorRegistration := new(boostTypes.SignedValidatorRegistration)
 		err = json.Unmarshal(value, signedValidatorRegistration)
 		if err != nil {
 			regLog.WithError(err).Error("error unmarshalling signed validator registration")
@@ -623,7 +624,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Verify the signature
-		ok, err := types.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
+		ok, err := boostTypes.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
 			regLog.WithError(err).Error("error verifying registerValidator signature")
 			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
@@ -757,7 +758,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 		log.WithError(err).Debug("capella getPayload request failed to decode")
-		bellatrixPayload := new(types.SignedBlindedBeaconBlock)
+		bellatrixPayload := new(boostTypes.SignedBlindedBeaconBlock)
 		if err := json.NewDecoder(bytes.NewReader(body)).Decode(bellatrixPayload); err != nil {
 			log.WithError(err).Warn("bellatrix getPayload request failed to decode")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -786,7 +787,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("pubkeyFromIndex", proposerPubkey)
 
 	// Get the proposer pubkey based on the validator index from the payload
-	pk, err := types.HexToPubkey(proposerPubkey.String())
+	pk, err := boostTypes.HexToPubkey(proposerPubkey.String())
 	if err != nil {
 		log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
 		api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
@@ -794,7 +795,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Verify the signature
-	ok, err := types.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature())
+	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature())
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify payload signature")
 		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
@@ -935,22 +936,22 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log = log.WithField("gzip-req", true)
 	}
 
-	payload := new(types.BuilderSubmitBlockRequest)
+	payload := new(common.BuilderSubmitBlockRequest)
 	if err := json.NewDecoder(r).Decode(payload); err != nil {
 		log.WithError(err).Warn("could not decode payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if payload.Message == nil || payload.ExecutionPayload == nil {
+	if payload.Message() == nil || payload.HasExecutionPayload() {
 		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
 		return
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"slot":          payload.Message.Slot,
-		"builderPubkey": payload.Message.BuilderPubkey.String(),
-		"blockHash":     payload.Message.BlockHash.String(),
+		"slot":          payload.Slot(),
+		"builderPubkey": payload.BuilderPubkey(),
+		"blockHash":     payload.BlockHash(),
 	})
 
 	// Reject new submissions once the payload for this slot was delivered
@@ -961,14 +962,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		slotLastPayloadDelivered, err := strconv.ParseUint(slotStr, 10, 64)
 		if err != nil {
 			log.WithError(err).Errorf("failed to parse delivered payload slot from redis: %s", slotStr)
-		} else if payload.Message.Slot <= slotLastPayloadDelivered {
+		} else if payload.Slot() <= slotLastPayloadDelivered {
 			log.Info("rejecting submission because payload for this slot was already delivered")
 			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
 			return
 		}
 	}
 
-	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.Message.BuilderPubkey.String())
+	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.BuilderPubkey().String())
 	log = log.WithFields(logrus.Fields{
 		"builderIsHighPrio":    builderIsHighPrio,
 		"builderIsBlacklisted": builderIsBlacklisted,
@@ -978,10 +979,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Timestamp check
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Message.Slot * 12)
-	if payload.ExecutionPayload.Timestamp != expectedTimestamp {
-		log.Warnf("incorrect timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp)
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.ExecutionPayload.Timestamp, expectedTimestamp))
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
+	if payload.Timestamp() != expectedTimestamp {
+		log.Warnf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
 		return
 	}
 
@@ -989,20 +990,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// - querying the randao from the BN if payload has a newer slot (might be faster than headSlot event)
 	// - check for validity happens later, again after validation (to use some time for BN request to finish...)
 	api.expectedPrevRandaoLock.RLock()
-	if payload.Message.Slot > api.expectedPrevRandao.slot {
-		go api.updatedExpectedRandao(payload.Message.Slot - 1)
+	if payload.Slot() > api.expectedPrevRandao.slot {
+		go api.updatedExpectedRandao(payload.Slot() - 1)
 	}
 	api.expectedPrevRandaoLock.RUnlock()
 
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
-	slotDuty := api.proposerDutiesMap[payload.Message.Slot]
+	slotDuty := api.proposerDutiesMap[payload.Slot()]
 	api.proposerDutiesLock.RUnlock()
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
 		return
-	} else if slotDuty.FeeRecipient != payload.Message.ProposerFeeRecipient {
+	} else if slotDuty.FeeRecipient.String() != payload.ProposerFeeRecipient() {
 		log.Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
 		return
@@ -1025,20 +1026,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithFields(logrus.Fields{
 		"builderHighPrio": builderIsHighPrio,
-		"proposerPubkey":  payload.Message.ProposerPubkey.String(),
-		"parentHash":      payload.Message.ParentHash.String(),
-		"value":           payload.Message.Value.String(),
-		"tx":              len(payload.ExecutionPayload.Transactions),
+		"proposerPubkey":  payload.ProposerPubkey(),
+		"parentHash":      payload.ParentHash(),
+		"value":           payload.Value().String(),
+		"tx":              payload.TxNum(),
 	})
 
-	if payload.Message.Slot <= api.headSlot.Load() {
+	if payload.Slot() <= api.headSlot.Load() {
 		api.log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return
 	}
 
 	// Don't accept blocks with 0 value
-	if payload.Message.Value.Cmp(&ZeroU256) == 0 || len(payload.ExecutionPayload.Transactions) == 0 {
+	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.TxNum() == 0 {
 		api.log.Info("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
@@ -1056,19 +1057,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	api.expectedPrevRandaoLock.RLock()
 	expectedRandao := api.expectedPrevRandao
 	api.expectedPrevRandaoLock.RUnlock()
-	if expectedRandao.slot != payload.Message.Slot { // we still don't have the prevrandao yet
+	if expectedRandao.slot != payload.Slot() { // we still don't have the prevrandao yet
 		log.Warn("prev_randao is not known yet")
 		api.RespondError(w, http.StatusInternalServerError, "prev_randao is not known yet")
 		return
-	} else if expectedRandao.prevRandao != payload.ExecutionPayload.Random.String() {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.ExecutionPayload.Random.String(), expectedRandao.prevRandao)
+	} else if expectedRandao.prevRandao != payload.Random() {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), expectedRandao.prevRandao)
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
 	// Verify the signature
-	ok, err := types.VerifySignature(payload.Message, api.opts.EthNetDetails.DomainBuilder, payload.Message.BuilderPubkey[:], payload.Signature[:])
+	builderPubkey := payload.BuilderPubkey()
+	signature := payload.Signature()
+	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
@@ -1121,7 +1124,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Ensure this request is still the latest one
-	latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Message.Slot, payload.Message.BuilderPubkey.String(), payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
+	latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("failed getting latest payload receivedAt from redis")
 	} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
@@ -1131,27 +1134,24 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Prepare the response data
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	getHeaderResponse, err := BuildGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: VersionBellatrix,
-		Data:    signedBuilderBid,
+	getPayloadResponse, err := BuildGetPayloadResponse(payload)
+	if err != nil {
+		log.WithError(err).Error("could not build getPayload response")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	getPayloadResponse := types.GetPayloadResponse{
-		Version: VersionBellatrix,
-		Data:    payload.ExecutionPayload,
-	}
-
-	bidTrace := common.BidTraceV2{
-		BidTrace:    *payload.Message,
-		BlockNumber: payload.ExecutionPayload.BlockNumber,
-		NumTx:       uint64(len(payload.ExecutionPayload.Transactions)),
+	bidTrace := types.BidTraceV2{
+		BidTrace:    *common.BoostBidToBidTrace(payload.Message()),
+		BlockNumber: payload.BlockNumber(),
+		NumTx:       uint64(payload.TxNum()),
 	}
 
 	//
@@ -1166,7 +1166,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// save execution payload (getPayload response)
-	err = api.redis.SaveExecutionPayload(payload.Message.Slot, payload.Message.ProposerPubkey.String(), payload.Message.BlockHash.String(), &getPayloadResponse)
+	err = api.redis.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("failed saving execution payload in redis")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1174,7 +1174,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// save this builder's latest bid
-	err = api.redis.SaveLatestBuilderBid(payload.Message.Slot, payload.Message.BuilderPubkey.String(), payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String(), receivedAt, &getHeaderResponse)
+	err = api.redis.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), receivedAt, getHeaderResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save latest builder bid")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1182,7 +1182,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// recalculate top bid
-	err = api.redis.UpdateTopBid(payload.Message.Slot, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
+	err = api.redis.UpdateTopBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("could not compute top bid")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1193,9 +1193,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// all done
 	//
 	log.WithFields(logrus.Fields{
-		"proposerPubkey": payload.Message.ProposerPubkey.String(),
-		"value":          payload.Message.Value.String(),
-		"tx":             len(payload.ExecutionPayload.Transactions),
+		"proposerPubkey": payload.ProposerPubkey(),
+		"value":          payload.Value().String(),
+		"tx":             payload.TxNum(),
 	}).Info("received block from builder")
 
 	// Respond with OK (TODO: proper response response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
@@ -1280,7 +1280,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	}
 
 	if args.Get("block_hash") != "" {
-		var hash types.Hash
+		var hash boostTypes.Hash
 		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
@@ -1339,7 +1339,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		return
 	}
 
-	response := make([]common.BidTraceV2JSON, len(deliveredPayloads))
+	response := make([]types.BidTraceV2JSON, len(deliveredPayloads))
 	for i, payload := range deliveredPayloads {
 		response[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
 	}
@@ -1373,7 +1373,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("block_hash") != "" {
-		var hash types.Hash
+		var hash boostTypes.Hash
 		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
@@ -1424,7 +1424,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	response := make([]common.BidTraceV2WithTimestampJSON, len(blockSubmissions))
+	response := make([]types.BidTraceV2WithTimestampJSON, len(blockSubmissions))
 	for i, payload := range blockSubmissions {
 		response[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload)
 	}
@@ -1439,7 +1439,7 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 		return
 	}
 
-	var pk types.PublicKey
+	var pk boostTypes.PublicKey
 	err := pk.UnmarshalText([]byte(pkStr))
 	if err != nil {
 		api.RespondError(w, http.StatusBadRequest, "invalid pubkey")

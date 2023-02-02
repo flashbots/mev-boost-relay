@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/flashbots/mev-boost-relay/types"
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +72,7 @@ var DataAPIExportPayloads = &cobra.Command{
 		}
 
 		log.Infof("got %d payloads", len(deliveredPayloads))
-		entries := make([]common.BidTraceV2JSON, len(deliveredPayloads))
+		entries := make([]types.BidTraceV2JSON, len(deliveredPayloads))
 		for i, payload := range deliveredPayloads {
 			entries[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
 		}
