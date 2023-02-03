@@ -56,11 +56,17 @@ type EthNetworkDetails struct {
 }
 
 var (
-	EthNetworkKiln    = "kiln"
-	EthNetworkRopsten = "ropsten"
-	EthNetworkSepolia = "sepolia"
-	EthNetworkGoerli  = "goerli"
-	EthNetworkMainnet = "mainnet"
+	EthNetworkKiln     = "kiln"
+	EthNetworkRopsten  = "ropsten"
+	EthNetworkSepolia  = "sepolia"
+	EthNetworkGoerli   = "goerli"
+	EthNetworkMainnet  = "mainnet"
+	EthNetworkZhejiang = "zhejiang"
+
+	// Zhejiang details
+	GenesisForkVersionZhejiang    = "0x00000069"
+	GenesisValidatorsRootZhejiang = "0x53a92d8f2bb1d85f62d16a156e6ebcd1bcaba652d0900b2c2f387826f3481f6f"
+	BellatrixForkVersionZhejiang  = "0x00000071"
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -91,6 +97,10 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		genesisForkVersion = types.GenesisForkVersionMainnet
 		genesisValidatorsRoot = types.GenesisValidatorsRootMainnet
 		bellatrixForkVersion = types.BellatrixForkVersionMainnet
+	case EthNetworkZhejiang:
+		genesisForkVersion = GenesisForkVersionZhejiang
+		genesisValidatorsRoot = GenesisValidatorsRootZhejiang
+		bellatrixForkVersion = BellatrixForkVersionZhejiang
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
