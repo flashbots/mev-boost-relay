@@ -3,17 +3,30 @@ package database
 import (
 	"os"
 	"testing"
+	"time"
 
+	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
+	blst "github.com/supranational/blst/bindings/go"
+)
+
+const (
+	slot          = uint64(42)
+	collateral    = 1000
+	collateralStr = "1000"
+	collateralID  = "builder0x69"
+	randao        = "01234567890123456789012345678901"
 )
 
 var (
-	runDBTests = os.Getenv("RUN_DB_TESTS") == "1" //|| true
-	testDBDSN  = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	runDBTests   = os.Getenv("RUN_DB_TESTS") == "1" //|| true
+	feeRecipient = types.Address{0x02}
+	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
 )
 
 func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
@@ -24,6 +37,31 @@ func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 		GasLimit:     30000000,
 		Signature:    "0xab6fa6462f658708f1a9030faeac588d55b1e28cc1f506b3ef938eeeec0171d4209865fb66bbb94e52c0c160a63975e51795ee8d1da38219b3f80d7d14f003421a255d99b744bd71f45f0cb2cd17948afff67ad6c9163fcd20b48f6315dac7cc",
 	}
+}
+
+func getTestKeyPair(t *testing.T) (*types.PublicKey, *blst.SecretKey) {
+	sk, _, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	blsPubkey := bls.PublicKeyFromSecretKey(sk)
+	var pubkey types.PublicKey
+	err = pubkey.FromSlice(blsPubkey.Compress())
+	require.NoError(t, err)
+	return &pubkey, sk
+}
+
+func insertTestBuilder(t *testing.T, db IDatabaseService) string {
+	pk, sk := getTestKeyPair(t)
+	req := common.TestBuilderSubmitBlockRequest(pk, sk, &types.BidTrace{
+		Slot:                 slot,
+		BuilderPubkey:        *pk,
+		ProposerFeeRecipient: feeRecipient,
+		Value:                types.IntToU256(uint64(collateral)),
+	})
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now())
+	require.NoError(t, err)
+	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
+	require.NoError(t, err)
+	return req.Message.BuilderPubkey.String()
 }
 
 func resetDatabase(t *testing.T) *DatabaseService {
@@ -136,4 +174,94 @@ func TestMigrations(t *testing.T) {
 	err := db.DB.QueryRow(query).Scan(&rowCount)
 	require.NoError(t, err)
 	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
+}
+
+func TestSetBlockBuilderStatus(t *testing.T) {
+	db := resetDatabase(t)
+	// Four test builders, 2 with matching collateral id, 2 with no collateral id.
+	pubkey1 := insertTestBuilder(t, db)
+	pubkey2 := insertTestBuilder(t, db)
+	pubkey3 := insertTestBuilder(t, db)
+	pubkey4 := insertTestBuilder(t, db)
+
+	// Builder 1 & 2 share a collateral id.
+	err := db.SetBlockBuilderCollateral(pubkey1, collateralID, collateralStr)
+	require.NoError(t, err)
+	err = db.SetBlockBuilderCollateral(pubkey2, collateralID, collateralStr)
+	require.NoError(t, err)
+
+	// Before status change.
+	for _, v := range []string{pubkey1, pubkey2, pubkey3, pubkey4} {
+		builder, err := db.GetBlockBuilderByPubkey(v)
+		require.NoError(t, err)
+		require.False(t, builder.IsHighPrio)
+		require.False(t, builder.IsDemoted)
+		require.False(t, builder.IsBlacklisted)
+	}
+
+	// Update status of builder 1 and 3.
+	err = db.SetBlockBuilderStatus(pubkey1, common.BuilderStatus{
+		IsHighPrio: true,
+		IsDemoted:  true,
+	})
+	require.NoError(t, err)
+	err = db.SetBlockBuilderStatus(pubkey3, common.BuilderStatus{
+		IsHighPrio: true,
+		IsDemoted:  true,
+	})
+	require.NoError(t, err)
+
+	// After status change, builders 1, 2, 3 should be modified.
+	for _, v := range []string{pubkey1, pubkey2, pubkey3} {
+		builder, err := db.GetBlockBuilderByPubkey(v)
+		require.NoError(t, err)
+		require.True(t, builder.IsHighPrio)
+		require.True(t, builder.IsDemoted)
+		require.False(t, builder.IsBlacklisted)
+	}
+	// Builder 4 should be unchanged.
+	builder, err := db.GetBlockBuilderByPubkey(pubkey4)
+	require.NoError(t, err)
+	require.False(t, builder.IsHighPrio)
+	require.False(t, builder.IsDemoted)
+	require.False(t, builder.IsBlacklisted)
+}
+
+func TestSetBlockBuilderCollateral(t *testing.T) {
+	db := resetDatabase(t)
+	pubkey := insertTestBuilder(t, db)
+
+	// Before collateral change.
+	builder, err := db.GetBlockBuilderByPubkey(pubkey)
+	require.NoError(t, err)
+	require.Equal(t, "", builder.CollateralID)
+	require.Equal(t, "0", builder.CollateralValue)
+
+	err = db.SetBlockBuilderCollateral(pubkey, collateralID, collateralStr)
+	require.NoError(t, err)
+
+	// After collateral change.
+	builder, err = db.GetBlockBuilderByPubkey(pubkey)
+	require.NoError(t, err)
+	require.Equal(t, collateralID, builder.CollateralID)
+	require.Equal(t, collateralStr, builder.CollateralValue)
+}
+
+func TestUpsertBuilderDemotion(t *testing.T) {
+	db := resetDatabase(t)
+	pk, sk := getTestKeyPair(t)
+	req := common.TestBuilderSubmitBlockRequest(pk, sk, &types.BidTrace{
+		Slot:                 slot,
+		BuilderPubkey:        *pk,
+		ProposerFeeRecipient: feeRecipient,
+		Value:                types.IntToU256(uint64(collateral)),
+	})
+
+	// Non-refundable demotion (just the block request).
+	err := db.UpsertBuilderDemotion(&req, nil, nil)
+	require.NoError(t, err)
+
+	// Refundable demotion.
+	err = db.UpsertBuilderDemotion(&req, &types.SignedBeaconBlock{}, &types.SignedValidatorRegistration{})
+	require.NoError(t, err)
 }
