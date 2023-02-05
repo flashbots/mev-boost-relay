@@ -23,6 +23,11 @@ var (
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 3000)) * time.Millisecond
 )
 
+type IBlockSimRateLimiter interface {
+	send(context context.Context, payload *BuilderBlockValidationRequest, isHighPrio bool) error
+	currentCounter() int64
+}
+
 type BlockSimulationRateLimiter struct {
 	cv          *sync.Cond
 	counter     int64

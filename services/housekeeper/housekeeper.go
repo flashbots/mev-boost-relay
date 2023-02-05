@@ -76,7 +76,6 @@ func (hk *Housekeeper) Start() (err error) {
 	}
 
 	// Start initial tasks
-	go hk.updateBlockBuildersInRedis()
 	go hk.updateValidatorRegistrationsInRedis()
 
 	// Start the periodic task loops
@@ -327,22 +326,4 @@ func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
 		}
 	}
 	hk.log.Infof("updating %d validator registrations in Redis done - %f sec", len(regs), time.Since(timeStarted).Seconds())
-}
-
-func (hk *Housekeeper) updateBlockBuildersInRedis() {
-	builders, err := hk.db.GetBlockBuilders()
-	if err != nil {
-		hk.log.WithError(err).Error("failed to get block builders from db")
-		return
-	}
-
-	hk.log.Infof("updating %d block builders in Redis...", len(builders))
-	for _, builder := range builders {
-		status := datastore.MakeBlockBuilderStatus(builder.IsHighPrio, builder.IsBlacklisted)
-		hk.log.Infof("updating block builder in Redis: %s - %s", builder.BuilderPubkey, status)
-		err = hk.redis.SetBlockBuilderStatus(builder.BuilderPubkey, status)
-		if err != nil {
-			hk.log.WithError(err).Error("failed to set block builder status in redis")
-		}
-	}
 }

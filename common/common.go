@@ -21,3 +21,10 @@ type HTTPServerTimeouts struct {
 	Write      time.Duration // Timeout for writes. None if 0.
 	Idle       time.Duration // Timeout to disconnect idle client connections. None if 0.
 }
+
+// BuilderStatus configures how builder blocks are processed.
+type BuilderStatus struct {
+	IsHighPrio    bool
+	IsBlacklisted bool
+	IsDemoted     bool
+}
