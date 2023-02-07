@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -257,11 +258,12 @@ func TestUpsertBuilderDemotion(t *testing.T) {
 		Value:                types.IntToU256(uint64(collateral)),
 	})
 
+	simErr := fmt.Errorf("fake simulation error")
 	// Non-refundable demotion (just the block request).
-	err := db.UpsertBuilderDemotion(&req, nil, nil)
+	err := db.UpsertBuilderDemotion(&req, nil, nil, simErr)
 	require.NoError(t, err)
 
 	// Refundable demotion.
-	err = db.UpsertBuilderDemotion(&req, &types.SignedBeaconBlock{}, &types.SignedValidatorRegistration{})
+	err = db.UpsertBuilderDemotion(&req, &types.SignedBeaconBlock{}, &types.SignedValidatorRegistration{}, simErr)
 	require.NoError(t, err)
 }

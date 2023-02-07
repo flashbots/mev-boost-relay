@@ -441,7 +441,7 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *types.BuilderSubmitBlockR
 		api.log.Error(fmt.Errorf("error setting builder: %v status: %v", pubkey, err))
 	}
 	// Write to demotions table.
-	if err = api.db.UpsertBuilderDemotion(req, block, reg); err != nil {
+	if err = api.db.UpsertBuilderDemotion(req, block, reg, err); err != nil {
 		api.log.WithError(err).WithFields(logrus.Fields{
 			"signedBeaconBlock":           block,
 			"signedValidatorRegistration": reg,

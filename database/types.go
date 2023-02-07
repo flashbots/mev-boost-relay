@@ -223,4 +223,7 @@ type BuilderDemotionEntry struct {
 	FeeRecipient string `db:"fee_recipient"`
 
 	BlockHash string `db:"block_hash"`
+
+	SubmitBlockSimError string `db:"submit_block_sim_error"`
+	GetPayloadSimError  string `db:"get_payload_sim_error"`
 }

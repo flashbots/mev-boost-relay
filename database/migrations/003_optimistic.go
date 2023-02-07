@@ -33,6 +33,9 @@ var Migration003Optimistic = &migrate.Migration{
 			
 			block_hash varchar(66) NOT NULL,
 			
+			submit_block_sim_error text NOT NULL,
+			get_payload_sim_error  text NOT NULL,
+			
 			UNIQUE (builder_pubkey, block_hash)
 		);
 	`},
