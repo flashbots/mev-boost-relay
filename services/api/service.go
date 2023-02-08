@@ -943,7 +943,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if payload.Message() == nil || payload.HasExecutionPayload() {
+	if payload.Message() == nil || !payload.HasExecutionPayload() {
 		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
 		return
 	}
