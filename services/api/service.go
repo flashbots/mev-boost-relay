@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -710,20 +711,20 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if bid == nil || bid.Data == nil || bid.Data.Message == nil {
+	if bid.Empty() {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	// Error on bid without value
-	if bid.Data.Message.Value.Cmp(&ZeroU256) == 0 {
+	if bid.Value().Cmp(big.NewInt(0)) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	log.WithFields(logrus.Fields{
-		"value":     bid.Data.Message.Value.String(),
-		"blockHash": bid.Data.Message.Header.BlockHash.String(),
+		"value":     bid.Value().String(),
+		"blockHash": bid.BlockHash().String(),
 	}).Info("bid delivered")
 	api.RespondOK(w, bid)
 }

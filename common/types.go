@@ -530,7 +530,7 @@ type GetPayloadResponse struct {
 func (p *GetPayloadResponse) UnmarshalJSON(data []byte) error {
 	capella := new(api.VersionedExecutionPayload)
 	err := json.Unmarshal(data, capella)
-	if err == nil {
+	if err == nil && capella.Capella != nil {
 		p.Capella = capella
 		return nil
 	}
@@ -561,7 +561,7 @@ type GetHeaderResponse struct {
 func (p *GetHeaderResponse) UnmarshalJSON(data []byte) error {
 	capella := new(spec.VersionedSignedBuilderBid)
 	err := json.Unmarshal(data, capella)
-	if err == nil {
+	if err == nil && capella.Capella != nil {
 		p.Capella = capella
 		return nil
 	}
@@ -586,10 +586,42 @@ func (p *GetHeaderResponse) MarshalJSON() ([]byte, error) {
 
 func (p *GetHeaderResponse) Value() *big.Int {
 	if p.Capella != nil {
+		fmt.Println(p.Capella.Capella.Message.Value)
 		return p.Capella.Capella.Message.Value.ToBig()
 	}
 	if p.Bellatrix != nil {
+		fmt.Println(p.Bellatrix.Data.Message.Value)
 		return p.Bellatrix.Data.Message.Value.BigInt()
+	}
+	return nil
+}
+
+func (p *GetHeaderResponse) BlockHash() phase0.Hash32 {
+	if p.Capella != nil {
+		return p.Capella.Capella.Message.Header.BlockHash
+	}
+	if p.Bellatrix != nil {
+		return phase0.Hash32(p.Bellatrix.Data.Message.Header.BlockHash)
+	}
+	return phase0.Hash32{}
+}
+
+func (p *GetHeaderResponse) Empty() bool {
+	if p == nil {
+		return true
+	}
+	if p.Capella != nil {
+		return p.Capella.Capella == nil || p.Capella.Capella.Message == nil
+	}
+	if p.Bellatrix != nil {
+		return p.Bellatrix.Data == nil || p.Bellatrix.Data.Message == nil
+	}
+	return true
+}
+
+func (b *BuilderSubmitBlockRequest) Withdrawals() []*consensuscapella.Withdrawal {
+	if b.Capella != nil {
+		return b.Capella.ExecutionPayload.Withdrawals
 	}
 	return nil
 }

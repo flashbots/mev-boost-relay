@@ -284,9 +284,9 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	return res, err
 }
 
-func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*boostTypes.GetHeaderResponse, error) {
+func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*common.GetHeaderResponse, error) {
 	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
-	resp := new(boostTypes.GetHeaderResponse)
+	resp := new(common.GetHeaderResponse)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
