@@ -8,9 +8,9 @@ import (
 var Migration003Optimistic = &migrate.Migration{
 	Id: "003-optimistic",
 	Up: []string{`
-		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD is_demoted        bool;
-		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_value  NUMERIC(48, 0);
-		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_id     varchar(98);
+		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD is_demoted        bool NOT NULL default false;
+		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_value  NUMERIC(48, 0) NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_id     varchar(98) NOT NULL default '';
 	`,
 		`
 		CREATE TABLE IF NOT EXISTS ` + vars.TableBuilderDemotions + `(
