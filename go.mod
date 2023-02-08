@@ -40,7 +40,7 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
-	github.com/attestantio/go-builder-client v0.2.6
+	github.com/attestantio/go-builder-client v0.2.7
 	github.com/attestantio/go-eth2-client v0.15.2
 	github.com/btcsuite/btcd v0.23.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect

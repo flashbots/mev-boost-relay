@@ -68,8 +68,8 @@ github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hC
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
 github.com/armon/go-radix v1.0.0/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
-github.com/attestantio/go-builder-client v0.2.6 h1:2DPy66HgKo/n84rf9KM2GSBd0a5C/uCxZor5pW2ASeA=
-github.com/attestantio/go-builder-client v0.2.6/go.mod h1:lZt7TKYeVfOfJPVtWdOguwysQeFqeQMDjCru87RBdic=
+github.com/attestantio/go-builder-client v0.2.7 h1:DVjqHj5vsM4LaHnRERgCq283aLG3lKR6kd920U1jrCY=
+github.com/attestantio/go-builder-client v0.2.7/go.mod h1:lZt7TKYeVfOfJPVtWdOguwysQeFqeQMDjCru87RBdic=
 github.com/attestantio/go-eth2-client v0.15.2 h1:4EYeA5IBSBypkUMhkkFALzMddaFDdb5PvCl7ORXEl6w=
 github.com/attestantio/go-eth2-client v0.15.2/go.mod h1:/Oh6YTuHmHhgLN/ZnQRKHGc7HdIzGlDkI2vjNZvOsvA=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
