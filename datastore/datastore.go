@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/attestantio/go-builder-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
@@ -147,9 +148,14 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		if err != nil {
 			return nil, err
 		}
+		capella := api.VersionedExecutionPayload{
+			Version:   res,
+			Capella:   executionPayload,
+			Bellatrix: nil,
+		}
 		return &common.VersionedExecutionPayload{
-			Version:          &res,
-			ExecutionPayload: &common.ExecutionPayload{Capella: executionPayload, Bellatrix: nil},
+			Capella:   &capella,
+			Bellatrix: nil,
 		}, nil
 	case consensusspec.DataVersionBellatrix:
 		executionPayload := new(types.ExecutionPayload)
@@ -157,9 +163,13 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		if err != nil {
 			return nil, err
 		}
+		bellatrix := types.GetPayloadResponse{
+			Version: types.VersionString(res.String()),
+			Data:    executionPayload,
+		}
 		return &common.VersionedExecutionPayload{
-			Version:          &res,
-			ExecutionPayload: &common.ExecutionPayload{Bellatrix: executionPayload, Capella: nil},
+			Bellatrix: &bellatrix,
+			Capella:   nil,
 		}, nil
 	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
 		return nil, errors.New("unsupported execution payload version")

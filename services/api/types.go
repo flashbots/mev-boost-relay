@@ -214,7 +214,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.Sign
 					Deposits:              capellaBlindedBlock.Message.Body.Deposits,
 					VoluntaryExits:        capellaBlindedBlock.Message.Body.VoluntaryExits,
 					SyncAggregate:         capellaBlindedBlock.Message.Body.SyncAggregate,
-					ExecutionPayload:      executionPayload.ExecutionPayload.Capella,
+					ExecutionPayload:      executionPayload.Capella.Capella,
 				},
 			},
 		}
@@ -236,7 +236,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.Sign
 					Deposits:          bellatrixBlindedBlock.Message.Body.Deposits,
 					VoluntaryExits:    bellatrixBlindedBlock.Message.Body.VoluntaryExits,
 					SyncAggregate:     bellatrixBlindedBlock.Message.Body.SyncAggregate,
-					ExecutionPayload:  executionPayload.ExecutionPayload.Bellatrix,
+					ExecutionPayload:  executionPayload.Bellatrix.Data,
 				},
 			},
 		}
