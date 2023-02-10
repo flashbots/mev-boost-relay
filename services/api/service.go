@@ -305,6 +305,9 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
+	// Initialize block builder cache.
+	api.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
+
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
