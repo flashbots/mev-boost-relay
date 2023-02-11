@@ -980,6 +980,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			isHighPrio: true, // manually set to true for these blocks.
 			req: &BuilderBlockValidationRequest{
 				BuilderSubmitBlockRequest: submitBlockReq,
+				RegisteredGasLimit:        getPayloadResp.Data.GasLimit,
 			},
 		})
 		// Block validation failed, perform a demotion.
