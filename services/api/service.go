@@ -429,26 +429,29 @@ func (api *RelayAPI) simulateBlock(opts blockSimOptions) error {
 	return nil
 }
 
-func (api *RelayAPI) demoteBuilder(pubkey string, req *types.BuilderSubmitBlockRequest, block *types.SignedBeaconBlock, reg *types.SignedValidatorRegistration) {
+func (api *RelayAPI) demoteBuilder(pubkey string, req *types.BuilderSubmitBlockRequest, block *types.SignedBeaconBlock, reg *types.SignedValidatorRegistration, simError error) {
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
 		builderEntry = &blockBuilderCacheEntry{}
 	}
-	err := api.db.SetBlockBuilderStatus(pubkey, common.BuilderStatus{
+	newStatus := common.BuilderStatus{
 		IsHighPrio:    builderEntry.status.IsHighPrio,
 		IsBlacklisted: builderEntry.status.IsBlacklisted,
 		IsDemoted:     true,
-	})
-	if err != nil {
+	}
+	api.log.Infof("demoted builder new status: %v", newStatus)
+	if err := api.db.SetBlockBuilderStatus(pubkey, newStatus); err != nil {
 		api.log.Error(fmt.Errorf("error setting builder: %v status: %v", pubkey, err))
 	}
 	// Write to demotions table.
-	if err = api.db.UpsertBuilderDemotion(req, block, reg, err); err != nil {
+	api.log.WithFields(logrus.Fields{"builder_pubkey": pubkey}).Info("demoting builder")
+	if err := api.db.UpsertBuilderDemotion(req, block, reg, simError); err != nil {
 		api.log.WithError(err).WithFields(logrus.Fields{
 			"signedBeaconBlock":           block,
 			"signedValidatorRegistration": reg,
 			"errorWritingRefundToDB":      true,
+			"simError":                    simError,
 		}).Error("failed to save validator refund to database")
 	}
 }
@@ -470,12 +473,12 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
 	})
 
-	if err := api.simulateBlock(opts); err != nil {
-		api.log.WithError(err).Error("block simulation failed")
+	if simErr := api.simulateBlock(opts); simErr != nil {
+		api.log.WithError(simErr).Error("block simulation failed in processOptimisticBlock, demoting builder")
 
 		// Demote the builder but without the beacon block or the signed
 		// registration, because we don't know if this bid will be accepted.
-		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, nil, nil)
+		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, nil, nil, simErr)
 	}
 }
 
@@ -972,7 +975,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 
 		simErr := api.simulateBlock(blockSimOptions{
-			ctx:        req.Context(),
+			ctx:        context.Background(),
 			log:        log,
 			isHighPrio: true, // manually set to true for these blocks.
 			req: &BuilderBlockValidationRequest{
@@ -986,16 +989,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 				"builderPubkey": builderPubkey,
 				"bidTrace":      bidTrace,
 			})
-			log.WithError(simErr).Error("simulation error")
+			log.WithError(simErr).Error("simulation error in getPayload, demoting builder")
 
 			// Prepare demotion data.
 			signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp.Data)
 
 			// Get registration entry from the DB.
-			registrationEntry, err := api.db.GetValidatorRegistration(builderPubkey)
+			registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					log.WithError(err).Error("no registration found for validator " + builderPubkey)
+					log.WithError(err).Error("no registration found for validator " + proposerPubkey.String())
 				} else {
 					log.WithError(err).Error("error reading validator registration")
 				}
@@ -1008,7 +1011,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 				}
 			}
 
-			api.demoteBuilder(builderPubkey, &submitBlockReq, signedBeaconBlock, signedRegistration)
+			api.demoteBuilder(builderPubkey, &submitBlockReq, signedBeaconBlock, signedRegistration, simErr)
 			return
 		}
 	}()
@@ -1392,6 +1395,7 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		api.log.WithFields(logrus.Fields{
 			"builderPubkey": builderPubkey,
 			"isHighPrio":    isHighPrio,
+			"isDemoted":     isDemoted,
 			"isBlacklisted": isBlacklisted,
 		}).Info("updating builder status")
 		newStatus := common.BuilderStatus{
