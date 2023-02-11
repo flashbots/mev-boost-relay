@@ -471,7 +471,7 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 		// updating api.optimisticBlocksInFlight concurrently. Since we just use
 		// it for logging, it is not atomic to avoid the performance impact.
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
-	})
+	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.Message.BlockHash)
 
 	if simErr := api.simulateBlock(opts); simErr != nil {
 		api.log.WithError(simErr).Error("block simulation failed in processOptimisticBlock, demoting builder")
