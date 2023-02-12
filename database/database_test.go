@@ -58,7 +58,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 		ProposerFeeRecipient: feeRecipient,
 		Value:                types.IntToU256(uint64(collateral)),
 	})
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now())
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), 0, false)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)

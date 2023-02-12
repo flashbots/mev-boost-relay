@@ -155,6 +155,10 @@ type BuilderBlockSubmissionEntry struct {
 	// Helpers
 	Epoch       uint64 `db:"epoch"`
 	BlockNumber uint64 `db:"block_number"`
+
+	// Optimistic data
+	SubmissionDuration   uint64 `db:"submission_duration"`
+	OptimisticSubmission bool   `db:"optimistic_submission"`
 }
 
 type DeliveredPayloadEntry struct {

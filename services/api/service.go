@@ -1243,10 +1243,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	var simErr error
+	var submissionDuration uint64
+	var optimisticSubmission bool
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, submissionDuration, optimisticSubmission)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
@@ -1273,6 +1275,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if builderEntry.collateral.Cmp(&payload.Message.Value) > 0 &&
 		!builderEntry.status.IsDemoted &&
 		payload.Message.Slot == api.optimisticSlot {
+		optimisticSubmission = true
 		go api.processOptimisticBlock(opts)
 	} else {
 		// Simulate block (synchronously).
@@ -1351,6 +1354,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// this bid is now elligible to win the auction
+	submissionDuration = uint64(time.Now().UTC().Sub(receivedAt).Microseconds())
 
 	//
 	// all done
