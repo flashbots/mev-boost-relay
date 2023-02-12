@@ -67,6 +67,7 @@ func TestBuilderSubmitBlockRequest(pk *types.PublicKey, sk *blst.SecretKey, bid 
 		Message:   bid,
 		Signature: signature,
 		ExecutionPayload: &types.ExecutionPayload{
+			BlockHash:    bid.BlockHash,
 			Timestamp:    bid.Slot * 12, // 12 seconds per slot.
 			Transactions: []hexutil.Bytes{_HexToBytes("0x03")},
 			Random:       _HexToHash("01234567890123456789012345678901"),

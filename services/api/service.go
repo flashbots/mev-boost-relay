@@ -1362,9 +1362,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// all done
 	//
 	log.WithFields(logrus.Fields{
-		"proposerPubkey": payload.Message.ProposerPubkey.String(),
-		"value":          payload.Message.Value.String(),
-		"tx":             len(payload.ExecutionPayload.Transactions),
+		"proposerPubkey":       payload.Message.ProposerPubkey.String(),
+		"value":                payload.Message.Value.String(),
+		"tx":                   len(payload.ExecutionPayload.Transactions),
+		"submissionDuration":   submissionDuration,
+		"optimisticSubmission": optimisticSubmission,
 	}).Info("received block from builder")
 
 	// Respond with OK (TODO: proper response response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)

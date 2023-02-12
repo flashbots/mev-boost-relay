@@ -17,16 +17,19 @@ import (
 )
 
 const (
-	slot          = uint64(42)
-	collateral    = 1000
-	collateralStr = "1000"
-	collateralID  = "builder0x69"
-	randao        = "01234567890123456789012345678901"
+	slot                 = uint64(42)
+	collateral           = 1000
+	collateralStr        = "1000"
+	collateralID         = "builder0x69"
+	randao               = "01234567890123456789012345678901"
+	submissionDuration   = 9998
+	optimisticSubmission = true
 )
 
 var (
 	runDBTests   = os.Getenv("RUN_DB_TESTS") == "1" //|| true
 	feeRecipient = types.Address{0x02}
+	blockHashStr = "0xa645370cc112c2e8e3cce121416c7dc849e773506d4b6fb9b752ada711355369"
 	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
 )
 
@@ -52,13 +55,18 @@ func getTestKeyPair(t *testing.T) (*types.PublicKey, *blst.SecretKey) {
 
 func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	pk, sk := getTestKeyPair(t)
+	var testBlockHash types.Hash
+	err := testBlockHash.UnmarshalText([]byte(blockHashStr))
+	require.NoError(t, err)
 	req := common.TestBuilderSubmitBlockRequest(pk, sk, &types.BidTrace{
+		BlockHash:            testBlockHash,
 		Slot:                 slot,
 		BuilderPubkey:        *pk,
+		ProposerPubkey:       *pk,
 		ProposerFeeRecipient: feeRecipient,
 		Value:                types.IntToU256(uint64(collateral)),
 	})
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), 0, false)
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), submissionDuration, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
@@ -266,4 +274,15 @@ func TestUpsertBuilderDemotion(t *testing.T) {
 	// Refundable demotion.
 	err = db.UpsertBuilderDemotion(&req, &types.SignedBeaconBlock{}, &types.SignedValidatorRegistration{}, simErr)
 	require.NoError(t, err)
+}
+
+func TestGetBlockSubmissionEntry(t *testing.T) {
+	db := resetDatabase(t)
+	pubkey := insertTestBuilder(t, db)
+
+	entry, err := db.GetBlockSubmissionEntry(slot, pubkey, blockHashStr)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(submissionDuration), entry.SubmissionDuration)
+	require.True(t, entry.OptimisticSubmission)
 }
