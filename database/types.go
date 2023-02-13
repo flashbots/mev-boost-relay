@@ -157,6 +157,9 @@ type BuilderBlockSubmissionEntry struct {
 	BlockNumber uint64 `db:"block_number"`
 
 	// Optimistic data
+	PrecheckDuration     uint64 `db:"precheck_duration"`
+	SimulationDuration   uint64 `db:"simulation_duration"`
+	RedisUpdateDuration  uint64 `db:"redis_update_duration"`
 	SubmissionDuration   uint64 `db:"submission_duration"`
 	OptimisticSubmission bool   `db:"optimistic_submission"`
 }

@@ -1243,12 +1243,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	var simErr error
-	var submissionDuration uint64
+	var precheckDuration, simulationDuration, redisUpdateDuration, submissionDuration uint64
 	var optimisticSubmission bool
+
+	precheckComplete := time.Now().UTC()
+	precheckDuration = uint64(precheckComplete.Sub(receivedAt).Microseconds())
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, submissionDuration, optimisticSubmission)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, precheckDuration, simulationDuration, redisUpdateDuration, submissionDuration, optimisticSubmission)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
@@ -1285,6 +1288,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			return
 		}
 	}
+
+	simulationComplete := time.Now().UTC()
+	simulationDuration = uint64(simulationComplete.Sub(precheckComplete).Microseconds())
 
 	// Ensure this request is still the latest one
 	latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Message.Slot, builderPubkey, payload.Message.ParentHash.String(), payload.Message.ProposerPubkey.String())
@@ -1356,6 +1362,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// this bid is now elligible to win the auction
+	redisUpdateComplete := time.Now().UTC()
+	redisUpdateDuration = uint64(redisUpdateComplete.Sub(simulationComplete).Microseconds())
 	submissionDuration = uint64(time.Now().UTC().Sub(receivedAt).Microseconds())
 
 	//
@@ -1365,6 +1373,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"proposerPubkey":       payload.Message.ProposerPubkey.String(),
 		"value":                payload.Message.Value.String(),
 		"tx":                   len(payload.ExecutionPayload.Transactions),
+		"precheckDuration":     precheckDuration,
+		"simulationDuration":   simulationDuration,
+		"redisUpdateDuration":  redisUpdateDuration,
 		"submissionDuration":   submissionDuration,
 		"optimisticSubmission": optimisticSubmission,
 	}).Info("received block from builder")

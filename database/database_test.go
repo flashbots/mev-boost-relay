@@ -22,12 +22,16 @@ const (
 	collateralStr        = "1000"
 	collateralID         = "builder0x69"
 	randao               = "01234567890123456789012345678901"
+	precheckDuration     = 101
+	simulationDuration   = 142
+	redisUpdateDuration  = 9402
 	submissionDuration   = 9998
 	optimisticSubmission = true
 )
 
 var (
-	runDBTests   = os.Getenv("RUN_DB_TESTS") == "1" //|| true
+	runDBTests = os.Getenv("RUN_DB_TESTS") == "1" //|| true
+	// runDBTests   = true
 	feeRecipient = types.Address{0x02}
 	blockHashStr = "0xa645370cc112c2e8e3cce121416c7dc849e773506d4b6fb9b752ada711355369"
 	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
@@ -66,7 +70,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 		ProposerFeeRecipient: feeRecipient,
 		Value:                types.IntToU256(uint64(collateral)),
 	})
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), submissionDuration, optimisticSubmission)
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), precheckDuration, simulationDuration, redisUpdateDuration, submissionDuration, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
@@ -283,6 +287,9 @@ func TestGetBlockSubmissionEntry(t *testing.T) {
 	entry, err := db.GetBlockSubmissionEntry(slot, pubkey, blockHashStr)
 	require.NoError(t, err)
 
+	require.Equal(t, uint64(precheckDuration), entry.PrecheckDuration)
+	require.Equal(t, uint64(simulationDuration), entry.SimulationDuration)
+	require.Equal(t, uint64(redisUpdateDuration), entry.RedisUpdateDuration)
 	require.Equal(t, uint64(submissionDuration), entry.SubmissionDuration)
 	require.True(t, entry.OptimisticSubmission)
 }

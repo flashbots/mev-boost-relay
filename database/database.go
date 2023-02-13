@@ -25,7 +25,7 @@ type IDatabaseService interface {
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
-	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, receivedAt time.Time, submissionDuration uint64, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
+	SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, receivedAt time.Time, precheckDuration, simulationDuration, redisUpdateDuration, submissionDuration uint64, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -93,8 +93,8 @@ func (s *DatabaseService) prepareNamedQueries() (err error) {
 
 	// Insert block builder submission
 	query = `INSERT INTO ` + vars.TableBuilderBlockSubmission + `
-	(received_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, submission_duration, optimistic_submission) VALUES
-	(:received_at, :execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :submission_duration, :optimistic_submission)
+	(received_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, precheck_duration, simulation_duration, redis_update_duration, submission_duration, optimistic_submission) VALUES
+	(:received_at, :execution_payload_id, :sim_success, :sim_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :precheck_duration, :simulation_duration, :redis_update_duration, :submission_duration, :optimistic_submission)
 	RETURNING id`
 	s.nstmtInsertBlockBuilderSubmission, err = s.DB.PrepareNamed(query)
 	return err
@@ -169,7 +169,7 @@ func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([
 	return registrations, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, receivedAt time.Time, submissionDuration uint64, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, receivedAt time.Time, precheckDuration, simulationDuration, redisUpdateDuration, submissionDuration uint64, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -213,6 +213,9 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 		Epoch:       payload.Message.Slot / uint64(common.SlotsPerEpoch),
 		BlockNumber: payload.ExecutionPayload.BlockNumber,
 
+		PrecheckDuration:     precheckDuration,
+		SimulationDuration:   simulationDuration,
+		RedisUpdateDuration:  redisUpdateDuration,
 		SubmissionDuration:   submissionDuration,
 		OptimisticSubmission: optimisticSubmission,
 	}
@@ -221,7 +224,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *types.BuilderSubmi
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
-	query := `SELECT id, inserted_at, received_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, submission_duration, optimistic_submission 
+	query := `SELECT id, inserted_at, received_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, precheck_duration, simulation_duration, redis_update_duration, submission_duration, optimistic_submission 
 	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
 	ORDER BY builder_pubkey ASC

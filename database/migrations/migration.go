@@ -11,5 +11,6 @@ var Migrations = migrate.MemoryMigrationSource{
 		Migration002RemoveIsBestAddReceivedAt,
 		Migration003Optimistic,
 		Migration004Temp,
+		Migration005Profiling,
 	},
 }
