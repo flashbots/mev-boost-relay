@@ -9,8 +9,14 @@ var Migration003Optimistic = &migrate.Migration{
 	Id: "003-optimistic",
 	Up: []string{`
 		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD is_demoted        bool NOT NULL default false;
-		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_value  NUMERIC(48, 0) NOT NULL default 0;
 		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral_id     varchar(98) NOT NULL default '';
+	`,
+		`
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD precheck_duration       bigint NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD simulation_duration     bigint NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD redis_update_duration   bigint NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD submission_duration     bigint NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD optimistic_submission   bool NOT NULL default false;
 	`,
 		`
 		CREATE TABLE IF NOT EXISTS ` + vars.TableBuilderDemotions + `(
