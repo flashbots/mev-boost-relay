@@ -977,7 +977,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		simErr := api.simulateBlock(blockSimOptions{
 			ctx:        context.Background(),
 			log:        log,
-			isHighPrio: true, // manually set to true for these blocks.
+			isHighPrio: false,
 			req: &BuilderBlockValidationRequest{
 				BuilderSubmitBlockRequest: submitBlockReq,
 				RegisteredGasLimit:        getPayloadResp.Data.GasLimit,
