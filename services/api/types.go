@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
@@ -247,4 +248,21 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.Sign
 type BuilderBlockValidationRequest struct {
 	common.BuilderSubmitBlockRequest
 	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+}
+
+func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
+	blockRequest, err := r.BuilderSubmitBlockRequest.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	gasLimit, err := json.Marshal(&struct {
+		RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+	}{
+		RegisteredGasLimit: r.RegisteredGasLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	gasLimit[0] = ','
+	return append(blockRequest[:len(blockRequest)-1], gasLimit...), nil
 }
