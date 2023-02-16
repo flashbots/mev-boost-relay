@@ -265,7 +265,7 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *types.BidTraceV2, signe
 		GasLimit: bidTrace.GasLimit,
 
 		NumTx: bidTrace.NumTx,
-		Value: bidTrace.Value.String(),
+		Value: bidTrace.Value.ToBig().String(),
 	}
 
 	query := `INSERT INTO ` + vars.TableDeliveredPayload + `
