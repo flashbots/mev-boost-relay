@@ -11,6 +11,7 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/spec"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -126,6 +127,137 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		DomainBuilder:            domainBuilder,
 		DomainBeaconProposer:     domainBeaconProposer,
 	}, nil
+}
+
+type BidTraceV2 struct {
+	apiv1.BidTrace
+	BlockNumber uint64 `json:"block_number,string" db:"block_number"`
+	NumTx       uint64 `json:"num_tx,string" db:"num_tx"`
+}
+
+type BidTraceV2JSON struct {
+	Slot                 uint64 `json:"slot,string"`
+	ParentHash           string `json:"parent_hash"`
+	BlockHash            string `json:"block_hash"`
+	BuilderPubkey        string `json:"builder_pubkey"`
+	ProposerPubkey       string `json:"proposer_pubkey"`
+	ProposerFeeRecipient string `json:"proposer_fee_recipient"`
+	GasLimit             uint64 `json:"gas_limit,string"`
+	GasUsed              uint64 `json:"gas_used,string"`
+	Value                string `json:"value"`
+	NumTx                uint64 `json:"num_tx,string"`
+	BlockNumber          uint64 `json:"block_number,string"`
+}
+
+func (b BidTraceV2) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&BidTraceV2JSON{
+		Slot:                 b.Slot,
+		ParentHash:           b.ParentHash.String(),
+		BlockHash:            b.BlockHash.String(),
+		BuilderPubkey:        b.BuilderPubkey.String(),
+		ProposerPubkey:       b.ProposerPubkey.String(),
+		ProposerFeeRecipient: b.ProposerFeeRecipient.String(),
+		GasLimit:             b.GasLimit,
+		GasUsed:              b.GasUsed,
+		Value:                b.Value.ToBig().String(),
+		NumTx:                b.NumTx,
+		BlockNumber:          b.BlockNumber,
+	})
+}
+
+func (b *BidTraceV2) UnmarshalJSON(data []byte) error {
+	params := &struct {
+		NumTx                uint64 `json:"num_tx,string"`
+		BlockNumber          uint64 `json:"block_number,string"`
+	}{}
+	err := json.Unmarshal(data, params)
+	if err != nil {
+		return err
+	}
+	b.NumTx = params.NumTx
+	b.BlockNumber = params.BlockNumber
+
+	bidTrace := new(apiv1.BidTrace)
+	err = json.Unmarshal(data, bidTrace)
+	if err != nil {
+		return err
+	}
+	b.BidTrace = *bidTrace
+	return nil
+}
+
+func (b *BidTraceV2JSON) CSVHeader() []string {
+	return []string{
+		"slot",
+		"parent_hash",
+		"block_hash",
+		"builder_pubkey",
+		"proposer_pubkey",
+		"proposer_fee_recipient",
+		"gas_limit",
+		"gas_used",
+		"value",
+		"num_tx",
+		"block_number",
+	}
+}
+
+func (b *BidTraceV2JSON) ToCSVRecord() []string {
+	return []string{
+		fmt.Sprint(b.Slot),
+		b.ParentHash,
+		b.BlockHash,
+		b.BuilderPubkey,
+		b.ProposerPubkey,
+		b.ProposerFeeRecipient,
+		fmt.Sprint(b.GasLimit),
+		fmt.Sprint(b.GasUsed),
+		b.Value,
+		fmt.Sprint(b.NumTx),
+		fmt.Sprint(b.BlockNumber),
+	}
+}
+
+type BidTraceV2WithTimestampJSON struct {
+	BidTraceV2JSON
+	Timestamp   int64 `json:"timestamp,string,omitempty"`
+	TimestampMs int64 `json:"timestamp_ms,string,omitempty"`
+}
+
+func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
+	return []string{
+		"slot",
+		"parent_hash",
+		"block_hash",
+		"builder_pubkey",
+		"proposer_pubkey",
+		"proposer_fee_recipient",
+		"gas_limit",
+		"gas_used",
+		"value",
+		"num_tx",
+		"block_number",
+		"timestamp",
+		"timestamp_ms",
+	}
+}
+
+func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
+	return []string{
+		fmt.Sprint(b.Slot),
+		b.ParentHash,
+		b.BlockHash,
+		b.BuilderPubkey,
+		b.ProposerPubkey,
+		b.ProposerFeeRecipient,
+		fmt.Sprint(b.GasLimit),
+		fmt.Sprint(b.GasUsed),
+		b.Value,
+		fmt.Sprint(b.NumTx),
+		fmt.Sprint(b.BlockNumber),
+		fmt.Sprint(b.Timestamp),
+		fmt.Sprint(b.TimestampMs),
+	}
 }
 
 type SignedBeaconBlindedBlock struct {
