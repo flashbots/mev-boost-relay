@@ -735,6 +735,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"ua":            ua,
 		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength": req.ContentLength,
+		"headSlot":      api.headSlot.Load(),
 	})
 
 	payload := new(types.SignedBlindedBeaconBlock)
