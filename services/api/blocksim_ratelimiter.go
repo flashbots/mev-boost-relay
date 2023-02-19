@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -22,6 +23,11 @@ var (
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 3000)) * time.Millisecond
 )
+
+type IBlockSimRateLimiter interface {
+	send(context context.Context, payload *BuilderBlockValidationRequest, isHighPrio bool) error
+	currentCounter() int64
+}
 
 type BlockSimulationRateLimiter struct {
 	cv          *sync.Cond
@@ -111,9 +117,19 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	}
 	defer resp.Body.Close()
 
+	// read all resp bytes
+	rawResp, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response bytes: %v", err)
+	}
+
+	// try json parsing
 	res = new(jsonrpc.JSONRPCResponse)
-	if err := json.NewDecoder(resp.Body).Decode(res); err != nil {
-		return nil, err
+	if err := json.NewDecoder(bytes.NewReader(rawResp)).Decode(res); err != nil {
+		// JSON parsing didn't work, return *jsonrpc.JSONRPCResponse with full response for debugging
+		res.Error = &jsonrpc.JSONRPCError{
+			Message: fmt.Errorf("unable to parse json: %v, full message: %v", err, rawResp).Error(),
+		}
 	}
 
 	return res, nil
