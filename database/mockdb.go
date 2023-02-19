@@ -1,12 +1,18 @@
 package database
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
-type MockDB struct{}
+type MockDB struct {
+	Builders  map[string]*BlockBuilderEntry
+	Demotions map[string]bool
+	Refunds   map[string]bool
+}
 
 func (db MockDB) NumRegisteredValidators() (count uint64, err error) {
 	return 0, nil
@@ -28,7 +34,7 @@ func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*Validat
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, simError error, receivedAt time.Time) (entry *BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, simError error, receivedAt time.Time, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }
 
@@ -81,14 +87,51 @@ func (db MockDB) UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderB
 }
 
 func (db MockDB) GetBlockBuilders() ([]*BlockBuilderEntry, error) {
-	return nil, nil
+	res := []*BlockBuilderEntry{}
+	for _, v := range db.Builders {
+		res = append(res, v)
+	}
+	return res, nil
 }
 
 func (db MockDB) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error) {
-	return nil, nil
+	builder, ok := db.Builders[pubkey]
+	if !ok {
+		return nil, fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
+	}
+	return builder, nil
 }
 
-func (db MockDB) SetBlockBuilderStatus(pubkey string, isHighPrio, isBlacklisted bool) error {
+func (db MockDB) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus) error {
+	builder, ok := db.Builders[pubkey]
+	if !ok {
+		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
+	}
+	// Single builder update.
+	if builder.CollateralID == "" {
+		builder.IsHighPrio = status.IsHighPrio
+		builder.IsBlacklisted = status.IsBlacklisted
+		builder.IsDemoted = status.IsDemoted
+		return nil
+	}
+	// All matching collateral IDs updated.
+	for _, v := range db.Builders {
+		if v.CollateralID == builder.CollateralID {
+			v.IsHighPrio = status.IsHighPrio
+			v.IsBlacklisted = status.IsBlacklisted
+			v.IsDemoted = status.IsDemoted
+		}
+	}
+	return nil
+}
+
+func (db MockDB) SetBlockBuilderCollateral(pubkey, collateralID, collateralValue string) error {
+	builder, ok := db.Builders[pubkey]
+	if !ok {
+		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
+	}
+	builder.CollateralID = collateralID
+	builder.CollateralValue = collateralValue
 	return nil
 }
 
@@ -98,4 +141,35 @@ func (db MockDB) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash strin
 
 func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error {
 	return nil
+}
+
+func (db MockDB) InsertBuilderDemotion(submitBlockRequest *types.BuilderSubmitBlockRequest, simError error) error {
+	pubkey := submitBlockRequest.Message.BuilderPubkey.String()
+	db.Demotions[pubkey] = true
+	return nil
+}
+
+func (db MockDB) UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+	pubkey := trace.BuilderPubkey.String()
+	_, ok := db.Builders[pubkey]
+	if !ok {
+		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
+	}
+	if !db.Demotions[pubkey] {
+		return fmt.Errorf("builder with pubkey %v is not demoted", pubkey)
+	}
+	db.Refunds[pubkey] = true
+	return nil
+}
+
+func (db MockDB) GetBuilderDemotion(trace *types.BidTrace) (*BuilderDemotionEntry, error) {
+	pubkey := trace.BuilderPubkey.String()
+	_, ok := db.Builders[pubkey]
+	if !ok {
+		return nil, fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
+	}
+	if db.Demotions[pubkey] {
+		return &BuilderDemotionEntry{}, nil
+	}
+	return nil, nil
 }
