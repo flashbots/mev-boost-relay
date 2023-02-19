@@ -128,7 +128,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	if err := json.NewDecoder(bytes.NewReader(rawResp)).Decode(res); err != nil {
 		// JSON parsing didn't work, return *jsonrpc.JSONRPCResponse with full response for debugging
 		res.Error = &jsonrpc.JSONRPCError{
-			Message: fmt.Errorf("unable to parse json: %w, full message: %v", err, rawResp).Error(),
+			Message: fmt.Errorf("unable to parse json: %v, full message: %v", err, rawResp).Error(),
 		}
 	}
 

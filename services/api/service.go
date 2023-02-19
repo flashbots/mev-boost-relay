@@ -343,6 +343,9 @@ func (api *RelayAPI) StartServer() (err error) {
 	currentSlot := bestSyncStatus.HeadSlot
 	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
 
+	// Initialize block builder cache.
+	api.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
+
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
@@ -932,7 +935,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"ua":            ua,
 		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength": req.ContentLength,
-		"headSlot":      api.headSlot.Load(),
 	})
 
 	// Read the body first, so we can decode it later
@@ -1001,9 +1003,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 	}
-
-	// Once the signature is verified, we know the proposer is committed to this bid.
-	signedAt := time.Now().UTC()
 
 	// Get the response - from memory, Redis or DB
 	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
@@ -1083,7 +1082,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		// Prepare refund data.
 		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
-
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 		if err != nil {
@@ -1549,11 +1547,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// this bid is now elligible to win the auction
-	nextTime = time.Now().UTC()
-	eligibleAt = nextTime
-	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
-	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
+	// after top bid is updated, the bid is eligible to win the auction.
+	eligibleAt = time.Now().UTC()
+	pf.RedisUpdate = uint64(eligibleAt.Sub(prevTime).Microseconds())
+	pf.Total = uint64(eligibleAt.Sub(receivedAt).Microseconds())
 
 	//
 	// all done
