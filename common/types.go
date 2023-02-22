@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/attestantio/go-builder-client/api"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -167,8 +167,8 @@ func (b BidTraceV2) MarshalJSON() ([]byte, error) {
 
 func (b *BidTraceV2) UnmarshalJSON(data []byte) error {
 	params := &struct {
-		NumTx                uint64 `json:"num_tx,string"`
-		BlockNumber          uint64 `json:"block_number,string"`
+		NumTx       uint64 `json:"num_tx,string"`
+		BlockNumber uint64 `json:"block_number,string"`
 	}{}
 	err := json.Unmarshal(data, params)
 	if err != nil {
