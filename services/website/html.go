@@ -26,6 +26,7 @@ type StatusHTMLData struct { //nolint:musttag
 	ValidatorsRegistered        uint64
 	ValidatorsActive            uint64
 	BellatrixForkVersion        string
+	CapellaForkVersion          string
 	GenesisForkVersion          string
 	GenesisValidatorsRoot       string
 	BuilderSigningDomain        string
