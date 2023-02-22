@@ -12,6 +12,7 @@ linters:
     - godox
     - gomnd
     - lll
+    - musttag
     - nestif
     - nilnil
     - nlreturn
@@ -65,6 +66,10 @@ linters-settings:
 
   gocyclo:
     min-complexity: 65 # default: 30
+
+  gomoddirectives:
+    replace-allow-list:
+      - github.com/attestantio/go-eth2-client
 
   maintidx:
     under: 5

@@ -6,7 +6,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/attestantio/go-builder-client/api"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -110,7 +114,7 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 }
 
 // GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
-func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
+func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
 
@@ -129,16 +133,47 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		return nil, err
 	}
 
+	ds.log.Debug("getPayload response from database")
 	// deserialize execution payload
-	executionPayload := new(types.ExecutionPayload)
-	err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+	var res consensusspec.DataVersion
+	err = json.Unmarshal([]byte(blockSubEntry.Version), &res)
 	if err != nil {
+		ds.log.Debug("invalid getPayload version from database")
 		return nil, err
 	}
-
-	ds.log.Debug("getPayload response from database")
-	return &types.GetPayloadResponse{
-		Version: types.VersionString(blockSubEntry.Version),
-		Data:    executionPayload,
-	}, nil
+	switch res {
+	case consensusspec.DataVersionCapella:
+		executionPayload := new(capella.ExecutionPayload)
+		err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+		capella := api.VersionedExecutionPayload{
+			Version:   res,
+			Capella:   executionPayload,
+			Bellatrix: nil,
+		}
+		return &common.VersionedExecutionPayload{
+			Capella:   &capella,
+			Bellatrix: nil,
+		}, nil
+	case consensusspec.DataVersionBellatrix:
+		executionPayload := new(types.ExecutionPayload)
+		err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+		bellatrix := types.GetPayloadResponse{
+			Version: types.VersionString(res.String()),
+			Data:    executionPayload,
+		}
+		return &common.VersionedExecutionPayload{
+			Bellatrix: &bellatrix,
+			Capella:   nil,
+		}, nil
+	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
+		return nil, errors.New("unsupported execution payload version")
+	default:
+		return nil, errors.New("unknown execution payload version")
+	}
 }

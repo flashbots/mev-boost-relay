@@ -60,14 +60,24 @@ func (b *BlockSimulationRateLimiter) send(context context.Context, payload *Buil
 		return ErrRequestClosed
 	}
 
-	simReq := jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
-	simResp, err := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio)
+	var simReq *jsonrpc.JSONRPCRequest
+	var simResp *jsonrpc.JSONRPCResponse
+	var err error
+	if payload.Bellatrix != nil {
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
+		simResp, err = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio)
+	}
+
+	if payload.Capella != nil {
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+		simResp, err = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio)
+	}
+
 	if err != nil {
 		return err
 	} else if simResp.Error != nil {
 		return fmt.Errorf("%w: %s", ErrSimulationFailed, simResp.Error.Message)
 	}
-
 	return nil
 }
 
