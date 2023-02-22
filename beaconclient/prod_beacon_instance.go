@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/r3labs/sse/v2"
@@ -254,6 +255,20 @@ type GetRandaoResponse struct {
 func (c *ProdBeaconInstance) GetRandao(slot uint64) (randaoResp *GetRandaoResponse, err error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/randao", c.beaconURI, slot)
 	resp := new(GetRandaoResponse)
+	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
+	return resp, err
+}
+
+type GetWithdrawalsResponse struct {
+	Data struct {
+		Withdrawals []*capella.Withdrawal `json:"withdrawals"`
+	}
+}
+
+// GetWithdrawals - /eth/v1/beacon/states/<slot>/withdrawals
+func (c *ProdBeaconInstance) GetWithdrawals(slot uint64) (withdrawalsResp *GetWithdrawalsResponse, err error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/withdrawals", c.beaconURI, slot)
+	resp := new(GetWithdrawalsResponse)
 	_, err = fetchBeacon(http.MethodGet, uri, nil, resp)
 	return resp, err
 }

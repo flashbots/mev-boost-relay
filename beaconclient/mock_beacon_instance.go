@@ -118,3 +118,7 @@ func (c *MockBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
 func (c *MockBeaconInstance) GetRandao(slot uint64) (spec *GetRandaoResponse, err error) {
 	return nil, nil
 }
+
+func (c *MockBeaconInstance) GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error) {
+	return nil, nil
+}

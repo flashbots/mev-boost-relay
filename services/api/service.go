@@ -22,6 +22,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -106,6 +107,11 @@ type randaoHelper struct {
 	prevRandao string
 }
 
+type withdrawalsHelper struct {
+	slot uint64
+	root phase0.Root
+}
+
 // RelayAPI represents a single Relay instance
 type RelayAPI struct {
 	opts RelayAPIOpts
@@ -147,6 +153,10 @@ type RelayAPI struct {
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
 	expectedPrevRandaoUpdating uint64
+
+	expectedWithdrawalsRoot     withdrawalsHelper
+	expectedWithdrawalsLock     sync.RWMutex
+	expectedWithdrawalsUpdating uint64
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -408,6 +418,9 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	if api.opts.BlockBuilderAPI {
 		// query the expected prev_randao field
 		go api.updatedExpectedRandao(headSlot)
+
+		// query expected withdrawals root
+		go api.updatedExpectedWithdrawals(headSlot)
 
 		// update proposer duties in the background
 		go api.updateProposerDuties(headSlot)
@@ -912,6 +925,56 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	}
 }
 
+// updatedExpectedWithdrawals updates the withdrawals field we expect from builder block submissions
+func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
+	api.log.Infof("updating withdrawals root for %d ...", slot)
+	api.expectedWithdrawalsLock.Lock()
+	latestKnownSlot := api.expectedWithdrawalsRoot.slot
+	if slot < latestKnownSlot || slot <= api.expectedWithdrawalsUpdating { // do nothing slot is already known or currently being updated
+		api.log.Debugf("- abort updating withdrawals root - slot %d, latest: %d, updating: %d", slot, latestKnownSlot, api.expectedWithdrawalsUpdating)
+		api.expectedWithdrawalsLock.Unlock()
+		return
+	}
+	api.expectedWithdrawalsUpdating = slot
+	api.expectedWithdrawalsLock.Unlock()
+
+	// get withdrawals from BN
+	api.log.Debugf("- querying BN for withdrawals for slot %d", slot)
+	withdrawals, err := api.beaconClient.GetWithdrawals(slot)
+	if err != nil {
+		if errors.Is(err, beaconclient.ErrWithdrawalsBeforeCapella) {
+			api.log.WithField("slot", slot).WithError(err).Debug("attempted to fetch withdrawals before capella")
+		} else {
+			api.log.WithField("slot", slot).WithError(err).Warn("failed to get withdrawals from beacon node")
+		}
+		api.expectedWithdrawalsLock.Lock()
+		api.expectedWithdrawalsUpdating = 0
+		api.expectedWithdrawalsLock.Unlock()
+		return
+	}
+
+	// after request, check if still the latest, then update
+	api.expectedWithdrawalsLock.Lock()
+	defer api.expectedWithdrawalsLock.Unlock()
+	targetSlot := slot + 1
+	api.log.Debugf("- after BN withdrawals: slot %d, targetSlot: %d latest: %d", slot, targetSlot, api.expectedWithdrawalsRoot.slot)
+
+	// update if still the latest
+	if targetSlot >= api.expectedWithdrawalsRoot.slot {
+		withdrawalsRoot, err := ComputeWithdrawalsRoot(withdrawals.Data.Withdrawals)
+		if err != nil {
+			api.log.WithField("slot", slot).WithError(err).Warn("failed to compute withdrawals root")
+			api.expectedWithdrawalsUpdating = 0
+			return
+		}
+		api.expectedWithdrawalsRoot = withdrawalsHelper{
+			slot: targetSlot, // the retrieved withdrawals is for the next slot
+			root: withdrawalsRoot,
+		}
+		api.log.WithField("slot", slot).Infof("updated expected withdrawals root to %s for slot %d", withdrawalsRoot, targetSlot)
+	}
+}
+
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	api.proposerDutiesLock.RLock()
 	defer api.proposerDutiesLock.RUnlock()
@@ -996,6 +1059,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 	api.expectedPrevRandaoLock.RUnlock()
 
+	// withdrawal check:
+	// - querying the withdrawls from the BN if payload has a newer slot (might be faster than headSlot event)
+	// - check for validity happens later, again after validation (to use some time for BN request to finish...)
+	api.expectedWithdrawalsLock.RLock()
+	if payload.Slot() > api.expectedWithdrawalsRoot.slot {
+		go api.updatedExpectedWithdrawals(payload.Slot() - 1)
+	}
+	api.expectedWithdrawalsLock.RUnlock()
+
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
 	slotDuty := api.proposerDutiesMap[payload.Slot()]
@@ -1067,6 +1139,30 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return
+	}
+
+	withdrawals := payload.Withdrawals()
+	if withdrawals != nil {
+		// get latest withdrawals and verify the roots match
+		api.expectedWithdrawalsLock.RLock()
+		expectedWithdrawalsRoot := api.expectedWithdrawalsRoot
+		api.expectedWithdrawalsLock.RUnlock()
+		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
+		if err != nil {
+			log.WithError(err).Error("could not compute withdrawals root")
+			api.RespondError(w, http.StatusInternalServerError, "could not compute withdrawals root")
+			return
+		}
+		if expectedWithdrawalsRoot.slot != payload.Slot() { // we still don't have the withdrawals yet
+			log.Warn("withdrawals are not known yet")
+			api.RespondError(w, http.StatusInternalServerError, "withdrawals are not known yet")
+			return
+		} else if expectedWithdrawalsRoot.root != withdrawalsRoot {
+			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), expectedWithdrawalsRoot.root.String())
+			log.Info(msg)
+			api.RespondError(w, http.StatusBadRequest, msg)
+			return
+		}
 	}
 
 	// Verify the signature
