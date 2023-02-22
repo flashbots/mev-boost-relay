@@ -887,11 +887,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 // updatedExpectedRandao updates the prev_randao field we expect from builder block submissions
 func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
-	api.log.Infof("updating randao for %d ...", slot)
+	log := api.log.WithField("slot", slot)
+	log.Infof("updating randao...")
 	api.expectedPrevRandaoLock.Lock()
 	latestKnownSlot := api.expectedPrevRandao.slot
 	if slot < latestKnownSlot || slot <= api.expectedPrevRandaoUpdating { // do nothing slot is already known or currently being updated
-		api.log.Debugf("- abort updating randao - slot %d, latest: %d, updating: %d", slot, latestKnownSlot, api.expectedPrevRandaoUpdating)
+		log.Debugf("- abort updating randao, latest: %d, updating: %d", latestKnownSlot, api.expectedPrevRandaoUpdating)
 		api.expectedPrevRandaoLock.Unlock()
 		return
 	}
@@ -899,10 +900,10 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	api.expectedPrevRandaoLock.Unlock()
 
 	// get randao from BN
-	api.log.Debugf("- querying BN for randao for slot %d", slot)
+	log.Debugf("- querying BN for randao")
 	randao, err := api.beaconClient.GetRandao(slot)
 	if err != nil {
-		api.log.WithField("slot", slot).WithError(err).Warn("failed to get randao from beacon node")
+		log.WithError(err).Error("failed to get randao from beacon node")
 		api.expectedPrevRandaoLock.Lock()
 		api.expectedPrevRandaoUpdating = 0
 		api.expectedPrevRandaoLock.Unlock()
@@ -913,7 +914,7 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 	api.expectedPrevRandaoLock.Lock()
 	defer api.expectedPrevRandaoLock.Unlock()
 	targetSlot := slot + 1
-	api.log.Debugf("- after BN randao: slot %d, targetSlot: %d latest: %d", slot, targetSlot, api.expectedPrevRandao.slot)
+	log.Debugf("- after BN randao: targetSlot: %d latest: %d", targetSlot, api.expectedPrevRandao.slot)
 
 	// update if still the latest
 	if targetSlot >= api.expectedPrevRandao.slot {
@@ -921,17 +922,18 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 			slot:       targetSlot, // the retrieved prev_randao is for the next slot
 			prevRandao: randao.Data.Randao,
 		}
-		api.log.WithField("slot", slot).Infof("updated expected prev_randao to %s for slot %d", randao.Data.Randao, targetSlot)
+		log.Infof("updated expected prev_randao to %s for slot %d", randao.Data.Randao, targetSlot)
 	}
 }
 
 // updatedExpectedWithdrawals updates the withdrawals field we expect from builder block submissions
 func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
-	api.log.Infof("updating withdrawals root for %d ...", slot)
+	log := api.log.WithField("slot", slot)
+	log.Infof("updating withdrawals root...")
 	api.expectedWithdrawalsLock.Lock()
 	latestKnownSlot := api.expectedWithdrawalsRoot.slot
 	if slot < latestKnownSlot || slot <= api.expectedWithdrawalsUpdating { // do nothing slot is already known or currently being updated
-		api.log.Debugf("- abort updating withdrawals root - slot %d, latest: %d, updating: %d", slot, latestKnownSlot, api.expectedWithdrawalsUpdating)
+		log.Debugf("- abort updating withdrawals root, latest: %d, updating: %d", latestKnownSlot, api.expectedWithdrawalsUpdating)
 		api.expectedWithdrawalsLock.Unlock()
 		return
 	}
@@ -939,13 +941,13 @@ func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
 	api.expectedWithdrawalsLock.Unlock()
 
 	// get withdrawals from BN
-	api.log.Debugf("- querying BN for withdrawals for slot %d", slot)
+	log.Debugf("- querying BN for withdrawals for slot %d", slot)
 	withdrawals, err := api.beaconClient.GetWithdrawals(slot)
 	if err != nil {
 		if errors.Is(err, beaconclient.ErrWithdrawalsBeforeCapella) {
-			api.log.WithField("slot", slot).WithError(err).Debug("attempted to fetch withdrawals before capella")
+			log.WithError(err).Debug("attempted to fetch withdrawals before capella")
 		} else {
-			api.log.WithField("slot", slot).WithError(err).Warn("failed to get withdrawals from beacon node")
+			log.WithError(err).Error("failed to get withdrawals from beacon node")
 		}
 		api.expectedWithdrawalsLock.Lock()
 		api.expectedWithdrawalsUpdating = 0
@@ -957,13 +959,13 @@ func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
 	api.expectedWithdrawalsLock.Lock()
 	defer api.expectedWithdrawalsLock.Unlock()
 	targetSlot := slot + 1
-	api.log.Debugf("- after BN withdrawals: slot %d, targetSlot: %d latest: %d", slot, targetSlot, api.expectedWithdrawalsRoot.slot)
+	log.Debugf("- after BN withdrawals: targetSlot: %d latest: %d", targetSlot, api.expectedWithdrawalsRoot.slot)
 
 	// update if still the latest
 	if targetSlot >= api.expectedWithdrawalsRoot.slot {
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(withdrawals.Data.Withdrawals)
 		if err != nil {
-			api.log.WithField("slot", slot).WithError(err).Warn("failed to compute withdrawals root")
+			log.WithError(err).Warn("failed to compute withdrawals root")
 			api.expectedWithdrawalsUpdating = 0
 			return
 		}
@@ -971,7 +973,7 @@ func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
 			slot: targetSlot, // the retrieved withdrawals is for the next slot
 			root: withdrawalsRoot,
 		}
-		api.log.WithField("slot", slot).Infof("updated expected withdrawals root to %s for slot %d", withdrawalsRoot, targetSlot)
+		log.Infof("updated expected withdrawals root to %s for slot %d", withdrawalsRoot, targetSlot)
 	}
 }
 
@@ -1149,8 +1151,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.expectedWithdrawalsLock.RUnlock()
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
 		if err != nil {
-			log.WithError(err).Error("could not compute withdrawals root")
-			api.RespondError(w, http.StatusInternalServerError, "could not compute withdrawals root")
+			log.WithError(err).Warn("could not compute withdrawals root from payload")
+			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
 			return
 		}
 		if expectedWithdrawalsRoot.slot != payload.Slot() { // we still don't have the withdrawals yet
