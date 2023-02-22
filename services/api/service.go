@@ -749,7 +749,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	payload := new(common.SignedBeaconBlindedBlock)
+	payload := new(common.SignedBlindedBeaconBlock)
 
 	capellaPayload := new(capella.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(capellaPayload); err != nil {
@@ -825,7 +825,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
-		"numTx":       getPayloadResp.TxNum(),
+		"numTx":       getPayloadResp.NumTx(),
 		"blockNumber": payload.BlockNumber(),
 	})
 	log.Info("execution payload delivered")
@@ -1030,7 +1030,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"proposerPubkey":  payload.ProposerPubkey(),
 		"parentHash":      payload.ParentHash(),
 		"value":           payload.Value().String(),
-		"tx":              payload.TxNum(),
+		"tx":              payload.NumTx(),
 	})
 
 	if payload.Slot() <= api.headSlot.Load() {
@@ -1040,7 +1040,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Don't accept blocks with 0 value
-	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.TxNum() == 0 {
+	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.NumTx() == 0 {
 		api.log.Info("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
@@ -1152,7 +1152,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	bidTrace := common.BidTraceV2{
 		BidTrace:    *payload.Message(),
 		BlockNumber: payload.BlockNumber(),
-		NumTx:       uint64(payload.TxNum()),
+		NumTx:       uint64(payload.NumTx()),
 	}
 
 	//
@@ -1196,7 +1196,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	log.WithFields(logrus.Fields{
 		"proposerPubkey": payload.ProposerPubkey(),
 		"value":          payload.Value().String(),
-		"tx":             payload.TxNum(),
+		"tx":             payload.NumTx(),
 	}).Info("received block from builder")
 
 	// Respond with OK (TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)

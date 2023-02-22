@@ -181,7 +181,7 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.SignedBeaconBlindedBlock, executionPayload *common.VersionedExecutionPayload) *common.SignedBeaconBlock {
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.SignedBlindedBeaconBlock, executionPayload *common.VersionedExecutionPayload) *common.SignedBeaconBlock {
 	var signedBeaconBlock common.SignedBeaconBlock
 	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 	bellatrixBlindedBlock := signedBlindedBeaconBlock.Bellatrix

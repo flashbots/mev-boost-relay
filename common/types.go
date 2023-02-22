@@ -270,12 +270,12 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
-type SignedBeaconBlindedBlock struct {
+type SignedBlindedBeaconBlock struct {
 	Bellatrix *boostTypes.SignedBlindedBeaconBlock
 	Capella   *apiv1capella.SignedBlindedBeaconBlock
 }
 
-func (s *SignedBeaconBlindedBlock) MarshalJSON() ([]byte, error) {
+func (s *SignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
 	if s.Capella != nil {
 		return json.Marshal(s.Capella)
 	}
@@ -285,7 +285,7 @@ func (s *SignedBeaconBlindedBlock) MarshalJSON() ([]byte, error) {
 	return nil, ErrEmptyPayload
 }
 
-func (s *SignedBeaconBlindedBlock) Slot() uint64 {
+func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 	if s.Capella != nil {
 		return uint64(s.Capella.Message.Slot)
 	}
@@ -295,7 +295,7 @@ func (s *SignedBeaconBlindedBlock) Slot() uint64 {
 	return 0
 }
 
-func (s *SignedBeaconBlindedBlock) BlockHash() string {
+func (s *SignedBlindedBeaconBlock) BlockHash() string {
 	if s.Capella != nil {
 		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockHash.String()
 	}
@@ -305,7 +305,7 @@ func (s *SignedBeaconBlindedBlock) BlockHash() string {
 	return ""
 }
 
-func (s *SignedBeaconBlindedBlock) BlockNumber() uint64 {
+func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
 	if s.Capella != nil {
 		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockNumber
 	}
@@ -315,7 +315,7 @@ func (s *SignedBeaconBlindedBlock) BlockNumber() uint64 {
 	return 0
 }
 
-func (s *SignedBeaconBlindedBlock) ProposerIndex() uint64 {
+func (s *SignedBlindedBeaconBlock) ProposerIndex() uint64 {
 	if s.Capella != nil {
 		return uint64(s.Capella.Message.ProposerIndex)
 	}
@@ -325,7 +325,7 @@ func (s *SignedBeaconBlindedBlock) ProposerIndex() uint64 {
 	return 0
 }
 
-func (s *SignedBeaconBlindedBlock) Signature() []byte {
+func (s *SignedBlindedBeaconBlock) Signature() []byte {
 	if s.Capella != nil {
 		return s.Capella.Signature[:]
 	}
@@ -336,7 +336,7 @@ func (s *SignedBeaconBlindedBlock) Signature() []byte {
 }
 
 //nolint:nolintlint,ireturn
-func (s *SignedBeaconBlindedBlock) Message() boostTypes.HashTreeRoot {
+func (s *SignedBlindedBeaconBlock) Message() boostTypes.HashTreeRoot {
 	if s.Capella != nil {
 		return s.Capella.Message
 	}
@@ -489,7 +489,7 @@ func (e *VersionedExecutionPayload) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *VersionedExecutionPayload) TxNum() int {
+func (e *VersionedExecutionPayload) NumTx() int {
 	if e.Capella != nil {
 		return len(e.Capella.Capella.Transactions)
 	}
@@ -499,7 +499,7 @@ func (e *VersionedExecutionPayload) TxNum() int {
 	return 0
 }
 
-func (e *ExecutionPayload) TxNum() int {
+func (e *ExecutionPayload) NumTx() int {
 	if e.Capella != nil {
 		return len(e.Capella.Transactions)
 	}
@@ -650,7 +650,7 @@ func (b *BuilderSubmitBlockRequest) Value() *big.Int {
 	return nil
 }
 
-func (b *BuilderSubmitBlockRequest) TxNum() int {
+func (b *BuilderSubmitBlockRequest) NumTx() int {
 	if b.Capella != nil {
 		return len(b.Capella.ExecutionPayload.Transactions)
 	}
