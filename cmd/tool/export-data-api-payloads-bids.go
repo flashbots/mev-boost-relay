@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/common"
@@ -68,7 +69,11 @@ var DataAPIExportBids = &cobra.Command{
 			return
 		}
 
-		writeToFile := func(outFile string) { //nolint:dupl
+		// Free up some memory
+		bids = nil //nolint:ineffassign
+		runtime.GC()
+
+		writeToFile := func(outFile string) {
 			f, err := os.Create(outFile)
 			if err != nil {
 				log.WithError(err).Fatal("failed to open file")
@@ -87,6 +92,7 @@ var DataAPIExportBids = &cobra.Command{
 						log.WithError(err).Fatal("error writing record to file")
 					}
 				}
+
 			} else {
 				// write JSON
 				encoder := json.NewEncoder(f)
@@ -95,7 +101,9 @@ var DataAPIExportBids = &cobra.Command{
 					log.WithError(err).Fatal("failed to write json to file")
 				}
 			}
+
 			log.Infof("Wrote %d entries to %s", len(entries), outFile)
+			runtime.GC()
 		}
 
 		for _, outFile := range outFiles {

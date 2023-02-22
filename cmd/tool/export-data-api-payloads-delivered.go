@@ -81,7 +81,7 @@ var DataAPIExportPayloads = &cobra.Command{
 			return
 		}
 
-		writeToFile := func(outFile string) { //nolint:dupl
+		writeToFile := func(outFile string) {
 			f, err := os.Create(outFile)
 			if err != nil {
 				log.WithError(err).Fatal("failed to open file")
