@@ -285,6 +285,16 @@ func (api *RelayAPI) getRouter() http.Handler {
 	return withGz
 }
 
+func (api *RelayAPI) isCapella(slot uint64) bool {
+	epoch := slot / uint64(common.SlotsPerEpoch)
+	return epoch >= api.capellaEpoch
+}
+
+func (api *RelayAPI) isBellatrix(slot uint64) bool {
+	epoch := slot / uint64(common.SlotsPerEpoch)
+	return epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch
+}
+
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
@@ -308,19 +318,22 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
-	var bellatrixForkVersionFound, capellaForkVersionFound bool
 	for _, fork := range forkSchedule.Data {
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.BellatrixForkVersionHex:
 			api.bellatrixEpoch = fork.Epoch
-			bellatrixForkVersionFound = true
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
 			api.capellaEpoch = fork.Epoch
-			capellaForkVersionFound = true
 		}
 	}
 
-	if !bellatrixForkVersionFound || !capellaForkVersionFound {
+	currentSlot := bestSyncStatus.HeadSlot
+	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	if api.isCapella(currentSlot) {
+		api.log.Infof("capella fork detected, startEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+	} else if api.isBellatrix(currentSlot) {
+		api.log.Infof("bellatrix fork detected. capellaStartEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+	} else {
 		return ErrMismatchedForkVersions
 	}
 
@@ -1043,16 +1056,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	epoch := payload.Slot() / uint64(common.SlotsPerEpoch)
-	// ensure that the payload is bellatrix if within the bellatrix epoch
-	if epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch && payload.Bellatrix == nil {
-		log.Info("rejecting submission non bellatrix payload for bellatrix fork")
-		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
-	}
-	// ensure that the payload is capella if within the capella epoch
-	if epoch >= api.capellaEpoch && payload.Capella == nil {
-		log.Info("rejecting submission non capella payload for capella fork")
+	currentSlot := api.headSlot.Load()
+	if api.isCapella(currentSlot) && payload.Capella == nil {
+		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
+	} else if api.isBellatrix(currentSlot) && payload.Bellatrix == nil {
+		log.Info("rejecting submission - non bellatrix payload for bellatrix fork")
+		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
 	}
 
 	log = log.WithFields(logrus.Fields{
