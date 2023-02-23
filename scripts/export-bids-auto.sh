@@ -11,7 +11,7 @@ if [[ "${TRACE-0}" == "1" ]]; then
 fi
 
 # number of bids to export per bucket
-BUCKET_SIZE=1500
+BUCKET_SIZE="${BUCKET_SIZE:-2000}"
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 echo "SCRIPT_DIR: $SCRIPT_DIR"

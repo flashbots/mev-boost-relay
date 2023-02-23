@@ -1,13 +1,13 @@
 #!/bin/bash
 set -o errexit
-set -o nounset
+# set -o nounset
 set -o pipefail
 if [[ "${TRACE-0}" == "1" ]]; then
     set -o xtrace
 fi
 
 # number of bids to export per bucket
-BUCKET_SIZE=1500
+BUCKET_SIZE="${BUCKET_SIZE:-2000}"
 
 if [ -z $DB ]; then
         echo "missing postgres dns in DB env var"
@@ -40,6 +40,10 @@ function export() {
         echo "uploading to s3..."
         aws --profile l1 s3 cp ./$fn1.gz s3://flashbots-boost-relay-public/data/2_builder-submissions/
         aws --profile l1 s3 cp ./$fn2.gz s3://flashbots-boost-relay-public/data/2_builder-submissions/
+
+       if [ "$DELETE" == "1" ]; then
+               rm -f $fn1* $fn2*
+       fi
 }
 
 start=$1
