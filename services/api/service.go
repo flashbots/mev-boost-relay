@@ -45,6 +45,7 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
+	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
 )
 
 var (
@@ -128,8 +129,10 @@ type RelayAPI struct {
 	redis        *datastore.RedisCache
 	db           database.IDatabaseService
 
-	headSlot    uberatomic.Uint64
-	genesisInfo *beaconclient.GetGenesisResponse
+	headSlot       uberatomic.Uint64
+	genesisInfo    *beaconclient.GetGenesisResponse
+	bellatrixEpoch uint64
+	capellaEpoch   uint64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   []boostTypes.BuilderGetValidatorsResponseEntry
@@ -299,6 +302,27 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 	api.log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
+
+	forkSchedule, err := api.beaconClient.GetForkSchedule()
+	if err != nil {
+		return err
+	}
+
+	var bellatrixForkVersionFound, capellaForkVersionFound bool
+	for _, fork := range forkSchedule.Data {
+		switch fork.CurrentVersion {
+		case api.opts.EthNetDetails.BellatrixForkVersionHex:
+			api.bellatrixEpoch = fork.Epoch
+			bellatrixForkVersionFound = true
+		case api.opts.EthNetDetails.CapellaForkVersionHex:
+			api.capellaEpoch = fork.Epoch
+			capellaForkVersionFound = true
+		}
+	}
+
+	if !bellatrixForkVersionFound || !capellaForkVersionFound {
+		return ErrMismatchedForkVersions
+	}
 
 	// start things for the block-builder API
 	if api.opts.BlockBuilderAPI {
@@ -1017,6 +1041,18 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if payload.Message() == nil || !payload.HasExecutionPayload() {
 		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
 		return
+	}
+
+	epoch := payload.Slot() / uint64(common.SlotsPerEpoch)
+	// ensure that the payload is bellatrix if within the bellatrix epoch
+	if epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch && payload.Bellatrix == nil {
+		log.Info("rejecting submission non bellatrix payload for bellatrix fork")
+		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
+	}
+	// ensure that the payload is capella if within the capella epoch
+	if epoch >= api.capellaEpoch && payload.Capella == nil {
+		log.Info("rejecting submission non capella payload for capella fork")
+		api.RespondError(w, http.StatusBadRequest, "not capella payload")
 	}
 
 	log = log.WithFields(logrus.Fields{
