@@ -64,57 +64,67 @@ type EthNetworkDetails struct {
 	GenesisForkVersionHex    string
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
+	CapellaForkVersionHex    string
 
-	DomainBuilder        boostTypes.Domain
-	DomainBeaconProposer boostTypes.Domain
+	DomainBuilder                 boostTypes.Domain
+	DomainBeaconProposerBellatrix boostTypes.Domain
+	DomainBeaconProposerCapella   boostTypes.Domain
 }
 
 var (
-	EthNetworkKiln     = "kiln"
 	EthNetworkRopsten  = "ropsten"
 	EthNetworkSepolia  = "sepolia"
 	EthNetworkGoerli   = "goerli"
 	EthNetworkMainnet  = "mainnet"
 	EthNetworkZhejiang = "zhejiang"
 
+	CapellaForkVersionRopsten = "0x03001020"
+	CapellaForkVersionSepolia = "0x90000072"
+	CapellaForkVersionGoerli  = "0x03001020"
+	CapellaForkVersionMainnet = "0x03000000"
+
 	// Zhejiang details
 	GenesisForkVersionZhejiang    = "0x00000069"
 	GenesisValidatorsRootZhejiang = "0x53a92d8f2bb1d85f62d16a156e6ebcd1bcaba652d0900b2c2f387826f3481f6f"
 	BellatrixForkVersionZhejiang  = "0x00000071"
+	CapellaForkVersionZhejiang    = "0x00000072"
 )
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
 	var genesisForkVersion string
 	var genesisValidatorsRoot string
 	var bellatrixForkVersion string
+	var capellaForkVersion string
 	var domainBuilder boostTypes.Domain
-	var domainBeaconProposer boostTypes.Domain
+	var domainBeaconProposerBellatrix boostTypes.Domain
+	var domainBeaconProposerCapella boostTypes.Domain
 
 	switch networkName {
-	case EthNetworkKiln:
-		genesisForkVersion = boostTypes.GenesisForkVersionKiln
-		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootKiln
-		bellatrixForkVersion = boostTypes.BellatrixForkVersionKiln
 	case EthNetworkRopsten:
 		genesisForkVersion = boostTypes.GenesisForkVersionRopsten
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootRopsten
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionRopsten
+		capellaForkVersion = CapellaForkVersionRopsten
 	case EthNetworkSepolia:
 		genesisForkVersion = boostTypes.GenesisForkVersionSepolia
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootSepolia
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionSepolia
+		capellaForkVersion = CapellaForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = boostTypes.GenesisForkVersionGoerli
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootGoerli
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionGoerli
+		capellaForkVersion = CapellaForkVersionGoerli
 	case EthNetworkMainnet:
 		genesisForkVersion = boostTypes.GenesisForkVersionMainnet
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootMainnet
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionMainnet
+		capellaForkVersion = CapellaForkVersionMainnet
 	case EthNetworkZhejiang:
 		genesisForkVersion = GenesisForkVersionZhejiang
 		genesisValidatorsRoot = GenesisValidatorsRootZhejiang
 		bellatrixForkVersion = BellatrixForkVersionZhejiang
+		capellaForkVersion = CapellaForkVersionZhejiang
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
@@ -124,18 +134,25 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
-	domainBeaconProposer, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerBellatrix, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	domainBeaconProposerCapella, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, capellaForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	return &EthNetworkDetails{
-		Name:                     networkName,
-		GenesisForkVersionHex:    genesisForkVersion,
-		GenesisValidatorsRootHex: genesisValidatorsRoot,
-		BellatrixForkVersionHex:  bellatrixForkVersion,
-		DomainBuilder:            domainBuilder,
-		DomainBeaconProposer:     domainBeaconProposer,
+		Name:                          networkName,
+		GenesisForkVersionHex:         genesisForkVersion,
+		GenesisValidatorsRootHex:      genesisValidatorsRoot,
+		BellatrixForkVersionHex:       bellatrixForkVersion,
+		CapellaForkVersionHex:         capellaForkVersion,
+		DomainBuilder:                 domainBuilder,
+		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
+		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 	}, nil
 }
 

@@ -808,12 +808,17 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Verify the signature
-	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposer, pk[:], payload.Signature()[:])
+	// Attempt verifying the signature for capella
+	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
 	if !ok || err != nil {
-		log.WithError(err).Warn("could not verify payload signature")
-		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
-		return
+		log.WithError(err).Debug("could not verify capella payload signature, attempting to verify signature for bellatrix")
+		// Attempt verifying the signature for bellatrix
+		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerBellatrix, pk[:], payload.Signature())
+		if !ok || err != nil {
+			log.WithError(err).Warn("could not verify payload signature")
+			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
+			return
+		}
 	}
 
 	// Get the response - from memory, Redis or DB
