@@ -30,6 +30,7 @@ type IMultiBeaconClient interface {
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
+	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
 	GetBlock(blockID string) (block *GetBlockResponse, err error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
@@ -46,6 +47,7 @@ type IBeaconInstance interface {
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
+	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
 	GetBlock(blockID string) (*GetBlockResponse, error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
@@ -255,6 +257,23 @@ func (c *MultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
 	}
 
 	c.log.WithError(err).Error("failed to get spec on any CL node")
+	return nil, err
+}
+
+// GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
+func (c *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
+	clients := c.beaconInstancesByLastResponse()
+	for _, client := range clients {
+		log := c.log.WithField("uri", client.GetURI())
+		if spec, err = client.GetForkSchedule(); err != nil {
+			log.WithError(err).Warn("failed to get fork schedule")
+			continue
+		}
+
+		return spec, nil
+	}
+
+	c.log.WithError(err).Error("failed to get fork schedule on any CL node")
 	return nil, err
 }
 

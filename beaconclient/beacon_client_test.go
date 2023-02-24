@@ -195,3 +195,42 @@ func TestFetchValidators(t *testing.T) {
 		require.Equal(t, 0, len(validators))
 	})
 }
+
+func TestGetForkSchedule(t *testing.T) {
+	r := mux.NewRouter()
+	srv := httptest.NewServer(r)
+	bc := NewProdBeaconInstance(common.TestLog, srv.URL)
+
+	r.HandleFunc("/eth/v1/config/fork_schedule", func(w http.ResponseWriter, _ *http.Request) {
+		resp := []byte(`{
+			"data": [
+			  {
+				"previous_version": "0x00000010",
+				"current_version": "0x00000020",
+				"epoch": "0"
+			  },
+			  {
+				"previous_version": "0x00000020",
+				"current_version": "0x00000030",
+				"epoch": "10"
+			  },
+			  {
+				"previous_version": "0x00000030",
+				"current_version": "0x00000040",
+				"epoch": "20"
+			  },
+			  {
+				"previous_version": "0x00000040",
+				"current_version": "0x00000050",
+				"epoch": "30"
+			  }
+			]
+		  }`)
+		_, err := w.Write(resp)
+		require.NoError(t, err)
+	})
+
+	forkSchedule, err := bc.GetForkSchedule()
+	require.NoError(t, err)
+	require.Equal(t, 4, len(forkSchedule.Data))
+}

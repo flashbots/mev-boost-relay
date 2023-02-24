@@ -115,6 +115,10 @@ func (c *MockBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
 	return nil, nil
 }
 
+func (c *MockBeaconInstance) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
+	return nil, nil
+}
+
 func (c *MockBeaconInstance) GetRandao(slot uint64) (spec *GetRandaoResponse, err error) {
 	return nil, nil
 }
