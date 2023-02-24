@@ -744,20 +744,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
+		if strings.Contains(err.Error(), "i/o timeout") {
+			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
 		log.WithError(err).Error("could not read body of request from the beacon node")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	payload := new(common.SignedBlindedBeaconBlock)
-
 	capellaPayload := new(capella.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(capellaPayload); err != nil {
-		if strings.Contains(err.Error(), "i/o timeout") {
-			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
-			api.RespondError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
 		log.WithError(err).Debug("capella getPayload request failed to decode")
 		bellatrixPayload := new(boostTypes.SignedBlindedBeaconBlock)
 		if err := json.NewDecoder(bytes.NewReader(body)).Decode(bellatrixPayload); err != nil {
