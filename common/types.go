@@ -319,7 +319,7 @@ func (s *SignedBlindedBeaconBlock) ProposerIndex() uint64 {
 	if s.Capella != nil {
 		return uint64(s.Capella.Message.ProposerIndex)
 	}
-	if s.Bellatrix == nil {
+	if s.Bellatrix != nil {
 		return s.Bellatrix.Message.ProposerIndex
 	}
 	return 0
@@ -329,7 +329,7 @@ func (s *SignedBlindedBeaconBlock) Signature() []byte {
 	if s.Capella != nil {
 		return s.Capella.Signature[:]
 	}
-	if s.Bellatrix == nil {
+	if s.Bellatrix != nil {
 		return s.Bellatrix.Signature[:]
 	}
 	return nil
@@ -340,7 +340,7 @@ func (s *SignedBlindedBeaconBlock) Message() boostTypes.HashTreeRoot {
 	if s.Capella != nil {
 		return s.Capella.Message
 	}
-	if s.Bellatrix == nil {
+	if s.Bellatrix != nil {
 		return s.Bellatrix.Message
 	}
 	return nil
@@ -421,7 +421,7 @@ func (e *ExecutionPayload) BlockHash() string {
 	if e.Capella != nil {
 		return e.Capella.BlockHash.String()
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return e.Bellatrix.BlockHash.String()
 	}
 	return ""
@@ -431,7 +431,7 @@ func (e *ExecutionPayload) ParentHash() string {
 	if e.Capella != nil {
 		return e.Capella.ParentHash.String()
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return e.Bellatrix.ParentHash.String()
 	}
 	return ""
@@ -441,7 +441,7 @@ func (e *ExecutionPayload) BlockNumber() uint64 {
 	if e.Capella != nil {
 		return e.Capella.BlockNumber
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return e.Bellatrix.BlockNumber
 	}
 	return 0
@@ -451,7 +451,7 @@ func (e *ExecutionPayload) Timestamp() uint64 {
 	if e.Capella != nil {
 		return e.Capella.Timestamp
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return e.Bellatrix.Timestamp
 	}
 	return 0
@@ -493,7 +493,7 @@ func (e *VersionedExecutionPayload) NumTx() int {
 	if e.Capella != nil {
 		return len(e.Capella.Capella.Transactions)
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return len(e.Bellatrix.Data.Transactions)
 	}
 	return 0
@@ -503,7 +503,7 @@ func (e *ExecutionPayload) NumTx() int {
 	if e.Capella != nil {
 		return len(e.Capella.Transactions)
 	}
-	if e.Bellatrix == nil {
+	if e.Bellatrix != nil {
 		return len(e.Bellatrix.Transactions)
 	}
 	return 0
