@@ -970,6 +970,10 @@ func (api *RelayAPI) updatedExpectedRandao(slot uint64) {
 
 // updatedExpectedWithdrawals updates the withdrawals field we expect from builder block submissions
 func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
+	if api.isBellatrix(slot) {
+		return
+	}
+
 	log := api.log.WithField("slot", slot)
 	log.Infof("updating withdrawals root...")
 	api.expectedWithdrawalsLock.Lock()
