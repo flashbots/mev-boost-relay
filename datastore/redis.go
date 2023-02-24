@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/go-redis/redis/v9"
@@ -40,7 +40,7 @@ var (
 	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
 )
 
-func PubkeyHexToLowerStr(pk types.PubkeyHex) string {
+func PubkeyHexToLowerStr(pk boostTypes.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
 
@@ -175,8 +175,8 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	return r.client.Expire(context.Background(), key, expiration).Err()
 }
 
-func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
-	validators := make(map[types.PubkeyHex]uint64)
+func (r *RedisCache) GetKnownValidators() (map[boostTypes.PubkeyHex]uint64, error) {
+	validators := make(map[boostTypes.PubkeyHex]uint64)
 	entries, err := r.client.HGetAll(context.Background(), r.keyKnownValidators).Result()
 	if err != nil {
 		return nil, err
@@ -184,21 +184,21 @@ func (r *RedisCache) GetKnownValidators() (map[types.PubkeyHex]uint64, error) {
 	for pubkey, proposerIndexStr := range entries {
 		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
 		if err == nil {
-			validators[types.PubkeyHex(pubkey)] = proposerIndex
+			validators[boostTypes.PubkeyHex(pubkey)] = proposerIndex
 		}
 	}
 	return validators, nil
 }
 
-func (r *RedisCache) SetKnownValidator(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
+func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
 	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
-func (r *RedisCache) SetKnownValidatorNX(pubkeyHex types.PubkeyHex, proposerIndex uint64) error {
+func (r *RedisCache) SetKnownValidatorNX(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
 	return r.client.HSetNX(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
-func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex) (uint64, error) {
+func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
 	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
@@ -206,7 +206,7 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey types.Pubk
 	return timestamp, err
 }
 
-func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey types.PubkeyHex, timestamp uint64) error {
+func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey boostTypes.PubkeyHex, timestamp uint64) error {
 	knownTimestamp, err := r.GetValidatorRegistrationTimestamp(proposerPubkey)
 	if err != nil {
 		return err
@@ -217,11 +217,11 @@ func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey typ
 	return r.SetValidatorRegistrationTimestamp(proposerPubkey, timestamp)
 }
 
-func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey types.PubkeyHex, timestamp uint64) error {
+func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex, timestamp uint64) error {
 	return r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, proposerPubkey.String(), timestamp).Err()
 }
 
-func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
+func (r *RedisCache) SetActiveValidator(pubkeyHex boostTypes.PubkeyHex) error {
 	key := r.keyActiveValidators(time.Now())
 	err := r.client.HSet(context.Background(), key, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
 	if err != nil {
@@ -232,10 +232,10 @@ func (r *RedisCache) SetActiveValidator(pubkeyHex types.PubkeyHex) error {
 	return r.client.Expire(context.Background(), key, expiryActiveValidators).Err()
 }
 
-func (r *RedisCache) GetActiveValidators() (map[types.PubkeyHex]bool, error) {
+func (r *RedisCache) GetActiveValidators() (map[boostTypes.PubkeyHex]bool, error) {
 	hours := activeValidatorsHours
 	now := time.Now()
-	validators := make(map[types.PubkeyHex]bool)
+	validators := make(map[boostTypes.PubkeyHex]bool)
 	for i := 0; i < hours; i++ {
 		key := r.keyActiveValidators(now.Add(time.Duration(-i) * time.Hour))
 		entries, err := r.client.HGetAll(context.Background(), key).Result()
@@ -243,7 +243,7 @@ func (r *RedisCache) GetActiveValidators() (map[types.PubkeyHex]bool, error) {
 			return nil, err
 		}
 		for pubkey := range entries {
-			validators[types.PubkeyHex(pubkey)] = true
+			validators[boostTypes.PubkeyHex(pubkey)] = true
 		}
 	}
 
@@ -258,12 +258,12 @@ func (r *RedisCache) GetStats(field string) (value string, err error) {
 	return r.client.HGet(context.Background(), r.keyStats, field).Result()
 }
 
-func (r *RedisCache) SetProposerDuties(proposerDuties []types.BuilderGetValidatorsResponseEntry) (err error) {
+func (r *RedisCache) SetProposerDuties(proposerDuties []boostTypes.BuilderGetValidatorsResponseEntry) (err error) {
 	return r.SetObj(r.keyProposerDuties, proposerDuties, 0)
 }
 
-func (r *RedisCache) GetProposerDuties() (proposerDuties []types.BuilderGetValidatorsResponseEntry, err error) {
-	proposerDuties = make([]types.BuilderGetValidatorsResponseEntry, 0)
+func (r *RedisCache) GetProposerDuties() (proposerDuties []boostTypes.BuilderGetValidatorsResponseEntry, err error) {
+	proposerDuties = make([]boostTypes.BuilderGetValidatorsResponseEntry, 0)
 	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
 	if errors.Is(err, redis.Nil) {
 		return proposerDuties, nil
@@ -283,9 +283,9 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	return res, err
 }
 
-func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*types.GetHeaderResponse, error) {
+func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*common.GetHeaderResponse, error) {
 	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
-	resp := new(types.GetHeaderResponse)
+	resp := new(common.GetHeaderResponse)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
@@ -293,14 +293,14 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 	return resp, err
 }
 
-func (r *RedisCache) SaveExecutionPayload(slot uint64, proposerPubkey, blockHash string, resp *types.GetPayloadResponse) (err error) {
+func (r *RedisCache) SaveExecutionPayload(slot uint64, proposerPubkey, blockHash string, resp *common.GetPayloadResponse) (err error) {
 	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
 	return r.SetObj(key, resp, expiryBidCache)
 }
 
-func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash string) (*types.GetPayloadResponse, error) {
+func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
 	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
-	resp := new(types.GetPayloadResponse)
+	resp := new(common.VersionedExecutionPayload)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
@@ -347,7 +347,7 @@ func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(slot uint64, builderPubke
 }
 
 // SaveLatestBuilderBid saves the latest bid by a specific builder
-func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *types.GetHeaderResponse) (err error) {
+func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *common.GetHeaderResponse) (err error) {
 	keyLatestBids := r.keyBlockBuilderLatestBids(slot, parentHash, proposerPubkey)
 	err = r.HSetObj(keyLatestBids, builderPubkey, headerResp, expiryBidCache)
 	if err != nil {
@@ -367,7 +367,7 @@ func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash
 
 	// set the value last, because that's iterated over when updating the best bid, and the payload has to be available
 	keyLatestBidsValue := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
-	err = r.client.HSet(context.Background(), keyLatestBidsValue, builderPubkey, headerResp.Data.Message.Value.String()).Err()
+	err = r.client.HSet(context.Background(), keyLatestBidsValue, builderPubkey, headerResp.Value().String()).Err()
 	if err != nil {
 		return err
 	}

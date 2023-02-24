@@ -3,7 +3,6 @@ package database
 import (
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
@@ -29,7 +28,7 @@ func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*Validat
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *types.BuilderSubmitBlockRequest, simError error, receivedAt time.Time) (entry *BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, simError error, receivedAt time.Time) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }
 
@@ -73,7 +72,7 @@ func (db MockDB) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries 
 	return nil, nil
 }
 
-func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock) error {
+func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.SignedBlindedBeaconBlock) error {
 	return nil
 }
 

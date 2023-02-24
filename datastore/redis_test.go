@@ -166,16 +166,18 @@ func TestActiveValidators(t *testing.T) {
 	require.True(t, vals[pk1])
 }
 
-func _buildGetHeaderResponse(value uint64) *types.GetHeaderResponse {
-	return &types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data: &types.SignedBuilderBid{
-			Message: &types.BuilderBid{
-				Header: &types.ExecutionPayloadHeader{},
-				Value:  types.IntToU256(value),
-				Pubkey: types.PublicKey{0x01},
+func _buildGetHeaderResponse(value uint64) *common.GetHeaderResponse {
+	return &common.GetHeaderResponse{
+		Bellatrix: &types.GetHeaderResponse{
+			Version: "bellatrix",
+			Data: &types.SignedBuilderBid{
+				Message: &types.BuilderBid{
+					Header: &types.ExecutionPayloadHeader{},
+					Value:  types.IntToU256(value),
+					Pubkey: types.PublicKey{0x01},
+				},
+				Signature: types.Signature{0x01},
 			},
-			Signature: types.Signature{0x01},
 		},
 	}
 }
@@ -201,7 +203,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	topBid, err := cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
-	require.Equal(t, "100", topBid.Data.Message.Value.String())
+	require.Equal(t, "100", topBid.Value().String())
 
 	// new top bid by builder3: 101
 	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(101))
@@ -210,7 +212,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
-	require.Equal(t, "101", topBid.Data.Message.Value.String())
+	require.Equal(t, "101", topBid.Value().String())
 
 	// builder3 cancels 101 bid, by sending 100 value
 	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, _buildGetHeaderResponse(99))
@@ -219,7 +221,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
-	require.Equal(t, "100", topBid.Data.Message.Value.String())
+	require.Equal(t, "100", topBid.Value().String())
 
 	// double-check the receivedAt timestamp
 	ts, err := cache.GetBuilderLatestPayloadReceivedAt(slot, builder3pk, parentHash, proposerPk)

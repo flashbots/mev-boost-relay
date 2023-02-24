@@ -3,22 +3,33 @@ package database
 import (
 	"encoding/json"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
-func PayloadToExecPayloadEntry(payload *types.BuilderSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
-	_payload, err := json.Marshal(payload.ExecutionPayload)
-	if err != nil {
-		return nil, err
+func PayloadToExecPayloadEntry(payload *common.BuilderSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
+	var _payload []byte
+	var version string
+	var err error
+	if payload.Bellatrix != nil {
+		_payload, err = json.Marshal(payload.Bellatrix.ExecutionPayload)
+		if err != nil {
+			return nil, err
+		}
+		version = "bellatrix"
 	}
-
+	if payload.Capella != nil {
+		_payload, err = json.Marshal(payload.Capella.ExecutionPayload)
+		if err != nil {
+			return nil, err
+		}
+		version = "capella"
+	}
 	return &ExecutionPayloadEntry{
-		Slot:           payload.Message.Slot,
-		ProposerPubkey: payload.Message.ProposerPubkey.String(),
-		BlockHash:      payload.ExecutionPayload.BlockHash.String(),
+		Slot:           payload.Slot(),
+		ProposerPubkey: payload.ProposerPubkey(),
+		BlockHash:      payload.BlockHash(),
 
-		Version: "bellatrix",
+		Version: version,
 		Payload: string(_payload),
 	}, nil
 }

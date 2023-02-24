@@ -1,15 +1,26 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 
+	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
+	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (
-	ErrMissingRequest   = errors.New("req is nil")
-	ErrMissingSecretKey = errors.New("secret key is nil")
+	ErrMissingRequest     = errors.New("req is nil")
+	ErrMissingSecretKey   = errors.New("secret key is nil")
+	ErrEmptyPayload       = errors.New("nil payload")
+	ErrInvalidTransaction = errors.New("invalid transaction")
 )
 
 type HTTPErrorResp struct {
@@ -19,12 +30,12 @@ type HTTPErrorResp struct {
 
 var NilResponse = struct{}{}
 
-var VersionBellatrix types.VersionString = "bellatrix"
+var VersionBellatrix boostTypes.VersionString = "bellatrix"
 
-var ZeroU256 = types.IntToU256(0)
+var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
-	if req == nil {
+func BuildGetHeaderResponse(payload *common.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*common.GetHeaderResponse, error) {
+	if payload == nil {
 		return nil, ErrMissingRequest
 	}
 
@@ -32,53 +43,215 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRe
 		return nil, ErrMissingSecretKey
 	}
 
-	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)
+	if payload.Bellatrix != nil {
+		signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload.Bellatrix, sk, pubkey, domain)
+		if err != nil {
+			return nil, err
+		}
+		return &common.GetHeaderResponse{
+			Bellatrix: &boostTypes.GetHeaderResponse{
+				Version: VersionBellatrix,
+				Data:    signedBuilderBid,
+			},
+			Capella: nil,
+		}, nil
+	}
+
+	if payload.Capella != nil {
+		signedBuilderBid, err := CapellaBuilderSubmitBlockRequestToSignedBuilderBid(payload.Capella, sk, (*phase0.BLSPubKey)(pubkey), domain)
+		if err != nil {
+			return nil, err
+		}
+		return &common.GetHeaderResponse{
+			Capella: &spec.VersionedSignedBuilderBid{
+				Version:   consensusspec.DataVersionCapella,
+				Capella:   signedBuilderBid,
+				Bellatrix: nil,
+			},
+			Bellatrix: nil,
+		}, nil
+	}
+	return nil, ErrEmptyPayload
+}
+
+func BuildGetPayloadResponse(payload *common.BuilderSubmitBlockRequest) (*common.GetPayloadResponse, error) {
+	if payload.Bellatrix != nil {
+		return &common.GetPayloadResponse{
+			Bellatrix: &boostTypes.GetPayloadResponse{
+				Version: VersionBellatrix,
+				Data:    payload.Bellatrix.ExecutionPayload,
+			},
+			Capella: nil,
+		}, nil
+	}
+
+	if payload.Capella != nil {
+		return &common.GetPayloadResponse{
+			Capella: &api.VersionedExecutionPayload{
+				Version:   consensusspec.DataVersionCapella,
+				Capella:   payload.Capella.ExecutionPayload,
+				Bellatrix: nil,
+			},
+			Bellatrix: nil,
+		}, nil
+	}
+
+	return nil, ErrEmptyPayload
+}
+
+func BuilderSubmitBlockRequestToSignedBuilderBid(req *boostTypes.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*boostTypes.SignedBuilderBid, error) {
+	header, err := boostTypes.PayloadToPayloadHeader(req.ExecutionPayload)
 	if err != nil {
 		return nil, err
 	}
 
-	builderBid := types.BuilderBid{
+	builderBid := boostTypes.BuilderBid{
 		Value:  req.Message.Value,
 		Header: header,
 		Pubkey: *pubkey,
 	}
 
-	sig, err := types.SignMessage(&builderBid, domain, sk)
+	sig, err := boostTypes.SignMessage(&builderBid, domain, sk)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.SignedBuilderBid{
+	return &boostTypes.SignedBuilderBid{
 		Message:   &builderBid,
 		Signature: sig,
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, executionPayload *types.ExecutionPayload) *types.SignedBeaconBlock {
-	return &types.SignedBeaconBlock{
-		Signature: signedBlindedBeaconBlock.Signature,
-		Message: &types.BeaconBlock{
-			Slot:          signedBlindedBeaconBlock.Message.Slot,
-			ProposerIndex: signedBlindedBeaconBlock.Message.ProposerIndex,
-			ParentRoot:    signedBlindedBeaconBlock.Message.ParentRoot,
-			StateRoot:     signedBlindedBeaconBlock.Message.StateRoot,
-			Body: &types.BeaconBlockBody{
-				RandaoReveal:      signedBlindedBeaconBlock.Message.Body.RandaoReveal,
-				Eth1Data:          signedBlindedBeaconBlock.Message.Body.Eth1Data,
-				Graffiti:          signedBlindedBeaconBlock.Message.Body.Graffiti,
-				ProposerSlashings: signedBlindedBeaconBlock.Message.Body.ProposerSlashings,
-				AttesterSlashings: signedBlindedBeaconBlock.Message.Body.AttesterSlashings,
-				Attestations:      signedBlindedBeaconBlock.Message.Body.Attestations,
-				Deposits:          signedBlindedBeaconBlock.Message.Body.Deposits,
-				VoluntaryExits:    signedBlindedBeaconBlock.Message.Body.VoluntaryExits,
-				SyncAggregate:     signedBlindedBeaconBlock.Message.Body.SyncAggregate,
-				ExecutionPayload:  executionPayload,
-			},
-		},
+func CapellaBuilderSubmitBlockRequestToSignedBuilderBid(req *capella.SubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain boostTypes.Domain) (*capella.SignedBuilderBid, error) {
+	header, err := CapellaPayloadToPayloadHeader(req.ExecutionPayload)
+	if err != nil {
+		return nil, err
 	}
+
+	builderBid := capella.BuilderBid{
+		Value:  req.Message.Value,
+		Header: header,
+		Pubkey: *pubkey,
+	}
+
+	sig, err := boostTypes.SignMessage(&builderBid, domain, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	return &capella.SignedBuilderBid{
+		Message:   &builderBid,
+		Signature: phase0.BLSSignature(sig),
+	}, nil
+}
+
+func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*consensuscapella.ExecutionPayloadHeader, error) {
+	if p == nil {
+		return nil, ErrEmptyPayload
+	}
+
+	transactions := consensusbellatrix.Transactions{Transactions: p.Transactions}
+	transactionsRoot, err := transactions.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	withdrawals := consensuscapella.Withdrawals{Withdrawals: p.Withdrawals}
+	withdrawalsRoot, err := withdrawals.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	return &consensuscapella.ExecutionPayloadHeader{
+		ParentHash:       p.ParentHash,
+		FeeRecipient:     p.FeeRecipient,
+		StateRoot:        p.StateRoot,
+		ReceiptsRoot:     p.ReceiptsRoot,
+		LogsBloom:        p.LogsBloom,
+		PrevRandao:       p.PrevRandao,
+		BlockNumber:      p.BlockNumber,
+		GasLimit:         p.GasLimit,
+		GasUsed:          p.GasUsed,
+		Timestamp:        p.Timestamp,
+		ExtraData:        p.ExtraData,
+		BaseFeePerGas:    p.BaseFeePerGas,
+		BlockHash:        p.BlockHash,
+		TransactionsRoot: transactionsRoot,
+		WithdrawalsRoot:  withdrawalsRoot,
+	}, nil
+}
+
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *common.SignedBlindedBeaconBlock, executionPayload *common.VersionedExecutionPayload) *common.SignedBeaconBlock {
+	var signedBeaconBlock common.SignedBeaconBlock
+	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
+	bellatrixBlindedBlock := signedBlindedBeaconBlock.Bellatrix
+	if capellaBlindedBlock != nil {
+		signedBeaconBlock.Capella = &consensuscapella.SignedBeaconBlock{
+			Signature: capellaBlindedBlock.Signature,
+			Message: &consensuscapella.BeaconBlock{
+				Slot:          capellaBlindedBlock.Message.Slot,
+				ProposerIndex: capellaBlindedBlock.Message.ProposerIndex,
+				ParentRoot:    capellaBlindedBlock.Message.ParentRoot,
+				StateRoot:     capellaBlindedBlock.Message.StateRoot,
+				Body: &consensuscapella.BeaconBlockBody{
+					BLSToExecutionChanges: capellaBlindedBlock.Message.Body.BLSToExecutionChanges,
+					RANDAOReveal:          capellaBlindedBlock.Message.Body.RANDAOReveal,
+					ETH1Data:              capellaBlindedBlock.Message.Body.ETH1Data,
+					Graffiti:              capellaBlindedBlock.Message.Body.Graffiti,
+					ProposerSlashings:     capellaBlindedBlock.Message.Body.ProposerSlashings,
+					AttesterSlashings:     capellaBlindedBlock.Message.Body.AttesterSlashings,
+					Attestations:          capellaBlindedBlock.Message.Body.Attestations,
+					Deposits:              capellaBlindedBlock.Message.Body.Deposits,
+					VoluntaryExits:        capellaBlindedBlock.Message.Body.VoluntaryExits,
+					SyncAggregate:         capellaBlindedBlock.Message.Body.SyncAggregate,
+					ExecutionPayload:      executionPayload.Capella.Capella,
+				},
+			},
+		}
+	} else if bellatrixBlindedBlock != nil {
+		signedBeaconBlock.Bellatrix = &boostTypes.SignedBeaconBlock{
+			Signature: bellatrixBlindedBlock.Signature,
+			Message: &boostTypes.BeaconBlock{
+				Slot:          bellatrixBlindedBlock.Message.Slot,
+				ProposerIndex: bellatrixBlindedBlock.Message.ProposerIndex,
+				ParentRoot:    bellatrixBlindedBlock.Message.ParentRoot,
+				StateRoot:     bellatrixBlindedBlock.Message.StateRoot,
+				Body: &boostTypes.BeaconBlockBody{
+					RandaoReveal:      bellatrixBlindedBlock.Message.Body.RandaoReveal,
+					Eth1Data:          bellatrixBlindedBlock.Message.Body.Eth1Data,
+					Graffiti:          bellatrixBlindedBlock.Message.Body.Graffiti,
+					ProposerSlashings: bellatrixBlindedBlock.Message.Body.ProposerSlashings,
+					AttesterSlashings: bellatrixBlindedBlock.Message.Body.AttesterSlashings,
+					Attestations:      bellatrixBlindedBlock.Message.Body.Attestations,
+					Deposits:          bellatrixBlindedBlock.Message.Body.Deposits,
+					VoluntaryExits:    bellatrixBlindedBlock.Message.Body.VoluntaryExits,
+					SyncAggregate:     bellatrixBlindedBlock.Message.Body.SyncAggregate,
+					ExecutionPayload:  executionPayload.Bellatrix.Data,
+				},
+			},
+		}
+	}
+	return &signedBeaconBlock
 }
 
 type BuilderBlockValidationRequest struct {
-	types.BuilderSubmitBlockRequest
+	common.BuilderSubmitBlockRequest
 	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+}
+
+func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
+	blockRequest, err := r.BuilderSubmitBlockRequest.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	gasLimit, err := json.Marshal(&struct {
+		RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+	}{
+		RegisteredGasLimit: r.RegisteredGasLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	gasLimit[0] = ','
+	return append(blockRequest[:len(blockRequest)-1], gasLimit...), nil
 }
