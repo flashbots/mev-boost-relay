@@ -9,7 +9,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.15.2
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
-	github.com/ethereum/go-ethereum v1.11.1
+	github.com/ethereum/go-ethereum v1.11.2
 	github.com/flashbots/go-boost-utils v1.2.2
 	github.com/flashbots/go-utils v0.4.8
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
