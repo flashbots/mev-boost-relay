@@ -1090,6 +1090,18 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	if payload.Slot() <= api.headSlot.Load() {
+		api.log.Info("submitNewBlock failed: submission for past slot")
+		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
+		return
+	}
+
+	if payload.Slot() > api.headSlot.Load()+1 {
+		api.log.Info("submitNewBlock failed: submission for future slot")
+		api.RespondError(w, http.StatusBadRequest, "submission for future slot")
+		return
+	}
+
 	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.BuilderPubkey().String())
 	log = log.WithFields(logrus.Fields{
 		"builderIsHighPrio":    builderIsHighPrio,
@@ -1106,24 +1118,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
 		return
 	}
-
-	// randao check 1:
-	// - querying the randao from the BN if payload has a newer slot (might be faster than headSlot event)
-	// - check for validity happens later, again after validation (to use some time for BN request to finish...)
-	api.expectedPrevRandaoLock.RLock()
-	if payload.Slot() > api.expectedPrevRandao.slot {
-		go api.updatedExpectedRandao(payload.Slot() - 1)
-	}
-	api.expectedPrevRandaoLock.RUnlock()
-
-	// withdrawal check:
-	// - querying the withdrawls from the BN if payload has a newer slot (might be faster than headSlot event)
-	// - check for validity happens later, again after validation (to use some time for BN request to finish...)
-	api.expectedWithdrawalsLock.RLock()
-	if payload.Slot() > api.expectedWithdrawalsRoot.slot {
-		go api.updatedExpectedWithdrawals(payload.Slot() - 1)
-	}
-	api.expectedWithdrawalsLock.RUnlock()
 
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
@@ -1162,12 +1156,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"tx":              payload.NumTx(),
 	})
 
-	if payload.Slot() <= api.headSlot.Load() {
-		api.log.Info("submitNewBlock failed: submission for past slot")
-		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
-		return
-	}
-
 	// Don't accept blocks with 0 value
 	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.NumTx() == 0 {
 		api.log.Info("submitNewBlock failed: block with 0 value or no txs")
@@ -1183,11 +1171,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// get the latest randao and check again, it might have updated in the meantime)
+	// get the latest randao and check its slot
 	api.expectedPrevRandaoLock.RLock()
 	expectedRandao := api.expectedPrevRandao
 	api.expectedPrevRandaoLock.RUnlock()
-	if expectedRandao.slot != payload.Slot() { // we still don't have the prevrandao yet
+	if expectedRandao.slot != payload.Slot() {
 		log.Warn("prev_randao is not known yet")
 		api.RespondError(w, http.StatusInternalServerError, "prev_randao is not known yet")
 		return
@@ -1210,7 +1198,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
 			return
 		}
-		if expectedWithdrawalsRoot.slot != payload.Slot() { // we still don't have the withdrawals yet
+		if expectedWithdrawalsRoot.slot != payload.Slot() {
 			log.Warn("withdrawals are not known yet")
 			api.RespondError(w, http.StatusInternalServerError, "withdrawals are not known yet")
 			return
