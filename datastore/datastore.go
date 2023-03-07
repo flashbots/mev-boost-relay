@@ -32,18 +32,20 @@ type GetPayloadResponseKey struct {
 type Datastore struct {
 	log *logrus.Entry
 
-	redis *RedisCache
-	db    database.IDatabaseService
+	redis     *RedisCache
+	memcached *Memcached
+	db        database.IDatabaseService
 
 	knownValidatorsByPubkey map[types.PubkeyHex]uint64
 	knownValidatorsByIndex  map[uint64]types.PubkeyHex
 	knownValidatorsLock     sync.RWMutex
 }
 
-func NewDatastore(log *logrus.Entry, redisCache *RedisCache, db database.IDatabaseService) (ds *Datastore, err error) {
+func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
 	ds = &Datastore{
 		log:                     log.WithField("component", "datastore"),
 		db:                      db,
+		memcached:               memcached,
 		redis:                   redisCache,
 		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
 		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
@@ -127,7 +129,16 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		return resp, nil
 	}
 
-	// 2. try to get from database
+	// 2. try to get from Memcached
+	resp, err = ds.memcached.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
+	if err != nil {
+		ds.log.WithError(err).Error("error getting execution payload response from memcached")
+	} else if resp != nil {
+		ds.log.Debug("successfully found execution payload in memcached")
+		return resp, nil
+	}
+
+	// 3. try to get from database
 	blockSubEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
 	if err != nil {
 		return nil, err
