@@ -1081,10 +1081,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		// Prepare refund data.
 		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
-<<<<<<< HEAD
-=======
-
->>>>>>> f77fa66 (fixing capella errors)
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 		if err != nil {
