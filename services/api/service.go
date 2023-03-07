@@ -90,6 +90,7 @@ type RelayAPIOpts struct {
 	BeaconClient beaconclient.IMultiBeaconClient
 	Datastore    *datastore.Datastore
 	Redis        *datastore.RedisCache
+	Memcached    *datastore.Memcached
 	DB           database.IDatabaseService
 
 	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
@@ -129,6 +130,7 @@ type RelayAPI struct {
 	beaconClient beaconclient.IMultiBeaconClient
 	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
+	memcached    *datastore.Memcached
 	db           database.IDatabaseService
 
 	headSlot       uberatomic.Uint64
@@ -1330,6 +1332,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	err = api.redis.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
 	if err != nil {
 		log.WithError(err).Error("failed saving execution payload in redis")
+		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// save execution payload to memcached as secondary backup to Redis
+	err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+	if err != nil {
+		log.WithError(err).Error("failed saving execution payload in memcached")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

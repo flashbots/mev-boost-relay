@@ -11,6 +11,12 @@ services:
     ports:
       - '6379:6379'
 
+  memcached:
+    image: memcached
+    restart: always
+    ports:
+      - '11211:11211'
+
   db:
     image: postgres
     restart: always

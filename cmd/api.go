@@ -98,6 +98,13 @@ var apiCmd = &cobra.Command{
 		}
 		log.Infof("Connected to Redis at %s", redisURI)
 
+		// Connect to Memcached if it exists
+		// TODO: pass in server endpoints and add memcached flag
+		mem, err := datastore.NewMemcached(networkInfo.Name)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to connect to Memcached")
+		}
+
 		// Connect to Postgres
 		dbURL, err := url.Parse(postgresDSN)
 		if err != nil {
@@ -110,7 +117,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		log.Info("Setting up datastore...")
-		ds, err := datastore.NewDatastore(log, redis, db)
+		ds, err := datastore.NewDatastore(log, redis, mem, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
@@ -121,6 +128,7 @@ var apiCmd = &cobra.Command{
 			BeaconClient:  beaconClient,
 			Datastore:     ds,
 			Redis:         redis,
+			Memcached:     mem,
 			DB:            db,
 			EthNetDetails: *networkInfo,
 			BlockSimURL:   apiBlockSimURL,
