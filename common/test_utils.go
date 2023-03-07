@@ -1,7 +1,10 @@
 package common
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"
@@ -41,12 +44,6 @@ func _HexToHash(s string) (ret types.Hash) {
 	return
 }
 
-// _HexToBytes converts a hexadecimal string to Bytes
-func _HexToBytes(s string) (ret hexutil.Bytes) {
-	check(ret.UnmarshalText([]byte(s)), " _HexToBytes: ", s)
-	return
-}
-
 var ValidPayloadRegisterValidator = types.SignedValidatorRegistration{
 	Message: &types.RegisterValidatorRequestMessage{
 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
@@ -60,17 +57,19 @@ var ValidPayloadRegisterValidator = types.SignedValidatorRegistration{
 		"0x8209b5391cd69f392b1f02dbc03bab61f574bb6bb54bf87b59e2a85bdc0756f7db6a71ce1b41b727a1f46ccc77b213bf0df1426177b5b29926b39956114421eaa36ec4602969f6f6370a44de44a6bce6dae2136e5fb594cce2a476354264d1ea"),
 }
 
-func TestBuilderSubmitBlockRequest(pk *types.PublicKey, sk *blst.SecretKey, bid *types.BidTrace) types.BuilderSubmitBlockRequest {
+func TestBuilderSubmitBlockRequest(pk *phase0.BLSPubKey, sk *blst.SecretKey, bid *BidTraceV2) BuilderSubmitBlockRequest {
 	signature, err := types.SignMessage(bid, types.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	return types.BuilderSubmitBlockRequest{
-		Message:   bid,
-		Signature: signature,
-		ExecutionPayload: &types.ExecutionPayload{
-			BlockHash:    bid.BlockHash,
-			Timestamp:    bid.Slot * 12, // 12 seconds per slot.
-			Transactions: []hexutil.Bytes{_HexToBytes("0x03")},
-			Random:       _HexToHash("01234567890123456789012345678901"),
+	return BuilderSubmitBlockRequest{
+		Capella: &capella.SubmitBlockRequest{
+			Message:   &bid.BidTrace,
+			Signature: [96]byte(signature),
+			ExecutionPayload: &consensuscapella.ExecutionPayload{
+				Transactions: []bellatrix.Transaction{[]byte{0x03}},
+				Timestamp:    bid.Slot * 12, // 12 seconds per slot.
+				PrevRandao:   _HexToHash("01234567890123456789012345678901"),
+				Withdrawals:  []*consensuscapella.Withdrawal{},
+			},
 		},
 	}
 }

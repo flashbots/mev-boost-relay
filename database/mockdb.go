@@ -143,13 +143,13 @@ func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 	return nil
 }
 
-func (db MockDB) InsertBuilderDemotion(submitBlockRequest *types.BuilderSubmitBlockRequest, simError error) error {
-	pubkey := submitBlockRequest.Message.BuilderPubkey.String()
+func (db MockDB) InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error {
+	pubkey := submitBlockRequest.BuilderPubkey().String()
 	db.Demotions[pubkey] = true
 	return nil
 }
 
-func (db MockDB) UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {
@@ -162,7 +162,7 @@ func (db MockDB) UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types
 	return nil
 }
 
-func (db MockDB) GetBuilderDemotion(trace *types.BidTrace) (*BuilderDemotionEntry, error) {
+func (db MockDB) GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error) {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {

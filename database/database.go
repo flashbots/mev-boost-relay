@@ -46,9 +46,9 @@ type IDatabaseService interface {
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError bool) error
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
-	InsertBuilderDemotion(submitBlockRequest *types.BuilderSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
-	GetBuilderDemotion(trace *types.BidTrace) (*BuilderDemotionEntry, error)
+	InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
+	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 }
 
 type DatabaseService struct {

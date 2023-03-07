@@ -25,7 +25,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/httplogger"
@@ -127,7 +126,7 @@ type blockSimOptions struct {
 
 type blockBuilderCacheEntry struct {
 	status     common.BuilderStatus
-	collateral types.U256Str
+	collateral *big.Int
 }
 
 // RelayAPI represents a single Relay instance
@@ -482,7 +481,7 @@ func (api *RelayAPI) simulateBlock(opts blockSimOptions) error {
 	return nil
 }
 
-func (api *RelayAPI) demoteBuilder(pubkey string, req *types.BuilderSubmitBlockRequest, simError error) {
+func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlockRequest, simError error) {
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
@@ -516,14 +515,14 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 	api.optimisticBlocks.Add(1)
 	defer api.optimisticBlocks.Done()
 
-	builderPubkey := opts.req.Message.BuilderPubkey.String()
+	builderPubkey := opts.req.BuilderPubkey().String()
 	opts.log.WithFields(logrus.Fields{
 		"builderPubkey": builderPubkey,
 		// NOTE: this value is just an estimate because many goroutines could be
 		// updating api.optimisticBlocksInFlight concurrently. Since we just use
 		// it for logging, it is not atomic to avoid the performance impact.
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
-	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.Message.BlockHash)
+	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.BlockHash())
 
 	if simErr := api.simulateBlock(opts); simErr != nil {
 		api.log.WithError(simErr).Error("block simulation failed in processOptimisticBlock, demoting builder")
@@ -625,11 +624,12 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 		collStr := v.CollateralValue
 
 		// Try to parse builder collateral string (U256Str) type.
-		var builderCollateral types.U256Str
+		var builderCollateral big.Int
+		fmt.Printf("buildercollateral %v\n", builderCollateral)
 		err = builderCollateral.UnmarshalText([]byte(collStr))
 		if err != nil {
 			api.log.WithError(err).Error("could not parse builder collateral string")
-			builderCollateral = ZeroU256
+			builderCollateral.SetInt64(0)
 		}
 		api.blockBuildersCache[v.BuilderPubkey] = &blockBuilderCacheEntry{
 			status: common.BuilderStatus{
@@ -637,7 +637,7 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 				IsBlacklisted: v.IsBlacklisted,
 				IsDemoted:     v.IsDemoted,
 			},
-			collateral: builderCollateral,
+			collateral: &builderCollateral,
 		}
 	}
 }
@@ -1046,7 +1046,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.optimisticBlocks.Wait()
 
 		// Check if there is a demotion for the winning block.
-		_, err = api.db.GetBuilderDemotion(&bidTrace.BidTrace)
+		_, err = api.db.GetBuilderDemotion(bidTrace)
 		// If demotion not found, we are done!
 		if err == sql.ErrNoRows {
 			log.Info("no demotion in getPayload, successful block proposal")
@@ -1066,7 +1066,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		log.Error("demotion found in getPayload, inserting refund justification")
 
 		// Prepare refund data.
-		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp.Data)
+		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
@@ -1077,7 +1077,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 				log.WithError(err).Error("error reading validator registration")
 			}
 		}
-		var signedRegistration *types.SignedValidatorRegistration
+		var signedRegistration *boostTypes.SignedValidatorRegistration
 		if registrationEntry != nil {
 			signedRegistration, err = registrationEntry.ToSignedValidatorRegistration()
 			if err != nil {
@@ -1085,7 +1085,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
-		err = api.db.UpdateBuilderDemotion(&bidTrace.BidTrace, signedBeaconBlock, signedRegistration)
+		err = api.db.UpdateBuilderDemotion(bidTrace, signedBeaconBlock, signedRegistration)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"errorWritingRefundToDB": true,
@@ -1282,15 +1282,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	builderPubkey := payload.Message.BuilderPubkey.String()
-	builderEntry, ok := api.blockBuildersCache[builderPubkey]
+	builderPubkey := payload.BuilderPubkey()
+	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
 	if !ok {
-		log.Warnf("unable to read builder: %x from the builder cache, using low-prio and no collateral", builderPubkey)
+		log.Warnf("unable to read builder: %x from the builder cache, using low-prio and no collateral", builderPubkey.String())
 		builderEntry = &blockBuilderCacheEntry{
 			status: common.BuilderStatus{
 				IsHighPrio: false,
 			},
-			collateral: ZeroU256,
+			collateral: big.NewInt(0),
 		}
 	}
 	log = log.WithFields(logrus.Fields{
@@ -1420,9 +1420,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Verify the signature
-	builderPubkey := payload.BuilderPubkey()
 	signature := payload.Signature()
-	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
+	ok, err = boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
@@ -1462,9 +1461,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// With sufficient collateral, process the block optimistically.
-	if builderEntry.collateral.Cmp(&payload.Message.Value) > 0 &&
+	if builderEntry.collateral.Cmp(payload.Value()) > 0 &&
 		!builderEntry.status.IsDemoted &&
-		payload.Message.Slot == api.optimisticSlot {
+		payload.Slot() == api.optimisticSlot {
 		optimisticSubmission = true
 		go api.processOptimisticBlock(opts)
 	} else {

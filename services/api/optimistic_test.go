@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -11,13 +12,21 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-builder-client/api/capella"
+	v1 "github.com/attestantio/go-builder-client/api/v1"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	blst "github.com/supranational/blst/bindings/go"
 )
@@ -31,60 +40,68 @@ const (
 )
 
 var (
-	feeRecipient = types.Address{0x02}
+	feeRecipient = bellatrix.ExecutionAddress{0x02}
 	errFake      = fmt.Errorf("foo error")
 )
 
-func getTestBlockHash(t *testing.T) types.Hash {
-	var blockHash types.Hash
+func getTestBlockHash(t *testing.T) boostTypes.Hash {
+	var blockHash boostTypes.Hash
 	err := blockHash.FromSlice([]byte("98765432109876543210987654321098"))
 	require.NoError(t, err)
 	return blockHash
 }
 
-func getTestBidTrace(pubkey types.PublicKey, value uint64) *types.BidTrace {
-	return &types.BidTrace{
-		Slot:                 slot,
-		BuilderPubkey:        pubkey,
-		ProposerFeeRecipient: feeRecipient,
-		Value:                types.IntToU256(value),
+func getTestBidTrace(pubkey phase0.BLSPubKey, value uint64) *common.BidTraceV2 {
+	return &common.BidTraceV2{
+		BidTrace: v1.BidTrace{
+			Slot:                 slot,
+			BuilderPubkey:        pubkey,
+			ProposerFeeRecipient: feeRecipient,
+			Value:                uint256.NewInt(value),
+		},
 	}
 }
 
 type blockRequestOpts struct {
-	pubkey     types.PublicKey
+	pubkey     phase0.BLSPubKey
 	secretkey  *blst.SecretKey
 	blockValue uint64
-	domain     types.Domain
+	domain     boostTypes.Domain
 }
 
-func startTestBackend(t *testing.T) (*types.PublicKey, *blst.SecretKey, *testBackend) {
+func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBackend) {
 	// Setup test key pair.
 	sk, _, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
 	blsPubkey := bls.PublicKeyFromSecretKey(sk)
-	var pubkey types.PublicKey
-	err = pubkey.FromSlice(blsPubkey.Compress())
-	require.NoError(t, err)
+	pkSlice := blsPubkey.Compress()
+	var pubkey phase0.BLSPubKey
+	copy(pubkey[:], pkSlice[:])
 	pkStr := pubkey.String()
 
 	// Setup test backend.
 	backend := newTestBackend(t, 1)
-	var randaoHash types.Hash
+	var randaoHash boostTypes.Hash
 	err = randaoHash.FromSlice([]byte(randao))
 	require.NoError(t, err)
 	backend.relay.expectedPrevRandao = randaoHelper{
 		slot:       slot,
 		prevRandao: randaoHash.String(),
 	}
+	withRoot, err := ComputeWithdrawalsRoot([]*consensuscapella.Withdrawal{})
+	require.NoError(t, err)
+	backend.relay.expectedWithdrawalsRoot = withdrawalsHelper{
+		slot: slot,
+		root: withRoot,
+	}
 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{}
 	backend.relay.genesisInfo.Data.GenesisTime = 0
-	backend.relay.proposerDutiesMap = map[uint64]*types.RegisterValidatorRequestMessage{
+	backend.relay.proposerDutiesMap = map[uint64]*boostTypes.RegisterValidatorRequestMessage{
 		slot: {
-			FeeRecipient: feeRecipient,
+			FeeRecipient: [20]byte(feeRecipient),
 			GasLimit:     5000,
 			Timestamp:    0xffffffff,
-			Pubkey:       types.PublicKey{},
+			Pubkey:       [48]byte(phase0.BLSPubKey{}),
 		},
 	}
 	backend.relay.opts.BlockBuilderAPI = true
@@ -95,7 +112,7 @@ func startTestBackend(t *testing.T) (*types.PublicKey, *blst.SecretKey, *testBac
 			status: common.BuilderStatus{
 				IsHighPrio: true,
 			},
-			collateral: types.IntToU256(uint64(collateral)),
+			collateral: big.NewInt(int64(collateral)),
 		},
 	}
 
@@ -126,25 +143,30 @@ func startTestBackend(t *testing.T) (*types.PublicKey, *blst.SecretKey, *testBac
 	// Prepare redis.
 	err = backend.relay.redis.SetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered, slot-1)
 	require.NoError(t, err)
-	err = backend.relay.redis.SetKnownValidator(pubkey.PubkeyHex(), proposerInd)
+	err = backend.relay.redis.SetKnownValidator(boostTypes.NewPubkeyHex(pubkey.String()), proposerInd)
 	require.NoError(t, err)
+	comResp := &common.GetPayloadResponse{
+		Capella: &api.VersionedExecutionPayload{
+			Version: consensusspec.DataVersionCapella,
+			Capella: &consensuscapella.ExecutionPayload{
+				Transactions: []bellatrix.Transaction{},
+			},
+		},
+	}
 	err = backend.relay.redis.SaveExecutionPayload(
 		slot,
 		pkStr,
 		getTestBlockHash(t).String(),
-		&types.GetPayloadResponse{
-			Data: &types.ExecutionPayload{
-				Transactions: []hexutil.Bytes{},
-			},
-		},
+		comResp,
 	)
 	require.NoError(t, err)
 	err = backend.relay.redis.SaveBidTrace(&common.BidTraceV2{
-		BidTrace: types.BidTrace{
+		BidTrace: v1.BidTrace{
 			Slot:           slot,
 			ProposerPubkey: pubkey,
-			BlockHash:      getTestBlockHash(t),
+			BlockHash:      phase0.Hash32(getTestBlockHash(t)),
 			BuilderPubkey:  pubkey,
+			Value:          uint256.NewInt(5),
 		},
 	})
 	require.NoError(t, err)
@@ -164,21 +186,21 @@ func runOptimisticGetPayload(t *testing.T, opts blockRequestOpts, backend *testB
 	err := txn.UnmarshalText([]byte("0x03"))
 	require.NoError(t, err)
 
-	block := &types.BlindedBeaconBlock{
+	block := &boostTypes.BlindedBeaconBlock{
 		Slot:          slot,
 		ProposerIndex: proposerInd,
-		Body: &types.BlindedBeaconBlockBody{
-			ExecutionPayloadHeader: &types.ExecutionPayloadHeader{
+		Body: &boostTypes.BlindedBeaconBlockBody{
+			ExecutionPayloadHeader: &boostTypes.ExecutionPayloadHeader{
 				BlockHash:   getTestBlockHash(t),
 				BlockNumber: 1234,
 			},
-			Eth1Data:      &types.Eth1Data{},
-			SyncAggregate: &types.SyncAggregate{},
+			Eth1Data:      &boostTypes.Eth1Data{},
+			SyncAggregate: &boostTypes.SyncAggregate{},
 		},
 	}
-	signature, err := types.SignMessage(block, opts.domain, opts.secretkey)
+	signature, err := boostTypes.SignMessage(block, opts.domain, opts.secretkey)
 	require.NoError(t, err)
-	req := &types.SignedBlindedBeaconBlock{
+	req := &boostTypes.SignedBlindedBeaconBlock{
 		Message:   block,
 		Signature: signature,
 	}
@@ -196,7 +218,8 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 	}
 
 	req := common.TestBuilderSubmitBlockRequest(&opts.pubkey, opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue))
-	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req)
+	fmt.Printf("*** %+v\n", req)
+	rr := backend.request(http.MethodPost, pathSubmitNewBlock, &req)
 
 	// Let updates happen async.
 	time.Sleep(100 * time.Millisecond)
@@ -331,7 +354,7 @@ func TestUpdateOptimisticSlot(t *testing.T) {
 	require.Equal(t, true, entry.status.IsHighPrio)
 	require.Equal(t, false, entry.status.IsDemoted)
 	require.Equal(t, false, entry.status.IsBlacklisted)
-	require.Equal(t, types.IntToU256(uint64(collateral)), entry.collateral)
+	require.Zero(t, entry.collateral.Cmp(big.NewInt(int64(collateral))))
 }
 
 func TestProposerApiGetPayloadOptimistic(t *testing.T) {
@@ -364,9 +387,11 @@ func TestProposerApiGetPayloadOptimistic(t *testing.T) {
 			pkStr := pubkey.String()
 			// First insert a demotion.
 			if tc.demoted {
-				backend.relay.db.InsertBuilderDemotion(&types.BuilderSubmitBlockRequest{
-					Message: &types.BidTrace{
-						BuilderPubkey: *pubkey,
+				backend.relay.db.InsertBuilderDemotion(&common.BuilderSubmitBlockRequest{
+					Capella: &capella.SubmitBlockRequest{
+						Message: &v1.BidTrace{
+							BuilderPubkey: *pubkey,
+						},
 					},
 				}, errFake)
 			}
@@ -374,7 +399,7 @@ func TestProposerApiGetPayloadOptimistic(t *testing.T) {
 			runOptimisticGetPayload(t, blockRequestOpts{
 				secretkey: secretkey,
 				pubkey:    *pubkey,
-				domain:    backend.relay.opts.EthNetDetails.DomainBeaconProposer,
+				domain:    backend.relay.opts.EthNetDetails.DomainBeaconProposerCapella,
 			}, backend)
 
 			// Check demotion and refund status'.
