@@ -218,7 +218,6 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 	}
 
 	req := common.TestBuilderSubmitBlockRequest(&opts.pubkey, opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue))
-	fmt.Printf("*** %+v\n", req)
 	rr := backend.request(http.MethodPost, pathSubmitNewBlock, &req)
 
 	// Let updates happen async.
