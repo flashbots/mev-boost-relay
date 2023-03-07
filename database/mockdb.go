@@ -108,53 +108,30 @@ func (db MockDB) SetBlockBuilderStatus(pubkey string, status common.BuilderStatu
 		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
 	}
 	// Single builder update.
-<<<<<<< HEAD
 	if builder.BuilderID == "" {
 		builder.IsHighPrio = status.IsHighPrio
 		builder.IsBlacklisted = status.IsBlacklisted
 		builder.IsOptimistic = status.IsOptimistic
-=======
-	if builder.CollateralID == "" {
-		builder.IsHighPrio = status.IsHighPrio
-		builder.IsBlacklisted = status.IsBlacklisted
-		builder.IsDemoted = status.IsDemoted
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 		return nil
 	}
 	// All matching collateral IDs updated.
 	for _, v := range db.Builders {
-<<<<<<< HEAD
 		if v.BuilderID == builder.BuilderID {
 			v.IsHighPrio = status.IsHighPrio
 			v.IsBlacklisted = status.IsBlacklisted
 			v.IsOptimistic = status.IsOptimistic
-=======
-		if v.CollateralID == builder.CollateralID {
-			v.IsHighPrio = status.IsHighPrio
-			v.IsBlacklisted = status.IsBlacklisted
-			v.IsDemoted = status.IsDemoted
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 		}
 	}
 	return nil
 }
 
-<<<<<<< HEAD
 func (db MockDB) SetBlockBuilderCollateral(pubkey, builderID, collateral string) error {
-=======
-func (db MockDB) SetBlockBuilderCollateral(pubkey, collateralID, collateralValue string) error {
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	builder, ok := db.Builders[pubkey]
 	if !ok {
 		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
 	}
-<<<<<<< HEAD
 	builder.BuilderID = builderID
 	builder.Collateral = collateral
-=======
-	builder.CollateralID = collateralID
-	builder.CollateralValue = collateralValue
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	return nil
 }
 
@@ -166,22 +143,13 @@ func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 	return nil
 }
 
-<<<<<<< HEAD
 func (db MockDB) InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error {
 	pubkey := submitBlockRequest.BuilderPubkey().String()
-=======
-func (db MockDB) InsertBuilderDemotion(submitBlockRequest *types.BuilderSubmitBlockRequest, simError error) error {
-	pubkey := submitBlockRequest.Message.BuilderPubkey.String()
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	db.Demotions[pubkey] = true
 	return nil
 }
 
-<<<<<<< HEAD
 func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
-=======
-func (db MockDB) UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {
@@ -194,11 +162,7 @@ func (db MockDB) UpdateBuilderDemotion(trace *types.BidTrace, signedBlock *types
 	return nil
 }
 
-<<<<<<< HEAD
 func (db MockDB) GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error) {
-=======
-func (db MockDB) GetBuilderDemotion(trace *types.BidTrace) (*BuilderDemotionEntry, error) {
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {

@@ -1,14 +1,10 @@
 package common
 
 import (
-<<<<<<< HEAD
 	"github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-=======
-	"github.com/ethereum/go-ethereum/common/hexutil"
->>>>>>> 08bb0bc (rebase onto capella: optimstic relay: testing changes)
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"

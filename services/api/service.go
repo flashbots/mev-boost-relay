@@ -638,7 +638,6 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 	for _, v := range builders {
 		collStr := v.Collateral
 
-		// Try to parse builder collateral string to big int.
 		var builderCollateral big.Int
 		err = builderCollateral.UnmarshalText([]byte(collStr))
 		if err != nil {
@@ -1082,6 +1081,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		// Prepare refund data.
 		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+<<<<<<< HEAD
+=======
+
+>>>>>>> f77fa66 (fixing capella errors)
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 		if err != nil {
