@@ -11,7 +11,7 @@ var (
 	runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
 )
 
-func TestNewMemcache(t *testing.T) {
+func TestNewMemcached(t *testing.T) {
 	if !runIntegrationTests {
 		t.Skip("Skipping integration tests")
 	}
@@ -21,7 +21,7 @@ func TestNewMemcache(t *testing.T) {
 	require.NotNil(t, mem, "expected non-nil memcache instance")
 }
 
-func TestMemcacheSaveExecutionPayload(t *testing.T) {
+func TestMemcachedSaveExecutionPayload(t *testing.T) {
 	if !runIntegrationTests {
 		t.Skip("Skipping integration tests")
 	}
@@ -34,7 +34,7 @@ func TestMemcacheSaveExecutionPayload(t *testing.T) {
 	require.NoError(t, err, "expected no error on memcache SaveExecutionPayload but found [%v]", err)
 }
 
-func TestMemcacheGetExecutionPayload(t *testing.T) {
+func TestMemcachedGetExecutionPayload(t *testing.T) {
 	if !runIntegrationTests {
 		t.Skip("Skipping integration tests")
 	}
