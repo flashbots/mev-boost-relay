@@ -13,7 +13,7 @@ func NewMockMultiBeaconClient() *MockMultiBeaconClient {
 }
 
 func (*MockMultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
-	return &SyncStatusPayloadData{HeadSlot: 1}, nil
+	return &SyncStatusPayloadData{HeadSlot: 1}, nil //nolint:exhaustruct
 }
 
 func (*MockMultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
@@ -31,7 +31,7 @@ func (*MockMultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (cod
 }
 
 func (*MockMultiBeaconClient) GetGenesis() (*GetGenesisResponse, error) {
-	resp := &GetGenesisResponse{}
+	resp := &GetGenesisResponse{} //nolint:exhaustruct
 	resp.Data.GenesisTime = 0
 	return resp, nil
 }

@@ -476,19 +476,17 @@ func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderE
 func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus) error {
 	builder, err := s.GetBlockBuilderByPubkey(pubkey)
 	if err != nil {
-		return fmt.Errorf("unable to read block builder: %v, %v", pubkey, err)
+		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
 	var query string
 	queryPrefix := `UPDATE ` + vars.TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2, is_optimistic=$3 `
-	// If no collateral ID is present, just update the status of the single builder pubkey.
+	// If no builder ID is present, just update the status of the single builder pubkey.
 	if builder.BuilderID == "" {
-		query = queryPrefix + "WHERE builder_pubkey=$4;"
-		_, err := s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic, pubkey)
-		return err
+		query = queryPrefix + fmt.Sprintf("WHERE builder_pubkey='%v';", pubkey)
+	} else { // If there is a builder ID, then update statuses of all pubkeys.
+		query = queryPrefix + fmt.Sprintf("WHERE builder_id='%v';", builder.BuilderID)
 	}
-	// If there is a collateral ID, then update statuses of all pubkeys.
-	query = queryPrefix + "WHERE builder_id=$4;"
-	_, err = s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic, builder.BuilderID)
+	_, err = s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic)
 	return err
 }
 
@@ -523,7 +521,6 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Build
 	if err != nil {
 		return err
 	}
-	// bidTrace := submitBlockRequest.Message
 	builderDemotionEntry := BuilderDemotionEntry{
 		SubmitBlockRequest: NewNullString(string(_submitBlockRequest)),
 

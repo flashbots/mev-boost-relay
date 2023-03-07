@@ -206,13 +206,13 @@ func TestMigrations(t *testing.T) {
 
 func TestSetBlockBuilderStatus(t *testing.T) {
 	db := resetDatabase(t)
-	// Four test builders, 2 with matching collateral id, 2 with no collateral id.
+	// Four test builders, 2 with matching builder id, 2 with no builder id.
 	pubkey1 := insertTestBuilder(t, db)
 	pubkey2 := insertTestBuilder(t, db)
 	pubkey3 := insertTestBuilder(t, db)
 	pubkey4 := insertTestBuilder(t, db)
 
-	// Builder 1 & 2 share a collateral id.
+	// Builder 1 & 2 share a builder id.
 	err := db.SetBlockBuilderCollateral(pubkey1, builderID, collateralStr)
 	require.NoError(t, err)
 	err = db.SetBlockBuilderCollateral(pubkey2, builderID, collateralStr)
@@ -321,7 +321,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 		},
 	}
 	req := common.TestBuilderSubmitBlockRequest(pk, sk, bt)
-	// Should return ErrNoRows because there is no demotion yet..
+	// Should return ErrNoRows because there is no demotion yet.
 	demotion, err := db.GetBuilderDemotion(bt)
 	require.Equal(t, sql.ErrNoRows, err)
 	require.Nil(t, demotion)

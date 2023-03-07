@@ -118,7 +118,6 @@ type withdrawalsHelper struct {
 
 // Data needed to issue a block validation request.
 type blockSimOptions struct {
-	ctx        context.Context
 	isHighPrio bool
 	log        *logrus.Entry
 	req        *BuilderBlockValidationRequest
@@ -466,9 +465,9 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
-func (api *RelayAPI) simulateBlock(opts blockSimOptions) error {
+func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) error {
 	t := time.Now()
-	simErr := api.blockSimRateLimiter.send(opts.ctx, opts.req, opts.isHighPrio)
+	simErr := api.blockSimRateLimiter.send(ctx, opts.req, opts.isHighPrio)
 	log := opts.log.WithFields(logrus.Fields{
 		"duration":   time.Since(t).Seconds(),
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
@@ -509,7 +508,7 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 
 // processOptimisticBlock is called on a new goroutine when a optimistic block
 // needs to be simulated.
-func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
+func (api *RelayAPI) processOptimisticBlock(ctx context.Context, opts blockSimOptions) {
 	api.optimisticBlocksInFlight += 1
 	defer func() { api.optimisticBlocksInFlight -= 1 }()
 	api.optimisticBlocks.Add(1)
@@ -524,7 +523,7 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
 	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.BlockHash())
 
-	if simErr := api.simulateBlock(opts); simErr != nil {
+	if simErr := api.simulateBlock(ctx, opts); simErr != nil {
 		api.log.WithError(simErr).Error("block simulation failed in processOptimisticBlock, demoting builder")
 
 		// Demote the builder.
@@ -623,7 +622,7 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 	for _, v := range builders {
 		collStr := v.Collateral
 
-		// Try to parse builder collateral string (U256Str) type.
+		// Try to parse builder collateral string to big int.
 		var builderCollateral big.Int
 		err = builderCollateral.UnmarshalText([]byte(collStr))
 		if err != nil {
@@ -919,6 +918,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"ua":            ua,
 		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength": req.ContentLength,
+		"headSlot":      api.headSlot.Load(),
 	})
 
 	// Read the body first, so we can decode it later
@@ -1047,7 +1047,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Check if there is a demotion for the winning block.
 		_, err = api.db.GetBuilderDemotion(bidTrace)
 		// If demotion not found, we are done!
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			log.Info("no demotion in getPayload, successful block proposal")
 			return
 		}
@@ -1438,7 +1438,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Construct simulation request.
 	opts := blockSimOptions{
-		ctx:        req.Context(),
 		isHighPrio: builderEntry.status.IsHighPrio,
 		log:        log,
 		req: &BuilderBlockValidationRequest{
@@ -1452,10 +1451,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		builderEntry.status.IsOptimistic &&
 		payload.Slot() == api.optimisticSlot {
 		optimisticSubmission = true
-		go api.processOptimisticBlock(opts)
+		go api.processOptimisticBlock(req.Context(), opts)
 	} else {
 		// Simulate block (synchronously).
-		simErr = api.simulateBlock(opts)
+		simErr = api.simulateBlock(req.Context(), opts)
 		if simErr != nil {
 			api.RespondError(w, http.StatusBadRequest, simErr.Error())
 			return
@@ -1576,9 +1575,10 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		return
 	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
 		args := req.URL.Query()
-		isHighPrio := args.Get("high_prio") == "true"
-		isBlacklisted := args.Get("blacklisted") == "true"
-		isOptimistic := args.Get("optimistic") == "true"
+		trueStr := "true"
+		isHighPrio := args.Get("high_prio") == trueStr
+		isBlacklisted := args.Get("blacklisted") == trueStr
+		isOptimistic := args.Get("optimistic") == trueStr
 		api.log.WithFields(logrus.Fields{
 			"builderPubkey": builderPubkey,
 			"isHighPrio":    isHighPrio,

@@ -177,8 +177,9 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBa
 	require.NoError(t, err)
 	require.Equal(t, count, 1)
 
-	go backend.relay.StartServer()
+	go backend.relay.StartServer() //nolint:errcheck
 	time.Sleep(100 * time.Millisecond)
+	backend.relay.headSlot.Store(40)
 
 	return &pubkey, sk, backend
 }
@@ -252,8 +253,7 @@ func TestSimulateBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
-			err := backend.relay.simulateBlock(blockSimOptions{
-				ctx:        context.Background(),
+			err := backend.relay.simulateBlock(context.Background(), blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				req: &BuilderBlockValidationRequest{
@@ -297,8 +297,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
-			backend.relay.processOptimisticBlock(blockSimOptions{
-				ctx:        context.Background(),
+			backend.relay.processOptimisticBlock(context.Background(), blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				req: &BuilderBlockValidationRequest{
@@ -388,13 +387,14 @@ func TestProposerApiGetPayloadOptimistic(t *testing.T) {
 			pkStr := pubkey.String()
 			// First insert a demotion.
 			if tc.demoted {
-				backend.relay.db.InsertBuilderDemotion(&common.BuilderSubmitBlockRequest{
+				err := backend.relay.db.InsertBuilderDemotion(&common.BuilderSubmitBlockRequest{
 					Capella: &capella.SubmitBlockRequest{
 						Message: &v1.BidTrace{
 							BuilderPubkey: *pubkey,
 						},
 					},
 				}, errFake)
+				require.NoError(t, err)
 			}
 
 			runOptimisticGetPayload(t, blockRequestOpts{
