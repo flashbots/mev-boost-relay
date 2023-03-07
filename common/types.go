@@ -247,8 +247,9 @@ func (b *BidTraceV2JSON) ToCSVRecord() []string {
 
 type BidTraceV2WithTimestampJSON struct {
 	BidTraceV2JSON
-	Timestamp   int64 `json:"timestamp,string,omitempty"`
-	TimestampMs int64 `json:"timestamp_ms,string,omitempty"`
+	Timestamp            int64 `json:"timestamp,string,omitempty"`
+	TimestampMs          int64 `json:"timestamp_ms,string,omitempty"`
+	OptimisticSubmission bool  `json:"optimistic_submission"`
 }
 
 func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
@@ -266,6 +267,7 @@ func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
 		"block_number",
 		"timestamp",
 		"timestamp_ms",
+		"optimistic_submission",
 	}
 }
 
@@ -284,6 +286,7 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 		fmt.Sprint(b.BlockNumber),
 		fmt.Sprint(b.Timestamp),
 		fmt.Sprint(b.TimestampMs),
+		fmt.Sprint(b.OptimisticSubmission),
 	}
 }
 
