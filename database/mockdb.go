@@ -108,30 +108,30 @@ func (db MockDB) SetBlockBuilderStatus(pubkey string, status common.BuilderStatu
 		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
 	}
 	// Single builder update.
-	if builder.CollateralID == "" {
+	if builder.BuilderID == "" {
 		builder.IsHighPrio = status.IsHighPrio
 		builder.IsBlacklisted = status.IsBlacklisted
-		builder.IsDemoted = status.IsDemoted
+		builder.IsOptimistic = status.IsOptimistic
 		return nil
 	}
 	// All matching collateral IDs updated.
 	for _, v := range db.Builders {
-		if v.CollateralID == builder.CollateralID {
+		if v.BuilderID == builder.BuilderID {
 			v.IsHighPrio = status.IsHighPrio
 			v.IsBlacklisted = status.IsBlacklisted
-			v.IsDemoted = status.IsDemoted
+			v.IsOptimistic = status.IsOptimistic
 		}
 	}
 	return nil
 }
 
-func (db MockDB) SetBlockBuilderCollateral(pubkey, collateralID, collateralValue string) error {
+func (db MockDB) SetBlockBuilderCollateral(pubkey, builderID, collateral string) error {
 	builder, ok := db.Builders[pubkey]
 	if !ok {
 		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey)
 	}
-	builder.CollateralID = collateralID
-	builder.CollateralValue = collateralValue
+	builder.BuilderID = builderID
+	builder.Collateral = collateral
 	return nil
 }
 

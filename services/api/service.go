@@ -490,9 +490,9 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 	newStatus := common.BuilderStatus{
 		IsHighPrio:    builderEntry.status.IsHighPrio,
 		IsBlacklisted: builderEntry.status.IsBlacklisted,
-		IsDemoted:     true,
+		IsOptimistic:  false,
 	}
-	api.log.Infof("demoted builder new status: %v", newStatus)
+	api.log.Infof("demoted builder, new status: %v", newStatus)
 	if err := api.db.SetBlockBuilderStatus(pubkey, newStatus); err != nil {
 		api.log.Error(fmt.Errorf("error setting builder: %v status: %v", pubkey, err))
 	}
@@ -621,11 +621,10 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 		return
 	}
 	for _, v := range builders {
-		collStr := v.CollateralValue
+		collStr := v.Collateral
 
 		// Try to parse builder collateral string (U256Str) type.
 		var builderCollateral big.Int
-		fmt.Printf("buildercollateral %v\n", builderCollateral)
 		err = builderCollateral.UnmarshalText([]byte(collStr))
 		if err != nil {
 			api.log.WithError(err).Error("could not parse builder collateral string")
@@ -635,7 +634,7 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 			status: common.BuilderStatus{
 				IsHighPrio:    v.IsHighPrio,
 				IsBlacklisted: v.IsBlacklisted,
-				IsDemoted:     v.IsDemoted,
+				IsOptimistic:  v.IsOptimistic,
 			},
 			collateral: &builderCollateral,
 		}
@@ -1462,7 +1461,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// With sufficient collateral, process the block optimistically.
 	if builderEntry.collateral.Cmp(payload.Value()) > 0 &&
-		!builderEntry.status.IsDemoted &&
+		builderEntry.status.IsOptimistic &&
 		payload.Slot() == api.optimisticSlot {
 		optimisticSubmission = true
 		go api.processOptimisticBlock(opts)
@@ -1591,17 +1590,17 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		args := req.URL.Query()
 		isHighPrio := args.Get("high_prio") == "true"
 		isBlacklisted := args.Get("blacklisted") == "true"
-		isDemoted := args.Get("demoted") == "true"
+		isOptimistic := args.Get("optimistic") == "true"
 		api.log.WithFields(logrus.Fields{
 			"builderPubkey": builderPubkey,
 			"isHighPrio":    isHighPrio,
-			"isDemoted":     isDemoted,
 			"isBlacklisted": isBlacklisted,
+			"isOptimistic":  isOptimistic,
 		}).Info("updating builder status")
 		newStatus := common.BuilderStatus{
 			IsHighPrio:    isHighPrio,
 			IsBlacklisted: isBlacklisted,
-			IsDemoted:     isDemoted,
+			IsOptimistic:  isOptimistic,
 		}
 		err := api.db.SetBlockBuilderStatus(builderPubkey, newStatus)
 		if err != nil {
@@ -1619,15 +1618,15 @@ func (api *RelayAPI) handleInternalBuilderCollateral(w http.ResponseWriter, req 
 	builderPubkey := vars["pubkey"]
 	if req.Method == http.MethodPost || req.Method == http.MethodPut {
 		args := req.URL.Query()
-		collateralID := args.Get("collateral_id")
+		collateral := args.Get("collateral")
 		value := args.Get("value")
 		log := api.log.WithFields(logrus.Fields{
-			"pubkey":       builderPubkey,
-			"collateralID": collateralID,
-			"value":        value,
+			"pubkey":     builderPubkey,
+			"collateral": collateral,
+			"value":      value,
 		})
 		log.Infof("updating builder collateral")
-		if err := api.db.SetBlockBuilderCollateral(builderPubkey, collateralID, value); err != nil {
+		if err := api.db.SetBlockBuilderCollateral(builderPubkey, collateral, value); err != nil {
 			fullErr := fmt.Errorf("unable to set collateral in db for pubkey: %v: %v", builderPubkey, err)
 			log.Error(fullErr.Error())
 			api.RespondError(w, http.StatusInternalServerError, fullErr.Error())

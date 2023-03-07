@@ -27,7 +27,7 @@ type HTTPServerTimeouts struct {
 type BuilderStatus struct {
 	IsHighPrio    bool
 	IsBlacklisted bool
-	IsDemoted     bool
+	IsOptimistic  bool
 }
 
 // Profile captures performance metrics for the block submission handler. Each

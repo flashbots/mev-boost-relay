@@ -198,10 +198,10 @@ type BlockBuilderEntry struct {
 
 	IsHighPrio    bool `db:"is_high_prio"   json:"is_high_prio"`
 	IsBlacklisted bool `db:"is_blacklisted" json:"is_blacklisted"`
-	IsDemoted     bool `db:"is_demoted"     json:"is_demoted"`
+	IsOptimistic  bool `db:"is_optimistic"  json:"is_optimistic"`
 
-	CollateralValue string `db:"collateral_value"  json:"collateral_value"`
-	CollateralID    string `db:"collateral_id"     json:"collateral_id"`
+	Collateral string `db:"collateral" json:"collateral"`
+	BuilderID  string `db:"builder_id" json:"builder_id"`
 
 	LastSubmissionID   sql.NullInt64 `db:"last_submission_id"   json:"last_submission_id"`
 	LastSubmissionSlot uint64        `db:"last_submission_slot" json:"last_submission_slot"`

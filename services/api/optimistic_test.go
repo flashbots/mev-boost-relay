@@ -32,11 +32,11 @@ import (
 )
 
 const (
-	slot         = uint64(41)
-	collateral   = 1000
-	collateralID = "builder0x69"
-	randao       = "01234567890123456789012345678901"
-	proposerInd  = uint64(987)
+	slot        = uint64(41)
+	collateral  = 1000
+	builderID   = "builder0x69"
+	randao      = "01234567890123456789012345678901"
+	proposerInd = uint64(987)
 )
 
 var (
@@ -110,7 +110,8 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBa
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{
 		pkStr: {
 			status: common.BuilderStatus{
-				IsHighPrio: true,
+				IsHighPrio:   true,
+				IsOptimistic: true,
 			},
 			collateral: big.NewInt(int64(collateral)),
 		},
@@ -120,10 +121,11 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBa
 	mockDB := &database.MockDB{
 		Builders: map[string]*database.BlockBuilderEntry{
 			pkStr: {
-				BuilderPubkey:   pkStr,
-				IsHighPrio:      true,
-				CollateralID:    collateralID,
-				CollateralValue: strconv.Itoa(collateral),
+				BuilderPubkey: pkStr,
+				IsHighPrio:    true,
+				IsOptimistic:  true,
+				BuilderID:     builderID,
+				Collateral:    strconv.Itoa(collateral),
 			},
 		},
 		Demotions: map[string]bool{},
@@ -275,15 +277,15 @@ func TestProcessOptimisticBlock(t *testing.T) {
 		{
 			description: "success",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  false,
-				IsHighPrio: true,
+				IsOptimistic: true,
+				IsHighPrio:   true,
 			},
 		},
 		{
 			description: "simulation_error",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  true,
-				IsHighPrio: true,
+				IsOptimistic: false,
+				IsHighPrio:   true,
 			},
 			simulationError: errFake,
 		},
@@ -308,7 +310,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
 			require.NoError(t, err)
-			require.Equal(t, tc.wantStatus.IsDemoted, builder.IsDemoted)
+			require.Equal(t, tc.wantStatus.IsOptimistic, builder.IsOptimistic)
 			require.Equal(t, tc.wantStatus.IsHighPrio, builder.IsHighPrio)
 
 			// Check demotion but no refund.
@@ -323,8 +325,8 @@ func TestProcessOptimisticBlock(t *testing.T) {
 
 func TestDemoteBuilder(t *testing.T) {
 	wantStatus := common.BuilderStatus{
-		IsDemoted:  true,
-		IsHighPrio: true,
+		IsOptimistic: false,
+		IsHighPrio:   true,
 	}
 	pubkey, secretkey, backend := startTestBackend(t)
 	pkStr := pubkey.String()
@@ -334,7 +336,7 @@ func TestDemoteBuilder(t *testing.T) {
 	// Check status in db.
 	builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
 	require.NoError(t, err)
-	require.Equal(t, wantStatus.IsDemoted, builder.IsDemoted)
+	require.Equal(t, wantStatus.IsOptimistic, builder.IsOptimistic)
 	require.Equal(t, wantStatus.IsHighPrio, builder.IsHighPrio)
 
 	// Check demotion and refund statuses.
@@ -351,7 +353,7 @@ func TestUpdateOptimisticSlot(t *testing.T) {
 	entry, ok := backend.relay.blockBuildersCache[pkStr]
 	require.True(t, ok)
 	require.Equal(t, true, entry.status.IsHighPrio)
-	require.Equal(t, false, entry.status.IsDemoted)
+	require.Equal(t, true, entry.status.IsOptimistic)
 	require.Equal(t, false, entry.status.IsBlacklisted)
 	require.Zero(t, entry.collateral.Cmp(big.NewInt(int64(collateral))))
 }
@@ -365,16 +367,16 @@ func TestProposerApiGetPayloadOptimistic(t *testing.T) {
 		{
 			description: "success",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  false,
-				IsHighPrio: true,
+				IsOptimistic: true,
+				IsHighPrio:   true,
 			},
 			demoted: false,
 		},
 		{
 			description: "sim_error_refund",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  true,
-				IsHighPrio: true,
+				IsOptimistic: false,
+				IsHighPrio:   true,
 			},
 			demoted: true,
 		},
@@ -421,8 +423,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		{
 			description: "success_value_less_than_collateral",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  false,
-				IsHighPrio: true,
+				IsOptimistic: true,
+				IsHighPrio:   true,
 			},
 			simulationError: nil,
 			expectDemotion:  false,
@@ -432,8 +434,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		{
 			description: "success_value_greater_than_collateral",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  false,
-				IsHighPrio: true,
+				IsOptimistic: true,
+				IsHighPrio:   true,
 			},
 			simulationError: nil,
 			expectDemotion:  false,
@@ -443,8 +445,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		{
 			description: "failure_value_less_than_collateral",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  true,
-				IsHighPrio: true,
+				IsOptimistic: false,
+				IsHighPrio:   true,
 			},
 			simulationError: errFake,
 			expectDemotion:  true,
@@ -454,8 +456,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		{
 			description: "failure_value_more_than_collateral",
 			wantStatus: common.BuilderStatus{
-				IsDemoted:  false,
-				IsHighPrio: true,
+				IsOptimistic: true,
+				IsHighPrio:   true,
 			},
 			simulationError: errFake,
 			expectDemotion:  false,
@@ -482,7 +484,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
 			require.NoError(t, err)
-			require.Equal(t, tc.wantStatus.IsDemoted, builder.IsDemoted)
+			require.Equal(t, tc.wantStatus.IsOptimistic, builder.IsOptimistic)
 			require.Equal(t, tc.wantStatus.IsHighPrio, builder.IsHighPrio)
 
 			// Check demotion status is set to expected and refund is false.
@@ -509,11 +511,11 @@ func TestInternalBuilderStatus(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expected.IsHighPrio, resp.IsHighPrio)
 		require.Equal(t, expected.IsBlacklisted, resp.IsBlacklisted)
-		require.Equal(t, expected.IsDemoted, resp.IsDemoted)
+		require.Equal(t, expected.IsOptimistic, resp.IsOptimistic)
 	}
 	setAndGetStatus("?high_prio=true", common.BuilderStatus{IsHighPrio: true})
 	setAndGetStatus("?blacklisted=true", common.BuilderStatus{IsBlacklisted: true})
-	setAndGetStatus("?demoted=true", common.BuilderStatus{IsDemoted: true})
+	setAndGetStatus("?optimistic=true", common.BuilderStatus{IsOptimistic: true})
 	setAndGetStatus("", common.BuilderStatus{})
 }
 
@@ -522,7 +524,7 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	path := "/internal/v1/builder/collateral/" + pubkey.String()
 
 	// Set & Get.
-	rr := backend.request(http.MethodPost, path+"?collateral_id=builder0x69&value=10000", nil)
+	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil)
 	require.Equal(t, rr.Code, http.StatusOK)
 
 	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil)
@@ -530,6 +532,6 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	resp := &database.BlockBuilderEntry{}
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, resp.CollateralID, "builder0x69")
-	require.Equal(t, resp.CollateralValue, "10000")
+	require.Equal(t, resp.BuilderID, "builder0x69")
+	require.Equal(t, resp.Collateral, "10000")
 }
