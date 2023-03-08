@@ -25,8 +25,9 @@ Dependencies:
 
 1. Redis
 1. PostgreSQL
-1. one or more beacon nodes
+1. one or more [beacon nodes](#running-beacon-node--s-)
 1. block submission validation nodes
+1. [optional] Memcached
 
 A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
 
@@ -82,7 +83,7 @@ ssh -L 3500:localhost:3500 your_server
 
 ### [Option 2] Running Lighthouse Beacon Node
 ```bash
-docker run --network=host -v ~/.lighthouse:/lighthouse -d --name bn sigp/lighthouse lighthouse bn --network mainnet --execution-endpoint http://localhost:8551  --checkpoint-sync-url https://mainnet.checkpoint.sigp.io --disable-deposit-contract-sync --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
+docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --disable-deposit-contract-sync --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
 ```
 
 ### Running Erigon Execution Client
@@ -90,7 +91,7 @@ docker run --network=host -v ~/.lighthouse:/lighthouse -d --name bn sigp/lightho
 - Connection between the beacon and execution engine should use a matching JSON Web Token (JWT)
   - For additional details, see: [link](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md)
 ```bash
-docker run -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=mainnet --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551
+docker run --name erigon -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=mainnet --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551
 ```
 
 ## Running Postgres, Redis and Memcached
@@ -98,6 +99,9 @@ docker run -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/
 # Start PostgreSQL & Redis individually:
 docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres postgres
 docker run -d -p 6379:6379 redis
+
+# [optional] Start Memcached
+docker run -d -p 11211:11211 memcached
 
 # Or with docker-compose:
 docker-compose up
