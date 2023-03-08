@@ -3,6 +3,7 @@ package datastore
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -29,6 +30,7 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 		return err
 	}
 
+	//nolint:exhaustruct // "Flags" variable unused and opaque server-side
 	return m.client.Set(&memcache.Item{Key: key, Value: bytes, Expiration: defaultExpirationSeconds})
 }
 

@@ -83,7 +83,7 @@ ssh -L 3500:localhost:3500 your_server
 
 ### [Option 2] Running Lighthouse Beacon Node
 ```bash
-docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --disable-deposit-contract-sync --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
+docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
 ```
 
 ### Running Erigon Execution Client
