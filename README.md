@@ -143,16 +143,21 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum)
 * `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: 3000)
-* `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
+* `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
+* `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
-* `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
 * `MEMCACHED_ENDPOINTS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
+
+#### Development Environment Variables
+* `RUN_DB_TESTS` - when set to "1" enables integration tests with Postgres using endpoint specified by environment variable `TEST_DB_DSN`
+* `RUN_INTEGRATION_TESTS` - when set to "1" enables integration tests, currently used for testing Memcached using comma separated list of endpoints specified by `MEMCACHED_ENDPOINTS`
+* `TEST_DB_DSN` - specifies connection string using Data Source Name (DSN) for Postgres (default: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable)
 
 ### Updating the website
 
