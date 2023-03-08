@@ -67,6 +67,33 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 
 # Usage
 
+## Running Beacon Node(s)
+
+- The services need access to a beacon node for event subscriptions. 
+- You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
+  - The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port).
+
+### [Option 1] Proxying [Prysm Beacon Node](https://docs.prylabs.network/docs/how-prysm-works/beacon-node)
+You can proxy the beacon-API port (eg. 3500 for Prysm) from a server like this:
+
+```bash
+ssh -L 3500:localhost:3500 your_server
+```
+
+### [Option 2] Running Lighthouse Beacon Node
+```bash
+docker run --network=host -v ~/.lighthouse:/lighthouse -d --name bn sigp/lighthouse lighthouse bn --network mainnet --execution-endpoint http://localhost:8551  --checkpoint-sync-url https://mainnet.checkpoint.sigp.io --disable-deposit-contract-sync --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
+```
+
+### Running Erigon Execution Client
+- Ethereum beacon nodes require connection to an execution client to validate block transactions
+- Connection between the beacon and execution engine should use a matching JSON Web Token (JWT)
+  - For additional details, see: [link](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md)
+```bash
+docker run -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=mainnet --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551
+```
+
+## Running Postgres, Redis and Memcached
 ```bash
 # Start PostgreSQL & Redis individually:
 docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres postgres
@@ -78,14 +105,7 @@ docker-compose up
 
 Note: docker-compose also runs an Adminer (a web frontend for Postgres) on http://localhost:8093/?username=postgres (db: `postgres`, username: `postgres`, password: `postgres`)
 
-The services need access to a beacon node for event subscriptions. You can also specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
-The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port).
 
-You can proxy the beacon-API port (eg. 3500 for Prysm) from a server like this:
-
-```bash
-ssh -L 3500:localhost:3500 your_server
-```
 
 Now start the services:
 
