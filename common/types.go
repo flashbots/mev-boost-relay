@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"math/big"
 	"net/url"
 	"strings"
@@ -564,6 +565,31 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 		return b.Bellatrix.ExecutionPayload != nil
 	}
 	return false
+}
+
+func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*GetPayloadResponse, error) {
+	if b.Bellatrix != nil {
+		return &GetPayloadResponse{
+			Bellatrix: &boostTypes.GetPayloadResponse{
+				Version: boostTypes.VersionString(consensusspec.DataVersionBellatrix.String()),
+				Data:    b.Bellatrix.ExecutionPayload,
+			},
+			Capella: nil,
+		}, nil
+	}
+
+	if b.Capella != nil {
+		return &GetPayloadResponse{
+			Capella: &api.VersionedExecutionPayload{
+				Version:   consensusspec.DataVersionCapella,
+				Capella:   b.Capella.ExecutionPayload,
+				Bellatrix: nil,
+			},
+			Bellatrix: nil,
+		}, nil
+	}
+
+	return nil, ErrEmptyPayload
 }
 
 func (b *BuilderSubmitBlockRequest) Slot() uint64 {

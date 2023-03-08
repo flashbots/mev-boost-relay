@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/bradfitz/gomemcache/memcache"
@@ -9,7 +10,12 @@ import (
 )
 
 const (
-	defaultExpirationSeconds = 60
+	defaultMemcachedExpirySeconds = 60
+)
+
+var (
+	ErrInvalidProposerPublicKey = errors.New("invalid proposer public key specified")
+	ErrInvalidBlockHash         = errors.New("invalid block hash specified")
 )
 
 type Memcached struct {
@@ -22,6 +28,14 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 		return nil
 	}
 
+	if proposerPubKey == "" {
+		return ErrInvalidProposerPublicKey
+	}
+
+	if blockHash == "" {
+		return ErrInvalidBlockHash
+	}
+
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 
@@ -31,7 +45,7 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 	}
 
 	//nolint:exhaustruct // "Flags" variable unused and opaque server-side
-	return m.client.Set(&memcache.Item{Key: key, Value: bytes, Expiration: defaultExpirationSeconds})
+	return m.client.Set(&memcache.Item{Key: key, Value: bytes, Expiration: defaultMemcachedExpirySeconds})
 }
 
 func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error) {
@@ -39,15 +53,26 @@ func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash s
 		return nil, nil
 	}
 
+	if proposerPubKey == "" {
+		return nil, ErrInvalidProposerPublicKey
+	}
+
+	if blockHash == "" {
+		return nil, ErrInvalidBlockHash
+	}
+
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 	item, err := m.client.Get(key)
 	if err != nil {
+		if errors.Is(err, memcache.ErrCacheMiss) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
-	var result *common.VersionedExecutionPayload
-	if err = json.Unmarshal(item.Value, result); err != nil {
+	result := new(common.VersionedExecutionPayload)
+	if err = result.UnmarshalJSON(item.Value); err != nil {
 		return nil, err
 	}
 
