@@ -15,6 +15,9 @@ var Migration003Optimistic = &migrate.Migration{
 		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD simulation_duration   bigint NOT NULL default 0;
 		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD redis_update_duration bigint NOT NULL default 0;
 		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD total_duration        bigint NOT NULL default 0;
+		ALTER TABLE ` + vars.TableBuilderBlockSubmission + ` ADD eligible_at           timestamp;
+	`, `
+		ALTER TABLE ` + vars.TableDeliveredPayload + ` ADD signed_at timestamp;
 	`, `
 		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD is_optimistic  bool NOT NULL default false;
 		ALTER TABLE ` + vars.TableBlockBuilder + ` ADD collateral     NUMERIC(48, 0) NOT NULL default 0;

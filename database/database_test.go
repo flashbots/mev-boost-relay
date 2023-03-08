@@ -85,7 +85,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			Value:                uint256.NewInt(collateral),
 		},
 	})
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), profile, optimisticSubmission)
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), time.Now().Add(time.Second), profile, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
@@ -370,4 +370,5 @@ func TestGetBlockSubmissionEntry(t *testing.T) {
 	require.Equal(t, profile.Total, entry.TotalDuration)
 
 	require.True(t, entry.OptimisticSubmission)
+	require.True(t, entry.EligibleAt.Valid)
 }
