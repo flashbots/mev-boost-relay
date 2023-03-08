@@ -33,6 +33,14 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 	return
 }
 
+// TestMemcached performs integration tests when RUN_INTEGRATION_TESTS is true, using
+// a comma separated list of endpoints specified by the environment variable MEMCACHED_ENDPOINTS.
+// Example:
+//
+//	# start memcached docker container locally
+//	docker run -d -p 11211:11211 memcached
+//	# navigate to directory test directory and run memcached tests
+//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -test.v -run ".*Memcache.*"
 func TestMemcached(t *testing.T) {
 	type test struct {
 		Input       common.BuilderSubmitBlockRequest
@@ -113,6 +121,7 @@ func TestMemcached(t *testing.T) {
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
+
 					payload, _ := tc.Input.ExecutionPayloadResponse()
 					err := mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), "", payload)
 					require.Error(t, err)
