@@ -81,17 +81,22 @@ You can proxy the beacon-API port (eg. 3500 for Prysm) from a server like this:
 ssh -L 3500:localhost:3500 your_server
 ```
 
-### [Option 2] Running Lighthouse Beacon Node
+### [Option 2] Running Lighthouse Beacon Node 
+- **NOTE:** A JSON Web Token (JWT) is required for communication between the beacon node and execution engine
+  - For details on how to generate a JWT, see [configure JWT authentication](https://docs.prylabs.network/docs/execution-node/authentication) documentation from Prysm
 ```bash
-docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --http --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex
+# WARNING: The command below specifies listen address for beacon node on 0.0.0.0.
+# It is NOT recommended to expose the beacon node API to the public internet. 
+docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex --http --http-port 5052 --http-address 0.0.0.0
 ```
 
-### Running Erigon Execution Client
+### Running Erigon Execution Client 
 - Ethereum beacon nodes require connection to an execution client to validate block transactions
 - Connection between the beacon and execution engine should use a matching JSON Web Token (JWT)
   - For additional details, see: [link](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md)
 ```bash
-docker run --name erigon -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=mainnet --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551
+# Note: The jwt.hex value must match between the beacon node and execution engine in order to successfully communicate.
+docker run --name erigon --network=host -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=goerli --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551 --authrpc.addr 0.0.0.0 --externalcl
 ```
 
 ## Running Postgres, Redis and Memcached
