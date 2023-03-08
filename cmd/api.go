@@ -47,6 +47,8 @@ func init() {
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	apiCmd.Flags().StringSliceVar(&memcachedEndpoints, "memcached-endpoints", defaultMemcachedEndpoints,
+		"Enable memcached, typically used as secondary backup to Redis for redundancy")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
 	apiCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")

@@ -1,16 +1,15 @@
 package datastore
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-var (
-	// TODO: standardize integration tests to run with single flag/env var - consolidate with RUN_DB_TESTS
-	runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
-)
+// TODO: standardize integration tests to run with single flag/env var - consolidate with RUN_DB_TESTS
+var runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
 
 func TestNewMemcached(t *testing.T) {
 	if !runIntegrationTests {
