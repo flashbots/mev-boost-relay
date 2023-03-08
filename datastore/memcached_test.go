@@ -2,12 +2,12 @@ package datastore
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/types"
-	"github.com/flashbots/mev-boost-relay/common"
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,6 +59,7 @@ func TestMemcached(t *testing.T) {
 			},
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
+					t.Helper()
 					payload, err := tc.Input.ExecutionPayloadResponse()
 					require.Error(t, err)
 					require.Equal(t, err, common.ErrEmptyPayload)
@@ -84,6 +85,7 @@ func TestMemcached(t *testing.T) {
 			},
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
+					t.Helper()
 					payload, _ := tc.Input.ExecutionPayloadResponse()
 					err := mem.SaveExecutionPayload(tc.Input.Slot(), "", tc.Input.BlockHash(), payload)
 					require.Error(t, err)
@@ -110,6 +112,7 @@ func TestMemcached(t *testing.T) {
 			},
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
+					t.Helper()
 					payload, _ := tc.Input.ExecutionPayloadResponse()
 					err := mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), "", payload)
 					require.Error(t, err)
@@ -157,6 +160,8 @@ func TestMemcached(t *testing.T) {
 			},
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
+					t.Helper()
+
 					payload, err := tc.Input.ExecutionPayloadResponse()
 					require.NoError(
 						t,
@@ -198,6 +203,7 @@ func TestMemcached(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.Description, tc.TestSuite(&tc))
+		testcase := tc
+		t.Run(testcase.Description, testcase.TestSuite(&testcase))
 	}
 }
