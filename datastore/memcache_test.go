@@ -11,21 +11,22 @@ import (
 // TODO: standardize integration tests to run with single flag/env var - consolidate with RUN_DB_TESTS
 var runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
 
-func TestNewMemcached(t *testing.T) {
+func initMemcached(t *testing.T) *Memcached {
+	t.Helper()
 	if !runIntegrationTests {
 		t.Skip("Skipping integration tests")
 	}
 
+	return nil
+}
+
+func TestNewMemcached(t *testing.T) {
 	mem, err := NewMemcached("test")
 	require.NoError(t, err, "expected no error on memcached initialization but found %v", err)
 	require.NotNil(t, mem, "expected non-nil memcached instance")
 }
 
 func TestMemcachedSaveExecutionPayload(t *testing.T) {
-	if !runIntegrationTests {
-		t.Skip("Skipping integration tests")
-	}
-
 	mem, err := NewMemcached("test")
 	require.NoError(t, err, "expected no error on memcached initialization but found [%v]", err)
 	require.NotNil(t, mem, "expected non-nil memcached instance")
@@ -35,10 +36,6 @@ func TestMemcachedSaveExecutionPayload(t *testing.T) {
 }
 
 func TestMemcachedGetExecutionPayload(t *testing.T) {
-	if !runIntegrationTests {
-		t.Skip("Skipping integration tests")
-	}
-
 	var servers []string
 	if memURLs := os.Getenv("MEMCACHE_URL"); memURLs != "" {
 		servers = strings.Split(memURLs, ",")
