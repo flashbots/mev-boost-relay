@@ -209,6 +209,71 @@ func TestMemcached(t *testing.T) {
 				}
 			},
 		},
+		{
+			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
+			Input: common.BuilderSubmitBlockRequest{
+				Bellatrix: &types.BuilderSubmitBlockRequest{
+					Signature: builderSk,
+					Message: &types.BidTrace{
+						Slot:                 1,
+						ParentHash:           types.Hash{0x01},
+						BlockHash:            types.Hash{0x09},
+						BuilderPubkey:        builderPk,
+						ProposerPubkey:       types.PublicKey{0x03},
+						ProposerFeeRecipient: types.Address{0x04},
+						Value:                types.IntToU256(123),
+						GasLimit:             5002,
+						GasUsed:              5003,
+					},
+					ExecutionPayload: &types.ExecutionPayload{
+						ParentHash:    types.Hash{0x01},
+						FeeRecipient:  types.Address{0x02},
+						StateRoot:     types.Root{0x03},
+						ReceiptsRoot:  types.Root{0x04},
+						LogsBloom:     types.Bloom{0x05},
+						Random:        types.Hash{0x06},
+						BlockNumber:   5001,
+						GasLimit:      5002,
+						GasUsed:       5003,
+						Timestamp:     5004,
+						ExtraData:     []byte{0x07},
+						BaseFeePerGas: types.IntToU256(123),
+						BlockHash:     types.Hash{0x09},
+						Transactions:  []hexutil.Bytes{},
+					},
+				},
+			},
+			TestSuite: func(tc *test) func(*testing.T) {
+				return func(t *testing.T) {
+					t.Helper()
+
+					payload, err := tc.Input.ExecutionPayloadResponse()
+					require.NoError(
+						t,
+						err,
+						"expected valid execution payload response for builder's submit block request but found [%v]", err,
+					)
+
+					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					require.NoError(t, err)
+
+					prev, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.NoError(t, err)
+					require.Equal(t, prev.NumTx(), tc.Input.NumTx())
+
+					payload.Bellatrix.Data.GasLimit++
+					require.NotEqual(t, prev.Bellatrix.Data.GasLimit, payload.Bellatrix.Data.GasLimit)
+
+					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					require.NoError(t, err)
+
+					current, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.NoError(t, err)
+					require.Equal(t, current.Bellatrix.Data.GasLimit, payload.Bellatrix.Data.GasLimit)
+					require.NotEqual(t, current.Bellatrix.Data.GasLimit, prev.Bellatrix.Data.GasLimit)
+				}
+			},
+		},
 	}
 
 	for _, tc := range testCases {

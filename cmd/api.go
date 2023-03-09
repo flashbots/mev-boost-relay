@@ -101,8 +101,7 @@ var apiCmd = &cobra.Command{
 		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Memcached if it exists
-		// TODO: pass in server endpoints and add memcached flag
-		mem, err := datastore.NewMemcached(networkInfo.Name)
+		mem, err := datastore.NewMemcached(networkInfo.Name, memcachedEndpoints...)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Memcached")
 		}
