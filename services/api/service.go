@@ -76,6 +76,7 @@ var (
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
+	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -382,6 +383,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		ReadHeaderTimeout: time.Duration(apiReadHeaderTimeoutMs) * time.Millisecond,
 		WriteTimeout:      time.Duration(apiWriteTimeoutMs) * time.Millisecond,
 		IdleTimeout:       time.Duration(apiIdleTimeoutMs) * time.Millisecond,
+		MaxHeaderBytes:    apiMaxHeaderBytes,
 	}
 
 	err = api.srv.ListenAndServe()
