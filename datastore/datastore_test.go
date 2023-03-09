@@ -21,7 +21,7 @@ func setupTestDatastore(t *testing.T) *Datastore {
 	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
-	// TODO: create mock memcached instead of passing in nil
+	// TODO: add support for testing datastore with memcached enabled
 	ds, err := NewDatastore(common.TestLog, redisDs, nil, database.MockDB{})
 	require.NoError(t, err)
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -23,6 +22,9 @@ type Memcached struct {
 	keyPrefix string
 }
 
+// SaveExecutionPayload attempts to insert execution engine payload to memcached using composite key of slot,
+// proposer public key, block hash, and cache prefix if specified. Note that writes to the same key value
+// (i.e. same slot, proposer public key, and blockhash) will overwrite the existing entry.
 func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *common.GetPayloadResponse) error {
 	if m == nil {
 		return nil
@@ -48,6 +50,8 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 	return m.client.Set(&memcache.Item{Key: key, Value: bytes, Expiration: defaultMemcachedExpirySeconds})
 }
 
+// GetExecutionPayload attempts to fetch execution engine payload from memcached using composite key of slot,
+// proposer public key, block hash, and cache prefix if specified.
 func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error) {
 	if m == nil {
 		return nil, nil
