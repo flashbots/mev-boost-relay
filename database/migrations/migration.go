@@ -9,6 +9,6 @@ var Migrations = migrate.MemoryMigrationSource{
 	Migrations: []*migrate.Migration{
 		Migration001InitDatabase,
 		Migration002RemoveIsBestAddReceivedAt,
-		Migration003Optimistic,
+		Migration003AddEligibleAtSignedAt,
 	},
 }
