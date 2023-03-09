@@ -40,7 +40,7 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 //	# start memcached docker container locally
 //	docker run -d -p 11211:11211 memcached
 //	# navigate to directory test directory and run memcached tests
-//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -test.v -run ".*Memcache.*"
+//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -test.v -run ".*Memcached.*"
 func TestMemcached(t *testing.T) {
 	type test struct {
 		Input       common.BuilderSubmitBlockRequest
@@ -198,6 +198,11 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.True(t, bytes.Equal(inputBytes, outputBytes))
 
+					// key should not exist in cache yet
+					empty, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.NoError(t, err)
+					require.Nil(t, empty)
+
 					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
 					require.NoError(t, err)
 
@@ -207,6 +212,7 @@ func TestMemcached(t *testing.T) {
 					getBytes, err := get.MarshalJSON()
 					require.NoError(t, err)
 					require.True(t, bytes.Equal(outputBytes, getBytes))
+					require.True(t, bytes.Equal(getBytes, inputBytes))
 				}
 			},
 		},
