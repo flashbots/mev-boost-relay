@@ -130,12 +130,14 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	}
 
 	// 2. try to get from Memcached
-	resp, err = ds.memcached.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
-	if err != nil {
-		ds.log.WithError(err).Error("error getting execution payload response from memcached")
-	} else if resp != nil {
-		ds.log.Debug("successfully found execution payload in memcached")
-		return resp, nil
+	if ds.memcached != nil {
+		resp, err = ds.memcached.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
+		if err != nil {
+			ds.log.WithError(err).Error("error getting execution payload response from memcached")
+		} else if resp != nil {
+			ds.log.Debug("successfully found execution payload in memcached")
+			return resp, nil
+		}
 	}
 
 	// 3. try to get from database
