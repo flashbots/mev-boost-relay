@@ -96,7 +96,7 @@ lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --data
   - For additional details, see: [link](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md)
 ```bash
 # Note: The jwt.hex value must match between the beacon node and execution engine in order to successfully communicate.
-docker run --name erigon --network=host -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=goerli --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551 --authrpc.addr 0.0.0.0 --externalcl
+docker run --name erigon -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=goerli --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551 --authrpc.addr 0.0.0.0 --externalcl
 ```
 
 ## Running Postgres, Redis and Memcached
