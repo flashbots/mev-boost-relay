@@ -106,7 +106,15 @@ func TestMemcached(t *testing.T) {
 		TestSuite   func(tc *test) func(*testing.T)
 	}
 
-	mem, err := initMemcached(t)
+	var (
+		mem *Memcached
+		err error
+	)
+	mem = nil
+	err = mem.SaveExecutionPayload(0, "foo", "bar", nil)
+	require.NoError(t, err)
+
+	mem, err = initMemcached(t)
 	require.NoError(t, err)
 	require.NotNil(t, mem)
 
