@@ -135,19 +135,20 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
+			//nolint:dupl // We need identical duplicate of input to verify that memcached stores correct state
 			Input: common.BuilderSubmitBlockRequest{
 				Bellatrix: &types.BuilderSubmitBlockRequest{
 					Signature: builderSk,
 					Message: &types.BidTrace{
-						Slot:                 1,
+						Slot:                 2,
 						ParentHash:           types.Hash{0x01},
 						BlockHash:            types.Hash{0x09},
 						BuilderPubkey:        builderPk,
 						ProposerPubkey:       types.PublicKey{0x03},
 						ProposerFeeRecipient: types.Address{0x04},
 						Value:                types.IntToU256(123),
-						GasLimit:             5002,
-						GasUsed:              5003,
+						GasLimit:             15002,
+						GasUsed:              15003,
 					},
 					ExecutionPayload: &types.ExecutionPayload{
 						ParentHash:    types.Hash{0x01},
@@ -157,8 +158,8 @@ func TestMemcached(t *testing.T) {
 						LogsBloom:     types.Bloom{0x05},
 						Random:        types.Hash{0x06},
 						BlockNumber:   5001,
-						GasLimit:      5002,
-						GasUsed:       5003,
+						GasLimit:      15002,
+						GasUsed:       15003,
 						Timestamp:     5004,
 						ExtraData:     []byte{0x07},
 						BaseFeePerGas: types.IntToU256(123),
@@ -211,6 +212,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
+			//nolint:dupl // We need identical duplicate of input to verify that memcached stores correct state
 			Input: common.BuilderSubmitBlockRequest{
 				Bellatrix: &types.BuilderSubmitBlockRequest{
 					Signature: builderSk,
