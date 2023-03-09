@@ -87,7 +87,7 @@ ssh -L 3500:localhost:3500 your_server
 ```bash
 # WARNING: The command below specifies listen address for beacon node on 0.0.0.0.
 # It is NOT recommended to expose the beacon node API to the public internet. 
-docker run --name bn --network=host -v ~/.lighthouse:/lighthouse sigp/lighthouse lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --datadir /lighthouse --execution-jwt /lighthouse/jwt.hex --http --http-port 5052 --http-address 0.0.0.0
+lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --datadir ~/.lighthouse --execution-jwt ~/.lighthouse/jwt.hex --http --http-port 5052 --http-address 0.0.0.0
 ```
 
 ### Running Erigon Execution Client 
