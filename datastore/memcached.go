@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/common"
 )
