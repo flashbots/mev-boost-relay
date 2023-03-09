@@ -284,6 +284,7 @@ func TestMemcached(t *testing.T) {
 					expired, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
 					require.NotEqual(t, ret, expired)
+					require.Nil(t, expired)
 				}
 			},
 		},
