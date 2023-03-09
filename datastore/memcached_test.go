@@ -3,12 +3,15 @@ package datastore
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
@@ -244,6 +247,43 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, current.Bellatrix.Data.GasLimit, payload.Bellatrix.Data.GasLimit)
 					require.NotEqual(t, current.Bellatrix.Data.GasLimit, prev.Bellatrix.Data.GasLimit)
+				}
+			},
+		},
+		{
+			Description: fmt.Sprintf("Given a valid builder submit block request, memcached entry should expire after %d seconds", defaultMemcachedExpirySeconds),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			TestSuite: func(tc *test) func(*testing.T) {
+				return func(t *testing.T) {
+					t.Helper()
+					t.Parallel()
+
+					_, pubkey, err := bls.GenerateNewKeypair()
+					require.NoError(t, err)
+
+					pk, err := types.BlsPublicKeyToPublicKey(pubkey)
+					require.NoError(t, err)
+
+					tc.Input.Bellatrix.Message.ProposerPubkey = pk
+					payload, err := tc.Input.ExecutionPayloadResponse()
+					require.NoError(
+						t,
+						err,
+						"expected valid execution payload response for builder's submit block request but found [%v]", err,
+					)
+					require.Equal(t, tc.Input.ProposerPubkey(), pk.String())
+
+					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					require.NoError(t, err)
+
+					ret, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.NoError(t, err)
+					require.Equal(t, ret.NumTx(), tc.Input.NumTx())
+
+					time.Sleep((defaultMemcachedExpirySeconds + 2) * time.Second)
+					expired, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.NoError(t, err)
+					require.NotEqual(t, ret, expired)
 				}
 			},
 		},
