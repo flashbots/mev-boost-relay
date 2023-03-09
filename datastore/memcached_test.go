@@ -20,7 +20,7 @@ import (
 // TODO: standardize integration tests to run with single flag/env var - consolidate with RUN_DB_TESTS
 var (
 	runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
-	memcachedEndpoints  = common.GetSliceEnv("MEMCACHED_ENDPOINTS", nil)
+	memcachedEndpoints  = common.GetSliceEnv("MEMCACHED_URIS", nil)
 
 	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
@@ -92,13 +92,13 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 }
 
 // TestMemcached performs integration tests when RUN_INTEGRATION_TESTS is true, using
-// a comma separated list of endpoints specified by the environment variable MEMCACHED_ENDPOINTS.
+// a comma separated list of endpoints specified by the environment variable MEMCACHED_URIS.
 // Example:
 //
 //	# start memcached docker container locally
 //	docker run -d -p 11211:11211 memcached
 //	# navigate to mev-boost-relay working directory and run memcached tests
-//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -v -run ".*Memcached.*" ./...
+//	RUN_INTEGRATION_TESTS=1 MEMCACHED_URIS="localhost:11211" go test -v -run ".*Memcached.*" ./...
 func TestMemcached(t *testing.T) {
 	type test struct {
 		Input       common.BuilderSubmitBlockRequest
