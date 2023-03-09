@@ -1337,11 +1337,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// save execution payload to memcached as secondary backup to Redis
-	err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
-	if err != nil {
-		log.WithError(err).Error("failed saving execution payload in memcached")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
+	if api.memcached != nil {
+		err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+		if err != nil {
+			log.WithError(err).Error("failed saving execution payload in memcached")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	// save this builder's latest bid

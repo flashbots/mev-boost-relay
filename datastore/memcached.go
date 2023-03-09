@@ -27,10 +27,6 @@ type Memcached struct {
 // proposer public key, block hash, and cache prefix if specified. Note that writes to the same key value
 // (i.e. same slot, proposer public key, and block hash) will overwrite the existing entry.
 func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *common.GetPayloadResponse) error {
-	if m == nil {
-		return nil
-	}
-
 	if proposerPubKey == "" {
 		return ErrInvalidProposerPublicKey
 	}
@@ -54,10 +50,6 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 // GetExecutionPayload attempts to fetch execution engine payload from memcached using composite key of slot,
 // proposer public key, block hash, and cache prefix if specified.
 func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error) {
-	if m == nil {
-		return nil, nil
-	}
-
 	if proposerPubKey == "" {
 		return nil, ErrInvalidProposerPublicKey
 	}
