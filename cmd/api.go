@@ -47,7 +47,7 @@ func init() {
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
-	apiCmd.Flags().StringSliceVar(&memcachedEndpoints, "memcached-endpoints", defaultMemcachedEndpoints,
+	apiCmd.Flags().StringSliceVar(&memcachedURIs, "memcached-uris", defaultMemcachedURIs,
 		"Enable memcached, typically used as secondary backup to Redis for redundancy")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
@@ -101,7 +101,7 @@ var apiCmd = &cobra.Command{
 		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Memcached if it exists
-		mem, err := datastore.NewMemcached(networkInfo.Name, memcachedEndpoints...)
+		mem, err := datastore.NewMemcached(networkInfo.Name, memcachedURIs...)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Memcached")
 		}
