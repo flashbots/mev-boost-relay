@@ -2,10 +2,13 @@ package datastore
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"testing"
 
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
@@ -15,12 +18,64 @@ import (
 var (
 	runIntegrationTests = os.Getenv("RUN_INTEGRATION_TESTS") == "1"
 	memcachedEndpoints  = common.GetSliceEnv("MEMCACHED_ENDPOINTS", nil)
+
+	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
+
+func testBuilderSubmitBlockRequest(pubkey types.PublicKey, signature types.Signature, version consensusspec.DataVersion) common.BuilderSubmitBlockRequest {
+	switch version {
+	case consensusspec.DataVersionBellatrix:
+		return common.BuilderSubmitBlockRequest{
+			Bellatrix: &types.BuilderSubmitBlockRequest{
+				Signature: signature,
+				Message: &types.BidTrace{
+					Slot:                 1,
+					ParentHash:           types.Hash{0x01},
+					BlockHash:            types.Hash{0x09},
+					BuilderPubkey:        pubkey,
+					ProposerPubkey:       types.PublicKey{0x03},
+					ProposerFeeRecipient: types.Address{0x04},
+					Value:                types.IntToU256(123),
+					GasLimit:             5002,
+					GasUsed:              5003,
+				},
+				ExecutionPayload: &types.ExecutionPayload{
+					ParentHash:    types.Hash{0x01},
+					FeeRecipient:  types.Address{0x02},
+					StateRoot:     types.Root{0x03},
+					ReceiptsRoot:  types.Root{0x04},
+					LogsBloom:     types.Bloom{0x05},
+					Random:        types.Hash{0x06},
+					BlockNumber:   5001,
+					GasLimit:      5002,
+					GasUsed:       5003,
+					Timestamp:     5004,
+					ExtraData:     []byte{0x07},
+					BaseFeePerGas: types.IntToU256(123),
+					BlockHash:     types.Hash{0x09},
+					Transactions:  []hexutil.Bytes{},
+				},
+			},
+		}
+	case consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionCapella:
+		fallthrough
+	default:
+		return common.BuilderSubmitBlockRequest{
+			Bellatrix: nil,
+			Capella:   nil,
+		}
+	}
+}
 
 func initMemcached(t *testing.T) (mem *Memcached, err error) {
 	t.Helper()
 	if !runIntegrationTests {
 		t.Skip("Skipping integration tests for memcached")
+	}
+
+	if len(memcachedEndpoints) == 0 {
+		err = ErrNoMemcachedServers
+		return
 	}
 
 	mem, err = NewMemcached("test", memcachedEndpoints...)
@@ -61,10 +116,7 @@ func TestMemcached(t *testing.T) {
 	testCases := []test{
 		{
 			Description: "Given an invalid execution payload, we expect an invalid payload error when attempting to create a payload response",
-			Input: common.BuilderSubmitBlockRequest{
-				Bellatrix: nil,
-				Capella:   nil,
-			},
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, math.MaxUint64),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -77,20 +129,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given an invalid proposer public key, we expect an invalid key error when storing and fetching the item in memcached",
-			Input: common.BuilderSubmitBlockRequest{
-				Bellatrix: &types.BuilderSubmitBlockRequest{
-					Signature: builderSk,
-					Message: &types.BidTrace{
-						Slot:          1,
-						ParentHash:    types.Hash{0x01},
-						BlockHash:     types.Hash{0x09},
-						BuilderPubkey: builderPk,
-					},
-					ExecutionPayload: &types.ExecutionPayload{
-						BlockHash: types.Hash{0x09},
-					},
-				},
-			},
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -107,17 +146,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given an invalid block hash, we expect an invalid block hash error when storing and fetching the item in memcached",
-			Input: common.BuilderSubmitBlockRequest{
-				Bellatrix: &types.BuilderSubmitBlockRequest{
-					Signature: builderSk,
-					Message: &types.BidTrace{
-						Slot:          1,
-						ParentHash:    types.Hash{0x01},
-						BuilderPubkey: builderPk,
-					},
-					ExecutionPayload: &types.ExecutionPayload{},
-				},
-			},
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -135,39 +164,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
-			//nolint:dupl // We need identical duplicate of input to verify that memcached stores correct state
-			Input: common.BuilderSubmitBlockRequest{
-				Bellatrix: &types.BuilderSubmitBlockRequest{
-					Signature: builderSk,
-					Message: &types.BidTrace{
-						Slot:                 2,
-						ParentHash:           types.Hash{0x01},
-						BlockHash:            types.Hash{0x09},
-						BuilderPubkey:        builderPk,
-						ProposerPubkey:       types.PublicKey{0x03},
-						ProposerFeeRecipient: types.Address{0x04},
-						Value:                types.IntToU256(123),
-						GasLimit:             15002,
-						GasUsed:              15003,
-					},
-					ExecutionPayload: &types.ExecutionPayload{
-						ParentHash:    types.Hash{0x01},
-						FeeRecipient:  types.Address{0x02},
-						StateRoot:     types.Root{0x03},
-						ReceiptsRoot:  types.Root{0x04},
-						LogsBloom:     types.Bloom{0x05},
-						Random:        types.Hash{0x06},
-						BlockNumber:   5001,
-						GasLimit:      15002,
-						GasUsed:       15003,
-						Timestamp:     5004,
-						ExtraData:     []byte{0x07},
-						BaseFeePerGas: types.IntToU256(123),
-						BlockHash:     types.Hash{0x09},
-						Transactions:  []hexutil.Bytes{},
-					},
-				},
-			},
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -218,39 +215,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
-			//nolint:dupl // We need identical duplicate of input to verify that memcached stores correct state
-			Input: common.BuilderSubmitBlockRequest{
-				Bellatrix: &types.BuilderSubmitBlockRequest{
-					Signature: builderSk,
-					Message: &types.BidTrace{
-						Slot:                 1,
-						ParentHash:           types.Hash{0x01},
-						BlockHash:            types.Hash{0x09},
-						BuilderPubkey:        builderPk,
-						ProposerPubkey:       types.PublicKey{0x03},
-						ProposerFeeRecipient: types.Address{0x04},
-						Value:                types.IntToU256(123),
-						GasLimit:             5002,
-						GasUsed:              5003,
-					},
-					ExecutionPayload: &types.ExecutionPayload{
-						ParentHash:    types.Hash{0x01},
-						FeeRecipient:  types.Address{0x02},
-						StateRoot:     types.Root{0x03},
-						ReceiptsRoot:  types.Root{0x04},
-						LogsBloom:     types.Bloom{0x05},
-						Random:        types.Hash{0x06},
-						BlockNumber:   5001,
-						GasLimit:      5002,
-						GasUsed:       5003,
-						Timestamp:     5004,
-						ExtraData:     []byte{0x07},
-						BaseFeePerGas: types.IntToU256(123),
-						BlockHash:     types.Hash{0x09},
-						Transactions:  []hexutil.Bytes{},
-					},
-				},
-			},
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
