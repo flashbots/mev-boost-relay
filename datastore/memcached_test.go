@@ -39,8 +39,8 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 //
 //	# start memcached docker container locally
 //	docker run -d -p 11211:11211 memcached
-//	# navigate to directory test directory and run memcached tests
-//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -test.v -run ".*Memcached.*"
+//	# navigate to mev-boost-relay working directory and run memcached tests
+//	RUN_INTEGRATION_TESTS=1 MEMCACHED_ENDPOINTS="localhost:11211" go test -v -run ".*Memcached.*" ./...
 func TestMemcached(t *testing.T) {
 	type test struct {
 		Input       common.BuilderSubmitBlockRequest
