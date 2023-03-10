@@ -105,3 +105,13 @@ func GetMevBoostVersionFromUserAgent(ua string) string {
 	}
 	return "-"
 }
+
+func reverse(src []byte) []byte {
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	for i := len(dst)/2 - 1; i >= 0; i-- {
+		opp := len(dst) - 1 - i
+		dst[i], dst[opp] = dst[opp], dst[i]
+	}
+	return dst
+}
