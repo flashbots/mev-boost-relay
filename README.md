@@ -9,7 +9,7 @@ We have also opened a PR with the same set of changes on the main repo https://g
 
 see [docs/optmistic](docs/optimistic) for the following:
 
-- [Builder onboarding](docs/optimsitic/builder-onboarding.md)
+- [Builder onboarding](docs/optimistic/builder-onboarding.md)
 - [Event log](docs/optimistic/event-log.md)
 
 ## Extended discussion
