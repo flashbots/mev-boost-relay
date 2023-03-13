@@ -246,6 +246,10 @@ func TestSimulateBlock(t *testing.T) {
 			description:     "block_already_known",
 			simulationError: fmt.Errorf(ErrBlockAlreadyKnown),
 		},
+		{
+			description:     "missing_trie_node",
+			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"),
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {

@@ -38,7 +38,10 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
-const ErrBlockAlreadyKnown = "simulation failed: block already known"
+const (
+	ErrBlockAlreadyKnown = "simulation failed: block already known"
+	ErrMissingTrieNode   = "missing trie node"
+)
 
 var (
 	ErrMissingLogOpt              = errors.New("log parameter is nil")
@@ -488,7 +491,9 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) er
 		"duration":   time.Since(t).Seconds(),
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
 	})
-	if simErr != nil && simErr.Error() != ErrBlockAlreadyKnown {
+	if simErr != nil &&
+		simErr.Error() != ErrBlockAlreadyKnown &&
+		!strings.Contains(simErr.Error(), ErrMissingTrieNode) {
 		log.WithError(simErr).Error("block validation failed")
 		return simErr
 	}
