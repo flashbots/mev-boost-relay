@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -104,4 +105,20 @@ func GetMevBoostVersionFromUserAgent(ua string) string {
 		}
 	}
 	return "-"
+}
+
+func U256StrToUint256(s types.U256Str) *uint256.Int {
+	i := new(uint256.Int)
+	i.SetBytes(reverse(s[:]))
+	return i
+}
+
+func reverse(src []byte) []byte {
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	for i := len(dst)/2 - 1; i >= 0; i-- {
+		opp := len(dst) - 1 - i
+		dst[i], dst[opp] = dst[opp], dst[i]
+	}
+	return dst
 }

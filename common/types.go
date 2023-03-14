@@ -18,7 +18,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -737,20 +736,6 @@ func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
 	return nil
 }
 
-func BidTraceToBoostBid(bidTrace *apiv1.BidTrace) *boostTypes.BidTrace {
-	return &boostTypes.BidTrace{
-		BuilderPubkey:        boostTypes.PublicKey(bidTrace.BuilderPubkey),
-		Slot:                 bidTrace.Slot,
-		ProposerPubkey:       boostTypes.PublicKey(bidTrace.ProposerPubkey),
-		ProposerFeeRecipient: boostTypes.Address(bidTrace.ProposerFeeRecipient),
-		BlockHash:            boostTypes.Hash(bidTrace.BlockHash),
-		Value:                boostTypes.IntToU256(bidTrace.Value.Uint64()),
-		ParentHash:           boostTypes.Hash(bidTrace.ParentHash),
-		GasLimit:             bidTrace.GasLimit,
-		GasUsed:              bidTrace.GasUsed,
-	}
-}
-
 func BoostBidToBidTrace(bidTrace *boostTypes.BidTrace) *apiv1.BidTrace {
 	return &apiv1.BidTrace{
 		BuilderPubkey:        phase0.BLSPubKey(bidTrace.BuilderPubkey),
@@ -758,7 +743,7 @@ func BoostBidToBidTrace(bidTrace *boostTypes.BidTrace) *apiv1.BidTrace {
 		ProposerPubkey:       phase0.BLSPubKey(bidTrace.ProposerPubkey),
 		ProposerFeeRecipient: bellatrix.ExecutionAddress(bidTrace.ProposerFeeRecipient),
 		BlockHash:            phase0.Hash32(bidTrace.BlockHash),
-		Value:                uint256.NewInt(bidTrace.Value.BigInt().Uint64()),
+		Value:                U256StrToUint256(bidTrace.Value),
 		ParentHash:           phase0.Hash32(bidTrace.ParentHash),
 		GasLimit:             bidTrace.GasLimit,
 		GasUsed:              bidTrace.GasUsed,
