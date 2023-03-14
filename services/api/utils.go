@@ -5,6 +5,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -32,6 +33,6 @@ func checkBLSPublicKeyHex(pkHex string) error {
 }
 
 func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
-	withdrawals := capella.Withdrawals{Withdrawals: w}
+	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
 }
