@@ -8,9 +8,10 @@ import (
 	"github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
+	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -150,13 +151,13 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 		return nil, ErrEmptyPayload
 	}
 
-	transactions := consensusbellatrix.Transactions{Transactions: p.Transactions}
+	transactions := utilbellatrix.ExecutionPayloadTransactions{Transactions: p.Transactions}
 	transactionsRoot, err := transactions.HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
 
-	withdrawals := consensuscapella.Withdrawals{Withdrawals: p.Withdrawals}
+	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: p.Withdrawals}
 	withdrawalsRoot, err := withdrawals.HashTreeRoot()
 	if err != nil {
 		return nil, err
