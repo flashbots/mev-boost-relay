@@ -2,11 +2,11 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
 )
@@ -43,24 +43,38 @@ func TestGetMevBoostVersionFromUserAgent(t *testing.T) {
 	}
 }
 
-func TestBoostBidToBidTrace(t *testing.T) {
-	bidTrace := boostTypes.BidTrace{
-		Slot:                 uint64(25),
-		ParentHash:           boostTypes.Hash{0x02, 0x03},
-		BuilderPubkey:        boostTypes.PublicKey{0x04, 0x05},
-		ProposerPubkey:       boostTypes.PublicKey{0x06, 0x07},
-		ProposerFeeRecipient: boostTypes.Address{0x08, 0x09},
-		GasLimit:             uint64(50),
-		GasUsed:              uint64(100),
-		Value:                boostTypes.U256Str{0x0a},
+func TestU256StrToUint256(t *testing.T) {
+	tests := []struct {
+		name    string
+		u256Str boostTypes.U256Str
+		want    string
+	}{
+		{
+			name:    "zero",
+			u256Str: boostTypes.U256Str(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000000")),
+			want:    "0",
+		},
+		{
+			name:    "one",
+			u256Str: boostTypes.U256Str(common.HexToHash("0100000000000000000000000000000000000000000000000000000000000000")),
+			want:    "1",
+		},
+		{
+			name:    "bigger value",
+			u256Str: boostTypes.U256Str(common.HexToHash("69D8340F00000000000000000000000000000000000000000000000000000000")),
+			want:    "255121513",
+		},
+		{
+			name:    "max value",
+			u256Str: boostTypes.U256Str(common.HexToHash("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
+			want:    "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+		},
 	}
-	convertedBidTrace := BoostBidToBidTrace(&bidTrace)
-	require.Equal(t, bidTrace.Slot, convertedBidTrace.Slot)
-	require.Equal(t, phase0.Hash32(bidTrace.ParentHash), convertedBidTrace.ParentHash)
-	require.Equal(t, phase0.BLSPubKey(bidTrace.BuilderPubkey), convertedBidTrace.BuilderPubkey)
-	require.Equal(t, phase0.BLSPubKey(bidTrace.ProposerPubkey), convertedBidTrace.ProposerPubkey)
-	require.Equal(t, bellatrix.ExecutionAddress(bidTrace.ProposerFeeRecipient), convertedBidTrace.ProposerFeeRecipient)
-	require.Equal(t, bidTrace.GasLimit, convertedBidTrace.GasLimit)
-	require.Equal(t, bidTrace.GasUsed, convertedBidTrace.GasUsed)
-	require.Equal(t, bidTrace.Value.BigInt().String(), convertedBidTrace.Value.ToBig().String())
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := U256StrToUint256(test.u256Str)
+			require.Equal(t, test.want, fmt.Sprintf("%d", got))
+		})
+	}
 }
