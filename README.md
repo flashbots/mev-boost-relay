@@ -70,34 +70,9 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 
 ## Running Beacon Node(s)
 
-- The services need access to a beacon node for event subscriptions. 
+- The services need access to a beacon node for event subscriptions.
 - You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
   - The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port).
-
-### [Option 1] Proxying [Prysm Beacon Node](https://docs.prylabs.network/docs/how-prysm-works/beacon-node)
-You can proxy the beacon-API port (eg. 3500 for Prysm) from a server like this:
-
-```bash
-ssh -L 3500:localhost:3500 your_server
-```
-
-### [Option 2] Running Lighthouse Beacon Node 
-- **NOTE:** A JSON Web Token (JWT) is required for communication between the beacon node and execution engine
-  - For details on how to generate a JWT, see [configure JWT authentication](https://docs.prylabs.network/docs/execution-node/authentication) documentation from Prysm
-```bash
-# WARNING: The command below specifies listen address for beacon node on 0.0.0.0.
-# It is NOT recommended to expose the beacon node API to the public internet. 
-lighthouse bn --network goerli --execution-endpoint http://localhost:8551 --datadir ~/.lighthouse --execution-jwt ~/.lighthouse/jwt.hex --http --http-port 5052 --http-address 0.0.0.0
-```
-
-### Running Erigon Execution Client 
-- Ethereum beacon nodes require connection to an execution client to validate block transactions
-- Connection between the beacon and execution engine should use a matching JSON Web Token (JWT)
-  - For additional details, see: [link](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md)
-```bash
-# Note: The jwt.hex value must match between the beacon node and execution engine in order to successfully communicate.
-docker run --name erigon -v ~/.erigon:/erigon -p 30303:30303 -p 8545:8545 -p 8551:8551 thorax/erigon:v2.40.1  --datadir /erigon --chain=goerli --port=30303 --http.port=8545 --http --http.api=eth,debug,net,trace,web3,erigon --prune hrtc --authrpc.port=8551 --authrpc.addr 0.0.0.0 --externalcl
-```
 
 ## Running Postgres, Redis and Memcached
 ```bash
@@ -113,8 +88,6 @@ docker-compose up
 ```
 
 Note: docker-compose also runs an Adminer (a web frontend for Postgres) on http://localhost:8093/?username=postgres (db: `postgres`, username: `postgres`, password: `postgres`)
-
-
 
 Now start the services:
 
@@ -153,6 +126,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
 * `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
+* `DISABLE_PAYLOAD_DATABASE_STORAGE` - builder API - disable storing execution payloads in the database
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
 * `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
