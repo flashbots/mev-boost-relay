@@ -78,6 +78,8 @@ var (
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
+
+	forceBellatrix = os.Getenv("FORCE_BELLATRIX") == "1"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -288,11 +290,17 @@ func (api *RelayAPI) getRouter() http.Handler {
 }
 
 func (api *RelayAPI) isCapella(slot uint64) bool {
+	if forceBellatrix {
+		return false
+	}
 	epoch := slot / uint64(common.SlotsPerEpoch)
 	return epoch >= api.capellaEpoch
 }
 
 func (api *RelayAPI) isBellatrix(slot uint64) bool {
+	if forceBellatrix {
+		return true
+	}
 	epoch := slot / uint64(common.SlotsPerEpoch)
 	return epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch
 }
@@ -330,7 +338,10 @@ func (api *RelayAPI) StartServer() (err error) {
 	}
 
 	if api.bellatrixEpoch == 0 || api.capellaEpoch == 0 {
-		return ErrMissingForkVersions
+		api.log.Error("no bellatrix/capella fork received from beacon node")
+		if !forceBellatrix { // continue on forceBellatrix
+			return ErrMissingForkVersions
+		}
 	}
 
 	currentSlot := bestSyncStatus.HeadSlot
