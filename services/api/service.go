@@ -153,9 +153,10 @@ type RelayAPI struct {
 	getPayloadCallsInFlight sync.WaitGroup
 
 	// Feature flags
-	ffForceGetHeader204      bool
-	ffDisableBlockPublishing bool
-	ffDisableLowPrioBuilders bool
+	ffForceGetHeader204       bool
+	ffDisableBlockPublishing  bool
+	ffDisableLowPrioBuilders  bool
+	ffDisablePayloadDBStorage bool // disable storing the execution payloads in the database
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -240,6 +241,10 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.ffDisableLowPrioBuilders = true
 	}
 
+	if os.Getenv("DISABLE_PAYLOAD_DATABASE_STORAGE") == "1" {
+		api.log.Warn("env: DISABLE_PAYLOAD_DATABASE_STORAGE - disabling storing payloads in the database")
+		api.ffDisablePayloadDBStorage = true
+	}
 	return api, nil
 }
 
@@ -1246,7 +1251,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt)
+		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt, savePayloadToDatabase)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return

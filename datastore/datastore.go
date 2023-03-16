@@ -140,16 +140,17 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		}
 	}
 
-	// 3. try to get from database
-	blockSubEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
+	// 3. try to get from database (should not happen, it's just a backup)
+	executionPayloadEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
 	if err != nil {
+		ds.log.WithError(err).Error("error getting execution payload response from database")
 		return nil, err
 	}
 
-	ds.log.Debug("getPayload response from database")
-	// deserialize execution payload
+	// Got it from databaase, now deserialize execution payload and compile full response
+	ds.log.Warn("getPayload response from database, primary storage failed")
 	var res consensusspec.DataVersion
-	err = json.Unmarshal([]byte(blockSubEntry.Version), &res)
+	err = json.Unmarshal([]byte(executionPayloadEntry.Version), &res)
 	if err != nil {
 		ds.log.Debug("invalid getPayload version from database")
 		return nil, err
@@ -157,7 +158,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	switch res {
 	case consensusspec.DataVersionCapella:
 		executionPayload := new(capella.ExecutionPayload)
-		err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +173,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		}, nil
 	case consensusspec.DataVersionBellatrix:
 		executionPayload := new(types.ExecutionPayload)
-		err = json.Unmarshal([]byte(blockSubEntry.Payload), executionPayload)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}

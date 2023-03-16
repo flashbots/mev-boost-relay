@@ -94,16 +94,20 @@ var apiCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis
+		log.Infof("Connecting to Redis at %s ...", redisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
-		log.Infof("Connected to Redis at %s", redisURI)
 
 		// Connect to Memcached if it exists
-		mem, err := datastore.NewMemcached(networkInfo.Name, memcachedURIs...)
-		if err != nil {
-			log.WithError(err).Fatalf("Failed to connect to Memcached")
+		var mem *datastore.Memcached
+		if len(memcachedURIs) > 0 {
+			log.Infof("Connecting to Memcached at %s ...", strings.Join(memcachedURIs, ", "))
+			mem, err = datastore.NewMemcached(networkInfo.Name, memcachedURIs...)
+			if err != nil {
+				log.WithError(err).Fatalf("Failed to connect to Memcached")
+			}
 		}
 
 		// Connect to Postgres
