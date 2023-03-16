@@ -371,7 +371,6 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	// Print fork version information
 	if api.isCapella(currentSlot) {
 		api.log.Infof("capella fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
 	} else if api.isBellatrix(currentSlot) {
