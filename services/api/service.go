@@ -46,6 +46,7 @@ var (
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
+	ErrMissingForkVersions        = errors.New("invalid bellatrix/capella fork version from beacon node")
 )
 
 var (
@@ -326,6 +327,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
 			api.capellaEpoch = fork.Epoch
 		}
+	}
+
+	if api.bellatrixEpoch == 0 || api.capellaEpoch == 0 {
+		return ErrMissingForkVersions
 	}
 
 	currentSlot := bestSyncStatus.HeadSlot
