@@ -48,6 +48,7 @@ var (
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
+	ErrMissingForkVersions        = errors.New("invalid bellatrix/capella fork version from beacon node")
 )
 
 var (
@@ -312,13 +313,15 @@ func (api *RelayAPI) getRouter() http.Handler {
 }
 
 func (api *RelayAPI) isCapella(slot uint64) bool {
+	if api.capellaEpoch == 0 { // CL didn't yet have it
+		return false
+	}
 	epoch := slot / uint64(common.SlotsPerEpoch)
 	return epoch >= api.capellaEpoch
 }
 
 func (api *RelayAPI) isBellatrix(slot uint64) bool {
-	epoch := slot / uint64(common.SlotsPerEpoch)
-	return epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch
+	return !api.isCapella(slot)
 }
 
 // StartServer starts the HTTP server for this instance
@@ -336,6 +339,10 @@ func (api *RelayAPI) StartServer() (err error) {
 	// Initialize block builder cache.
 	api.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
 
+	// Helpers
+	currentSlot := bestSyncStatus.HeadSlot
+	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
@@ -347,7 +354,9 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
+	// Parse forkSchedule
 	for _, fork := range forkSchedule.Data {
+		api.log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.BellatrixForkVersionHex:
 			api.bellatrixEpoch = fork.Epoch
@@ -356,12 +365,14 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	currentSlot := bestSyncStatus.HeadSlot
-	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	// Print fork version information
 	if api.isCapella(currentSlot) {
-		api.log.Infof("capella fork detected, startEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+		api.log.Infof("capella fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
 	} else if api.isBellatrix(currentSlot) {
-		api.log.Infof("bellatrix fork detected. capellaStartEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+		api.log.Infof("bellatrix fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
+		if api.capellaEpoch == 0 {
+			api.log.Infof("no capella fork scheduled. update your beacon-node in time.")
+		}
 	} else {
 		return ErrMismatchedForkVersions
 	}
