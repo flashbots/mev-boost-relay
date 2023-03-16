@@ -311,6 +311,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
+	// Helpers
+	currentSlot := bestSyncStatus.HeadSlot
+	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
@@ -318,12 +322,13 @@ func (api *RelayAPI) StartServer() (err error) {
 	api.log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
 
 	forkSchedule, err := api.beaconClient.GetForkSchedule()
-	api.log.WithError(err).WithField("forkSchedule", forkSchedule).Debug("forkSchedule received from beacon node")
 	if err != nil {
 		return err
 	}
 
+	// Parse forkSchedule
 	for _, fork := range forkSchedule.Data {
+		api.log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.BellatrixForkVersionHex:
 			api.bellatrixEpoch = fork.Epoch
@@ -332,21 +337,14 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	if api.bellatrixEpoch == 0 {
-		api.log.Error("no bellatrix fork schedule received from beacon node")
-		return ErrMissingForkVersions
-	}
-
-	if api.capellaEpoch == 0 {
-		api.log.Info("no capella fork schedule received from beacon node. this is because your CL is not ready for the Capella fork")
-	}
-
-	currentSlot := bestSyncStatus.HeadSlot
-	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	// Print fork version information
 	if api.isCapella(currentSlot) {
-		api.log.Infof("capella fork detected, startEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+		api.log.Infof("capella fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
 	} else if api.isBellatrix(currentSlot) {
-		api.log.Infof("bellatrix fork detected. capellaStartEpoch: %d / currentEpoch: %d", api.capellaEpoch, currentEpoch)
+		api.log.Infof("bellatrix fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
+		if api.capellaEpoch == 0 {
+			api.log.Infof("no capella fork scheduled. update your beacon-node in time.")
+		}
 	} else {
 		return ErrMismatchedForkVersions
 	}
