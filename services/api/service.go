@@ -78,8 +78,6 @@ var (
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
-
-	forceBellatrix = os.Getenv("FORCE_BELLATRIX") == "1"
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -290,7 +288,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 }
 
 func (api *RelayAPI) isCapella(slot uint64) bool {
-	if forceBellatrix {
+	if api.capellaEpoch == 0 { // CL didn't yet have it
 		return false
 	}
 	epoch := slot / uint64(common.SlotsPerEpoch)
@@ -298,11 +296,7 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 }
 
 func (api *RelayAPI) isBellatrix(slot uint64) bool {
-	if forceBellatrix {
-		return true
-	}
-	epoch := slot / uint64(common.SlotsPerEpoch)
-	return epoch >= api.bellatrixEpoch && epoch < api.capellaEpoch
+	return !api.isCapella(slot)
 }
 
 // StartServer starts the HTTP server for this instance
@@ -324,6 +318,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	api.log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
 
 	forkSchedule, err := api.beaconClient.GetForkSchedule()
+	api.log.WithError(err).WithField("forkSchedule", forkSchedule).Debug("forkSchedule received from beacon node")
 	if err != nil {
 		return err
 	}
@@ -337,11 +332,13 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	if api.bellatrixEpoch == 0 || api.capellaEpoch == 0 {
-		api.log.Error("no bellatrix/capella fork received from beacon node")
-		if !forceBellatrix { // continue on forceBellatrix
-			return ErrMissingForkVersions
-		}
+	if api.bellatrixEpoch == 0 {
+		api.log.Error("no bellatrix fork schedule received from beacon node")
+		return ErrMissingForkVersions
+	}
+
+	if api.capellaEpoch == 0 {
+		api.log.Info("no capella fork schedule received from beacon node. this is because your CL is not ready for the Capella fork")
 	}
 
 	currentSlot := bestSyncStatus.HeadSlot
