@@ -737,6 +737,9 @@ func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
 }
 
 func BoostBidToBidTrace(bidTrace *boostTypes.BidTrace) *apiv1.BidTrace {
+	if bidTrace == nil {
+		return nil
+	}
 	return &apiv1.BidTrace{
 		BuilderPubkey:        phase0.BLSPubKey(bidTrace.BuilderPubkey),
 		Slot:                 bidTrace.Slot,
