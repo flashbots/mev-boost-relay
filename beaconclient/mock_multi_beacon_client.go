@@ -41,7 +41,18 @@ func (*MockMultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
 }
 
 func (*MockMultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
-	resp := &GetForkScheduleResponse{}
+	resp := &GetForkScheduleResponse{
+		Data: []struct {
+			PreviousVersion string `json:"previous_version"`
+			CurrentVersion  string `json:"current_version"`
+			Epoch           uint64 `json:"epoch,string"`
+		}{
+			{
+				CurrentVersion: "",
+				Epoch:          1,
+			},
+		},
+	}
 	return resp, nil
 }
 
