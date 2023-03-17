@@ -10,7 +10,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.11.3
-	github.com/flashbots/go-boost-utils v1.2.2
+	github.com/flashbots/go-boost-utils v1.3.0
 	github.com/flashbots/go-utils v0.4.8
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0
@@ -42,6 +42,7 @@ require (
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/kilic/bls12-381 v0.1.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -84,7 +85,6 @@ require (
 	github.com/rubenv/sql-migrate v1.4.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/supranational/blst v0.3.8-0.20220526154634-513d2456b344 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tdewolff/parse v2.3.4+incompatible // indirect
 	github.com/tdewolff/test v1.0.7 // indirect
