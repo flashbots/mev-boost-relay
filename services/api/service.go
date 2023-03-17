@@ -347,9 +347,6 @@ func (api *RelayAPI) StartServer() (err error) {
 	currentSlot := bestSyncStatus.HeadSlot
 	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
 
-	// Initialize block builder cache.
-	api.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
-
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
@@ -372,6 +369,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
+	// Print fork version information
 	if api.isCapella(currentSlot) {
 		api.log.Infof("capella fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
 	} else if api.isBellatrix(currentSlot) {
