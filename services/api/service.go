@@ -39,8 +39,9 @@ import (
 )
 
 const (
-	ErrBlockAlreadyKnown = "simulation failed: block already known"
-	ErrMissingTrieNode   = "missing trie node"
+	ErrBlockAlreadyKnown  = "simulation failed: block already known"
+	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
+	ErrMissingTrieNode    = "missing trie node"
 )
 
 var (
@@ -492,6 +493,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) er
 	})
 	if simErr != nil &&
 		simErr.Error() != ErrBlockAlreadyKnown &&
+		simErr.Error() != ErrBlockRequiresReorg &&
 		!strings.Contains(simErr.Error(), ErrMissingTrieNode) {
 		log.WithError(simErr).Error("block validation failed")
 		return simErr
