@@ -34,6 +34,29 @@ type HeadEventData struct {
 	State string `json:"state"`
 }
 
+// PayloadAttributeData represents the data of a payload_attributes event
+// {"version": "capella", "data": {"proposer_index": "123", "proposal_slot": "10", "parent_block_number": "9", "parent_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", "parent_block_hash": "0x9a2fefd2fdb57f74993c7780ea5b9030d2897b615b89f808011ca5aebed54eaf", "payload_attributes": {"timestamp": "123456", "prev_randao": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", "suggested_fee_recipient": "0x0000000000000000000000000000000000000000", "withdrawals": [{"index": "5", "validator_index": "10", "address": "0x0000000000000000000000000000000000000000", "amount": "15640"}]}}}
+type PayloadAttributeData struct {
+	Version string `json:"version"`
+	Data    struct {
+		ProposalSlot        string `json:"proposal_slot"`
+		ParentBlockHash     string `json:"parent_block_hash"`
+		PayloadAttributes   PayloadAttributes `json:"payload_attributes"`
+	} `json:"data"`
+}
+
+type PayloadAttributes struct {
+	Timestamp           uint64 `json:"timestamp"`
+	PrevRandao          string `json:"prev_randao"`
+	SuggestedFeeRecipient string `json:"suggested_fee_recipient"`
+	Withdrawals         []struct {
+		Index         string `json:"index"`
+		ValidatorIndex string `json:"validator_index"`
+		Address       string `json:"address"`
+		Amount        string `json:"amount"`
+	} `json:"withdrawals"`
+}
+
 func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
 	log := c.log.WithField("url", eventsURL)
