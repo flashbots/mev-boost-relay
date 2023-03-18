@@ -285,7 +285,7 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, ret.NumTx(), tc.Input.NumTx())
 
-					time.Sleep((defaultMemcachedExpirySeconds + 2) * time.Second)
+					time.Sleep((time.Duration(defaultMemcachedExpirySeconds) + 2) * time.Second)
 					expired, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
 					require.NotEqual(t, ret, expired)

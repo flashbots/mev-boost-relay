@@ -6,14 +6,13 @@ import (
 	"fmt"
 
 	"github.com/bradfitz/gomemcache/memcache"
+	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
-const (
-	defaultMemcachedExpirySeconds = 60
-)
-
 var (
+	defaultMemcachedExpirySeconds = int32(cli.GetEnvInt("MEMCACHED_EXPIRY_SECONDS", 45))
+
 	ErrInvalidProposerPublicKey = errors.New("invalid proposer public key specified")
 	ErrInvalidBlockHash         = errors.New("invalid block hash specified")
 )

@@ -135,7 +135,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		if err != nil {
 			ds.log.WithError(err).Error("error getting execution payload response from memcached")
 		} else if resp != nil {
-			ds.log.Debug("successfully found execution payload in memcached")
+			ds.log.Debug("getPaylaod response from memcached")
 			return resp, nil
 		}
 	}

@@ -119,21 +119,27 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: 600)
 * `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: 10000)
 * `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
+* `API_MAX_HEADER_BYTES` - http maximum header byted (default: 60kb)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum)
 * `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: 3000)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
-* `DISABLE_BID_MEMORY_CACHE` - disable bids to go through in-memory cache. forces to go through redis/db
+* `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
+* `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
+* `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: 45)
+* `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
+* `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
+
+#### Feature Flags
+
 * `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `DISABLE_PAYLOAD_DATABASE_STORAGE` - builder API - disable storing execution payloads in the database
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
-* `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
-* `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
-* `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
-* `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
+
 
 #### Development Environment Variables
+
 * `RUN_DB_TESTS` - when set to "1" enables integration tests with Postgres using endpoint specified by environment variable `TEST_DB_DSN`
 * `RUN_INTEGRATION_TESTS` - when set to "1" enables integration tests, currently used for testing Memcached using comma separated list of endpoints specified by `MEMCACHED_URIS`
 * `TEST_DB_DSN` - specifies connection string using Data Source Name (DSN) for Postgres (default: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable)
@@ -156,6 +162,21 @@ The website is using:
 # Technical Notes
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for more technical details!
+
+### Storing execution payloads and redundant data availability
+
+By default, the execution payloads for all block submission are stored in Redis and also in the Postgres database,
+to provide redundant data availability for getPayload responses. But the database table is not pruned automatically,
+because it takes a lot of resources to rebuild the indexes (and a better option is using `TRUNCATE`).
+
+Storing all the payloads in the database can lead to terrabytes of data in this particular table. Now it's also possible
+to use memcached as a second data availability layer. Using memcached is optional and disabled by default.
+
+To enable memcached, you just need to supply the memcached URIs either via environment variable (i.e.
+`MEMCACHED_URIS=localhost:11211`) or through command line flag (`--memcached-uris`).
+
+You can disable storing the execution payloads in the database with this environment variable:
+`DISABLE_PAYLOAD_DATABASE_STORAGE=1`.
 
 ---
 
