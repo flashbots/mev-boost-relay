@@ -153,10 +153,11 @@ type RelayAPI struct {
 	getPayloadCallsInFlight sync.WaitGroup
 
 	// Feature flags
-	ffForceGetHeader204       bool
-	ffDisableBlockPublishing  bool
-	ffDisableLowPrioBuilders  bool
-	ffDisablePayloadDBStorage bool // disable storing the execution payloads in the database
+	ffForceGetHeader204             bool
+	ffDisableBlockPublishing        bool
+	ffDisableLowPrioBuilders        bool
+	ffDisablePayloadDBStorage       bool // disable storing the execution payloads in the database
+	ffDisableQueryPayloadAttributes bool
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -245,6 +246,12 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.log.Warn("env: DISABLE_PAYLOAD_DATABASE_STORAGE - disabling storing payloads in the database")
 		api.ffDisablePayloadDBStorage = true
 	}
+
+	if os.Getenv("DISABLE_QUERY_PAYLOAD_ATTRIBUTES") == "1" {
+		api.log.Warn("env: DISABLE_QUERY_PAYLOAD_ATTRIBUTES - disabling querying beacon node for prevrandao and withdrawals")
+		api.ffDisableQueryPayloadAttributes = true
+	}
+
 	return api, nil
 }
 
@@ -394,6 +401,16 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
+	// Start regular payload attributes updates
+	go func() {
+		c := make(chan beaconclient.PayloadAttributesData)
+		api.beaconClient.SubscribeToPayloadAttributesEvents(c)
+		for {
+			payloadAttributes := <-c
+			api.processPayloadAttributes(payloadAttributes)
+		}
+	}()
+
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
@@ -457,6 +474,45 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	}
 }
 
+func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesData) {
+	// only for builder-api and if using see subscriptions instead of querying for payload attributes
+	if api.opts.BlockBuilderAPI && api.ffDisableQueryPayloadAttributes {
+		apiHeadSlot := api.headSlot.Load()
+		proposalSlot := payloadAttributes.Data.ProposalSlot
+		if proposalSlot <= apiHeadSlot {
+			return
+		}
+		log := api.log.WithField("proposalSlot", proposalSlot)
+
+		log.Info("updating payload attributes")
+		api.expectedPrevRandaoLock.Lock()
+		prevRandao := payloadAttributes.Data.PayloadAttributes.PrevRandao
+		api.expectedPrevRandao = randaoHelper{
+			slot:       proposalSlot,
+			prevRandao: prevRandao,
+		}
+		log.Infof("updated expected prev_randao to %s", prevRandao)
+		api.expectedPrevRandaoLock.Unlock()
+
+		log.Info("updating expected withdrawals")
+		if api.isBellatrix(proposalSlot) {
+			return
+		}
+		api.expectedWithdrawalsLock.Lock()
+		defer api.expectedWithdrawalsLock.Unlock()
+		withdrawalsRoot, err := ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
+		if err != nil {
+			log.WithError(err).Error("error computing withdrawals root")
+			return
+		}
+		api.expectedWithdrawalsRoot = withdrawalsHelper{
+			slot: proposalSlot,
+			root: withdrawalsRoot,
+		}
+		log.Infof("updated expected withdrawals root to %s", withdrawalsRoot)
+	}
+}
+
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	_apiHeadSlot := api.headSlot.Load()
 	if headSlot <= _apiHeadSlot {
@@ -474,11 +530,13 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI {
-		// query the expected prev_randao field
-		go api.updatedExpectedRandao(headSlot)
+		if !api.ffDisableQueryPayloadAttributes {
+			// query the expected prev_randao field
+			go api.updatedExpectedRandao(headSlot)
 
-		// query expected withdrawals root
-		go api.updatedExpectedWithdrawals(headSlot)
+			// query expected withdrawals root
+			go api.updatedExpectedWithdrawals(headSlot)
+		}
 
 		// update proposer duties in the background
 		go api.updateProposerDuties(headSlot)
@@ -999,7 +1057,7 @@ func (api *RelayAPI) updatedExpectedWithdrawals(slot uint64) {
 	}
 
 	log := api.log.WithField("slot", slot)
-	log.Infof("updating withdrawals root...")
+	log.Info("updating withdrawals root...")
 	api.expectedWithdrawalsLock.Lock()
 	latestKnownSlot := api.expectedWithdrawalsRoot.slot
 	if slot < latestKnownSlot || slot <= api.expectedWithdrawalsUpdating { // do nothing slot is already known or currently being updated
