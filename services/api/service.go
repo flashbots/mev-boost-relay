@@ -192,7 +192,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		}
 
 		// If using a secret key, ensure it's the correct one
-		publicKey, err = boostTypes.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(opts.SecretKey))
+		blsPubkey, err := bls.PublicKeyFromSecretKey(opts.SecretKey)
+		if err != nil {
+			return nil, err
+		}
+		publicKey, err = boostTypes.BlsPublicKeyToPublicKey(blsPubkey)
 		if err != nil {
 			return nil, err
 		}

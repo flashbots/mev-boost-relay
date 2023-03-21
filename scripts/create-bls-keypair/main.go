@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
 )
 
 func main() {
@@ -14,11 +13,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	pubkey, err := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk))
+	blsPubkey, err := bls.PublicKeyFromSecretKey(sk)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	fmt.Printf("secret key: 0x%x\n", sk.Serialize())
-	fmt.Printf("public key: %s\n", pubkey.String())
+	fmt.Printf("secret key: 0x%x\n", bls.SecretKeyToBytes(sk))
+	fmt.Printf("public key: 0x%x\n", bls.PublicKeyToBytes(blsPubkey))
 }
