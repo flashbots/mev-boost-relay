@@ -476,7 +476,9 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 
 func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesData) {
 	// only for builder-api and if using see subscriptions instead of querying for payload attributes
-	if api.opts.BlockBuilderAPI && api.ffDisableQueryPayloadAttributes {
+	if !api.opts.BlockBuilderAPI || !api.ffDisableQueryPayloadAttributes {
+		return
+	}
 		apiHeadSlot := api.headSlot.Load()
 		proposalSlot := payloadAttributes.Data.ProposalSlot
 		if proposalSlot <= apiHeadSlot {
