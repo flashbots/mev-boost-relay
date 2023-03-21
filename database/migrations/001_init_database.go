@@ -30,8 +30,8 @@ var Migration001InitDatabase = &migrate.Migration{
 			proposer_pubkey varchar(98) NOT NULL,
 			block_hash      varchar(66) NOT NULL,
 
-			version     text NOT NULL, -- bellatrix
-			payload 	json NOT NULL
+			version text NOT NULL,
+			payload json NOT NULL
 		);
 
 		CREATE UNIQUE INDEX IF NOT EXISTS ` + vars.TableExecutionPayload + `_slot_pk_hash_idx ON ` + vars.TableExecutionPayload + `(slot, proposer_pubkey, block_hash);

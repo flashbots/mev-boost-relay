@@ -39,7 +39,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 
 	db := database.MockDB{}
 
-	ds, err := datastore.NewDatastore(common.TestLog, redisCache, db)
+	ds, err := datastore.NewDatastore(common.TestLog, redisCache, nil, db)
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()

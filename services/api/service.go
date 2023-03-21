@@ -90,6 +90,7 @@ type RelayAPIOpts struct {
 	BeaconClient beaconclient.IMultiBeaconClient
 	Datastore    *datastore.Datastore
 	Redis        *datastore.RedisCache
+	Memcached    *datastore.Memcached
 	DB           database.IDatabaseService
 
 	SecretKey *bls.SecretKey // used to sign bids (getHeader responses)
@@ -129,6 +130,7 @@ type RelayAPI struct {
 	beaconClient beaconclient.IMultiBeaconClient
 	datastore    *datastore.Datastore
 	redis        *datastore.RedisCache
+	memcached    *datastore.Memcached
 	db           database.IDatabaseService
 
 	headSlot       uberatomic.Uint64
@@ -151,9 +153,10 @@ type RelayAPI struct {
 	getPayloadCallsInFlight sync.WaitGroup
 
 	// Feature flags
-	ffForceGetHeader204      bool
-	ffDisableBlockPublishing bool
-	ffDisableLowPrioBuilders bool
+	ffForceGetHeader204       bool
+	ffDisableBlockPublishing  bool
+	ffDisableLowPrioBuilders  bool
+	ffDisablePayloadDBStorage bool // disable storing the execution payloads in the database
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -214,6 +217,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		datastore:              opts.Datastore,
 		beaconClient:           opts.BeaconClient,
 		redis:                  opts.Redis,
+		memcached:              opts.Memcached,
 		db:                     opts.DB,
 		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
@@ -237,6 +241,10 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.ffDisableLowPrioBuilders = true
 	}
 
+	if os.Getenv("DISABLE_PAYLOAD_DATABASE_STORAGE") == "1" {
+		api.log.Warn("env: DISABLE_PAYLOAD_DATABASE_STORAGE - disabling storing payloads in the database")
+		api.ffDisablePayloadDBStorage = true
+	}
 	return api, nil
 }
 
@@ -1243,7 +1251,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// At end of this function, save builder submission to database (in the background)
 	defer func() {
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt)
+		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt, savePayloadToDatabase)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
@@ -1332,6 +1341,16 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log.WithError(err).Error("failed saving execution payload in redis")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// save execution payload to memcached as secondary backup to Redis
+	if api.memcached != nil {
+		err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+		if err != nil {
+			log.WithError(err).Error("failed saving execution payload in memcached")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	// save this builder's latest bid

@@ -10,8 +10,8 @@ Please start by reading our [license agreement](#individual-contributor-license-
 
 ```bash
 go install mvdan.cc/gofumpt@latest
-go install honnef.co/go/tools/cmd/staticcheck@v0.3.1
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
+go install honnef.co/go/tools/cmd/staticcheck@v0.4.2
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
 ```
 
 ## Test

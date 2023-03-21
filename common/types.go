@@ -13,6 +13,7 @@ import (
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -564,6 +565,31 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 		return b.Bellatrix.ExecutionPayload != nil
 	}
 	return false
+}
+
+func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*GetPayloadResponse, error) {
+	if b.Bellatrix != nil {
+		return &GetPayloadResponse{
+			Bellatrix: &boostTypes.GetPayloadResponse{
+				Version: boostTypes.VersionString(consensusspec.DataVersionBellatrix.String()),
+				Data:    b.Bellatrix.ExecutionPayload,
+			},
+			Capella: nil,
+		}, nil
+	}
+
+	if b.Capella != nil {
+		return &GetPayloadResponse{
+			Capella: &api.VersionedExecutionPayload{
+				Version:   consensusspec.DataVersionCapella,
+				Capella:   b.Capella.ExecutionPayload,
+				Bellatrix: nil,
+			},
+			Bellatrix: nil,
+		}, nil
+	}
+
+	return nil, ErrEmptyPayload
 }
 
 func (b *BuilderSubmitBlockRequest) Slot() uint64 {
