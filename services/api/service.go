@@ -38,8 +38,6 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
-const ()
-
 var (
 	ErrMissingLogOpt              = errors.New("log parameter is nil")
 	ErrMissingBeaconClientOpt     = errors.New("beacon-client is nil")
@@ -498,8 +496,8 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) er
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
 	})
 	if simErr != nil &&
-		simErr != ErrBlockAlreadyKnown &&
-		simErr != ErrBlockRequiresReorg &&
+		!errors.Is(simErr, ErrBlockAlreadyKnown) &&
+		!errors.Is(simErr, ErrBlockRequiresReorg) &&
 		!strings.Contains(simErr.Error(), ErrMissingTrieNode.Error()) {
 		log.WithError(simErr).Error("block validation failed")
 		return simErr
