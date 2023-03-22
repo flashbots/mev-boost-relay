@@ -6,19 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/holiman/uint256"
-
 	v1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/holiman/uint256"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 	blst "github.com/supranational/blst/bindings/go"
