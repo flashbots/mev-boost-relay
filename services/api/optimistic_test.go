@@ -41,8 +41,9 @@ const (
 )
 
 var (
-	feeRecipient = bellatrix.ExecutionAddress{0x02}
-	errFake      = fmt.Errorf("foo error")
+	feeRecipient   = bellatrix.ExecutionAddress{0x02}
+	errFake        = fmt.Errorf("foo error")
+	errMissingTrie = errors.New(ErrMissingTrieNode.Error() + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>")
 )
 
 func getTestBlockHash(t *testing.T) boostTypes.Hash {
@@ -72,6 +73,7 @@ type blockRequestOpts struct {
 }
 
 func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBackend) {
+	t.Helper()
 	// Setup test key pair.
 	sk, _, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
@@ -187,6 +189,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBa
 }
 
 func runOptimisticGetPayload(t *testing.T, opts blockRequestOpts, backend *testBackend) {
+	t.Helper()
 	var txn hexutil.Bytes
 	err := txn.UnmarshalText([]byte("0x03"))
 	require.NoError(t, err)
@@ -218,6 +221,7 @@ func runOptimisticGetPayload(t *testing.T, opts blockRequestOpts, backend *testB
 }
 
 func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr error, backend *testBackend) *httptest.ResponseRecorder {
+	t.Helper()
 	backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 		simulationError: simErr,
 	}
@@ -246,11 +250,11 @@ func TestSimulateBlock(t *testing.T) {
 		},
 		{
 			description:     "block_already_known",
-			simulationError: errors.New(ErrBlockAlreadyKnown),
+			simulationError: ErrBlockAlreadyKnown,
 		},
 		{
 			description:     "missing_trie_node",
-			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"),
+			simulationError: errMissingTrie,
 		},
 	}
 	for _, tc := range cases {
@@ -497,7 +501,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			require.Equal(t, tc.wantStatus.IsHighPrio, builder.IsHighPrio)
 
 			// Check demotion status is set to expected and refund is false.
-			mockDB := backend.relay.db.(*database.MockDB)
+			mockDB, ok := backend.relay.db.(*database.MockDB)
+			require.True(t, ok)
 			require.Equal(t, mockDB.Demotions[pkStr], tc.expectDemotion)
 			require.False(t, mockDB.Refunds[pkStr])
 		})

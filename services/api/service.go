@@ -38,11 +38,7 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
-const (
-	ErrBlockAlreadyKnown  = "simulation failed: block already known"
-	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
-	ErrMissingTrieNode    = "missing trie node"
-)
+const ()
 
 var (
 	ErrMissingLogOpt              = errors.New("log parameter is nil")
@@ -53,6 +49,10 @@ var (
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
 	ErrMissingForkVersions        = errors.New("invalid bellatrix/capella fork version from beacon node")
+
+	ErrBlockAlreadyKnown  = errors.New("simulation failed: block already known")
+	ErrBlockRequiresReorg = errors.New("simulation failed: block requires a reorg")
+	ErrMissingTrieNode    = errors.New("missing trie node")
 )
 
 var (
@@ -498,9 +498,9 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) er
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
 	})
 	if simErr != nil &&
-		simErr.Error() != ErrBlockAlreadyKnown &&
-		simErr.Error() != ErrBlockRequiresReorg &&
-		!strings.Contains(simErr.Error(), ErrMissingTrieNode) {
+		simErr != ErrBlockAlreadyKnown &&
+		simErr != ErrBlockRequiresReorg &&
+		!strings.Contains(simErr.Error(), ErrMissingTrieNode.Error()) {
 		log.WithError(simErr).Error("block validation failed")
 		return simErr
 	}
@@ -1658,7 +1658,7 @@ func (api *RelayAPI) handleInternalBuilderCollateral(w http.ResponseWriter, req 
 		})
 		log.Infof("updating builder collateral")
 		if err := api.db.SetBlockBuilderCollateral(builderPubkey, collateral, value); err != nil {
-			fullErr := fmt.Errorf("unable to set collateral in db for pubkey: %v: %v", builderPubkey, err)
+			fullErr := fmt.Errorf("unable to set collateral in db for pubkey: %v: %w", builderPubkey, err)
 			log.Error(fullErr.Error())
 			api.RespondError(w, http.StatusInternalServerError, fullErr.Error())
 			return
