@@ -23,6 +23,7 @@ var (
 type IMultiBeaconClient interface {
 	BestSyncStatus() (*SyncStatusPayloadData, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
+	// SubscribeToPayloadAttributesEvents subscribes to payload attributes events to validate fields such as prevrandao and withdrawals
 	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesData)
 
 	// FetchValidators returns all active and pending validators from the beacon node

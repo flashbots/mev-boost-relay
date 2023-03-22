@@ -153,11 +153,14 @@ type RelayAPI struct {
 	getPayloadCallsInFlight sync.WaitGroup
 
 	// Feature flags
-	ffForceGetHeader204             bool
-	ffDisableBlockPublishing        bool
-	ffDisableLowPrioBuilders        bool
-	ffDisablePayloadDBStorage       bool // disable storing the execution payloads in the database
-	ffDisableQueryPayloadAttributes bool
+	ffForceGetHeader204          bool
+	ffDisableBlockPublishing     bool
+	ffDisableLowPrioBuilders     bool
+	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
+	ffEnableSsePayloadAttributes bool
+
+	headHash     string
+	headHashLock sync.RWMutex
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -247,9 +250,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.ffDisablePayloadDBStorage = true
 	}
 
-	if os.Getenv("DISABLE_QUERY_PAYLOAD_ATTRIBUTES") == "1" {
-		api.log.Warn("env: DISABLE_QUERY_PAYLOAD_ATTRIBUTES - disabling querying beacon node for prevrandao and withdrawals")
-		api.ffDisableQueryPayloadAttributes = true
+	if os.Getenv("ENABLE_SSE_PAYLOAD_ATTRIBUTES") == "1" {
+		api.log.Warn("env: ENABLE_SSE_PAYLOAD_ATTRIBUTES - enable sse subscription for validating payload attributes")
+		api.ffEnableSsePayloadAttributes = true
 	}
 
 	return api, nil
@@ -476,13 +479,21 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 
 func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesData) {
 	// only for builder-api and if using see subscriptions instead of querying for payload attributes
-	if api.opts.BlockBuilderAPI && api.ffDisableQueryPayloadAttributes {
+	if api.opts.BlockBuilderAPI && api.ffEnableSsePayloadAttributes {
 		apiHeadSlot := api.headSlot.Load()
 		proposalSlot := payloadAttributes.Data.ProposalSlot
 		if proposalSlot <= apiHeadSlot {
 			return
 		}
 		log := api.log.WithField("proposalSlot", proposalSlot)
+
+		api.headHashLock.Lock()
+		if api.headHash == payloadAttributes.Data.ParentBlockHash {
+			return
+		}
+		api.headHash = payloadAttributes.Data.ParentBlockHash
+		log = log.WithField("parentBlockHash", payloadAttributes.Data.ParentBlockHash)
+		api.headHashLock.Unlock()
 
 		log.Info("updating payload attributes")
 		api.expectedPrevRandaoLock.Lock()
@@ -530,7 +541,8 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI {
-		if !api.ffDisableQueryPayloadAttributes {
+		// if not subscribed to payload attributes via sse, query beacon node endpoints
+		if !api.ffEnableSsePayloadAttributes {
 			// query the expected prev_randao field
 			go api.updatedExpectedRandao(headSlot)
 

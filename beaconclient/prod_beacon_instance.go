@@ -40,6 +40,7 @@ type PayloadAttributesData struct {
 	Version string `json:"version"`
 	Data    struct {
 		ProposalSlot      uint64            `json:"proposal_slot,string"`
+		ParentBlockHash   string            `json:"parent_block_hash"`
 		PayloadAttributes PayloadAttributes `json:"payload_attributes"`
 	} `json:"data"`
 }
