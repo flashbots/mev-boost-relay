@@ -25,19 +25,23 @@ echo "latest_slot_exported: $latestslot_exported"
 latestslot=$( curl -s https://beaconcha.in/latestState | jq '.lastProposedSlot' )
 echo "latest slot: $latestslot"
 
-# Compute latest slot to export
-last_slot_to_export=$((latestslot_exported + BUCKET_SIZE))
-echo "last_slot_to_export:  $last_slot_to_export"
-
-# End now if latest slot to export is in the future
-if (( last_slot_to_export > latestslot )); then
-       echo "latest slot to export is in the future. exiting now"
-       exit 0
-fi
-
-# Export now
+# Start at last exported slot +1
 slot_start=$((latestslot_exported + 1))
-slot_end=$last_slot_to_export
-cmd="$SCRIPT_DIR/export-bids.sh $slot_start $slot_end"
-echo $cmd
-$cmd
+
+# Now loop over buckets until all slots are exported
+while true; do
+        slot_end=$((slot_start + BUCKET_SIZE - 1))
+        echo "slots to export: $slot_start - $slot_end"
+
+        # End now if latest slot to export is in the future
+        if (( slot_end > latestslot )); then
+               echo "latest slot to export is in the future. exiting now"
+               exit 0
+        fi
+
+        # Export now
+        cmd="$SCRIPT_DIR/export-bids.sh $slot_start $slot_end"
+        echo $cmd
+        $cmd
+        slot_start=$((slot_start + BUCKET_SIZE))
+done

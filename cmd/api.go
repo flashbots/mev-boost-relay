@@ -47,6 +47,8 @@ func init() {
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	apiCmd.Flags().StringSliceVar(&memcachedURIs, "memcached-uris", defaultMemcachedURIs,
+		"Enable memcached, typically used as secondary backup to Redis for redundancy")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
 	apiCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
@@ -92,11 +94,21 @@ var apiCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis
+		log.Infof("Connecting to Redis at %s ...", redisURI)
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}
-		log.Infof("Connected to Redis at %s", redisURI)
+
+		// Connect to Memcached if it exists
+		var mem *datastore.Memcached
+		if len(memcachedURIs) > 0 {
+			log.Infof("Connecting to Memcached at %s ...", strings.Join(memcachedURIs, ", "))
+			mem, err = datastore.NewMemcached(networkInfo.Name, memcachedURIs...)
+			if err != nil {
+				log.WithError(err).Fatalf("Failed to connect to Memcached")
+			}
+		}
 
 		// Connect to Postgres
 		dbURL, err := url.Parse(postgresDSN)
@@ -110,7 +122,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		log.Info("Setting up datastore...")
-		ds, err := datastore.NewDatastore(log, redis, db)
+		ds, err := datastore.NewDatastore(log, redis, mem, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}
@@ -121,6 +133,7 @@ var apiCmd = &cobra.Command{
 			BeaconClient:  beaconClient,
 			Datastore:     ds,
 			Redis:         redis,
+			Memcached:     mem,
 			DB:            db,
 			EthNetDetails: *networkInfo,
 			BlockSimURL:   apiBlockSimURL,
