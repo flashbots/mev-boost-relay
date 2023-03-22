@@ -65,7 +65,7 @@ func (*MockMultiBeaconClient) GetRandao(slot uint64) (spec *GetRandaoResponse, e
 }
 
 func (*MockMultiBeaconClient) GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error) {
-	resp := &GetWithdrawalsResponse{}
-	resp.Data.Withdrawals = append(resp.Data.Withdrawals, &capella.Withdrawal{})
+	resp := &GetWithdrawalsResponse{}                                            //nolint:exhaustruct
+	resp.Data.Withdrawals = append(resp.Data.Withdrawals, &capella.Withdrawal{}) //nolint:exhaustruct
 	return resp, nil
 }

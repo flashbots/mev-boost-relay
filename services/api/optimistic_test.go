@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -45,6 +46,7 @@ var (
 )
 
 func getTestBlockHash(t *testing.T) boostTypes.Hash {
+	t.Helper()
 	var blockHash boostTypes.Hash
 	err := blockHash.FromSlice([]byte("98765432109876543210987654321098"))
 	require.NoError(t, err)
@@ -244,11 +246,11 @@ func TestSimulateBlock(t *testing.T) {
 		},
 		{
 			description:     "block_already_known",
-			simulationError: fmt.Errorf(ErrBlockAlreadyKnown),
+			simulationError: errors.New(ErrBlockAlreadyKnown),
 		},
 		{
 			description:     "missing_trie_node",
-			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"),
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"),
 		},
 	}
 	for _, tc := range cases {
@@ -318,7 +320,8 @@ func TestProcessOptimisticBlock(t *testing.T) {
 
 			// Check demotion but no refund.
 			if tc.simulationError != nil {
-				mockDB := backend.relay.db.(*database.MockDB)
+				mockDB, ok := backend.relay.db.(*database.MockDB)
+				require.True(t, ok)
 				require.True(t, mockDB.Demotions[pkStr])
 				require.False(t, mockDB.Refunds[pkStr])
 			}
@@ -343,7 +346,8 @@ func TestDemoteBuilder(t *testing.T) {
 	require.Equal(t, wantStatus.IsHighPrio, builder.IsHighPrio)
 
 	// Check demotion and refund statuses.
-	mockDB := backend.relay.db.(*database.MockDB)
+	mockDB, ok := backend.relay.db.(*database.MockDB)
+	require.True(t, ok)
 	require.True(t, mockDB.Demotions[pkStr])
 }
 
@@ -408,7 +412,8 @@ func TestProposerApiGetPayloadOptimistic(t *testing.T) {
 			}, backend)
 
 			// Check demotion and refund status'.
-			mockDB := backend.relay.db.(*database.MockDB)
+			mockDB, ok := backend.relay.db.(*database.MockDB)
+			require.True(t, ok)
 			require.Equal(t, tc.demoted, mockDB.Demotions[pkStr])
 			require.Equal(t, tc.demoted, mockDB.Refunds[pkStr])
 		})

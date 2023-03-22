@@ -60,11 +60,11 @@ var ValidPayloadRegisterValidator = types.SignedValidatorRegistration{
 func TestBuilderSubmitBlockRequest(pk *phase0.BLSPubKey, sk *blst.SecretKey, bid *BidTraceV2) BuilderSubmitBlockRequest {
 	signature, err := types.SignMessage(bid, types.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	return BuilderSubmitBlockRequest{
+	return BuilderSubmitBlockRequest{ //nolint:exhaustruct
 		Capella: &capella.SubmitBlockRequest{
 			Message:   &bid.BidTrace,
 			Signature: [96]byte(signature),
-			ExecutionPayload: &consensuscapella.ExecutionPayload{
+			ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
 				Transactions: []bellatrix.Transaction{[]byte{0x03}},
 				Timestamp:    bid.Slot * 12, // 12 seconds per slot.
 				PrevRandao:   _HexToHash("01234567890123456789012345678901"),

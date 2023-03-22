@@ -512,7 +512,10 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
-		builderEntry = &blockBuilderCacheEntry{}
+		builderEntry = &blockBuilderCacheEntry{
+			status:     common.BuilderStatus{}, //nolint:exhaustruct
+			collateral: big.NewInt(0),
+		}
 	}
 	newStatus := common.BuilderStatus{
 		IsHighPrio:    builderEntry.status.IsHighPrio,
@@ -521,7 +524,7 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 	}
 	api.log.Infof("demoted builder, new status: %v", newStatus)
 	if err := api.db.SetBlockBuilderStatus(pubkey, newStatus); err != nil {
-		api.log.Error(fmt.Errorf("error setting builder: %v status: %v", pubkey, err))
+		api.log.Error(fmt.Errorf("error setting builder: %v status: %w", pubkey, err))
 	}
 	// Write to demotions table.
 	api.log.WithFields(logrus.Fields{"builder_pubkey": pubkey}).Info("demoting builder")
@@ -1326,7 +1329,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if !ok {
 		log.Warnf("unable to read builder: %x from the builder cache, using low-prio and no collateral", builderPubkey.String())
 		builderEntry = &blockBuilderCacheEntry{
-			status: common.BuilderStatus{
+			status: common.BuilderStatus{ //nolint:exhaustruct
 				IsHighPrio: false,
 			},
 			collateral: big.NewInt(0),
@@ -1632,7 +1635,7 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		}
 		err := api.db.SetBlockBuilderStatus(builderPubkey, newStatus)
 		if err != nil {
-			err := fmt.Errorf("error setting builder: %v status: %v", builderPubkey, err)
+			err := fmt.Errorf("error setting builder: %v status: %w", builderPubkey, err)
 			api.log.Error(err)
 			api.RespondError(w, http.StatusInternalServerError, err.Error())
 			return

@@ -60,6 +60,7 @@ func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 }
 
 func getTestKeyPair(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey) {
+	t.Helper()
 	sk, _, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
 	blsPubkey := bls.PublicKeyFromSecretKey(sk)
@@ -70,6 +71,7 @@ func getTestKeyPair(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey) {
 }
 
 func insertTestBuilder(t *testing.T, db IDatabaseService) string {
+	t.Helper()
 	pk, sk := getTestKeyPair(t)
 	var testBlockHash phase0.Hash32
 	hashSlice, err := hexutil.Decode(blockHashStr)
