@@ -85,7 +85,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			Value:                uint256.NewInt(collateral),
 		},
 	})
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), time.Now().Add(time.Second), profile, optimisticSubmission)
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, time.Now(), time.Now().Add(time.Second), true, profile, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)

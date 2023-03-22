@@ -135,7 +135,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *blst.SecretKey, *testBa
 	require.NoError(t, err)
 	mockRedis, err := datastore.NewRedisCache(redisTestServer.Addr(), "")
 	require.NoError(t, err)
-	mockDS, err := datastore.NewDatastore(backend.relay.log, mockRedis, mockDB)
+	mockDS, err := datastore.NewDatastore(backend.relay.log, mockRedis, nil, mockDB)
 	require.NoError(t, err)
 
 	backend.relay.datastore = mockDS
