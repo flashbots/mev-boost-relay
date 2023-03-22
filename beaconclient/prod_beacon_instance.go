@@ -39,15 +39,20 @@ type HeadEventData struct {
 type PayloadAttributesData struct {
 	Version string `json:"version"`
 	Data    struct {
+		ProposerIndex     uint64            `json:"proposer_index,string"`
 		ProposalSlot      uint64            `json:"proposal_slot,string"`
+		ParentBlockNumber uint64            `json:"parent_block_number,string"`
+		ParentBlockRoot   string            `json:"parent_block_root"`
 		ParentBlockHash   string            `json:"parent_block_hash"`
 		PayloadAttributes PayloadAttributes `json:"payload_attributes"`
 	} `json:"data"`
 }
 
 type PayloadAttributes struct {
-	PrevRandao  string                `json:"prev_randao"`
-	Withdrawals []*capella.Withdrawal `json:"withdrawals"`
+	Timestamp             uint64                `json:"timestamp,string"`
+	PrevRandao            string                `json:"prev_randao"`
+	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
+	Withdrawals           []*capella.Withdrawal `json:"withdrawals"`
 }
 
 func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
