@@ -15,7 +15,7 @@ require (
 	github.com/flashbots/go-utils v0.4.8
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0
-	github.com/holiman/uint256 v1.2.1
+	github.com/holiman/uint256 v1.2.2
 	github.com/jinzhu/copier v0.3.5
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.7
