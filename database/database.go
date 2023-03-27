@@ -542,8 +542,8 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Build
 	}
 
 	query := `INSERT INTO ` + vars.TableBuilderDemotions + `
-		(submit_block_request, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, submit_block_sim_error) VALUES
-		(:submit_block_request, :epoch, :slot, :builder_pubkey, :proposer_pubkey, :value, :fee_recipient, :block_hash, :submit_block_sim_error);
+		(submit_block_request, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, sim_error) VALUES
+		(:submit_block_request, :epoch, :slot, :builder_pubkey, :proposer_pubkey, :value, :fee_recipient, :block_hash, :sim_error);
 	`
 	_, err = s.DB.NamedExec(query, builderDemotionEntry)
 	return err
@@ -569,7 +569,7 @@ func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signed
 }
 
 func (s *DatabaseService) GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error) {
-	query := `SELECT submit_block_request, signed_beacon_block, signed_validator_registration, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, submit_block_sim_error FROM ` + vars.TableBuilderDemotions + `
+	query := `SELECT submit_block_request, signed_beacon_block, signed_validator_registration, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, sim_error FROM ` + vars.TableBuilderDemotions + `
 	WHERE slot=$1 AND builder_pubkey=$2 AND block_hash=$3`
 	entry := &BuilderDemotionEntry{}
 	err := s.DB.Get(entry, query, trace.Slot, trace.BuilderPubkey.String(), trace.BlockHash.String())
