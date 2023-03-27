@@ -60,8 +60,9 @@ func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	log := c.log.WithField("url", eventsURL)
 	log.Info("subscribing to head events")
 
+	client := sse.NewClient(eventsURL)
+
 	for {
-		client := sse.NewClient(eventsURL)
 		err := client.SubscribeRaw(func(msg *sse.Event) {
 			var data HeadEventData
 			err := json.Unmarshal(msg.Data, &data)
@@ -84,8 +85,9 @@ func (c *ProdBeaconInstance) SubscribeToPayloadAttributesEvents(payloadAttribute
 	log := c.log.WithField("url", eventsURL)
 	log.Info("subscribing to payload_attributes events")
 
+	client := sse.NewClient(eventsURL)
+
 	for {
-		client := sse.NewClient(eventsURL)
 		err := client.SubscribeRaw(func(msg *sse.Event) {
 			var data PayloadAttributesData
 			err := json.Unmarshal(msg.Data, &data)

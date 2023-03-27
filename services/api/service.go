@@ -159,8 +159,7 @@ type RelayAPI struct {
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
 	ffEnableSSEPayloadAttributes bool
 
-	latestParentBlockHash     string
-	latestParentBlockHashLock sync.RWMutex
+	latestParentBlockHash uberatomic.String
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -404,15 +403,18 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
-	// Start regular payload attributes updates
-	go func() {
-		c := make(chan beaconclient.PayloadAttributesData)
-		api.beaconClient.SubscribeToPayloadAttributesEvents(c)
-		for {
-			payloadAttributes := <-c
-			api.processPayloadAttributes(payloadAttributes)
-		}
-	}()
+	// Start regular payload attributes updates only if builder-api is enabled
+	// and if using see subscriptions instead of querying for payload attributes
+	if api.opts.BlockBuilderAPI && api.ffEnableSSEPayloadAttributes {
+		go func() {
+			c := make(chan beaconclient.PayloadAttributesData)
+			api.beaconClient.SubscribeToPayloadAttributesEvents(c)
+			for {
+				payloadAttributes := <-c
+				api.processPayloadAttributes(payloadAttributes)
+			}
+		}()
+	}
 
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
@@ -478,51 +480,46 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesData) {
-	// only for builder-api and if using see subscriptions instead of querying for payload attributes
-	if api.opts.BlockBuilderAPI && api.ffEnableSSEPayloadAttributes {
-		apiHeadSlot := api.headSlot.Load()
-		proposalSlot := payloadAttributes.Data.ProposalSlot
-		if proposalSlot <= apiHeadSlot {
-			return
-		}
-		log := api.log.WithField("proposalSlot", proposalSlot)
-
-		api.latestParentBlockHashLock.Lock()
-		if api.latestParentBlockHash == payloadAttributes.Data.ParentBlockHash {
-			api.latestParentBlockHashLock.Unlock()
-			return
-		}
-		api.latestParentBlockHash = payloadAttributes.Data.ParentBlockHash
-		log = log.WithField("parentBlockHash", payloadAttributes.Data.ParentBlockHash)
-		api.latestParentBlockHashLock.Unlock()
-
-		log.Info("updating payload attributes")
-		api.expectedPrevRandaoLock.Lock()
-		prevRandao := payloadAttributes.Data.PayloadAttributes.PrevRandao
-		api.expectedPrevRandao = randaoHelper{
-			slot:       proposalSlot,
-			prevRandao: prevRandao,
-		}
-		log.Infof("updated expected prev_randao to %s", prevRandao)
-		api.expectedPrevRandaoLock.Unlock()
-
-		log.Info("updating expected withdrawals")
-		if api.isBellatrix(proposalSlot) {
-			return
-		}
-		api.expectedWithdrawalsLock.Lock()
-		defer api.expectedWithdrawalsLock.Unlock()
-		withdrawalsRoot, err := ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
-		if err != nil {
-			log.WithError(err).Error("error computing withdrawals root")
-			return
-		}
-		api.expectedWithdrawalsRoot = withdrawalsHelper{
-			slot: proposalSlot,
-			root: withdrawalsRoot,
-		}
-		log.Infof("updated expected withdrawals root to %s", withdrawalsRoot)
+	apiHeadSlot := api.headSlot.Load()
+	proposalSlot := payloadAttributes.Data.ProposalSlot
+	if proposalSlot <= apiHeadSlot {
+		return
 	}
+	log := api.log.WithField("proposalSlot", proposalSlot)
+
+	latestParentBlockHash := api.latestParentBlockHash.Load()
+	if latestParentBlockHash == payloadAttributes.Data.ParentBlockHash {
+		return
+	}
+	api.latestParentBlockHash.Store(payloadAttributes.Data.ParentBlockHash)
+	log = log.WithField("parentBlockHash", payloadAttributes.Data.ParentBlockHash)
+
+	log.Info("updating payload attributes")
+	api.expectedPrevRandaoLock.Lock()
+	prevRandao := payloadAttributes.Data.PayloadAttributes.PrevRandao
+	api.expectedPrevRandao = randaoHelper{
+		slot:       proposalSlot,
+		prevRandao: prevRandao,
+	}
+	log.Infof("updated expected prev_randao to %s", prevRandao)
+	api.expectedPrevRandaoLock.Unlock()
+
+	log.Info("updating expected withdrawals")
+	if api.isBellatrix(proposalSlot) {
+		return
+	}
+	api.expectedWithdrawalsLock.Lock()
+	defer api.expectedWithdrawalsLock.Unlock()
+	withdrawalsRoot, err := ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
+	if err != nil {
+		log.WithError(err).Error("error computing withdrawals root")
+		return
+	}
+	api.expectedWithdrawalsRoot = withdrawalsHelper{
+		slot: proposalSlot,
+		root: withdrawalsRoot,
+	}
+	log.Infof("updated expected withdrawals root to %s", withdrawalsRoot)
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
