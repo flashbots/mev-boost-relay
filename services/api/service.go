@@ -1368,7 +1368,22 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}).Info("block validation successful")
 	}
 
-	// Ensure this request is still the latest one
+	// Ensure this request is still the latest one. This logic intentionally
+	// ignores the value of the bids and makes the current active bid the one
+	// that arrived at the relay last. This allows for builders to reduce the
+	// value of their bid (effectively cancel a high bid) by ensuring a lower
+	// bid arrives later. Even if the higher bid takes longer to simulate,
+	// by checking the receivedAt timestamp, this logic ensures that the low bid
+	// is not overwritten by the high bid.
+	//
+	// NOTE: this can lead to a rather tricky race condition. If a builder
+	// submits two blocks to the relay concurrently, then the randomness of
+	// network latency will make it impossible to predict which arrives first.
+	// Thus a high bid could unintentionally be overwritten by a low bid that
+	// happend to arrive a few microseconds later. If builders are submitting
+	// blocks at a frequency where they cannot reliably predict which bid will
+	// arrive at the relay first, they should instead use multiple pubkeys to
+	// avoid uninitentionally overwriting their own bids.
 	latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("failed getting latest payload receivedAt from redis")
