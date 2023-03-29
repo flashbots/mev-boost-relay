@@ -71,9 +71,11 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 
 ## Running Beacon Node(s)
 
-- The services need access to a beacon node for event subscriptions.
-- You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
-  - The beacon API by default is using `localhost:3500` (the Prysm default beacon-API port).
+- The services need access to a beacon node for event subscriptions. You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
+  - The default beacon API is `localhost:3500` (Prysm default beacon-API port)
+- The beacon node needs to support the `payload_attributes` SSE event [[1]](https://github.com/ethereum/beacon-APIs/pull/305). As of now, this is either:
+  - Prysm v4.0.0+
+  - Lighthouse v4.0.1+ (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint)
 
 ## Running Postgres, Redis and Memcached
 ```bash
