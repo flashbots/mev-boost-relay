@@ -153,11 +153,11 @@ type RelayAPI struct {
 	getPayloadCallsInFlight sync.WaitGroup
 
 	// Feature flags
-	ffForceGetHeader204          bool
-	ffDisableBlockPublishing     bool
-	ffDisableLowPrioBuilders     bool
-	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
-	ffEnableSSEPayloadAttributes bool // instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)
+	ffForceGetHeader204           bool
+	ffDisableBlockPublishing      bool
+	ffDisableLowPrioBuilders      bool
+	ffDisablePayloadDBStorage     bool // disable storing the execution payloads in the database
+	ffDisableSSEPayloadAttributes bool // instead of SSE, fall back to previous polling withdrawals+prevRandao from our custom Prysm fork
 
 	latestParentBlockHash uberatomic.String // used to cache the latest parent block hash, to avoid repetitive similar SSE events
 
@@ -249,9 +249,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.ffDisablePayloadDBStorage = true
 	}
 
-	if os.Getenv("ENABLE_SSE_PAYLOAD_ATTRIBUTES") == "1" {
-		api.log.Warn("env: ENABLE_SSE_PAYLOAD_ATTRIBUTES - enable SSE subscription for validating payload attributes")
-		api.ffEnableSSEPayloadAttributes = true
+	if os.Getenv("DISABLE_SSE_PAYLOAD_ATTRIBUTES") == "1" {
+		api.log.Warn("env: DISABLE_SSE_PAYLOAD_ATTRIBUTES - using previous polling logic for withdrawals and randao (requires custom Prysm fork)")
+		api.ffDisableSSEPayloadAttributes = true
 	}
 
 	return api, nil
@@ -405,7 +405,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// Start regular payload attributes updates only if builder-api is enabled
 	// and if using see subscriptions instead of querying for payload attributes
-	if api.opts.BlockBuilderAPI && api.ffEnableSSEPayloadAttributes {
+	if api.opts.BlockBuilderAPI && !api.ffDisableSSEPayloadAttributes {
 		go func() {
 			c := make(chan beaconclient.PayloadAttributesEvent)
 			api.beaconClient.SubscribeToPayloadAttributesEvents(c)
@@ -547,7 +547,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	// only for builder-api
 	if api.opts.BlockBuilderAPI {
 		// if not subscribed to payload attributes via sse, query beacon node endpoints
-		if !api.ffEnableSSEPayloadAttributes {
+		if api.ffDisableSSEPayloadAttributes {
 			// query the expected prev_randao field
 			go api.updatedExpectedRandao(headSlot)
 
