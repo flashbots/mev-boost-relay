@@ -24,7 +24,7 @@ type IMultiBeaconClient interface {
 	BestSyncStatus() (*SyncStatusPayloadData, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
 	// SubscribeToPayloadAttributesEvents subscribes to payload attributes events to validate fields such as prevrandao and withdrawals
-	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesData)
+	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent)
 
 	// FetchValidators returns all active and pending validators from the beacon node
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
@@ -43,7 +43,7 @@ type IBeaconInstance interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	CurrentSlot() (uint64, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
-	SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesData)
+	SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent)
 	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
@@ -142,7 +142,7 @@ func (c *MultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {
 	}
 }
 
-func (c *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesData) {
+func (c *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent) {
 	for _, instance := range c.beaconInstances {
 		go instance.SubscribeToPayloadAttributesEvents(slotC)
 	}

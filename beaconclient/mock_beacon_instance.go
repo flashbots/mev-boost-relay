@@ -84,7 +84,7 @@ func (c *MockBeaconInstance) CurrentSlot() (uint64, error) {
 
 func (c *MockBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 
-func (c *MockBeaconInstance) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesData) {}
+func (c *MockBeaconInstance) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent) {}
 
 func (c *MockBeaconInstance) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
 	c.addDelay()

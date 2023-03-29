@@ -157,9 +157,9 @@ type RelayAPI struct {
 	ffDisableBlockPublishing     bool
 	ffDisableLowPrioBuilders     bool
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
-	ffEnableSSEPayloadAttributes bool
+	ffEnableSSEPayloadAttributes bool // instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)
 
-	latestParentBlockHash uberatomic.String
+	latestParentBlockHash uberatomic.String // used to cache the latest parent block hash, to avoid repetitive similar SSE events
 
 	expectedPrevRandao         randaoHelper
 	expectedPrevRandaoLock     sync.RWMutex
@@ -250,7 +250,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	}
 
 	if os.Getenv("ENABLE_SSE_PAYLOAD_ATTRIBUTES") == "1" {
-		api.log.Warn("env: ENABLE_SSE_PAYLOAD_ATTRIBUTES - enable sse subscription for validating payload attributes")
+		api.log.Warn("env: ENABLE_SSE_PAYLOAD_ATTRIBUTES - enable SSE subscription for validating payload attributes")
 		api.ffEnableSSEPayloadAttributes = true
 	}
 
@@ -407,7 +407,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	// and if using see subscriptions instead of querying for payload attributes
 	if api.opts.BlockBuilderAPI && api.ffEnableSSEPayloadAttributes {
 		go func() {
-			c := make(chan beaconclient.PayloadAttributesData)
+			c := make(chan beaconclient.PayloadAttributesEvent)
 			api.beaconClient.SubscribeToPayloadAttributesEvents(c)
 			for {
 				payloadAttributes := <-c
@@ -479,14 +479,20 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	}
 }
 
-func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesData) {
+func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.PayloadAttributesEvent) {
 	apiHeadSlot := api.headSlot.Load()
 	proposalSlot := payloadAttributes.Data.ProposalSlot
+
+	// require proposal slot in the future
 	if proposalSlot <= apiHeadSlot {
 		return
 	}
-	log := api.log.WithField("proposalSlot", proposalSlot)
+	log := api.log.WithFields(logrus.Fields{
+		"headSlot":     apiHeadSlot,
+		"proposalSlot": proposalSlot,
+	})
 
+	// discard repetitive payload attributes (we receive them once from each beacon node)
 	latestParentBlockHash := api.latestParentBlockHash.Load()
 	if latestParentBlockHash == payloadAttributes.Data.ParentBlockHash {
 		return
@@ -501,24 +507,25 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 		slot:       proposalSlot,
 		prevRandao: prevRandao,
 	}
-	log.Infof("updated expected prev_randao to %s", prevRandao)
 	api.expectedPrevRandaoLock.Unlock()
+	log.Infof("updated expected prev_randao to %s", prevRandao)
 
-	log.Info("updating expected withdrawals")
+	// Update withdrawals (in Capella only)
 	if api.isBellatrix(proposalSlot) {
 		return
 	}
-	api.expectedWithdrawalsLock.Lock()
-	defer api.expectedWithdrawalsLock.Unlock()
+	log.Info("updating expected withdrawals")
 	withdrawalsRoot, err := ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
 	if err != nil {
 		log.WithError(err).Error("error computing withdrawals root")
 		return
 	}
+	api.expectedWithdrawalsLock.Lock()
 	api.expectedWithdrawalsRoot = withdrawalsHelper{
 		slot: proposalSlot,
 		root: withdrawalsRoot,
 	}
+	api.expectedWithdrawalsLock.Unlock()
 	log.Infof("updated expected withdrawals root to %s", withdrawalsRoot)
 }
 
