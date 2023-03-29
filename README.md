@@ -14,6 +14,7 @@ Currently live at:
 * https://relayooor.wtf
 * https://mainnet-relay.securerpc.com
 * https://mainnet.aestus.live
+* bloXroute relays (running a light [fork](https://github.com/bloXroute-Labs/mev-relay))
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
