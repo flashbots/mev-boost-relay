@@ -106,10 +106,10 @@ func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.A
 		}
 	}
 
-	blsPubKey := bls.PublicKeyFromSecretKey(sk)
+	blsPubKey, _ := bls.PublicKeyFromSecretKey(sk)
 
 	var pubKey types.PublicKey
-	err = pubKey.FromSlice(blsPubKey.Compress())
+	err = pubKey.FromSlice(bls.PublicKeyToBytes(blsPubKey))
 	if err != nil {
 		return nil, err
 	}

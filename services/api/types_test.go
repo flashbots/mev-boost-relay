@@ -50,7 +50,10 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 	sk, _, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
 
-	publicKey, err := types.BlsPublicKeyToPublicKey(bls.PublicKeyFromSecretKey(sk))
+	pubkey, err := bls.PublicKeyFromSecretKey(sk)
+	require.NoError(t, err)
+
+	publicKey, err := types.BlsPublicKeyToPublicKey(pubkey)
 	require.NoError(t, err)
 
 	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(&reqPayload, sk, &publicKey, builderSigningDomain)

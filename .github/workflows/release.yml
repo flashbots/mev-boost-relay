@@ -37,8 +37,6 @@ jobs:
             type=sha
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !contains(env.RELEASE_VERSION, '-') }}
-            type=semver,pattern={{major}},enable=${{ !contains(env.RELEASE_VERSION, '-') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(env.RELEASE_VERSION, '-') }}
 
       - name: Login to DockerHub
         uses: docker/login-action@v2
