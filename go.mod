@@ -36,10 +36,9 @@ require (
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
-	github.com/fatih/color v1.15.0 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
-	github.com/consensys/gnark-crypto v0.9.1-0.20230105202408-1a7a29904a7c // indirect
-	github.com/fatih/color v1.13.0 // indirect
+	github.com/consensys/gnark-crypto v0.9.1 // indirect
+	github.com/fatih/color v1.15.0 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/goccy/go-yaml v1.10.1 // indirect
@@ -105,11 +104,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// Manually replace gnark-crypto with the audited version (v0.7.1). This is
-// required because there are two depedencies that require different versions
-// of gnark-crypto: geth requires v0.9.1 (for fuzzing) and go-boost-utils
-// requires v0.7.1 (for signatures). Because the major version is the same, Go
-// believes these versions are backwards-compatible, which they are, and will
-// use the newer of the two.
-replace github.com/consensys/gnark-crypto => github.com/consensys/gnark-crypto v0.7.1-0.20220622171907-450e0206211e

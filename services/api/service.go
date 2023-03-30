@@ -1384,7 +1384,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// submits two blocks to the relay concurrently, then the randomness of
 	// network latency will make it impossible to predict which arrives first.
 	// Thus a high bid could unintentionally be overwritten by a low bid that
-	// happend to arrive a few microseconds later. If builders are submitting
+	// happened to arrive a few microseconds later. If builders are submitting
 	// blocks at a frequency where they cannot reliably predict which bid will
 	// arrive at the relay first, they should instead use multiple pubkeys to
 	// avoid uninitentionally overwriting their own bids.
