@@ -9,6 +9,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/services/housekeeper"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +31,10 @@ var housekeeperCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		log := common.LogSetup(logJSON, logLevel).WithField("service", "relay/housekeeper")
+		log := common.LogSetup(logJSON, logLevel).WithFields(logrus.Fields{
+			"service": "relay/housekeeper",
+			"version": Version,
+		})
 		log.Infof("boost-relay %s", Version)
 
 		networkInfo, err := common.NewEthNetworkDetails(network)
