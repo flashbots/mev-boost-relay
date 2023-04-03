@@ -921,7 +921,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":     req.URL.Query().Get("id"),
 	})
 
-	log.Debug("getPayload request received")
+	slotStart := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
+	currTime := uint64(time.Now().UnixMilli())
+	msIntoSlot := currTime - slotStart
+	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
+
+	if msIntoSlot > 2000 {
+		log.WithField("time", currTime).Error("getPayload sent too late")
+		api.RespondError(w, http.StatusBadRequest, "sent too late")
+		return
+	}
 
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
 	if !found {
