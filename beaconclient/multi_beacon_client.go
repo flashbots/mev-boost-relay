@@ -232,14 +232,14 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 	for i, client := range clients {
 		log := log.WithField("uri", client.GetURI())
 		log.Debug("publishing block")
-		go func(i int) {
+		go func(index int, client IBeaconInstance) {
 			code, err := client.PublishBlock(block)
 			resChans <- publishResp{
-				index: i,
+				index: index,
 				code:  code,
 				err:   err,
 			}
-		}(i)
+		}(i, client)
 	}
 
 	var lastErrPublishResp publishResp
