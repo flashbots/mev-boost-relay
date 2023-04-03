@@ -72,7 +72,7 @@ var (
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
-	timeoutGetPayloadResponseMs  = cli.GetEnvInt("GETPAYLOAD_RESPONSE_TIMEOUT_MS", 1000)
+	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_DELAY_MS", 1000)
 
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
@@ -986,7 +986,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// give the beacon network some time to propagate the block
-	time.Sleep(time.Duration(timeoutGetPayloadResponseMs) * time.Millisecond)
+	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
