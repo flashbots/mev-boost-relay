@@ -17,6 +17,7 @@ var (
 	ErrBeaconNodeSyncing        = errors.New("beacon node is syncing or unavailable")
 	ErrBeaconNodesUnavailable   = errors.New("all beacon nodes responded with error")
 	ErrWithdrawalsBeforeCapella = errors.New("withdrawals are not supported before capella")
+	ErrBeaconBlock202           = errors.New("beacon block failed validation but was still broadcast (202)")
 )
 
 // IMultiBeaconClient is the interface for the MultiBeaconClient, which can manage several beacon client instances under the hood
@@ -223,7 +224,13 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 		log.Debug("publishing block")
 
 		if code, err = client.PublishBlock(block); err != nil {
-			log.WithField("statusCode", code).WithError(err).Warn("failed to publish block")
+			log.WithField("statusCode", code).WithError(err).Error("failed to publish block")
+			continue
+		} else if code == 202 {
+			// Should the block fail full validation, a separate success response code (202) is used to indicate that the block was successfully broadcast but failed integration.
+			// https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/publishBlock
+			log.WithField("statusCode", code).WithError(err).Error("block failed validation but was still broadcast")
+			err = ErrBeaconBlock202
 			continue
 		}
 

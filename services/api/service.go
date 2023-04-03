@@ -154,7 +154,6 @@ type RelayAPI struct {
 
 	// Feature flags
 	ffForceGetHeader204           bool
-	ffDisableBlockPublishing      bool
 	ffDisableLowPrioBuilders      bool
 	ffDisablePayloadDBStorage     bool // disable storing the execution payloads in the database
 	ffDisableSSEPayloadAttributes bool // instead of SSE, fall back to previous polling withdrawals+prevRandao from our custom Prysm fork
@@ -236,11 +235,6 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
 		api.log.Warn("env: FORCE_GET_HEADER_204 - forcing getHeader to always return 204")
 		api.ffForceGetHeader204 = true
-	}
-
-	if os.Getenv("DISABLE_BLOCK_PUBLISHING") == "1" {
-		api.log.Warn("env: DISABLE_BLOCK_PUBLISHING - disabling publishing blocks on getPayload")
-		api.ffDisableBlockPublishing = true
 	}
 
 	if os.Getenv("DISABLE_LOWPRIO_BUILDERS") == "1" {
@@ -981,6 +975,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
+	// Publish the signed beacon block via beacon-node
+	signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
+	if err != nil {
+		log.WithError(err).WithField("code", code).Error("failed to publish block")
+		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
+		return
+	}
+
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
 		"numTx":       getPayloadResp.NumTx(),
@@ -1013,16 +1016,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		if err != nil {
 			log.WithError(err).Error("failed to increment builder-stats after getPayload")
 		}
-	}()
-
-	// Publish the signed beacon block via beacon-node
-	go func() {
-		if api.ffDisableBlockPublishing {
-			log.Info("publishing the block is disabled")
-			return
-		}
-		signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
-		_, _ = api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	}()
 }
 

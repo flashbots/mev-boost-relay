@@ -136,7 +136,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 #### Feature Flags
 
 * `DISABLE_PAYLOAD_DATABASE_STORAGE` - builder API - disable storing execution payloads in the database (i.e. when using memcached as data availability redundancy)
-* `DISABLE_BLOCK_PUBLISHING` - disable publishing blocks to the beacon node at the end of getPayload
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `DISABLE_SSE_PAYLOAD_ATTRIBUTES` - instead of using SSE events, poll withdrawals and randao (requires custom Prysm fork)
