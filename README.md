@@ -10,11 +10,13 @@ Currently live at:
 * https://boost-relay.flashbots.net (also on [Goerli](https://boost-relay-sepolia.flashbots.net) and [Sepolia](https://boost-relay-goerli.flashbots.net))
 * https://relay.ultrasound.money
 * https://agnostic-relay.net
-* https://relay.edennetwork.io/info
-* https://relayooor.wtf
-* https://mainnet-relay.securerpc.com
-* https://mainnet.aestus.live
 * bloXroute relays (running a light [fork](https://github.com/bloXroute-Labs/mev-relay))
+* https://mainnet.aestus.live
+* https://relayooor.wtf
+* https://relay.edennetwork.io/info
+* https://mainnet-relay.securerpc.com
+
+#### Components
 
 The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
 
@@ -22,22 +24,33 @@ The relay consists of several components that are designed to run and scale inde
 1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
 1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties.
 
-Dependencies:
-
-1. Redis
-1. PostgreSQL
-1. one or more [beacon nodes](#running-beacon-node--s-)
-1. block submission validation nodes
-1. [optional] Memcached
-
-A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
-
-**See also:**
+#### See also
 
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
 * [mev-boost](https://github.com/flashbots/mev-boost)
 * [Relay API specs](https://flashbots.github.io/relay-specs)
 * [Guider for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
+
+
+#### Dependencies
+
+1. Redis
+1. PostgreSQL
+1. one or more [beacon nodes](#running-beacon-node--s-) (note: run multiple beacon nodes!)
+1. block submission validation nodes
+1. [optional] Memcached
+
+#### About beacon nodes:
+
+* Relays are strongly advised to run multiple beacon nodes localy!
+* The reason being that on getPayload, the block has to be accepted by a local beacon node before it is returned to the proposer.
+* If the local beacon nodes don't accept it, the block won't be returned to the proposer, which leads to the proposer missing the slot.
+
+#### Security
+
+A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
+
+If you find a security vulnerability on this project or any other initiative related to Flashbots, please let us know sending an email to security@flashbots.net.
 
 ---
 
