@@ -17,6 +17,7 @@ var (
 	ErrBeaconNodeSyncing        = errors.New("beacon node is syncing or unavailable")
 	ErrBeaconNodesUnavailable   = errors.New("all beacon nodes responded with error")
 	ErrWithdrawalsBeforeCapella = errors.New("withdrawals are not supported before capella")
+	ErrBeaconBlock202           = errors.New("beacon block failed validation but was still broadcast (202)")
 )
 
 // IMultiBeaconClient is the interface for the MultiBeaconClient, which can manage several beacon client instances under the hood
@@ -210,6 +211,12 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 	return instances
 }
 
+type publishResp struct {
+	index int
+	code  int
+	err   error
+}
+
 // PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
 func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
 	log := c.log.WithFields(logrus.Fields{
@@ -218,23 +225,46 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 	})
 
 	clients := c.beaconInstancesByLastResponse()
+
+	// The chan will be cleaner up automatically once the function exists even if it was still being written to
+	resChans := make(chan publishResp, len(clients))
+
 	for i, client := range clients {
 		log := log.WithField("uri", client.GetURI())
 		log.Debug("publishing block")
+		go func(index int, client IBeaconInstance) {
+			code, err := client.PublishBlock(block)
+			resChans <- publishResp{
+				index: index,
+				code:  code,
+				err:   err,
+			}
+		}(i, client)
+	}
 
-		if code, err = client.PublishBlock(block); err != nil {
-			log.WithField("statusCode", code).WithError(err).Warn("failed to publish block")
+	var lastErrPublishResp publishResp
+	for i := 0; i < len(clients); i++ {
+		res := <-resChans
+		if res.err != nil {
+			log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).WithError(res.err).Error("failed to publish block")
+			lastErrPublishResp = res
+			continue
+		} else if res.code == 202 {
+			// Should the block fail full validation, a separate success response code (202) is used to indicate that the block was successfully broadcast but failed integration.
+			// https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/publishBlock
+			log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).WithError(res.err).Error("block failed validation but was still broadcast")
+			lastErrPublishResp = res
 			continue
 		}
 
-		c.bestBeaconIndex.Store(int64(i))
+		c.bestBeaconIndex.Store(int64(res.index))
 
-		log.WithField("statusCode", code).Info("published block")
-		return code, nil
+		log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).Info("published block")
+		return res.code, nil
 	}
 
-	log.WithField("statusCode", code).WithError(err).Error("failed to publish block on any CL node")
-	return code, err
+	log.Error("failed to publish block on any CL node")
+	return lastErrPublishResp.code, lastErrPublishResp.err
 }
 
 // GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
