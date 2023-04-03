@@ -985,6 +985,14 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + ((payload.Slot() + 1) * 12)
+	currTime := uint64(time.Now().Unix())
+	if currTime >= expectedTimestamp {
+		log.WithField("time", currTime).Error("timestamp too late")
+		api.RespondError(w, http.StatusBadRequest, "timestamp too late")
+		return
+	}
+
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
