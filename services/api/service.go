@@ -921,17 +921,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":     req.URL.Query().Get("id"),
 	})
 
-	slotStart := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
-	currTime := uint64(time.Now().UnixMilli())
-	msIntoSlot := currTime - slotStart
-	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
+	// Snapshot current time
+	requestTime := time.Now().UTC()
 
-	if msIntoSlot > 2000 {
-		log.WithField("time", currTime).Error("getPayload sent too late")
-		api.RespondError(w, http.StatusBadRequest, "sent too late")
-		return
-	}
-
+	// Start with signature validation
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
 	if !found {
 		log.Errorf("could not find proposer pubkey for index %d", payload.ProposerIndex())
@@ -939,7 +932,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log = log.WithField("pubkeyFromIndex", proposerPubkey)
+	log = log.WithField("proposerPubkey", proposerPubkey)
 
 	// Get the proposer pubkey based on the validator index from the payload
 	pk, err := boostTypes.HexToPubkey(proposerPubkey.String())
@@ -962,8 +955,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Once the signature is verified, we know the proposer is committed to this bid.
-	signedAt := time.Now().UTC()
+	// Only allow getPayload requests for the current slot until a certain cutoff time (2 sec into the slot)
+	slotStartMs := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
+	msIntoSlot := uint64(requestTime.UnixMilli()) - slotStartMs
+	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
+	if msIntoSlot > 2000 {
+		log.WithField("msIntoSlot", msIntoSlot).Error("getPayload sent too late")
+		api.RespondError(w, http.StatusBadRequest, "sent too late")
+		return
+	}
 
 	// Get the response - from memory, Redis or DB
 	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
@@ -1016,7 +1016,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
 		}
 
-		err = api.db.SaveDeliveredPayload(bidTrace, payload, signedAt)
+		err = api.db.SaveDeliveredPayload(bidTrace, payload, requestTime)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"bidTrace": bidTrace,
