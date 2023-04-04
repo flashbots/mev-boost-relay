@@ -72,6 +72,7 @@ var (
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
+	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 3000)
 	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_DELAY_MS", 1000)
 
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
@@ -959,7 +960,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	slotStartMs := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
 	msIntoSlot := uint64(requestTime.UnixMilli()) - slotStartMs
 	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
-	if msIntoSlot > 2000 {
+	if msIntoSlot > uint64(getPayloadRequestCutoffMs) {
 		log.WithField("msIntoSlot", msIntoSlot).Error("getPayload sent too late")
 		api.RespondError(w, http.StatusBadRequest, "sent too late")
 		return
