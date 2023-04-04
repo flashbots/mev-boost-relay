@@ -99,3 +99,15 @@ func (db MockDB) IncBlockBuilderStatsAfterGetHeader(slot uint64, blockhash strin
 func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error {
 	return nil
 }
+
+func (db MockDB) InsertBlockedValidator(entry BlockedValidatorEntry) error {
+	return nil
+}
+
+func (db MockDB) GetBlockedValidator(pubkey string) (*BlockedValidatorEntry, error) {
+	return nil, nil
+}
+
+func (db MockDB) IsValidatorBlocked(pubkey string) (bool, error) {
+	return false, nil
+}

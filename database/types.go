@@ -60,6 +60,15 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
+type BlockedValidatorEntry struct {
+	ID         int64     `db:"id"`
+	InsertedAt time.Time `db:"inserted_at"`
+
+	Pubkey  string `db:"pubkey"`
+	Blocked bool   `db:"is_blocked"`
+	Notes   string `db:"notes"`
+}
+
 func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*types.SignedValidatorRegistration, error) {
 	pubkey, err := types.HexToPubkey(reg.Pubkey)
 	if err != nil {
