@@ -159,6 +159,7 @@ type RelayAPI struct {
 	ffDisableLowPrioBuilders      bool
 	ffDisablePayloadDBStorage     bool // disable storing the execution payloads in the database
 	ffDisableSSEPayloadAttributes bool // instead of SSE, fall back to previous polling withdrawals+prevRandao from our custom Prysm fork
+	ffAllowMemcacheSavingFail     bool // don't fail when saving payloads to memcache doesn't succeed
 
 	latestParentBlockHash uberatomic.String // used to cache the latest parent block hash, to avoid repetitive similar SSE events
 
@@ -252,6 +253,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("DISABLE_SSE_PAYLOAD_ATTRIBUTES") == "1" {
 		api.log.Warn("env: DISABLE_SSE_PAYLOAD_ATTRIBUTES - using previous polling logic for withdrawals and randao (requires custom Prysm fork)")
 		api.ffDisableSSEPayloadAttributes = true
+	}
+
+	if os.Getenv("MEMCACHE_ALLOW_SAVING_FAIL") == "1" {
+		api.log.Warn("env: MEMCACHE_ALLOW_SAVING_FAIL - continue block submission request even if saving to memcache fails")
+		api.ffAllowMemcacheSavingFail = true
 	}
 
 	return api, nil
@@ -1449,8 +1455,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
 		if err != nil {
 			log.WithError(err).Error("failed saving execution payload in memcached")
-			api.RespondError(w, http.StatusInternalServerError, err.Error())
-			return
+			if !api.ffAllowMemcacheSavingFail {
+				api.RespondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 	}
 
