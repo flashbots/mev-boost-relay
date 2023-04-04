@@ -137,3 +137,29 @@ func TestMigrations(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
 }
+
+func TestBlockedValidator(t *testing.T) {
+	db := resetDatabase(t)
+
+	testValidator := BlockedValidatorEntry{
+		Pubkey:  "0x8996515293fcd87ca09b5c6ffe5c17f043c6a1a3639cc9494a82ec8eb50a9b55c34b47675e573be40d9be308b1ca2908",
+		Blocked: true,
+		Notes:   "evil actor",
+	}
+	err := db.InsertBlockedValidator(testValidator)
+	require.NoError(t, err)
+
+	out, err := db.GetBlockedValidator(testValidator.Pubkey)
+	require.NoError(t, err)
+	require.Equal(t, testValidator.Pubkey, out.Pubkey)
+	require.Equal(t, testValidator.Blocked, out.Blocked)
+	require.Equal(t, testValidator.Notes, out.Notes)
+
+	blocked, err := db.IsValidatorBlocked(testValidator.Pubkey)
+	require.NoError(t, err)
+	require.True(t, blocked)
+
+	blocked, err = db.IsValidatorBlocked("0x0")
+	require.NoError(t, err)
+	require.False(t, blocked)
+}

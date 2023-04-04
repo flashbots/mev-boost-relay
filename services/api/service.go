@@ -73,7 +73,7 @@ var (
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
 	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 3000)
-	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_DELAY_MS", 1000)
+	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
 
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
@@ -817,20 +817,28 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	parentHashHex := vars["parent_hash"]
 	proposerPubkeyHex := vars["pubkey"]
 	ua := req.UserAgent()
-	log := api.log.WithFields(logrus.Fields{
-		"method":     "getHeader",
-		"slot":       slotStr,
-		"parentHash": parentHashHex,
-		"pubkey":     proposerPubkeyHex,
-		"ua":         ua,
-		"mevBoostV":  common.GetMevBoostVersionFromUserAgent(ua),
-	})
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
 		return
 	}
+
+	requestTime := time.Now().UTC()
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (slot * 12)
+	msIntoSlot := uint64(requestTime.UnixMilli()) - (slotStartTimestamp * 1000)
+
+	log := api.log.WithFields(logrus.Fields{
+		"method":           "getHeader",
+		"slot":             slotStr,
+		"parentHash":       parentHashHex,
+		"pubkey":           proposerPubkeyHex,
+		"ua":               ua,
+		"mevBoostV":        common.GetMevBoostVersionFromUserAgent(ua),
+		"requestTimestamp": requestTime.Unix(),
+		"slotStartSec":     slotStartTimestamp,
+		"msIntoSlot":       msIntoSlot,
+	})
 
 	if len(proposerPubkeyHex) != 98 {
 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
@@ -852,6 +860,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	if api.ffForceGetHeader204 {
 		log.Info("forced getHeader 204 response")
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Only allow requests for the current slot until a certain cutoff time
+	if getPayloadRequestCutoffMs > 0 && msIntoSlot > uint64(getPayloadRequestCutoffMs) {
+		log.Error("getHeader sent too late")
+		api.RespondError(w, http.StatusBadRequest, "sent too late")
 		return
 	}
 
@@ -891,6 +906,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength": req.ContentLength,
 		"headSlot":      api.headSlot.Load(),
+		"idArg":         req.URL.Query().Get("id"),
 	})
 
 	// Read the body first, so we can decode it later
@@ -907,6 +923,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// Decode payload
 	payload := new(common.SignedBlindedBeaconBlock)
 	capellaPayload := new(capella.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(capellaPayload); err != nil {
@@ -922,16 +939,19 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		payload.Capella = capellaPayload
 	}
 
+	// Take time after the decoding, and add to logging
+	requestTime := time.Now().UTC()
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
+	msIntoSlot := uint64(requestTime.UnixMilli()) - (slotStartTimestamp * 1000)
 	log = log.WithFields(logrus.Fields{
-		"slot":      payload.Slot(),
-		"blockHash": payload.BlockHash(),
-		"idArg":     req.URL.Query().Get("id"),
+		"slot":             payload.Slot(),
+		"blockHash":        payload.BlockHash(),
+		"slotStartSec":     slotStartTimestamp,
+		"msIntoSlot":       msIntoSlot,
+		"requestTimestamp": requestTime.Unix(),
 	})
 
-	// Snapshot current time
-	requestTime := time.Now().UTC()
-
-	// Start with signature validation
+	// Get the proposer pubkey based on the validator index from the payload
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
 	if !found {
 		log.Errorf("could not find proposer pubkey for index %d", payload.ProposerIndex())
@@ -939,9 +959,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// Add proposer pubkey to logs
 	log = log.WithField("proposerPubkey", proposerPubkey)
 
-	// Get the proposer pubkey based on the validator index from the payload
+	// Create a BLS pubkey from the hex pubkey
 	pk, err := boostTypes.HexToPubkey(proposerPubkey.String())
 	if err != nil {
 		log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
@@ -949,11 +970,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Attempt verifying the signature for capella
+	// Validate proposer signature (first attempt verifying the Capella signature)
 	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
 	if !ok || err != nil {
 		log.WithError(err).Debug("could not verify capella payload signature, attempting to verify signature for bellatrix")
-		// Attempt verifying the signature for bellatrix
+		// Fall-back to verifying the bellatrix signature
 		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerBellatrix, pk[:], payload.Signature())
 		if !ok || err != nil {
 			log.WithError(err).Warn("could not verify payload signature")
@@ -962,18 +983,28 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Only allow getPayload requests for the current slot until a certain cutoff time (2 sec into the slot)
-	slotStartMs := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
-	msIntoSlot := uint64(requestTime.UnixMilli()) - slotStartMs
-	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
-	if msIntoSlot > uint64(getPayloadRequestCutoffMs) {
-		log.WithField("msIntoSlot", msIntoSlot).Error("getPayload sent too late")
+	// Log about received payload (with a valid proposer signature)
+	log.Info("getPayload request received")
+
+	// Only allow getPayload requests for the current slot until a certain cutoff time
+	if getPayloadRequestCutoffMs > 0 && msIntoSlot > uint64(getPayloadRequestCutoffMs) {
+		log.Error("getPayload sent too late")
 		api.RespondError(w, http.StatusBadRequest, "sent too late")
 		return
 	}
 
-	// Get the response - from memory, Redis or DB
-	// note that mev-boost might send getPayload for bids of other relays, thus this code wouldn't find anything
+	// Check if validator is blocked.
+	blocked, err := api.db.IsValidatorBlocked(pk.String())
+	if err != nil {
+		log.WithError(err).Error("unable to get validator blocked status")
+	} else if blocked {
+		log.Error("validator is blocked")
+		api.RespondError(w, http.StatusBadRequest, "validator is blocked")
+		return
+	}
+
+	// Get the response - from Redis, Memcache or DB
+	// note that recent mev-boost versions only send getPayload to relays that provided the bid
 	getPayloadResp, err := api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed getting execution payload (1/2)")
@@ -1000,10 +1031,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return
 	}
+	log.Info("block published through beacon node")
 
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
+	// respond to the HTTP request
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
 		"numTx":       getPayloadResp.NumTx(),
