@@ -152,6 +152,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `DISABLE_SSE_PAYLOAD_ATTRIBUTES` - instead of using SSE events, poll withdrawals and randao (requires custom Prysm fork)
+* `MEMCACHE_ALLOW_SAVING_FAIL` -- don't abort builder submission if memcache saving fails
 
 #### Development Environment Variables
 
