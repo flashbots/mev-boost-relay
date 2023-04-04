@@ -923,14 +923,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		payload.Capella = capellaPayload
 	}
 
-	log = log.WithFields(logrus.Fields{
-		"slot":      payload.Slot(),
-		"blockHash": payload.BlockHash(),
-		"idArg":     req.URL.Query().Get("id"),
-	})
-
 	// Snapshot current time
 	requestTime := time.Now().UTC()
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
+	msIntoSlot := uint64(requestTime.UnixMilli()) - (slotStartTimestamp * 1000)
+
+	log = log.WithFields(logrus.Fields{
+		"slot":             payload.Slot(),
+		"blockHash":        payload.BlockHash(),
+		"idArg":            req.URL.Query().Get("id"),
+		"requestTimestamp": requestTime.Unix(),
+		"slotStartSec":     slotStartTimestamp,
+		"msIntoSlot":       msIntoSlot,
+	})
+	log.Info("getPayload request received")
 
 	// Start with signature validation
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
@@ -964,11 +970,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Only allow getPayload requests for the current slot until a certain cutoff time (2 sec into the slot)
-	slotStartMs := (api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)) * 1000
-	msIntoSlot := uint64(requestTime.UnixMilli()) - slotStartMs
-	log.WithField("msIntoSlot", msIntoSlot).Info("getPayload request received")
 	if msIntoSlot > uint64(getPayloadRequestCutoffMs) {
-		log.WithField("msIntoSlot", msIntoSlot).Error("getPayload sent too late")
+		log.Error("getPayload sent too late")
 		api.RespondError(w, http.StatusBadRequest, "sent too late")
 		return
 	}
