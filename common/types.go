@@ -398,82 +398,6 @@ func (s *SignedBeaconBlock) BlockHash() string {
 	return ""
 }
 
-type ExecutionPayloadHeader struct {
-	Bellatrix *boostTypes.ExecutionPayloadHeader
-	Capella   *consensuscapella.ExecutionPayloadHeader
-}
-
-type ExecutionPayload struct {
-	Bellatrix *boostTypes.ExecutionPayload
-	Capella   *consensuscapella.ExecutionPayload
-}
-
-func (e *ExecutionPayload) MarshalJSON() ([]byte, error) {
-	if e.Capella != nil {
-		return json.Marshal(e.Capella)
-	}
-	if e.Bellatrix != nil {
-		return json.Marshal(e.Bellatrix)
-	}
-	return nil, ErrEmptyPayload
-}
-
-func (e *ExecutionPayload) UnmarshalJSON(data []byte) error {
-	capella := new(consensuscapella.ExecutionPayload)
-	err := json.Unmarshal(data, capella)
-	if err == nil {
-		e.Capella = capella
-		return nil
-	}
-	bellatrix := new(boostTypes.ExecutionPayload)
-	err = json.Unmarshal(data, bellatrix)
-	if err != nil {
-		return err
-	}
-	e.Bellatrix = bellatrix
-	return nil
-}
-
-func (e *ExecutionPayload) BlockHash() string {
-	if e.Capella != nil {
-		return e.Capella.BlockHash.String()
-	}
-	if e.Bellatrix != nil {
-		return e.Bellatrix.BlockHash.String()
-	}
-	return ""
-}
-
-func (e *ExecutionPayload) ParentHash() string {
-	if e.Capella != nil {
-		return e.Capella.ParentHash.String()
-	}
-	if e.Bellatrix != nil {
-		return e.Bellatrix.ParentHash.String()
-	}
-	return ""
-}
-
-func (e *ExecutionPayload) BlockNumber() uint64 {
-	if e.Capella != nil {
-		return e.Capella.BlockNumber
-	}
-	if e.Bellatrix != nil {
-		return e.Bellatrix.BlockNumber
-	}
-	return 0
-}
-
-func (e *ExecutionPayload) Timestamp() uint64 {
-	if e.Capella != nil {
-		return e.Capella.Timestamp
-	}
-	if e.Bellatrix != nil {
-		return e.Bellatrix.Timestamp
-	}
-	return 0
-}
-
 type VersionedExecutionPayload struct {
 	Bellatrix *boostTypes.GetPayloadResponse
 	Capella   *api.VersionedExecutionPayload
@@ -512,16 +436,6 @@ func (e *VersionedExecutionPayload) NumTx() int {
 	}
 	if e.Bellatrix != nil {
 		return len(e.Bellatrix.Data.Transactions)
-	}
-	return 0
-}
-
-func (e *ExecutionPayload) NumTx() int {
-	if e.Capella != nil {
-		return len(e.Capella.Transactions)
-	}
-	if e.Bellatrix != nil {
-		return len(e.Bellatrix.Transactions)
 	}
 	return 0
 }

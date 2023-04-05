@@ -6,7 +6,7 @@ WORKDIR /build
 # Cache for the modules
 COPY go.mod ./
 COPY go.sum ./
-RUN go mod download
+RUN --mount=type=cache,mode=0755,target=/root/.cache/go-build go mod download
 
 # Now adding all the code and start building
 ADD . .

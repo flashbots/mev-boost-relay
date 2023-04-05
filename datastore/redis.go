@@ -260,7 +260,6 @@ func (r *RedisCache) GetStats(field string) (value string, err error) {
 
 func (r *RedisCache) GetStatsUint64(field string) (value uint64, err error) {
 	valStr, err := r.client.HGet(context.Background(), r.keyStats, field).Result()
-
 	if err != nil {
 		return 0, err
 	}

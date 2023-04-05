@@ -73,8 +73,8 @@ var (
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
-	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 3000)
-	getPayloadPublishDelayMs     = cli.GetEnvInt("GETPAYLOAD_PUBLISH_DELAY_MS", 500)
+	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
+	getPayloadPublishDelayMs     = cli.GetEnvInt("GETPAYLOAD_PUBLISH_DELAY_MS", 0)
 	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
 
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
@@ -902,12 +902,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	defer api.getPayloadCallsInFlight.Done()
 
 	ua := req.UserAgent()
+	headSlot := api.headSlot.Load()
 	log := api.log.WithFields(logrus.Fields{
 		"method":        "getPayload",
 		"ua":            ua,
 		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength": req.ContentLength,
-		"headSlot":      api.headSlot.Load(),
+		"headSlot":      headSlot,
 		"idArg":         req.URL.Query().Get("id"),
 	})
 
@@ -927,18 +928,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.SignedBlindedBeaconBlock)
-	capellaPayload := new(capella.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(capellaPayload); err != nil {
-		log.WithError(err).Debug("capella getPayload request failed to decode")
-		bellatrixPayload := new(boostTypes.SignedBlindedBeaconBlock)
-		if err := json.NewDecoder(bytes.NewReader(body)).Decode(bellatrixPayload); err != nil {
-			log.WithError(err).Warn("bellatrix getPayload request failed to decode")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
+	if api.isCapella(headSlot) {
+		payload.Capella = new(capella.SignedBlindedBeaconBlock)
+		if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
+			log.WithError(err).Warn("failed to decode capella getPayload request")
+			api.RespondError(w, http.StatusBadRequest, "failed to decode capella payload")
 			return
 		}
-		payload.Bellatrix = bellatrixPayload
 	} else {
-		payload.Capella = capellaPayload
+		payload.Bellatrix = new(boostTypes.SignedBlindedBeaconBlock)
+		if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Bellatrix); err != nil {
+			log.WithError(err).Warn("failed to decode bellatrix getPayload request")
+			api.RespondError(w, http.StatusBadRequest, "failed to decode bellatrix payload")
+			return
+		}
 	}
 
 	// Take time after the decoding, and add to logging
@@ -1039,6 +1042,14 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Random delay before publishing (0-500ms)
 		delayMillis := rand.Intn(getPayloadPublishDelayMs) //nolint:gosec
 		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
+	}
+
+	// Check that ExecutionPayloadHeader fields (sent by the proposer) match our known ExecutionPayload
+	err = EqExecutionPayloadToHeader(payload, getPayloadResp)
+	if err != nil {
+		log.WithError(err).Warn("ExecutionPayloadHeader not matching known ExecutionPayload")
+		api.RespondError(w, http.StatusBadRequest, "invalid execution payload header")
+		return
 	}
 
 	// Publish the signed beacon block via beacon-node
