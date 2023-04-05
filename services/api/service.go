@@ -868,7 +868,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	// Only allow requests for the current slot until a certain cutoff time
 	if getPayloadRequestCutoffMs > 0 && msIntoSlot > uint64(getPayloadRequestCutoffMs) {
 		log.Info("getHeader sent too late")
-		api.RespondError(w, http.StatusBadRequest, "sent too late")
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 		return
 	}
 
@@ -994,7 +994,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Only allow getPayload requests for the current slot until a certain cutoff time
 	if getPayloadRequestCutoffMs > 0 && msIntoSlot > uint64(getPayloadRequestCutoffMs) {
 		log.Warn("getPayload sent too late")
-		api.RespondError(w, http.StatusBadRequest, "sent too late")
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 		return
 	}
 
