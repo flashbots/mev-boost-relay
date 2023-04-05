@@ -819,6 +819,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	parentHashHex := vars["parent_hash"]
 	proposerPubkeyHex := vars["pubkey"]
 	ua := req.UserAgent()
+	headSlot := api.headSlot.Load()
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
@@ -832,6 +833,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	log := api.log.WithFields(logrus.Fields{
 		"method":           "getHeader",
+		"headSlot":         headSlot,
 		"slot":             slotStr,
 		"parentHash":       parentHashHex,
 		"pubkey":           proposerPubkeyHex,
@@ -852,8 +854,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if slot < api.headSlot.Load() {
+	if slot < headSlot {
 		api.RespondError(w, http.StatusBadRequest, "slot is too old")
+		return
+	}
+
+	if slot > headSlot+1 {
+		api.RespondError(w, http.StatusBadRequest, "slot is too far into the future")
 		return
 	}
 
@@ -904,12 +911,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	log := api.log.WithFields(logrus.Fields{
-		"method":        "getPayload",
-		"ua":            ua,
-		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
-		"contentLength": req.ContentLength,
-		"headSlot":      headSlot,
-		"idArg":         req.URL.Query().Get("id"),
+		"method":                "getPayload",
+		"ua":                    ua,
+		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
+		"contentLength":         req.ContentLength,
+		"headSlot":              headSlot,
+		"idArg":                 req.URL.Query().Get("id"),
+		"timestampRequestStart": time.Now().UTC().UnixMilli(),
 	})
 
 	// Read the body first, so we can decode it later
@@ -949,11 +957,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
 	msIntoSlot := uint64(requestTime.UnixMilli()) - (slotStartTimestamp * 1000)
 	log = log.WithFields(logrus.Fields{
-		"slot":             payload.Slot(),
-		"blockHash":        payload.BlockHash(),
-		"slotStartSec":     slotStartTimestamp,
-		"msIntoSlot":       msIntoSlot,
-		"requestTimestamp": requestTime.Unix(),
+		"slot":                 payload.Slot(),
+		"blockHash":            payload.BlockHash(),
+		"slotStartSec":         slotStartTimestamp,
+		"msIntoSlot":           msIntoSlot,
+		"timestampAfterDecode": requestTime.UnixMilli(),
 	})
 
 	// Get the proposer pubkey based on the validator index from the payload
@@ -1053,6 +1061,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Publish the signed beacon block via beacon-node
+	log = log.WithField("timestampBeforePublishing", time.Now().UTC().UnixMilli())
+	log.Info("block published through beacon node")
+
 	signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	if err != nil {
@@ -1060,6 +1071,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return
 	}
+	log = log.WithField("timestampAfterPublishing", time.Now().UTC().UnixMilli())
 	log.Info("block published through beacon node")
 
 	// Remember that getPayload has already been called
