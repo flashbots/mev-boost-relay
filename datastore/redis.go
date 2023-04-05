@@ -258,6 +258,17 @@ func (r *RedisCache) GetStats(field string) (value string, err error) {
 	return r.client.HGet(context.Background(), r.keyStats, field).Result()
 }
 
+func (r *RedisCache) GetStatsUint64(field string) (value uint64, err error) {
+	valStr, err := r.client.HGet(context.Background(), r.keyStats, field).Result()
+
+	if err != nil {
+		return 0, err
+	}
+
+	value, err = strconv.ParseUint(valStr, 10, 64)
+	return value, err
+}
+
 func (r *RedisCache) SetProposerDuties(proposerDuties []boostTypes.BuilderGetValidatorsResponseEntry) (err error) {
 	return r.SetObj(r.keyProposerDuties, proposerDuties, 0)
 }

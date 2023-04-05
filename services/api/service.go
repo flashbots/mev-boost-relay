@@ -990,7 +990,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Only allow getPayload requests for the current slot until a certain cutoff time
 	if getPayloadRequestCutoffMs > 0 && msIntoSlot > uint64(getPayloadRequestCutoffMs) {
-		log.Error("getPayload sent too late")
+		log.Warn("getPayload sent too late")
 		api.RespondError(w, http.StatusBadRequest, "sent too late")
 		return
 	}
@@ -1000,24 +1000,19 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		log.WithError(err).Error("unable to get validator blocked status")
 	} else if blocked {
-		log.Error("validator is blocked")
+		log.Warn("validator is blocked")
 		api.RespondError(w, http.StatusBadRequest, "validator is blocked")
 		return
 	}
 
 	// Check whether getPayload has already been called
-	lastSlotDeliveredStr, err := api.redis.GetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered)
+	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else {
-		slotLastPayloadDelivered, err := strconv.ParseUint(lastSlotDeliveredStr, 10, 64)
-		if err != nil {
-			log.WithError(err).Errorf("failed to parse delivered payload slot from redis: %s", lastSlotDeliveredStr)
-		} else if payload.Slot() <= slotLastPayloadDelivered {
-			log.Error("getPayload was already called for this slot")
-			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
-			return
-		}
+	} else if payload.Slot() <= slotLastPayloadDelivered {
+		log.Warn("getPayload was already called for this slot")
+		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
+		return
 	}
 
 	// Get the response - from Redis, Memcache or DB
