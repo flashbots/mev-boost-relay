@@ -78,7 +78,8 @@ func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 			log.WithError(err).Error("failed to subscribe to head events")
 			time.Sleep(1 * time.Second)
 		}
-		c.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+		c.log.Warn("beaconclient SubscribeRaw/SubscribeToHeadEvents ended, reconnecting")
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -103,7 +104,8 @@ func (c *ProdBeaconInstance) SubscribeToPayloadAttributesEvents(payloadAttribute
 			log.WithError(err).Error("failed to subscribe to payload_attributes events")
 			time.Sleep(1 * time.Second)
 		}
-		c.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+		c.log.Warn("beaconclient SubscribeRaw/SubscribeToPayloadAttributesEvents ended, reconnecting")
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
