@@ -928,7 +928,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.SignedBlindedBeaconBlock)
-	if api.isCapella(headSlot) {
+	if api.isCapella(headSlot + 1) {
 		payload.Capella = new(capella.SignedBlindedBeaconBlock)
 		if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
 			log.WithError(err).Warn("failed to decode capella getPayload request")
@@ -1212,9 +1212,11 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	receivedAt := time.Now().UTC()
+	headSlot := api.headSlot.Load()
 	log := api.log.WithFields(logrus.Fields{
 		"method":        "submitNewBlock",
 		"contentLength": req.ContentLength,
+		"headSlot":      headSlot,
 	})
 
 	var err error
@@ -1241,12 +1243,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	currentSlot := api.headSlot.Load()
-	if api.isCapella(currentSlot) && payload.Capella == nil {
+	if api.isCapella(headSlot+1) && payload.Capella == nil {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
 		return
-	} else if api.isBellatrix(currentSlot) && payload.Bellatrix == nil {
+	} else if api.isBellatrix(headSlot+1) && payload.Bellatrix == nil {
 		log.Info("rejecting submission - non bellatrix payload for bellatrix fork")
 		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
 		return
@@ -1273,13 +1274,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	if payload.Slot() <= api.headSlot.Load() {
+	if payload.Slot() <= headSlot {
 		api.log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return
 	}
 
-	if payload.Slot() > api.headSlot.Load()+1 {
+	if payload.Slot() > headSlot+1 {
 		api.log.Info("submitNewBlock failed: submission for future slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for future slot")
 		return
