@@ -1272,18 +1272,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	})
 
 	// Reject new submissions once the payload for this slot was delivered
-	slotStr, err := api.redis.GetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered)
+	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else {
-		slotLastPayloadDelivered, err := strconv.ParseUint(slotStr, 10, 64)
-		if err != nil {
-			log.WithError(err).Errorf("failed to parse delivered payload slot from redis: %s", slotStr)
-		} else if payload.Slot() <= slotLastPayloadDelivered {
-			log.Info("rejecting submission because payload for this slot was already delivered")
-			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
-			return
-		}
+	} else if payload.Slot() <= slotLastPayloadDelivered {
+		log.Info("rejecting submission because payload for this slot was already delivered")
+		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
+		return
 	}
 
 	if payload.Slot() <= headSlot {

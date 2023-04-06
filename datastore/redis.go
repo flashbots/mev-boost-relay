@@ -258,6 +258,7 @@ func (r *RedisCache) GetStats(field string) (value string, err error) {
 	return r.client.HGet(context.Background(), r.keyStats, field).Result()
 }
 
+// GetStatsUint64 returns (valueUint64, nil), or (0, redis.Nil) if the field does not exist
 func (r *RedisCache) GetStatsUint64(field string) (value uint64, err error) {
 	valStr, err := r.client.HGet(context.Background(), r.keyStats, field).Result()
 	if err != nil {
