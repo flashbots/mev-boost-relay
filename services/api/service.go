@@ -538,13 +538,14 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
-	_apiHeadSlot := api.headSlot.Load()
-	if headSlot <= _apiHeadSlot {
+	prevHeadSlot := api.headSlot.Load()
+	if headSlot <= prevHeadSlot {
 		return
 	}
 
-	if _apiHeadSlot > 0 {
-		for s := _apiHeadSlot + 1; s < headSlot; s++ {
+	// If there's gaps between previous and new headslot, print the missed slots
+	if prevHeadSlot > 0 {
+		for s := prevHeadSlot + 1; s < headSlot; s++ {
 			api.log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
 		}
 	}
@@ -574,6 +575,10 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotHead":           headSlot,
 		"slotStartNextEpoch": (epoch + 1) * uint64(common.SlotsPerEpoch),
 	}).Infof("updated headSlot to %d", headSlot)
+
+	if api.isBellatrix(prevHeadSlot) && api.isCapella(headSlot) {
+		api.log.Info("====================== NOW ON CAPELLA ======================")
+	}
 }
 
 func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
