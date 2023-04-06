@@ -162,6 +162,7 @@ type RelayAPI struct {
 	ffDisablePayloadDBStorage     bool // disable storing the execution payloads in the database
 	ffDisableSSEPayloadAttributes bool // instead of SSE, fall back to previous polling withdrawals+prevRandao from our custom Prysm fork
 	ffAllowMemcacheSavingFail     bool // don't fail when saving payloads to memcache doesn't succeed
+	ffLogInvalidSignaturePayload  bool // log payload if getPayload signature validation fails
 
 	latestParentBlockHash uberatomic.String // used to cache the latest parent block hash, to avoid repetitive similar SSE events
 
@@ -260,6 +261,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("MEMCACHE_ALLOW_SAVING_FAIL") == "1" {
 		api.log.Warn("env: MEMCACHE_ALLOW_SAVING_FAIL - continue block submission request even if saving to memcache fails")
 		api.ffAllowMemcacheSavingFail = true
+	}
+
+	if os.Getenv("LOG_INVALID_GETPAYLOAD_SIGNATURE") == "1" {
+		api.log.Warn("env: LOG_INVALID_GETPAYLOAD_SIGNATURE - getPayload payloads with invalid proposer signature will be logged")
+		api.ffLogInvalidSignaturePayload = true
 	}
 
 	return api, nil
@@ -992,6 +998,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if api.isCapella(headSlot + 1) {
 		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
 		if !ok || err != nil {
+			if api.ffLogInvalidSignaturePayload {
+				txt, _ := json.Marshal(payload) //nolint:errchkjson
+				fmt.Println("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
+			}
 			log.WithError(err).Warn("could not verify capella payload signature")
 			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
 			return
@@ -1000,6 +1010,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Fall-back to verifying the bellatrix signature
 		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerBellatrix, pk[:], payload.Signature())
 		if !ok || err != nil {
+			if api.ffLogInvalidSignaturePayload {
+				txt, _ := json.Marshal(payload) //nolint:errchkjson
+				fmt.Println("payload_invalid_sig_bellatrix: ", string(txt), "pubkey:", proposerPubkey.String())
+			}
 			log.WithError(err).Warn("could not verify bellatrix payload signature")
 			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
 			return
@@ -1007,6 +1021,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Log about received payload (with a valid proposer signature)
+	log = log.WithField("timestampAfterSignatureVerify", time.Now().UTC().UnixMilli())
 	log.Info("getPayload request received")
 
 	// Only allow getPayload requests for the current slot until a certain cutoff time
@@ -1017,16 +1032,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Check if validator is blocked.
-	blocked, err := api.db.IsValidatorBlocked(pk.String())
-	if err != nil {
-		log.WithError(err).Error("unable to get validator blocked status")
-	} else if blocked {
-		log.Warn("validator is blocked")
-		api.RespondError(w, http.StatusBadRequest, "validator is blocked")
-		return
-	}
-
-	log = log.WithField("timestampAfterBlocked", time.Now().UTC().UnixMilli())
+	// TODO: periodic get all blocked validators and store in memory (in bg goroutine)
+	// blocked, err := api.db.IsValidatorBlocked(pk.String())
+	// if err != nil {
+	// 	log.WithError(err).Error("unable to get validator blocked status")
+	// } else if blocked {
+	// 	log.Warn("validator is blocked")
+	// 	api.RespondError(w, http.StatusBadRequest, "validator is blocked")
+	// 	return
+	// }
+	// log = log.WithField("timestampAfterBlockCheck", time.Now().UTC().UnixMilli())
 
 	// Check whether getPayload has already been called
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
