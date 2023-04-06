@@ -989,13 +989,18 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Validate proposer signature (first attempt verifying the Capella signature)
-	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
-	if !ok || err != nil {
-		log.WithError(err).Debug("could not verify capella payload signature, attempting to verify signature for bellatrix")
+	if api.isCapella(headSlot + 1) {
+		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
+		if !ok || err != nil {
+			log.WithError(err).Warn("could not verify capella payload signature")
+			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
+			return
+		}
+	} else {
 		// Fall-back to verifying the bellatrix signature
 		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerBellatrix, pk[:], payload.Signature())
 		if !ok || err != nil {
-			log.WithError(err).Warn("could not verify payload signature")
+			log.WithError(err).Warn("could not verify bellatrix payload signature")
 			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
 			return
 		}
