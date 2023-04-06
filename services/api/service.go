@@ -1021,6 +1021,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	log = log.WithField("timestampAfterBlocked", time.Now().UTC().UnixMilli())
+
 	// Check whether getPayload has already been called
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
 	if err != nil && !errors.Is(err, redis.Nil) {
@@ -1030,6 +1032,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return
 	}
+
+	log = log.WithField("timestampAfterAlreadyDelivered", time.Now().UTC().UnixMilli())
 
 	// Get the response - from Redis, Memcache or DB
 	// note that recent mev-boost versions only send getPayload to relays that provided the bid
