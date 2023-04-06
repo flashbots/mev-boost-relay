@@ -1061,9 +1061,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Publish the signed beacon block via beacon-node
-	log = log.WithField("timestampBeforePublishing", time.Now().UTC().UnixMilli())
-	log.Info("block published through beacon node")
-
+	timeBeforePublish := time.Now().UTC().UnixMilli()
+	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
 	signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	if err != nil {
@@ -1071,8 +1070,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return
 	}
-	log = log.WithField("timestampAfterPublishing", time.Now().UTC().UnixMilli())
-	log.Info("block published through beacon node")
+	timeAfterPublish := time.Now().UTC().UnixMilli()
+	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
+	log.WithField("msNeededForPublishing", timeAfterPublish-timeBeforePublish).Info("block published through beacon node")
 
 	// Remember that getPayload has already been called
 	go func() {
