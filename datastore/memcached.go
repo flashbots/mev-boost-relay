@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-utils/cli"
@@ -75,7 +76,7 @@ func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash s
 	return result, nil
 }
 
-func NewMemcached(prefix string, servers ...string) (*Memcached, error) {
+func NewMemcached(prefix string, timeout time.Duration, servers ...string) (*Memcached, error) {
 	if len(servers) == 0 {
 		return nil, nil
 	}
@@ -89,6 +90,7 @@ func NewMemcached(prefix string, servers ...string) (*Memcached, error) {
 	if err := client.Ping(); err != nil {
 		return nil, err
 	}
+	client.Timeout = timeout
 
 	return &Memcached{client: client, keyPrefix: prefix}, nil
 }

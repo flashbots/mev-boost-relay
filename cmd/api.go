@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -47,6 +48,7 @@ func init() {
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
+	apiCmd.Flags().DurationVar(&memcachedTimeout, "memcached-timeout", memcache.DefaultTimeout, "Specify memcached client timeout")
 	apiCmd.Flags().StringSliceVar(&memcachedURIs, "memcached-uris", defaultMemcachedURIs,
 		"Enable memcached, typically used as secondary backup to Redis for redundancy")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
@@ -104,7 +106,7 @@ var apiCmd = &cobra.Command{
 		var mem *datastore.Memcached
 		if len(memcachedURIs) > 0 {
 			log.Infof("Connecting to Memcached at %s ...", strings.Join(memcachedURIs, ", "))
-			mem, err = datastore.NewMemcached(networkInfo.Name, memcachedURIs...)
+			mem, err = datastore.NewMemcached(networkInfo.Name, memcachedTimeout, memcachedURIs...)
 			if err != nil {
 				log.WithError(err).Fatalf("Failed to connect to Memcached")
 			}

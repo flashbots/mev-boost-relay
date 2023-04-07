@@ -9,6 +9,7 @@ import (
 	"time"
 
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -81,7 +82,7 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 		return
 	}
 
-	mem, err = NewMemcached("test", memcachedEndpoints...)
+	mem, err = NewMemcached("test", memcache.DefaultTimeout, memcachedEndpoints...)
 	if err != nil {
 		return
 	}

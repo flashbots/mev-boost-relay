@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"time"
 
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -15,10 +16,11 @@ var (
 	defaultLogJSON       = os.Getenv("LOG_JSON") != ""
 	defaultLogLevel      = common.GetEnv("LOG_LEVEL", "info")
 
-	beaconNodeURIs []string
-	redisURI       string
-	postgresDSN    string
-	memcachedURIs  []string
+	beaconNodeURIs   []string
+	redisURI         string
+	postgresDSN      string
+	memcachedTimeout time.Duration
+	memcachedURIs    []string
 
 	logJSON  bool
 	logLevel string
