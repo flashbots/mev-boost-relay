@@ -56,21 +56,21 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcache
 
 // RefreshKnownValidators loads known validators from Redis into memory
 func (ds *Datastore) RefreshKnownValidators() (cnt int, err error) {
-	knownValidators, err := ds.redis.GetKnownValidators()
+	knownValidatorsByIndex, err := ds.redis.GetKnownValidators()
 	if err != nil {
 		return 0, err
 	}
 
-	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
-	for pubkey, index := range knownValidators {
-		knownValidatorsByIndex[index] = pubkey
+	knownValidatorsByPubkey := make(map[types.PubkeyHex]uint64)
+	for index, pubkey := range knownValidatorsByIndex {
+		knownValidatorsByPubkey[pubkey] = index
 	}
 
 	ds.knownValidatorsLock.Lock()
 	defer ds.knownValidatorsLock.Unlock()
-	ds.knownValidatorsByPubkey = knownValidators
+	ds.knownValidatorsByPubkey = knownValidatorsByPubkey
 	ds.knownValidatorsByIndex = knownValidatorsByIndex
-	return len(knownValidators), nil
+	return len(knownValidatorsByIndex), nil
 }
 
 func (ds *Datastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {

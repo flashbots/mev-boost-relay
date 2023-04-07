@@ -175,23 +175,23 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	return r.client.Expire(context.Background(), key, expiration).Err()
 }
 
-func (r *RedisCache) GetKnownValidators() (map[boostTypes.PubkeyHex]uint64, error) {
-	validators := make(map[boostTypes.PubkeyHex]uint64)
+func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, error) {
+	validators := make(map[uint64]boostTypes.PubkeyHex)
 	entries, err := r.client.HGetAll(context.Background(), r.keyKnownValidators).Result()
 	if err != nil {
 		return nil, err
 	}
-	for pubkey, proposerIndexStr := range entries {
+	for proposerIndexStr, pubkey := range entries {
 		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
 		if err == nil {
-			validators[boostTypes.PubkeyHex(pubkey)] = proposerIndex
+			validators[proposerIndex] = boostTypes.PubkeyHex(pubkey)
 		}
 	}
 	return validators, nil
 }
 
 func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
-	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
+	return r.client.HSet(context.Background(), r.keyKnownValidators, proposerIndex, PubkeyHexToLowerStr(pubkeyHex)).Err()
 }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
