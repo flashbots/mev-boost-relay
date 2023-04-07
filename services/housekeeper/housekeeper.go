@@ -44,7 +44,7 @@ type Housekeeper struct {
 
 	headSlot uberatomic.Uint64
 
-	proposersAlreadySaved map[string]bool // to avoid repeating redis writes
+	proposersAlreadySaved map[uint64]string // to avoid repeating redis writes
 }
 
 var ErrServerAlreadyStarted = errors.New("server was already started")
@@ -56,7 +56,7 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		redis:                 opts.Redis,
 		db:                    opts.DB,
 		beaconClient:          opts.BeaconClient,
-		proposersAlreadySaved: make(map[string]bool),
+		proposersAlreadySaved: make(map[uint64]string),
 	}
 
 	return server
@@ -202,8 +202,9 @@ func (hk *Housekeeper) updateKnownValidators() {
 			hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
 		}
 
-		// avoid resaving
-		if hk.proposersAlreadySaved[validator.Validator.Pubkey] {
+		// avoid resaving if index->pubkey mapping is the same
+		prevPubkeyForIndex := hk.proposersAlreadySaved[validator.Index]
+		if prevPubkeyForIndex == validator.Validator.Pubkey {
 			continue
 		}
 
@@ -211,7 +212,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 		if err != nil {
 			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
 		} else {
-			hk.proposersAlreadySaved[validator.Validator.Pubkey] = true
+			hk.proposersAlreadySaved[validator.Index] = validator.Validator.Pubkey
 			newValidators++
 		}
 	}

@@ -245,21 +245,22 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 	var lastErrPublishResp publishResp
 	for i := 0; i < len(clients); i++ {
 		res := <-resChans
+		log = log.WithField("beacon", clients[res.index].GetURI())
 		if res.err != nil {
-			log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).WithError(res.err).Error("failed to publish block")
+			log.WithField("statusCode", res.code).WithError(res.err).Warn("failed to publish block")
 			lastErrPublishResp = res
 			continue
 		} else if res.code == 202 {
 			// Should the block fail full validation, a separate success response code (202) is used to indicate that the block was successfully broadcast but failed integration.
 			// https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/publishBlock
-			log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).WithError(res.err).Error("block failed validation but was still broadcast")
+			log.WithField("statusCode", res.code).WithError(res.err).Error("block failed validation but was still broadcast")
 			lastErrPublishResp = res
 			continue
 		}
 
 		c.bestBeaconIndex.Store(int64(res.index))
 
-		log.WithField("beacon", clients[res.index].GetURI()).WithField("statusCode", res.code).Info("published block")
+		log.WithField("statusCode", res.code).Info("published block")
 		return res.code, nil
 	}
 
