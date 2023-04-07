@@ -207,7 +207,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 			continue
 		}
 
-		err := hk.redis.SetKnownValidatorNX(types.PubkeyHex(validator.Validator.Pubkey), validator.Index)
+		err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Validator.Pubkey), validator.Index)
 		if err != nil {
 			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
 		} else {

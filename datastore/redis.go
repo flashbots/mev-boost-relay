@@ -194,10 +194,6 @@ func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerI
 	return r.client.HSet(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
 }
 
-func (r *RedisCache) SetKnownValidatorNX(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
-	return r.client.HSetNX(context.Background(), r.keyKnownValidators, PubkeyHexToLowerStr(pubkeyHex), proposerIndex).Err()
-}
-
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
 	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
 	if errors.Is(err, redis.Nil) {
