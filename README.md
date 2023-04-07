@@ -171,7 +171,6 @@ This builds a local copy of the template and saves it in `website-index.html`
 The website is using:
 * [PureCSS](https://purecss.io/)
 * [HeroIcons](https://heroicons.com/)
-* [Font Awesome](https://fontawesome.com/docs) [icons](https://fontawesome.com/icons)
 
 ---
 
@@ -193,6 +192,20 @@ To enable memcached, you just need to supply the memcached URIs either via envir
 
 You can disable storing the execution payloads in the database with this environment variable:
 `DISABLE_PAYLOAD_DATABASE_STORAGE=1`.
+
+
+### blocked_validators
+
+DISABLED
+
+blocked_validators table is empty by default, relay operators can add proposer pubkeys to the list.
+
+blocked_validators is used to prevent known attackers from exploiting the system. It is an optional list for relays
+to protect against known attackers: there is no reason to add any proposer that is not a known attacker.
+
+Blocked_validators is disabled and not running for any relays.
+
+
 
 ---
 
