@@ -207,6 +207,62 @@ Blocked_validators is disabled and not running for any relays.
 
 
 
+### Builder submission validation nodes
+
+You can run the builder project to validate block builder submissions: https://github.com/flashbots/builder
+
+Here's an example systemd config:
+
+<details>
+<summary><code>/etc/systemd/system/geth.service</code></summary>
+
+```ini
+[Unit]
+Description=mev-boost
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+Type=simple
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=10s
+ExecStart=/home/ubuntu/builder/build/bin/geth \
+    --syncmode=snap \
+    --datadir /var/lib/goethereum \
+    --metrics \
+    --metrics.expensive \
+    --http \
+    --http.api="engine,eth,web3,net,debug,flashbots" \
+    --http.corsdomain "*" \
+    --http.addr "0.0.0.0" \
+    --http.port 8545 \
+    --http.vhosts '*' \
+    --ws \
+    --ws.api="engine,eth,web3,net,debug" \
+    --ws.addr 0.0.0.0 \
+    --ws.port 8546 \
+    --ws.api engine,eth,net,web3 \
+    --ws.origins '*' \
+    --graphql \
+    --graphql.corsdomain '*' \
+    --graphql.vhosts '*' \
+    --authrpc.addr="0.0.0.0" \
+    --authrpc.jwtsecret=/var/lib/goethereum/jwtsecret \
+    --authrpc.vhosts '*' \
+    --cache=8192
+
+[Install]
+WantedBy=multi-user.target
+```
+</details>
+
+
 ---
 
 # Maintainers
