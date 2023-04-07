@@ -128,7 +128,9 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 ```
 
 
-### Environment variables
+## Environment variables
+
+#### General
 
 * `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: 3)
 * `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: 1500)
@@ -160,7 +162,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `RUN_INTEGRATION_TESTS` - when set to "1" enables integration tests, currently used for testing Memcached using comma separated list of endpoints specified by `MEMCACHED_URIS`
 * `TEST_DB_DSN` - specifies connection string using Data Source Name (DSN) for Postgres (default: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable)
 
-### Updating the website
+## Updating the website
 
 * Edit the HTML in `services/website/website.html`
 * Edit template values in `testdata/website-htmldata.json`
@@ -172,11 +174,10 @@ The website is using:
 * [PureCSS](https://purecss.io/)
 * [HeroIcons](https://heroicons.com/)
 
----
 
 # Technical Notes
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for more technical details!
+See [ARCHITECTURE.md](ARCHITECTURE.md) and [Running MEV-Boost-Relay at scale](https://flashbots.notion.site/Draft-Running-a-relay-4040ccd5186c425d9a860cbb29bbfe09) for more technical details!
 
 ### Storing execution payloads and redundant data availability
 
@@ -192,20 +193,6 @@ To enable memcached, you just need to supply the memcached URIs either via envir
 
 You can disable storing the execution payloads in the database with this environment variable:
 `DISABLE_PAYLOAD_DATABASE_STORAGE=1`.
-
-
-### blocked_validators
-
-DISABLED
-
-blocked_validators table is empty by default, relay operators can add proposer pubkeys to the list.
-
-blocked_validators is used to prevent known attackers from exploiting the system. It is an optional list for relays
-to protect against known attackers: there is no reason to add any proposer that is not a known attacker.
-
-Blocked_validators is disabled and not running for any relays.
-
-
 
 ### Builder submission validation nodes
 
