@@ -1031,18 +1031,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Check if validator is blocked.
-	// TODO: periodic get all blocked validators and store in memory (in bg goroutine)
-	// blocked, err := api.db.IsValidatorBlocked(pk.String())
-	// if err != nil {
-	// 	log.WithError(err).Error("unable to get validator blocked status")
-	// } else if blocked {
-	// 	log.Warn("validator is blocked")
-	// 	api.RespondError(w, http.StatusBadRequest, "validator is blocked")
-	// 	return
-	// }
-	// log = log.WithField("timestampAfterBlockCheck", time.Now().UTC().UnixMilli())
-
 	// Check whether getPayload has already been called
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
 	if err != nil && !errors.Is(err, redis.Nil) {
