@@ -506,7 +506,7 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 	var err error
 	if api.isCapella(payloadAttrSlot) {
 		withdrawalsRoot, err = ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
-		log = log.WithField("withdrawalsRoot", withdrawalsRoot)
+		log = log.WithField("withdrawalsRoot", withdrawalsRoot.String())
 		if err != nil {
 			log.WithError(err).Error("error computing withdrawals root")
 			return
@@ -1285,8 +1285,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if withdrawals := payload.Withdrawals(); withdrawals != nil {
-		// get latest withdrawals and verify the roots match
+	if api.isCapella(payload.Slot()) { // Capella requires correct withdrawals
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
