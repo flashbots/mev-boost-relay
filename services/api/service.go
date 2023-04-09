@@ -110,11 +110,11 @@ type RelayAPIOpts struct {
 	InternalAPI     bool
 }
 
-type PayloadAttributesHelper struct {
-	Slot              uint64
-	ParentHash        string
-	WithdrawalsRoot   phase0.Root
-	PayloadAttributes beaconclient.PayloadAttributes
+type payloadAttributesHelper struct {
+	slot              uint64
+	parentHash        string
+	withdrawalsRoot   phase0.Root
+	payloadAttributes beaconclient.PayloadAttributes
 }
 
 // RelayAPI represents a single Relay instance
@@ -160,7 +160,7 @@ type RelayAPI struct {
 	ffAllowMemcacheSavingFail    bool // don't fail when saving payloads to memcache doesn't succeed
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
 
-	payloadAttributes     map[string]PayloadAttributesHelper // key:parentBlockHash
+	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
 }
 
@@ -221,7 +221,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		memcached:    opts.Memcached,
 		db:           opts.DB,
 
-		payloadAttributes:      make(map[string]PayloadAttributesHelper),
+		payloadAttributes:      make(map[string]payloadAttributesHelper),
 		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
@@ -518,17 +518,17 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 
 	// Step 1: clean up old ones
 	for parentBlockHash, attr := range api.payloadAttributes {
-		if attr.Slot < apiHeadSlot {
+		if attr.slot < apiHeadSlot {
 			delete(api.payloadAttributes, parentBlockHash)
 		}
 	}
 
 	// Step 2: save new one
-	api.payloadAttributes[payloadAttributes.Data.ParentBlockHash] = PayloadAttributesHelper{
-		Slot:              payloadAttrSlot,
-		ParentHash:        payloadAttributes.Data.ParentBlockHash,
-		WithdrawalsRoot:   withdrawalsRoot,
-		PayloadAttributes: payloadAttributes.Data.PayloadAttributes,
+	api.payloadAttributes[payloadAttributes.Data.ParentBlockHash] = payloadAttributesHelper{
+		slot:              payloadAttrSlot,
+		parentHash:        payloadAttributes.Data.ParentBlockHash,
+		withdrawalsRoot:   withdrawalsRoot,
+		payloadAttributes: payloadAttributes.Data.PayloadAttributes,
 	}
 
 	log.WithFields(logrus.Fields{
@@ -1272,14 +1272,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	api.payloadAttributesLock.RLock()
 	attrs, ok := api.payloadAttributes[payload.ParentHash()]
 	api.payloadAttributesLock.RUnlock()
-	if !ok || payload.Slot() != attrs.Slot {
+	if !ok || payload.Slot() != attrs.slot {
 		log.Warn("payload attributes not (yet) known")
 		api.RespondError(w, http.StatusInternalServerError, "payload attributes not (yet) known")
 		return
 	}
 
-	if payload.Random() != attrs.PayloadAttributes.PrevRandao {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), attrs.PayloadAttributes.PrevRandao)
+	if payload.Random() != attrs.payloadAttributes.PrevRandao {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), attrs.payloadAttributes.PrevRandao)
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return
@@ -1293,8 +1293,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			return
 		}
 
-		if withdrawalsRoot != attrs.WithdrawalsRoot {
-			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.WithdrawalsRoot.String())
+		if withdrawalsRoot != attrs.withdrawalsRoot {
+			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
 			api.RespondError(w, http.StatusBadRequest, msg)
 			return
