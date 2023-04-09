@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-utils/cli"
@@ -12,6 +13,8 @@ import (
 
 var (
 	defaultMemcachedExpirySeconds = int32(cli.GetEnvInt("MEMCACHED_EXPIRY_SECONDS", 45))
+	defaultMemcachedTimeoutMs     = cli.GetEnvInt("MEMCACHED_CLIENT_TIMEOUT_MS", 250)
+	defaultMemcachedMaxIdleConns  = cli.GetEnvInt("MEMCACHED_MAX_IDLE_CONNS", 10)
 
 	ErrInvalidProposerPublicKey = errors.New("invalid proposer public key specified")
 	ErrInvalidBlockHash         = errors.New("invalid block hash specified")
@@ -89,6 +92,9 @@ func NewMemcached(prefix string, servers ...string) (*Memcached, error) {
 	if err := client.Ping(); err != nil {
 		return nil, err
 	}
+
+	client.MaxIdleConns = defaultMemcachedMaxIdleConns
+	client.Timeout = time.Duration(defaultMemcachedTimeoutMs) * time.Millisecond
 
 	return &Memcached{client: client, keyPrefix: prefix}, nil
 }
