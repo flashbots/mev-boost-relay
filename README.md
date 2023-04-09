@@ -145,6 +145,8 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
 * `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
 * `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: 45)
+* `MEMCACHED_CLIENT_TIMEOUT_MS` - client timeout in milliseconds (default: 250)
+* `MEMCACHED_MAX_IDLE_CONNS` - client max idle conns (default: 10)
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 
