@@ -36,15 +36,23 @@ The relay consists of several components that are designed to run and scale inde
 
 1. Redis
 1. PostgreSQL
-1. one or more [beacon nodes](#running-beacon-node--s-) (note: run multiple beacon nodes!)
+1. one or more beacon nodes
 1. block submission validation nodes
 1. [optional] Memcached
 
-#### About beacon nodes:
+#### Beacon nodes / CL clients
 
-* Relays are strongly advised to run multiple beacon nodes localy!
-* The reason being that on getPayload, the block has to be accepted by a local beacon node before it is returned to the proposer.
-* If the local beacon nodes don't accept it, the block won't be returned to the proposer, which leads to the proposer missing the slot.
+- The relay services need access to one or more beacon node for event subscriptions (in particular the `head` and `payload_attributes` topics).
+- You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
+- The beacon nodes need to support the []`payload_attributes` SSE event](https://github.com/ethereum/beacon-APIs/pull/305).
+- As of now, this is either:
+  - **Lighthouse v4.0.1+** (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint), with the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168). Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
+  - **Prysm v4.0.0+** with the [validate-before-broadcast patch](https://github.com/flashbots/prysm/pull/17/commits/11f997f5933654cfd6e2c8298b61cd1d38bb6d5d) or the more experimental [fast-validate-before-broadcast patch](https://gist.github.com/terencechain/8dbd40da7a640b4833fbedf0976595ad)
+
+**Relays are strongly advised to run multiple beacon nodes!**
+* The reason is that on getPayload, the block has to be validated and broadcast by a local beacon node before it is returned to the proposer.
+* If the local beacon nodes don't accept it (i.e. because it's down), the block won't be returned to the proposer, which leads to the proposer missing the slot.
+* The relay makes the validate+broadcast request to all beacon nodes concurrently, and returns as soon as the first request is successful.
 
 #### Security
 
@@ -81,14 +89,6 @@ Read more in [Why run mev-boost?](https://writings.flashbots.net/writings/why-ru
 ---
 
 # Usage
-
-## Running Beacon Node(s)
-
-- The services need access to a beacon node for event subscriptions. You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
-  - The default beacon API is `localhost:3500` (Prysm default beacon-API port)
-- The beacon node needs to support the `payload_attributes` SSE event [[1]](https://github.com/ethereum/beacon-APIs/pull/305). As of now, this is either:
-  - Prysm v4.0.0+
-  - Lighthouse v4.0.1+ (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint)
 
 ## Running Postgres, Redis and Memcached
 ```bash
@@ -153,7 +153,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_PAYLOAD_DATABASE_STORAGE` - builder API - disable storing execution payloads in the database (i.e. when using memcached as data availability redundancy)
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
-* `DISABLE_SSE_PAYLOAD_ATTRIBUTES` - instead of using SSE events, poll withdrawals and randao (requires custom Prysm fork)
 * `MEMCACHE_ALLOW_SAVING_FAIL` -- don't abort builder submission if memcache saving fails
 
 #### Development Environment Variables

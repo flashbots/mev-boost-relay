@@ -15,6 +15,7 @@ var (
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
 	ErrNoPayloads               = errors.New("no payloads")
+	ErrNoWithdrawals            = errors.New("no withdrawals")
 	ErrPayloadMismatchBellatrix = errors.New("bellatrix beacon-block but no bellatrix payload")
 	ErrPayloadMismatchCapella   = errors.New("capella beacon-block but no capella payload")
 	ErrHeaderHTRMismatch        = errors.New("beacon-block and payload header mismatch")
@@ -38,6 +39,9 @@ func checkBLSPublicKeyHex(pkHex string) error {
 }
 
 func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
+	if w == nil {
+		return phase0.Root{}, ErrNoWithdrawals
+	}
 	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
 }
