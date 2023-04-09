@@ -162,6 +162,7 @@ type RelayAPI struct {
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
+	bidUpdateLock         sync.Mutex
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -1436,8 +1437,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// save this builder's latest bid
+	bidUpdateStartTime := time.Now()
+	api.bidUpdateLock.Lock()
 	err = api.redis.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), receivedAt, getHeaderResponse)
 	if err != nil {
+		api.bidUpdateLock.Unlock()
 		log.WithError(err).Error("could not save latest builder bid")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -1445,11 +1449,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// recalculate top bid
 	err = api.redis.UpdateTopBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	api.bidUpdateLock.Unlock()
 	if err != nil {
 		log.WithError(err).Error("could not compute top bid")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.WithField("bidUpdateDurationMs", time.Since(bidUpdateStartTime).Milliseconds()).Info("bids updated")
 
 	// after top bid is updated, the bid is eligible to win the auction.
 	eligibleAt = time.Now().UTC()
