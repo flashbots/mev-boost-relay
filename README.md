@@ -138,7 +138,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: 10000)
 * `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
 * `API_MAX_HEADER_BYTES` - http maximum header byted (default: 60kb)
-* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum)
+* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum, default: 4)
 * `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: 3000)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
@@ -180,7 +180,7 @@ The website is using:
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and [Running MEV-Boost-Relay at scale](https://flashbots.notion.site/Draft-Running-a-relay-4040ccd5186c425d9a860cbb29bbfe09) for more technical details!
 
-### Storing execution payloads and redundant data availability
+## Storing execution payloads and redundant data availability
 
 By default, the execution payloads for all block submission are stored in Redis and also in the Postgres database,
 to provide redundant data availability for getPayload responses. But the database table is not pruned automatically,
@@ -195,9 +195,9 @@ To enable memcached, you just need to supply the memcached URIs either via envir
 You can disable storing the execution payloads in the database with this environment variable:
 `DISABLE_PAYLOAD_DATABASE_STORAGE=1`.
 
-### Builder submission validation nodes
+## Builder submission validation nodes
 
-You can run the builder project to validate block builder submissions: https://github.com/flashbots/builder
+You can use the [builder project](https://github.com/flashbots/builder) to validate block builder submissions: https://github.com/flashbots/builder
 
 Here's an example systemd config:
 
@@ -250,6 +250,105 @@ WantedBy=multi-user.target
 ```
 </details>
 
+Sending blocks to the validation node:
+
+- The built-in [blocksim-ratelimiter](services/api/blocksim_ratelimiter.go) is a simple example queue implementation.
+- By default, `BLOCKSIM_MAX_CONCURRENT` is set to 4, which allows 4 concurrent block simulations per API node
+- For production use, use the [prio-load-balancer](https://github.com/flashbots/prio-load-balancer) project for a single priority queue,
+  and disable the internal concurrency limit (set `BLOCKSIM_MAX_CONCURRENT` to `0`).
+
+## Beacon node setup
+
+### Lighthouse
+
+- Use Lighthouse v4.0.1+
+- with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint
+- use the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168)
+
+Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
+
+Here's an example Lighthouse systemd config:
+
+<details>
+<summary><code>/etc/systemd/system/lighthouse.service</code></summary>
+
+```ini
+[Unit]
+Description=Lighthouse
+After=network.target
+Wants=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+Type=simple
+Restart=always
+RestartSec=5
+TimeoutStopSec=180
+ExecStart=/home/ubuntu/.cargo/bin/lighthouse bn \
+        --network mainnet \
+        --checkpoint-sync-url=https://mainnet-checkpoint-sync.attestant.io \
+        --eth1 \
+        --http \
+        --http-address "0.0.0.0" \
+        --http-port 3500 \
+        --datadir=/mnt/data/lighthouse \
+        --http-allow-sync-stalled \
+        --execution-endpoints=http://localhost:8551 \
+        --jwt-secrets=/var/lib/goethereum/jwtsecret \
+        --disable-deposit-contract-sync \
+        --always-prepare-payload \
+        --prepare-payload-lookahead 12000
+
+[Install]
+WantedBy=default.target
+```
+
+</details>
+
+
+### Prysm
+
+- Prysm v4.0.0+
+- with this [validate-before-broadcast patch](https://github.com/flashbots/prysm/pull/17/commits/11f997f5933654cfd6e2c8298b61cd1d38bb6d5d) or the more experimental [fast-validate-before-broadcast patch](https://gist.github.com/terencechain/8dbd40da7a640b4833fbedf0976595ad)
+- use `--grpc-max-msg-size 104857600`, because by default the getAllValidators response is too big and fails
+
+Here's an example Prysm systemd config:
+
+<details>
+<summary><code>/etc/systemd/system/prysm.service</code></summary>
+
+```ini
+[Unit]
+Description=Prysm
+After=network.target
+Wants=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+Type=simple
+Restart=always
+RestartSec=5
+TimeoutStopSec=180
+ExecStart=/home/ubuntu/prysm/bazel-bin/cmd/beacon-chain/beacon-chain_/beacon-chain \
+        --accept-terms-of-use \
+        --enable-debug-rpc-endpoints \
+        --checkpoint-sync-url=https://mainnet-checkpoint-sync.attestant.io \
+        --genesis-beacon-api-url=https://mainnet-checkpoint-sync.attestant.io \
+        --grpc-gateway-host "0.0.0.0" \
+        --datadir=/mnt/data/prysm \
+        --p2p-max-peers 100 \
+        --execution-endpoint=http://localhost:8551 \
+        --jwt-secret=/var/lib/goethereum/jwtsecret \
+        --min-sync-peers=1 \
+        --grpc-max-msg-size 104857600
+
+[Install]
+WantedBy=default.target
+```
+
+</details>
 
 ---
 
