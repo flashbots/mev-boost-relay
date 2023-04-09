@@ -1275,7 +1275,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	api.payloadAttributesLock.RUnlock()
 	if !ok || payload.Slot() != attrs.slot {
 		log.Warn("payload attributes not (yet) known")
-		api.RespondError(w, http.StatusInternalServerError, "payload attributes not (yet) known")
+		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
 		return
 	}
 
