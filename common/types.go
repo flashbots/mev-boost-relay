@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/attestantio/go-builder-client/api"
@@ -77,6 +78,7 @@ var (
 	EthNetworkGoerli   = "goerli"
 	EthNetworkMainnet  = "mainnet"
 	EthNetworkZhejiang = "zhejiang"
+	EthNetworkCustom   = "custom"
 
 	CapellaForkVersionRopsten = "0x03001020"
 	CapellaForkVersionSepolia = "0x90000072"
@@ -125,6 +127,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		genesisValidatorsRoot = GenesisValidatorsRootZhejiang
 		bellatrixForkVersion = BellatrixForkVersionZhejiang
 		capellaForkVersion = CapellaForkVersionZhejiang
+	case EthNetworkCustom:
+		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
+		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
+		bellatrixForkVersion = os.Getenv("BELLATRIX_FORK_VERSION")
+		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
