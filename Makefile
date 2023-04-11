@@ -30,7 +30,7 @@ gofumpt:
 fmt:
 	gofmt -s -w .
 	gofumpt -extra -w .
-	gci write . -s standard,default
+	gci write .
 	go mod tidy
 
 test-coverage:
