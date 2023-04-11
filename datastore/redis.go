@@ -182,6 +182,11 @@ func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, erro
 		return nil, err
 	}
 	for proposerIndexStr, pubkey := range entries {
+		if strings.HasPrefix(proposerIndexStr, "0x") {
+			// remove -- it's an artifact of the previous storage by pubkey
+			r.client.HDel(context.Background(), r.keyKnownValidators, proposerIndexStr)
+			continue
+		}
 		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
 		if err == nil {
 			validators[proposerIndex] = boostTypes.PubkeyHex(pubkey)
