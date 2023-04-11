@@ -63,6 +63,7 @@ var websiteCmd = &cobra.Command{
 		}
 
 		log.Infof("Using network: %s", networkInfo.Name)
+		log.Debug(networkInfo.String())
 
 		// Connect to Redis
 		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name)
