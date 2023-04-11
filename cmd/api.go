@@ -81,6 +81,7 @@ var apiCmd = &cobra.Command{
 			log.WithError(err).Fatalf("error getting network details")
 		}
 		log.Infof("Using network: %s", networkInfo.Name)
+		log.Debug(networkInfo.String())
 
 		// Connect to beacon clients and ensure it's synced
 		if len(beaconNodeURIs) == 0 {

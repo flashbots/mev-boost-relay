@@ -60,18 +60,6 @@ func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
 	}, nil
 }
 
-type EthNetworkDetails struct {
-	Name                     string
-	GenesisForkVersionHex    string
-	GenesisValidatorsRootHex string
-	BellatrixForkVersionHex  string
-	CapellaForkVersionHex    string
-
-	DomainBuilder                 boostTypes.Domain
-	DomainBeaconProposerBellatrix boostTypes.Domain
-	DomainBeaconProposerCapella   boostTypes.Domain
-}
-
 var (
 	EthNetworkRopsten  = "ropsten"
 	EthNetworkSepolia  = "sepolia"
@@ -91,6 +79,18 @@ var (
 	BellatrixForkVersionZhejiang  = "0x00000071"
 	CapellaForkVersionZhejiang    = "0x00000072"
 )
+
+type EthNetworkDetails struct {
+	Name                     string
+	GenesisForkVersionHex    string
+	GenesisValidatorsRootHex string
+	BellatrixForkVersionHex  string
+	CapellaForkVersionHex    string
+
+	DomainBuilder                 boostTypes.Domain
+	DomainBeaconProposerBellatrix boostTypes.Domain
+	DomainBeaconProposerCapella   boostTypes.Domain
+}
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
 	var genesisForkVersion string
@@ -161,6 +161,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 	}, nil
+}
+
+func (e *EthNetworkDetails) String() string {
+	return fmt.Sprintf("EthNetworkDetails{Name: %s, GenesisForkVersionHex: %s, GenesisValidatorsRootHex: %s, BellatrixForkVersionHex: %s, CapellaForkVersionHex: %s, DomainBuilder: %x, DomainBeaconProposerBellatrix: %x, DomainBeaconProposerCapella: %x}",
+		e.Name, e.GenesisForkVersionHex, e.GenesisValidatorsRootHex, e.BellatrixForkVersionHex, e.CapellaForkVersionHex, e.DomainBuilder, e.DomainBeaconProposerBellatrix, e.DomainBeaconProposerCapella)
 }
 
 type BidTraceV2 struct {
