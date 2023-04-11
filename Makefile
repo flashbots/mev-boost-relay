@@ -27,6 +27,12 @@ lint:
 gofumpt:
 	gofumpt -l -w -extra .
 
+fmt:
+	gofmt -s -w .
+	gofumpt -extra -w .
+	gci write . -s standard,default
+	go mod tidy
+
 test-coverage:
 	go test -race -v -covermode=atomic -coverprofile=coverage.out ./...
 	go tool cover -func coverage.out
