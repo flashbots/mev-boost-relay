@@ -393,54 +393,70 @@ func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash
 	return r.client.Expire(context.Background(), keyLatestBidsValue, expiryBidCache).Err()
 }
 
-func (r *RedisCache) UpdateTopBid(slot uint64, parentHash, proposerPubkey string) (topBidValue *big.Int, err error) {
-	topBidValue = big.NewInt(0)
+func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse, reqReceivedAt time.Time) (wasUpdated bool, err error) {
+	// Compute the new top bid list.
+	// Only save bid details to redis if current payload is the new top bid
+	prevTopBidValue := big.NewInt(0)
+	prevTopBidBuilderPubkey := ""
 
-	// Get value of all latest bids for a given slot+parent+proposer
-	keyBidValues := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
+	// 1. Get value of all latest bids for a given slot+parent+proposer
+	keyBidValues := r.keyBlockBuilderLatestBidsValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	bidValueMap, err := r.client.HGetAll(context.Background(), keyBidValues).Result()
 	if err != nil {
-		return topBidValue, err
+		return wasUpdated, err
 	}
 
-	// Find bid with highest value among all the latest bids
-	topBidBuilderPubkey := ""
+	// 2. Find bid with highest value among all the latest bids
 	for builderPubkey, bidValue := range bidValueMap {
 		val := new(big.Int)
 		val.SetString(bidValue, 10)
-		if val.Cmp(topBidValue) > 0 {
-			topBidValue = val
-			topBidBuilderPubkey = builderPubkey
+		if val.Cmp(prevTopBidValue) > 0 {
+			prevTopBidValue = val
+			prevTopBidBuilderPubkey = builderPubkey
 		}
 	}
 
-	if topBidBuilderPubkey == "" {
-		return topBidValue, ErrFailedUpdatingTopBidNoBids
+	// 3. Do nothing if there aren't wouldn't be any bids
+	if prevTopBidBuilderPubkey == "" {
+		return wasUpdated, ErrFailedUpdatingTopBidNoBids
 	}
 
-	// Get the actual bid
-	keyBid := r.keyBlockBuilderLatestBids(slot, parentHash, proposerPubkey)
-	bidStr, err := r.client.HGet(context.Background(), keyBid, topBidBuilderPubkey).Result()
+	// 4. Don't update if the current bid is the same as the previously known winning bid
+	if payload.Value().Cmp(prevTopBidValue) < 1 {
+		return wasUpdated, nil
+	}
+
+	// Time to update the top bid
+	// 1. Save the execution payload
+	err = r.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
 	if err != nil {
-		return topBidValue, err
+		return wasUpdated, err
 	}
 
-	// Save the top bid - TODO: consider using redis COPY command
-	keyTopBid := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
+	// 2. Save the new top bid - TODO: use transaction
+	err = r.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), reqReceivedAt, getHeaderResponse)
+	if err != nil {
+		return wasUpdated, err
+	}
+
+	// 3. Get the actual bid
+	keyBid := r.keyBlockBuilderLatestBids(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	bidStr, err := r.client.HGet(context.Background(), keyBid, prevTopBidBuilderPubkey).Result()
+	if err != nil {
+		return wasUpdated, err
+	}
+
+	// 2. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
+	keyTopBid := r.keyCacheGetHeaderResponse(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	err = r.client.Set(context.Background(), keyTopBid, bidStr, expiryBidCache).Err()
 	if err != nil {
-		return topBidValue, err
+		return wasUpdated, err
 	}
+	wasUpdated = true
 
 	// Finally, update the top bid value
-	err = r.SetTopBidValue(slot, parentHash, proposerPubkey, topBidValue)
-	return topBidValue, err
-}
-
-// SetTopBidValue sets the top bid value for a given slot+parent+proposer combination
-func (r *RedisCache) SetTopBidValue(slot uint64, parentHash, proposerPubkey string, topBidValue *big.Int) (err error) {
-	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)
-	return r.client.Set(context.Background(), keyTopBidValue, topBidValue.String(), expiryBidCache).Err()
+	keyTopBidValue := r.keyTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	return wasUpdated, r.client.Set(context.Background(), keyTopBidValue, payload.Value().String(), expiryBidCache).Err()
 }
 
 // GetTopBidValue gets the top bid value for a given slot+parent+proposer combination
@@ -448,7 +464,10 @@ func (r *RedisCache) GetTopBidValue(slot uint64, parentHash, proposerPubkey stri
 	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)
 	topBidValueStr, err := r.client.Get(context.Background(), keyTopBidValue).Result()
 	if err != nil {
-		return topBidValue, err
+		if errors.Is(err, redis.Nil) {
+			return big.NewInt(0), nil
+		}
+		return nil, err
 	}
 	topBidValue = new(big.Int)
 	topBidValue.SetString(topBidValueStr, 10)

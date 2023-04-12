@@ -1329,7 +1329,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	var simErr error
 	var eligibleAt time.Time
 
-	// At end of this function, save builder submission to database (in the background)
+	// save the builder submission to the database whenever this function ends
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt, savePayloadToDatabase)
@@ -1441,7 +1441,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	//
 	// Save to Redis
 	//
-	// first the trace
+	// 1. Save BidTrace
 	log = log.WithField("timestampBeforeUpdateTopBid", time.Now().UTC().UnixMilli())
 	err = api.redis.SaveBidTrace(&bidTrace)
 	if err != nil {
@@ -1450,15 +1450,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// save execution payload (getPayload response)
-	err = api.redis.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
-	if err != nil {
-		log.WithError(err).Error("failed saving execution payload in redis")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// save execution payload to memcached as secondary backup to Redis (in the background)
+	// 2. Kickoff goroutine to save execution payload in memcache
 	if api.memcached != nil {
 		go func() {
 			err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
@@ -1468,18 +1460,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}()
 	}
 
-	// save this builder's latest bid - TODO: combine with UpdateTopBid
-	err = api.redis.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), receivedAt, getHeaderResponse)
+	// Save bid and recalculate top bid
+	_, err = api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt)
 	if err != nil {
-		log.WithError(err).Error("could not save latest builder bid")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// recalculate top bid
-	topBidValue, err := api.redis.UpdateTopBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	if err != nil {
-		log.WithError(err).Error("could not compute top bid")
+		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1489,7 +1473,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithFields(logrus.Fields{
 		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
-		"newTopBidValue":             topBidValue,
+		// "newTopBidValue":             topBidValue,
 	})
 
 	//
