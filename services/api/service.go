@@ -1178,7 +1178,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"proposerPubkey":         payload.ProposerPubkey(),
 		"parentHash":             payload.ParentHash(),
 		"value":                  payload.Value().String(),
-		"tx":                     payload.NumTx(),
+		"numTx":                  payload.NumTx(),
 	})
 
 	if payload.Message() == nil || !payload.HasExecutionPayload() {
@@ -1329,7 +1329,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	var simErr error
 	var eligibleAt time.Time
 
-	// save the builder submission to the database whenever this function ends
+	// Save the builder submission to the database whenever this function ends
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt, savePayloadToDatabase)
@@ -1344,18 +1344,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	// Without cancellations, discard lower or similar value submissions to previous top bid
-	if !isCancellationEnabled {
-		topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-		if err != nil {
-			log.WithError(err).Error("failed to get top bid value from redis")
-		} else if topBidValue != nil {
-			log = log.WithField("topBidValue", topBidValue.String())
-			if payload.Value().Cmp(topBidValue) < 1 {
-				log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
-				w.WriteHeader(http.StatusOK)
-				return
-			}
+	// Get the latest top bid value from Redis
+	topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	if err != nil {
+		log.WithError(err).Error("failed to get top bid value from redis")
+	} else {
+		log = log.WithFields(logrus.Fields{
+			"preTopBidValue":       topBidValue.String(),
+			"newBidHasHigherValue": payload.Value().Cmp(topBidValue) == 1,
+		})
+
+		// Without cancellations, discard lower or similar value submissions to previous top bid
+		if !isCancellationEnabled && payload.Value().Cmp(topBidValue) < 1 {
+			log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 	}
 
@@ -1450,43 +1453,36 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// 2. Kickoff goroutine to save execution payload in memcache
-	if api.memcached != nil {
-		go func() {
-			err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
-			if err != nil {
-				log.WithError(err).Error("failed saving execution payload in memcached")
-			}
-		}()
-	}
-
-	// Save bid and recalculate top bid
-	_, err = api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt)
+	// 2. Save bid and recalculate top bid
+	wasUpdated, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// after top bid is updated, the bid is eligible to win the auction.
-	eligibleAt = time.Now().UTC()
+	// If this was a new top bid, only then save to memcache
+	if wasUpdated {
+		// At this point, the bid is eligible to win the auction
+		eligibleAt = time.Now().UTC()
 
-	log = log.WithFields(logrus.Fields{
-		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
-		// "newTopBidValue":             topBidValue,
-	})
+		// Kickoff saving to memcache in the background
+		if api.memcached != nil {
+			go func() {
+				err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+				if err != nil {
+					log.WithError(err).Error("failed saving execution payload in memcached")
+				}
+			}()
+		}
+	}
 
-	//
-	// all done
-	//
+	// All done
 	log.WithFields(logrus.Fields{
-		"proposerPubkey":    payload.ProposerPubkey(),
-		"value":             payload.Value().String(),
-		"tx":                payload.NumTx(),
-		"requestDurationMs": time.Since(receivedAt).Milliseconds(),
-	}).Info("received block from builder")
-
-	// Respond with OK (TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
+		"bidIsNowTopBid":             wasUpdated,
+		"timestampEligibleAt":        eligibleAt.UnixMilli(),
+		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
+	}).Info("received block from builder") // TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
 	w.WriteHeader(http.StatusOK)
 }
 
