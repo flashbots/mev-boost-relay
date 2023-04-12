@@ -1370,12 +1370,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			log = log.WithField("topBidValue", topBidValue.String())
 
 			// Save locally for later in-memory lookup
-			if localTopBidValue == nil || localTopBidValue.Cmp(topBidValue) < 1 {
-				api.builderTopBidValueLock.Lock()
-				api.builderTopBidValue[payload.ParentHash()] = topBidValue
-				api.builderTopBidValueLock.Unlock()
-				localTopBidValue = topBidValue
-			}
+			api.builderTopBidValueLock.Lock()
+			api.builderTopBidValue[payload.ParentHash()] = topBidValue
+			api.builderTopBidValueLock.Unlock()
+			localTopBidValue = topBidValue
 
 			// Check and return
 			if payload.Value().Cmp(topBidValue) < 1 {
@@ -1519,12 +1517,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"newTopBidValue":             topBidValue,
 	})
 
-	// Update in-memory top bid value (if needed)
-	if topBidValue != nil || localTopBidValue.Cmp(topBidValue) < 1 {
-		api.builderTopBidValueLock.Lock()
-		api.builderTopBidValue[payload.ParentHash()] = topBidValue
-		api.builderTopBidValueLock.Unlock()
-	}
+	// Update in-memory top bid value
+	api.builderTopBidValueLock.Lock()
+	api.builderTopBidValue[payload.ParentHash()] = topBidValue
+	api.builderTopBidValueLock.Unlock()
 
 	//
 	// all done
