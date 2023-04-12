@@ -188,7 +188,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
 	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
+	_, err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
 	topBid, err := cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestBuilderBids(t *testing.T) {
 	// new top bid by builder3: 101
 	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(101))
 	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
+	_, err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
 	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -206,8 +206,10 @@ func TestBuilderBids(t *testing.T) {
 	// builder3 cancels 101 bid, by sending 100 value
 	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
 	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
+	topBidValue, err := cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
+	require.Equal(t, "100", topBidValue.String())
+
 	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
 	require.Equal(t, "100", topBid.Value().String())
@@ -216,6 +218,10 @@ func TestBuilderBids(t *testing.T) {
 	ts, err := cache.GetBuilderLatestPayloadReceivedAt(slot, builder3pk, parentHash, proposerPk)
 	require.NoError(t, err)
 	require.Equal(t, receivedAt.UnixMilli(), ts)
+
+	topBidValue, err = cache.GetTopBidValue(slot, parentHash, proposerPk)
+	require.NoError(t, err)
+	require.Equal(t, topBidValue.String(), topBid.Value().String())
 }
 
 func TestRedisURIs(t *testing.T) {

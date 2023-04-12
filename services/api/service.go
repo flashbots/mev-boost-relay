@@ -162,11 +162,13 @@ type RelayAPI struct {
 	ffForceGetHeader204          bool
 	ffDisableLowPrioBuilders     bool
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
-	ffAllowMemcacheSavingFail    bool // don't fail when saving payloads to memcache doesn't succeed
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
+
+	builderTopBidValue     map[string]*big.Int
+	builderTopBidValueLock sync.RWMutex
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -226,7 +228,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		memcached:    opts.Memcached,
 		db:           opts.DB,
 
-		payloadAttributes:      make(map[string]payloadAttributesHelper),
+		payloadAttributes:  make(map[string]payloadAttributesHelper),
+		builderTopBidValue: make(map[string]*big.Int),
+
 		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
@@ -247,11 +251,6 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("DISABLE_PAYLOAD_DATABASE_STORAGE") == "1" {
 		api.log.Warn("env: DISABLE_PAYLOAD_DATABASE_STORAGE - disabling storing payloads in the database")
 		api.ffDisablePayloadDBStorage = true
-	}
-
-	if os.Getenv("MEMCACHE_ALLOW_SAVING_FAIL") == "1" {
-		api.log.Warn("env: MEMCACHE_ALLOW_SAVING_FAIL - continue block submission request even if saving to memcache fails")
-		api.ffAllowMemcacheSavingFail = true
 	}
 
 	if os.Getenv("LOG_INVALID_GETPAYLOAD_SIGNATURE") == "1" {
@@ -670,7 +669,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
 	})
 
-	start := time.Now()
+	start := time.Now().UTC()
 	registrationTimeUpperBound := start.Add(10 * time.Second)
 
 	numRegTotal := 0
@@ -804,6 +803,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 	log = log.WithFields(logrus.Fields{
 		"timeNeededSec":             time.Since(start).Seconds(),
+		"timeNeededMs":              time.Since(start).Milliseconds(),
 		"numRegistrations":          numRegTotal,
 		"numRegistrationsActive":    numRegActive,
 		"numRegistrationsProcessed": numRegProcessed,
@@ -1142,10 +1142,14 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	receivedAt := time.Now().UTC()
 	headSlot := api.headSlot.Load()
+	args := req.URL.Query()
+	isCancellationEnabled := args.Get("cancellations") == "1"
+
 	log := api.log.WithFields(logrus.Fields{
 		"method":                "submitNewBlock",
 		"contentLength":         req.ContentLength,
 		"headSlot":              headSlot,
+		"cancellationEnabled":   isCancellationEnabled,
 		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
 
@@ -1169,10 +1173,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	log = log.WithFields(logrus.Fields{
+		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
 		"slot":                   payload.Slot(),
 		"builderPubkey":          payload.BuilderPubkey().String(),
 		"blockHash":              payload.BlockHash(),
-		"timestampAfterDecoding": time.Now().UnixMilli(),
+		"proposerPubkey":         payload.ProposerPubkey(),
+		"parentHash":             payload.ParentHash(),
+		"value":                  payload.Value().String(),
+		"tx":                     payload.NumTx(),
 	})
 
 	if payload.Message() == nil || !payload.HasExecutionPayload() {
@@ -1190,16 +1198,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Reject new submissions once the payload for this slot was delivered
-	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else if payload.Slot() <= slotLastPayloadDelivered {
-		log.Info("rejecting submission because payload for this slot was already delivered")
-		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
-		return
-	}
-
 	if payload.Slot() <= headSlot {
 		api.log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
@@ -1212,15 +1210,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.BuilderPubkey().String())
-	log = log.WithFields(logrus.Fields{
-		"builderIsHighPrio":    builderIsHighPrio,
-		"builderIsBlacklisted": builderIsBlacklisted,
-	})
-	if err != nil {
-		log.WithError(err).Error("could not get block builder status")
-	}
-
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
 	if payload.Timestamp() != expectedTimestamp {
@@ -1229,7 +1218,28 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("timestampAfterChecks1", time.Now().UnixMilli())
+	// TODO: have the builder status in-memory, rather than going through redis every time
+	builderIsHighPrio, builderIsBlacklisted, err := api.redis.GetBlockBuilderStatus(payload.BuilderPubkey().String())
+	log = log.WithFields(logrus.Fields{
+		"builderIsHighPrio":    builderIsHighPrio,
+		"builderIsBlacklisted": builderIsBlacklisted,
+	})
+	if err != nil {
+		log.WithError(err).Error("could not get block builder status")
+	} else if builderIsBlacklisted {
+		log.Info("builder is blacklisted")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return
+	} else if api.ffDisableLowPrioBuilders && !builderIsHighPrio {
+		// In case only high-prio requests are accepted, fail others
+		log.Info("rejecting low-prio builder (ff-disable-low-prio-builders)")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	log = log.WithField("timestampAfterChecks1", time.Now().UTC().UnixMilli())
 
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
@@ -1244,29 +1254,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
 		return
 	}
-
-	if builderIsBlacklisted {
-		log.Info("builder is blacklisted")
-		time.Sleep(200 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// In case only high-prio requests are accepted, fail others
-	if api.ffDisableLowPrioBuilders && !builderIsHighPrio {
-		log.Info("rejecting low-prio builder (ff-disable-low-prio-builders)")
-		time.Sleep(200 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	log = log.WithFields(logrus.Fields{
-		"builderHighPrio": builderIsHighPrio,
-		"proposerPubkey":  payload.ProposerPubkey(),
-		"parentHash":      payload.ParentHash(),
-		"value":           payload.Value().String(),
-		"tx":              payload.NumTx(),
-	})
 
 	// Don't accept blocks with 0 value
 	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.NumTx() == 0 {
@@ -1283,7 +1270,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UnixMilli())
+	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
 	api.payloadAttributesLock.RLock()
 	attrs, ok := api.payloadAttributes[payload.ParentHash()]
@@ -1318,13 +1305,24 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Verify the signature
-	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UnixMilli())
+	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
 	builderPubkey := payload.BuilderPubkey()
 	signature := payload.Signature()
 	ok, err = boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
+	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
 	if !ok || err != nil {
 		log.WithError(err).Warn("could not verify builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		return
+	}
+
+	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
+	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.WithError(err).Error("failed to get delivered payload slot from redis")
+	} else if payload.Slot() <= slotLastPayloadDelivered {
+		log.Info("rejecting submission because payload for this slot was already delivered")
+		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return
 	}
 
@@ -1346,9 +1344,47 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
+	// Get the current (in-memory) top bid value
+	api.builderTopBidValueLock.RLock()
+	localTopBidValue := api.builderTopBidValue[payload.ParentHash()]
+	api.builderTopBidValueLock.RUnlock()
+
+	// Without cancellations, discard lower or similar value submissions to previous top bid
+	if !isCancellationEnabled {
+		// Check the local top bid value first
+		if localTopBidValue != nil && payload.Value().Cmp(localTopBidValue) < 1 {
+			log.Info("rejecting submission because it is lower or equal to the top bid (local)")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Then check the top bid value in redis
+		topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+		if err != nil {
+			log.WithError(err).Error("failed to get top bid value from redis")
+		} else if topBidValue != nil {
+			log = log.WithField("topBidValue", topBidValue.String())
+
+			// Save locally for later in-memory lookup
+			if localTopBidValue == nil || localTopBidValue.Cmp(topBidValue) < 1 {
+				api.builderTopBidValueLock.Lock()
+				api.builderTopBidValue[payload.ParentHash()] = topBidValue
+				api.builderTopBidValueLock.Unlock()
+				localTopBidValue = topBidValue
+			}
+
+			// Check and return
+			if payload.Value().Cmp(topBidValue) < 1 {
+				log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+		}
+	}
+
 	// Simulate the block submission and save to db
-	timeBeforeValidation := time.Now()
-	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UnixMilli())
+	timeBeforeValidation := time.Now().UTC()
+	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UTC().UnixMilli())
 	validationRequestPayload := &BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: *payload,
 		RegisteredGasLimit:        slotDuty.GasLimit,
@@ -1371,35 +1407,37 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("timestampAfterValidation", time.Now().UnixMilli())
+	log = log.WithField("timestampAfterValidation", time.Now().UTC().UnixMilli())
 	log.WithFields(logrus.Fields{
 		"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
 	}).Info("block validation successful")
 
-	// Ensure this request is still the latest one. This logic intentionally
-	// ignores the value of the bids and makes the current active bid the one
-	// that arrived at the relay last. This allows for builders to reduce the
-	// value of their bid (effectively cancel a high bid) by ensuring a lower
-	// bid arrives later. Even if the higher bid takes longer to simulate,
-	// by checking the receivedAt timestamp, this logic ensures that the low bid
-	// is not overwritten by the high bid.
-	//
-	// NOTE: this can lead to a rather tricky race condition. If a builder
-	// submits two blocks to the relay concurrently, then the randomness of
-	// network latency will make it impossible to predict which arrives first.
-	// Thus a high bid could unintentionally be overwritten by a low bid that
-	// happened to arrive a few microseconds later. If builders are submitting
-	// blocks at a frequency where they cannot reliably predict which bid will
-	// arrive at the relay first, they should instead use multiple pubkeys to
-	// avoid uninitentionally overwriting their own bids.
-	latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
-	if err != nil {
-		log.WithError(err).Error("failed getting latest payload receivedAt from redis")
-	} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
-		log.Infof("already have a newer payload: now=%d / prev=%d", receivedAt.UnixMilli(), latestPayloadReceivedAt)
-		api.RespondError(w, http.StatusBadRequest, "already using a newer payload")
-		return
+	if isCancellationEnabled {
+		// Ensure this request is still the latest one. This logic intentionally
+		// ignores the value of the bids and makes the current active bid the one
+		// that arrived at the relay last. This allows for builders to reduce the
+		// value of their bid (effectively cancel a high bid) by ensuring a lower
+		// bid arrives later. Even if the higher bid takes longer to simulate,
+		// by checking the receivedAt timestamp, this logic ensures that the low bid
+		// is not overwritten by the high bid.
+		//
+		// NOTE: this can lead to a rather tricky race condition. If a builder
+		// submits two blocks to the relay concurrently, then the randomness of
+		// network latency will make it impossible to predict which arrives first.
+		// Thus a high bid could unintentionally be overwritten by a low bid that
+		// happened to arrive a few microseconds later. If builders are submitting
+		// blocks at a frequency where they cannot reliably predict which bid will
+		// arrive at the relay first, they should instead use multiple pubkeys to
+		// avoid uninitentionally overwriting their own bids.
+		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
+		if err != nil {
+			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
+		} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
+			log.Infof("already have a newer payload: now=%d / prev=%d", receivedAt.UnixMilli(), latestPayloadReceivedAt)
+			api.RespondError(w, http.StatusBadRequest, "already using a newer payload")
+			return
+		}
 	}
 
 	// Prepare the response data
@@ -1427,7 +1465,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Save to Redis
 	//
 	// first the trace
-	log = log.WithField("timestampBeforeUpdateTopBid", time.Now().UnixMilli())
+	log = log.WithField("timestampBeforeUpdateTopBid", time.Now().UTC().UnixMilli())
 	err = api.redis.SaveBidTrace(&bidTrace)
 	if err != nil {
 		log.WithError(err).Error("failed saving bidTrace in redis")
@@ -1443,19 +1481,17 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// save execution payload to memcached as secondary backup to Redis
+	// save execution payload to memcached as secondary backup to Redis (in the background)
 	if api.memcached != nil {
-		err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
-		if err != nil {
-			log.WithError(err).Error("failed saving execution payload in memcached")
-			if !api.ffAllowMemcacheSavingFail {
-				api.RespondError(w, http.StatusInternalServerError, err.Error())
-				return
+		go func() {
+			err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+			if err != nil {
+				log.WithError(err).Error("failed saving execution payload in memcached")
 			}
-		}
+		}()
 	}
 
-	// save this builder's latest bid
+	// save this builder's latest bid - TODO: combine with UpdateTopBid
 	err = api.redis.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), receivedAt, getHeaderResponse)
 	if err != nil {
 		log.WithError(err).Error("could not save latest builder bid")
@@ -1464,7 +1500,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// recalculate top bid
-	err = api.redis.UpdateTopBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	topBidValue, err := api.redis.UpdateTopBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("could not compute top bid")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1472,16 +1508,28 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// after top bid is updated, the bid is eligible to win the auction.
-	log = log.WithField("timestampAfterUpdateTopBid", time.Now().UnixMilli())
 	eligibleAt = time.Now().UTC()
+
+	log = log.WithFields(logrus.Fields{
+		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
+		"newTopBidValue":             topBidValue,
+	})
+
+	// Update in-memory top bid value (if needed)
+	if topBidValue != nil || localTopBidValue.Cmp(topBidValue) < 1 {
+		api.builderTopBidValueLock.Lock()
+		api.builderTopBidValue[payload.ParentHash()] = topBidValue
+		api.builderTopBidValueLock.Unlock()
+	}
 
 	//
 	// all done
 	//
 	log.WithFields(logrus.Fields{
-		"proposerPubkey": payload.ProposerPubkey(),
-		"value":          payload.Value().String(),
-		"tx":             payload.NumTx(),
+		"proposerPubkey":    payload.ProposerPubkey(),
+		"value":             payload.Value().String(),
+		"tx":                payload.NumTx(),
+		"requestDurationMs": time.Since(receivedAt).Milliseconds(),
 	}).Info("received block from builder")
 
 	// Respond with OK (TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6)
