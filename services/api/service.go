@@ -1049,7 +1049,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	if getPayloadPublishDelayMs > 0 {
-		// Random delay before publishing (0-500ms)
 		delayMillis := rand.Intn(getPayloadPublishDelayMs) //nolint:gosec
 		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
 	}
@@ -1133,9 +1132,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	receivedAt := time.Now().UTC()
 	headSlot := api.headSlot.Load()
 	log := api.log.WithFields(logrus.Fields{
-		"method":        "submitNewBlock",
-		"contentLength": req.ContentLength,
-		"headSlot":      headSlot,
+		"method":                "submitNewBlock",
+		"contentLength":         req.ContentLength,
+		"headSlot":              headSlot,
+		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
 
 	var err error
@@ -1157,6 +1157,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithFields(logrus.Fields{
+		"slot":                   payload.Slot(),
+		"builderPubkey":          payload.BuilderPubkey().String(),
+		"blockHash":              payload.BlockHash(),
+		"timestampAfterDecoding": time.Now().UnixMilli(),
+	})
+
 	if payload.Message() == nil || !payload.HasExecutionPayload() {
 		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
 		return
@@ -1171,12 +1178,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
 		return
 	}
-
-	log = log.WithFields(logrus.Fields{
-		"slot":          payload.Slot(),
-		"builderPubkey": payload.BuilderPubkey().String(),
-		"blockHash":     payload.BlockHash(),
-	})
 
 	// Reject new submissions once the payload for this slot was delivered
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
@@ -1216,6 +1217,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
 		return
 	}
+
+	log = log.WithField("timestampAfterChecks1", time.Now().UnixMilli())
 
 	// ensure correct feeRecipient is used
 	api.proposerDutiesLock.RLock()
@@ -1269,6 +1272,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UnixMilli())
+
 	api.payloadAttributesLock.RLock()
 	attrs, ok := api.payloadAttributes[payload.ParentHash()]
 	api.payloadAttributesLock.RUnlock()
@@ -1302,6 +1307,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Verify the signature
+	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UnixMilli())
 	builderPubkey := payload.BuilderPubkey()
 	signature := payload.Signature()
 	ok, err = boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
@@ -1330,7 +1336,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Simulate the block submission and save to db
-	t := time.Now()
+	timeBeforeValidation := time.Now()
+	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UnixMilli())
 	validationRequestPayload := &BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: *payload,
 		RegisteredGasLimit:        slotDuty.GasLimit,
@@ -1340,7 +1347,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if simErr != nil {
 		log = log.WithField("simErr", simErr.Error())
 		log.WithError(simErr).WithFields(logrus.Fields{
-			"duration":   time.Since(t).Seconds(),
+			"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
 		}).Info("block validation failed")
 
@@ -1351,12 +1358,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 		api.RespondError(w, http.StatusBadRequest, simErr.Error())
 		return
-	} else {
-		log.WithFields(logrus.Fields{
-			"duration":   time.Since(t).Seconds(),
-			"numWaiting": api.blockSimRateLimiter.currentCounter(),
-		}).Info("block validation successful")
 	}
+
+	log = log.WithField("timestampAfterValidation", time.Now().UnixMilli())
+	log.WithFields(logrus.Fields{
+		"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
+		"numWaiting": api.blockSimRateLimiter.currentCounter(),
+	}).Info("block validation successful")
 
 	// Ensure this request is still the latest one. This logic intentionally
 	// ignores the value of the bids and makes the current active bid the one
@@ -1408,6 +1416,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Save to Redis
 	//
 	// first the trace
+	log = log.WithField("timestampBeforeUpdateTopBid", time.Now().UnixMilli())
 	err = api.redis.SaveBidTrace(&bidTrace)
 	if err != nil {
 		log.WithError(err).Error("failed saving bidTrace in redis")
@@ -1452,6 +1461,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// after top bid is updated, the bid is eligible to win the auction.
+	log = log.WithField("timestampAfterUpdateTopBid", time.Now().UnixMilli())
 	eligibleAt = time.Now().UTC()
 
 	//
