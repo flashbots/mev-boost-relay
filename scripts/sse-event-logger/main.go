@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -38,7 +39,7 @@ func subscribeHead(instance *beaconclient.ProdBeaconInstance) {
 	go instance.SubscribeToHeadEvents(c)
 	for {
 		headEvent := <-c
-		_log.Infof("headEvent: slot=%d", headEvent.Slot)
+		_log.WithField("timestamp", time.Now().UTC().UnixMilli()).Infof("headEvent: slot=%d", headEvent.Slot)
 	}
 }
 
@@ -49,6 +50,6 @@ func subscribePayloadAttr(instance *beaconclient.ProdBeaconInstance) {
 	go instance.SubscribeToPayloadAttributesEvents(c)
 	for {
 		event := <-c
-		_log.Infof("payloadAttrEvent - slot=%d / parent=%s / randao=%s", event.Data.ProposalSlot, event.Data.ParentBlockHash, event.Data.PayloadAttributes.PrevRandao)
+		_log.WithField("timestamp", time.Now().UTC().UnixMilli()).Infof("payloadAttrEvent: slot=%d / parent=%s / randao=%s", event.Data.ProposalSlot, event.Data.ParentBlockHash, event.Data.PayloadAttributes.PrevRandao)
 	}
 }
