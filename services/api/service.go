@@ -829,7 +829,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	requestTime := time.Now().UTC()
-	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (slot * 12)
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (slot * common.SecondsPerSlot)
 	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 
 	log := api.log.WithFields(logrus.Fields{
@@ -961,7 +961,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Take time after the decoding, and add to logging
 	requestTime := time.Now().UTC()
-	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
 	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 	log = log.WithFields(logrus.Fields{
 		"slot":                 payload.Slot(),
@@ -1029,8 +1029,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Check whether getPayload has already been called
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		log.WithError(err).Error("failed to get delivered payload slot from redis")
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			log.WithError(err).Error("failed to get delivered payload slot from redis")
+		}
 	} else if payload.Slot() <= slotLastPayloadDelivered {
 		log.Warn("getPayload was already called for this slot")
 		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
@@ -1211,7 +1213,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Timestamp check
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
 	if payload.Timestamp() != expectedTimestamp {
 		log.Warnf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp)
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
@@ -1318,8 +1320,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		log.WithError(err).Error("failed to get delivered payload slot from redis")
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			log.WithError(err).Error("failed to get delivered payload slot from redis")
+		}
 	} else if payload.Slot() <= slotLastPayloadDelivered {
 		log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")

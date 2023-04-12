@@ -437,11 +437,13 @@ func (r *RedisCache) UpdateTopBid(slot uint64, parentHash, proposerPubkey string
 	return topBidValue, err
 }
 
+// SetTopBidValue sets the top bid value for a given slot+parent+proposer combination
 func (r *RedisCache) SetTopBidValue(slot uint64, parentHash, proposerPubkey string, topBidValue *big.Int) (err error) {
 	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)
 	return r.client.Set(context.Background(), keyTopBidValue, topBidValue.String(), expiryBidCache).Err()
 }
 
+// GetTopBidValue gets the top bid value for a given slot+parent+proposer combination
 func (r *RedisCache) GetTopBidValue(slot uint64, parentHash, proposerPubkey string) (topBidValue *big.Int, err error) {
 	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)
 	topBidValueStr, err := r.client.Get(context.Background(), keyTopBidValue).Result()
