@@ -166,9 +166,6 @@ type RelayAPI struct {
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
-
-	builderTopBidValue     map[string]*big.Int
-	builderTopBidValueLock sync.RWMutex
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -228,8 +225,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		memcached:    opts.Memcached,
 		db:           opts.DB,
 
-		payloadAttributes:  make(map[string]payloadAttributesHelper),
-		builderTopBidValue: make(map[string]*big.Int),
+		payloadAttributes: make(map[string]payloadAttributesHelper),
 
 		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
@@ -1348,34 +1344,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	// Get the current (in-memory) top bid value
-	api.builderTopBidValueLock.RLock()
-	localTopBidValue := api.builderTopBidValue[payload.ParentHash()]
-	api.builderTopBidValueLock.RUnlock()
-
 	// Without cancellations, discard lower or similar value submissions to previous top bid
 	if !isCancellationEnabled {
-		// Check the local top bid value first
-		if localTopBidValue != nil && payload.Value().Cmp(localTopBidValue) < 1 {
-			log.Info("rejecting submission because it is lower or equal to the top bid (local)")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		// Then check the top bid value in redis
 		topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 		if err != nil {
 			log.WithError(err).Error("failed to get top bid value from redis")
 		} else if topBidValue != nil {
 			log = log.WithField("topBidValue", topBidValue.String())
-
-			// Save locally for later in-memory lookup
-			api.builderTopBidValueLock.Lock()
-			api.builderTopBidValue[payload.ParentHash()] = topBidValue
-			api.builderTopBidValueLock.Unlock()
-			localTopBidValue = topBidValue
-
-			// Check and return
 			if payload.Value().Cmp(topBidValue) < 1 {
 				log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
 				w.WriteHeader(http.StatusOK)
@@ -1516,11 +1491,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
 		"newTopBidValue":             topBidValue,
 	})
-
-	// Update in-memory top bid value
-	api.builderTopBidValueLock.Lock()
-	api.builderTopBidValue[payload.ParentHash()] = topBidValue
-	api.builderTopBidValueLock.Unlock()
 
 	//
 	// all done
