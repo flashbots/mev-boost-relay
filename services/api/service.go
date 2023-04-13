@@ -35,7 +35,6 @@ import (
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -819,8 +818,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	parentHashHex := vars["parent_hash"]
 	proposerPubkeyHex := vars["pubkey"]
 	ua := req.UserAgent()
-	if ffRejectPrysmGetHeader && strings.Contains(ua, "Go-http-client") {
-		log.Info("rejecting prysm submission")
+	if ffRejectPrysmGetHeader && ua == "mev-boost/v1.5.0 Go-http-client/1.1" {
+		api.log.Info("rejecting getHeader from prysm client")
 		w.WriteHeader(http.StatusNoContent)
 	}
 	headSlot := api.headSlot.Load()
