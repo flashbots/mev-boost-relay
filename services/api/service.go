@@ -821,6 +821,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	if api.ffRejectPrysmGetHeader && ua == "mev-boost/v1.5.0 Go-http-client/1.1" {
 		api.log.Info("rejecting getHeader from prysm client")
 		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	headSlot := api.headSlot.Load()
 
