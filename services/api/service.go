@@ -35,6 +35,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -159,6 +160,7 @@ type RelayAPI struct {
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
 	ffAllowMemcacheSavingFail    bool // don't fail when saving payloads to memcache doesn't succeed
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
+	ffRejectPrysmGetHeader       bool
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
@@ -253,6 +255,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		api.log.Warn("env: LOG_INVALID_GETPAYLOAD_SIGNATURE - getPayload payloads with invalid proposer signature will be logged")
 		api.ffLogInvalidSignaturePayload = true
 	}
+
+	api.ffRejectPrysmGetHeader = true
 
 	return api, nil
 }
@@ -815,6 +819,10 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	parentHashHex := vars["parent_hash"]
 	proposerPubkeyHex := vars["pubkey"]
 	ua := req.UserAgent()
+	if ffRejectPrysmGetHeader && strings.Contains(ua, "Go-http-client") {
+		log.Info("rejecting prysm submission")
+		w.WriteHeader(http.StatusNoContent)
+	}
 	headSlot := api.headSlot.Load()
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
