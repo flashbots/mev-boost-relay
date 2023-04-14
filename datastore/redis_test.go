@@ -184,9 +184,9 @@ func TestBuilderBids(t *testing.T) {
 	receivedAt := time.Now()
 
 	// 2 initial bids: 99 and 100 value
-	err := cache.SaveLatestBuilderBid(slot, builder1pk, parentHash, proposerPk, receivedAt, BuildDummyBellatrixGetHeaderResponse(100))
+	err := cache.SaveLatestBuilderBid(slot, builder1pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(100))
 	require.NoError(t, err)
-	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, receivedAt, BuildDummyBellatrixGetHeaderResponse(99))
+	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, "100", topBid.Value().String())
 
 	// new top bid by builder3: 101
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildDummyBellatrixGetHeaderResponse(101))
+	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(101))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, "101", topBid.Value().String())
 
 	// builder3 cancels 101 bid, by sending 100 value
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildDummyBellatrixGetHeaderResponse(99))
+	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
 	require.NoError(t, err)
 	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
 	require.NoError(t, err)

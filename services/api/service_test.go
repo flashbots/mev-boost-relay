@@ -256,7 +256,7 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	// Add a bid
-	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildDummyBellatrixGetHeaderResponse(99))
+	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildEmptyBellatrixGetHeaderResponse(99))
 	require.NoError(t, err)
 	err = backend.redis.UpdateTopBid(slot, parentHash, proposerPubkey)
 	require.NoError(t, err)

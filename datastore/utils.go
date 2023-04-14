@@ -15,7 +15,7 @@ func MakeBlockBuilderStatus(isHighPrio, isBlacklisted bool) BlockBuilderStatus {
 	}
 }
 
-func BuildDummyBellatrixGetHeaderResponse(value uint64) *common.GetHeaderResponse {
+func BuildEmptyBellatrixGetHeaderResponse(value uint64) *common.GetHeaderResponse {
 	return &common.GetHeaderResponse{ //nolint:exhaustruct
 		Bellatrix: &types.GetHeaderResponse{
 			Version: "bellatrix",
