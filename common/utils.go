@@ -122,3 +122,11 @@ func reverse(src []byte) []byte {
 	}
 	return dst
 }
+
+// GetEnvStrSlice returns a slice of strings from a comma-separated env var
+func GetEnvStrSlice(key string, defaultValue []string) []string {
+	if value, ok := os.LookupEnv(key); ok {
+		return strings.Split(value, ",")
+	}
+	return defaultValue
+}

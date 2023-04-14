@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -90,6 +91,25 @@ func (be *testBackend) request(method, path string, payload any) *httptest.Respo
 		require.NoError(be.t, err2)
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
+
+	require.NoError(be.t, err)
+	rr := httptest.NewRecorder()
+	be.relay.getRouter().ServeHTTP(rr, req)
+	return rr
+}
+
+func (be *testBackend) requestWithUA(method, path, userAgent string, payload any) *httptest.ResponseRecorder {
+	var req *http.Request
+	var err error
+
+	if payload == nil {
+		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
+	} else {
+		payloadBytes, err2 := json.Marshal(payload)
+		require.NoError(be.t, err2)
+		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
+	}
+	req.Header.Set("User-Agent", userAgent)
 
 	require.NoError(be.t, err)
 	rr := httptest.NewRecorder()
@@ -218,6 +238,40 @@ func TestRegisterValidator(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	})
+}
+
+func TestGetHeader(t *testing.T) {
+	slot := uint64(2)
+	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
+	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
+
+	// Setup backend with headSlot and genesisTime
+	backend := newTestBackend(t, 1)
+	backend.relay.headSlot.Store(uint64(2))
+	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
+		Data: beaconclient.GetGenesisResponseData{
+			GenesisTime: uint64(time.Now().UTC().Unix()),
+		},
+	}
+
+	// Add a bid
+	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildEmptyBellatrixGetHeaderResponse(99))
+	require.NoError(t, err)
+	err = backend.redis.UpdateTopBid(slot, parentHash, proposerPubkey)
+	require.NoError(t, err)
+
+	// Check 1: regular request works and returns a bid
+	rr := backend.request(http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	resp := common.GetHeaderResponse{}
+	err = json.Unmarshal(rr.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Equal(t, "99", resp.Value().String())
+
+	// Check 2: Request returns 204 if sending a filtered user agent
+	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
+	require.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestBuilderApiGetValidators(t *testing.T) {

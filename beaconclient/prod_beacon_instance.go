@@ -264,11 +264,13 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock) (code
 }
 
 type GetGenesisResponse struct {
-	Data struct {
-		GenesisTime           uint64 `json:"genesis_time,string"`
-		GenesisValidatorsRoot string `json:"genesis_validators_root"`
-		GenesisForkVersion    string `json:"genesis_fork_version"`
-	}
+	Data GetGenesisResponseData `json:"data"`
+}
+
+type GetGenesisResponseData struct {
+	GenesisTime           uint64 `json:"genesis_time,string"`
+	GenesisValidatorsRoot string `json:"genesis_validators_root"`
+	GenesisForkVersion    string `json:"genesis_fork_version"`
 }
 
 // GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis

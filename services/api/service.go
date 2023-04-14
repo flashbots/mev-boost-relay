@@ -37,6 +37,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -82,6 +83,10 @@ var (
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
+
+	apiNoHeaderUserAgents = common.GetEnvStrSlice("NO_HEADER_USERAGENTS", []string{
+		"mev-boost/v1.5.0 Go-http-client/1.1",
+	})
 )
 
 // RelayAPIOpts contains the options for a relay
@@ -862,8 +867,8 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	log.Debug("getHeader request received")
 
-	if ua == "mev-boost/v1.5.0 Go-http-client/1.1" {
-		log.Info("rejecting getHeader from prysm client")
+	if slices.Contains(apiNoHeaderUserAgents, ua) {
+		log.Info("rejecting getHeader by user agent")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1398,7 +1403,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Prepare the response data
-	getHeaderResponse, err := BuildGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	getHeaderResponse, err := BuildDummyGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
