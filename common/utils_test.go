@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,4 +78,23 @@ func TestU256StrToUint256(t *testing.T) {
 			require.Equal(t, test.want, fmt.Sprintf("%d", got))
 		})
 	}
+}
+
+func TestGetEnvStrSlice(t *testing.T) {
+	testEnvVar := "TESTENV_TestGetEnvStrSlice"
+	os.Unsetenv(testEnvVar)
+	r := GetEnvStrSlice(testEnvVar, nil)
+	require.Len(t, r, 0)
+
+	t.Setenv(testEnvVar, "")
+	r = GetEnvStrSlice(testEnvVar, nil)
+	require.Len(t, r, 1)
+	require.Equal(t, "", r[0])
+
+	t.Setenv(testEnvVar, "str1,str2")
+	r = GetEnvStrSlice(testEnvVar, nil)
+	require.Len(t, r, 2)
+	require.Equal(t, "str1", r[0])
+	require.Equal(t, "str2", r[1])
+	os.Unsetenv(testEnvVar)
 }

@@ -35,7 +35,7 @@ var VersionBellatrix boostTypes.VersionString = "bellatrix"
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *common.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*common.GetHeaderResponse, error) {
+func BuildDummyGetHeaderResponse(payload *common.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*common.GetHeaderResponse, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
