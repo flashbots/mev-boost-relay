@@ -149,6 +149,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `MEMCACHED_MAX_IDLE_CONNS` - client max idle conns (default: 10)
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
+* `NO_HEADER_USERAGENTS` - proposer API - comma separated list of user agents for which no bids should be returned
 
 #### Feature Flags
 
