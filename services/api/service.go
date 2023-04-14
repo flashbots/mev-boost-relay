@@ -862,6 +862,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	log.Debug("getHeader request received")
 
+	if ua == "mev-boost/v1.5.0 Go-http-client/1.1" {
+		log.Info("rejecting getHeader from prysm client")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if api.ffForceGetHeader204 {
 		log.Info("forced getHeader 204 response")
 		w.WriteHeader(http.StatusNoContent)
