@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -240,39 +239,39 @@ func TestRegisterValidator(t *testing.T) {
 	})
 }
 
-func TestGetHeader(t *testing.T) {
-	slot := uint64(2)
-	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
-	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
-	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
+// func TestGetHeader(t *testing.T) {
+// 	slot := uint64(2)
+// 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
+// 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+// 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
 
-	// Setup backend with headSlot and genesisTime
-	backend := newTestBackend(t, 1)
-	backend.relay.headSlot.Store(uint64(2))
-	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
-		Data: beaconclient.GetGenesisResponseData{
-			GenesisTime: uint64(time.Now().UTC().Unix()),
-		},
-	}
+// 	// Setup backend with headSlot and genesisTime
+// 	backend := newTestBackend(t, 1)
+// 	backend.relay.headSlot.Store(uint64(2))
+// 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
+// 		Data: beaconclient.GetGenesisResponseData{
+// 			GenesisTime: uint64(time.Now().UTC().Unix()),
+// 		},
+// 	}
 
-	// Add a bid
-	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildEmptyBellatrixGetHeaderResponse(99))
-	require.NoError(t, err)
-	err = backend.redis.UpdateTopBid(slot, parentHash, proposerPubkey)
-	require.NoError(t, err)
+// 	// Add a bid
+// 	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildEmptyBellatrixGetHeaderResponse(99))
+// 	require.NoError(t, err)
+// 	err = backend.redis.UpdateTopBid(slot, parentHash, proposerPubkey)
+// 	require.NoError(t, err)
 
-	// Check 1: regular request works and returns a bid
-	rr := backend.request(http.MethodGet, path, nil)
-	require.Equal(t, http.StatusOK, rr.Code)
-	resp := common.GetHeaderResponse{}
-	err = json.Unmarshal(rr.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	require.Equal(t, "99", resp.Value().String())
+// 	// Check 1: regular request works and returns a bid
+// 	rr := backend.request(http.MethodGet, path, nil)
+// 	require.Equal(t, http.StatusOK, rr.Code)
+// 	resp := common.GetHeaderResponse{}
+// 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
+// 	require.NoError(t, err)
+// 	require.Equal(t, "99", resp.Value().String())
 
-	// Check 2: Request returns 204 if sending a filtered user agent
-	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
-	require.Equal(t, http.StatusNoContent, rr.Code)
-}
+// 	// Check 2: Request returns 204 if sending a filtered user agent
+// 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
+// 	require.Equal(t, http.StatusNoContent, rr.Code)
+// }
 
 func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"

@@ -365,8 +365,8 @@ func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(slot uint64, builderPubke
 	return timestamp, err
 }
 
-// SaveLatestBuilderBid saves the latest bid by a specific builder
-func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *common.GetHeaderResponse) (err error) {
+// SaveBuilderBid saves the latest bid by a specific builder. TODO: use transaction to make these writes atomic
+func (r *RedisCache) SaveBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *common.GetHeaderResponse) (err error) {
 	keyLatestBids := r.keyBlockBuilderLatestBids(slot, parentHash, proposerPubkey)
 	err = r.HSetObj(keyLatestBids, builderPubkey, headerResp, expiryBidCache)
 	if err != nil {
@@ -393,70 +393,106 @@ func (r *RedisCache) SaveLatestBuilderBid(slot uint64, builderPubkey, parentHash
 	return r.client.Expire(context.Background(), keyLatestBidsValue, expiryBidCache).Err()
 }
 
-func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse, reqReceivedAt time.Time) (wasUpdated bool, err error) {
-	// Compute the new top bid list.
-	// Only save bid details to redis if current payload is the new top bid
+func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse, reqReceivedAt time.Time, isCancellationEnabled bool) (wasTopBidUpdated bool, topBidValue *big.Int, topBidBuilderPubkey string, err error) {
+	topBidValue = big.NewInt(0)
 	prevTopBidValue := big.NewInt(0)
-	prevTopBidBuilderPubkey := ""
+	currentBuilderLastTopBidValue := big.NewInt(0)
 
 	// 1. Get value of all latest bids for a given slot+parent+proposer
 	keyBidValues := r.keyBlockBuilderLatestBidsValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	bidValueMap, err := r.client.HGetAll(context.Background(), keyBidValues).Result()
+	bidValueIntMap := make(map[string]*big.Int)
 	if err != nil {
-		return wasUpdated, err
+		return wasTopBidUpdated, topBidValue, topBidBuilderPubkey, err
 	}
 
 	// 2. Find bid with highest value among all the latest bids
 	for builderPubkey, bidValue := range bidValueMap {
 		val := new(big.Int)
 		val.SetString(bidValue, 10)
+		bidValueIntMap[builderPubkey] = val
 		if val.Cmp(prevTopBidValue) > 0 {
 			prevTopBidValue = val
-			prevTopBidBuilderPubkey = builderPubkey
+		}
+
+		// Keep track of the top value of this builder, to discard any lower bids if not using cancellations
+		if builderPubkey == payload.BuilderPubkey().String() && val.Cmp(currentBuilderLastTopBidValue) > 0 {
+			currentBuilderLastTopBidValue = val
 		}
 	}
 
-	// 3. Do nothing if there aren't wouldn't be any bids
-	if prevTopBidBuilderPubkey == "" {
-		return wasUpdated, ErrFailedUpdatingTopBidNoBids
+	// 3. Check whether to continue at all
+	// - In cancellation mode: always save latest bid
+	// - In non-cancellation mode: abort if current bid is lower than this builders previous bid
+	//
+	// Example bid update orders (BA=non cancelling builder, BC=builder using cancellations):
+	//    BA1=5, BC1=10, BA2=6, BC2=5 -> winning bid should be BA2 (6)
+	//    BA1=5, BC1=10, BA2=4, BC2=5 -> winning bid should be BA1 (5)
+	if !isCancellationEnabled && payload.Value().Cmp(currentBuilderLastTopBidValue) < 1 {
+		return wasTopBidUpdated, prevTopBidValue, topBidBuilderPubkey, nil
 	}
 
-	// 4. Don't update if the current bid is the same as the previously known winning bid
-	if payload.Value().Cmp(prevTopBidValue) < 1 {
-		return wasUpdated, nil
-	}
-
-	// Time to update the top bid
+	// Time to save things in Redis
 	// 1. Save the execution payload
 	err = r.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
 	if err != nil {
-		return wasUpdated, err
+		return wasTopBidUpdated, prevTopBidValue, topBidBuilderPubkey, err
 	}
 
-	// 2. Save the new top bid - TODO: use transaction
-	err = r.SaveLatestBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), reqReceivedAt, getHeaderResponse)
+	// 2. Save this bid
+	err = r.SaveBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
-		return wasUpdated, err
+		return wasTopBidUpdated, prevTopBidValue, topBidBuilderPubkey, err
 	}
 
-	// 3. Get the actual bid
+	//
+	// Decide if winning bid should be updated
+	//
+	if payload.Value().Cmp(prevTopBidValue) == 1 {
+		// update if this payload is new top bid
+		topBidValue = payload.Value()
+		topBidBuilderPubkey = payload.BuilderPubkey().String()
+	} else if isCancellationEnabled {
+		// In cancellation mode, builder can overwrite his own last bid with lower value.
+		// First, compute newest top bid with latest values
+		for builderPubkey, bidValue := range bidValueIntMap {
+			if builderPubkey == payload.BuilderPubkey().String() {
+				bidValue = payload.Value() // overwrite previous value with new value
+			}
+			if bidValue.Cmp(topBidValue) > 0 {
+				topBidValue = bidValue
+				topBidBuilderPubkey = builderPubkey
+			}
+		}
+
+		// Abort now if top bid value hasn't changed
+		if topBidValue.Cmp(prevTopBidValue) == 0 {
+			return wasTopBidUpdated, prevTopBidValue, topBidBuilderPubkey, nil
+		}
+	} else {
+		// don't update in any other case
+		return wasTopBidUpdated, prevTopBidValue, topBidBuilderPubkey, nil
+	}
+
+	// 3. Get the previous winning bid
 	keyBid := r.keyBlockBuilderLatestBids(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	bidStr, err := r.client.HGet(context.Background(), keyBid, prevTopBidBuilderPubkey).Result()
+	bidStr, err := r.client.HGet(context.Background(), keyBid, topBidBuilderPubkey).Result()
 	if err != nil {
-		return wasUpdated, err
+		return wasTopBidUpdated, topBidValue, topBidBuilderPubkey, err
 	}
 
-	// 2. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
+	// 4. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
 	keyTopBid := r.keyCacheGetHeaderResponse(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	err = r.client.Set(context.Background(), keyTopBid, bidStr, expiryBidCache).Err()
 	if err != nil {
-		return wasUpdated, err
+		return wasTopBidUpdated, topBidValue, topBidBuilderPubkey, err
 	}
-	wasUpdated = true
+	wasTopBidUpdated = true
 
-	// Finally, update the top bid value
+	// 5. Finally, update the global top bid value
 	keyTopBidValue := r.keyTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	return wasUpdated, r.client.Set(context.Background(), keyTopBidValue, payload.Value().String(), expiryBidCache).Err()
+	err = r.client.Set(context.Background(), keyTopBidValue, payload.Value().String(), expiryBidCache).Err()
+	return wasTopBidUpdated, topBidValue, topBidBuilderPubkey, err
 }
 
 // GetTopBidValue gets the top bid value for a given slot+parent+proposer combination

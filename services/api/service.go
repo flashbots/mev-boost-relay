@@ -1073,7 +1073,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Publish the signed beacon block via beacon-node
 	timeBeforePublish := time.Now().UTC().UnixMilli()
 	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
-	signedBeaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+	signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	if err != nil {
 		log.WithError(err).WithField("code", code).Error("failed to publish block")
@@ -1365,7 +1365,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Simulate the block submission and save to db
 	timeBeforeValidation := time.Now().UTC()
 	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UTC().UnixMilli())
-	validationRequestPayload := &BuilderBlockValidationRequest{
+	validationRequestPayload := &common.BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: *payload,
 		RegisteredGasLimit:        slotDuty.GasLimit,
 	}
@@ -1421,14 +1421,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Prepare the response data
-	getHeaderResponse, err := BuildDummyGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	getHeaderResponse, err := common.BuildGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
 		log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	getPayloadResponse, err := BuildGetPayloadResponse(payload)
+	getPayloadResponse, err := common.BuildGetPayloadResponse(payload)
 	if err != nil {
 		log.WithError(err).Error("could not build getPayload response")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -1454,7 +1454,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// 2. Save bid and recalculate top bid
-	wasUpdated, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt)
+	wasUpdated, _, _, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
