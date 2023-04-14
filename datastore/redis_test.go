@@ -1,22 +1,14 @@
 package datastore
 
 import (
-	"encoding/hex"
 	"math/big"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/attestantio/go-builder-client/api/capella"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
-	"github.com/holiman/uint256"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -181,53 +173,6 @@ func TestActiveValidators(t *testing.T) {
 	require.True(t, vals[pk1])
 }
 
-func _strToPhase0Pubkey(s string) (ret phase0.BLSPubKey, err error) {
-	builderPubkey, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
-	if err != nil {
-		return ret, errors.Wrap(err, "invalid value for builder pubkey")
-	}
-	if len(builderPubkey) != phase0.PublicKeyLength {
-		return ret, errors.New("incorrect length for builder pubkey")
-	}
-	copy(ret[:], builderPubkey)
-	return ret, nil
-}
-
-func _createTestBlockSubmission(builderPubkey string, value *big.Int) (*common.BuilderSubmitBlockRequest, error) {
-	builderPk, err := _strToPhase0Pubkey(builderPubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := &common.BuilderSubmitBlockRequest{
-		Capella: &capella.SubmitBlockRequest{
-			Message: &v1.BidTrace{
-				BuilderPubkey: builderPk,
-				Value:         uint256.MustFromBig(value),
-			},
-			ExecutionPayload: &capellaspec.ExecutionPayload{},
-			Signature:        phase0.BLSSignature{},
-		},
-	}
-	return ret, nil
-}
-
-func _createTestBlockSubmission2(t *testing.T, builderPubkey string, value *big.Int, relaySk *bls.SecretKey, relayPk *types.PublicKey, domain types.Domain) (payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse) {
-	t.Helper()
-
-	var err error
-	payload, err = _createTestBlockSubmission(builderPubkey, value)
-	require.NoError(t, err)
-
-	getHeaderResponse, err = common.BuildGetHeaderResponse(payload, relaySk, relayPk, domain)
-	require.NoError(t, err)
-
-	getPayloadResponse, err = common.BuildGetPayloadResponse(payload)
-	require.NoError(t, err)
-
-	return payload, getPayloadResponse, getHeaderResponse
-}
-
 func TestBuilderBids(t *testing.T) {
 	mainnetDetails, err := common.NewEthNetworkDetails(common.EthNetworkMainnet)
 	require.NoError(t, err)
@@ -252,34 +197,34 @@ func TestBuilderBids(t *testing.T) {
 	cache := setupTestRedis(t)
 
 	// submit ba1=10
-	payload, getPayloadResp, getHeaderResp := _createTestBlockSubmission2(t, bApubkey, big.NewInt(10), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(10), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, _, _, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
 	require.True(t, wasTopBidUpdated)
 
 	// submit ba2=5 (should not update)
-	payload, getPayloadResp, getHeaderResp = _createTestBlockSubmission2(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, topBidValue, _, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
 	require.False(t, wasTopBidUpdated)
 	require.Equal(t, big.NewInt(10), topBidValue)
 
 	// submit ba3c=5 (should update, because of cancellation)
-	payload, getPayloadResp, getHeaderResp = _createTestBlockSubmission2(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, topBidValue, _, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
 	require.NoError(t, err)
 	require.True(t, wasTopBidUpdated)
 	require.Equal(t, big.NewInt(5), topBidValue)
 
 	// submit bb1=20
-	payload, getPayloadResp, getHeaderResp = _createTestBlockSubmission2(t, bBpubkey, big.NewInt(20), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, topBidValue, _, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
 	require.True(t, wasTopBidUpdated)
 	require.Equal(t, big.NewInt(20), topBidValue)
 
 	// submit ba4c=3
-	payload, getPayloadResp, getHeaderResp = _createTestBlockSubmission2(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, topBidValue, topBidBuilder, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
 	require.NoError(t, err)
 	require.False(t, wasTopBidUpdated)
@@ -287,7 +232,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, bBpubkey, topBidBuilder)
 
 	// submit bb2c=2 (cancels prev top bid bb1)
-	payload, getPayloadResp, getHeaderResp = _createTestBlockSubmission2(t, bBpubkey, big.NewInt(2), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(2), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
 	wasTopBidUpdated, topBidValue, topBidBuilder, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
 	require.NoError(t, err)
 	require.True(t, wasTopBidUpdated)

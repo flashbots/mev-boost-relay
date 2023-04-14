@@ -97,24 +97,24 @@ func (be *testBackend) request(method, path string, payload any) *httptest.Respo
 	return rr
 }
 
-func (be *testBackend) requestWithUA(method, path, userAgent string, payload any) *httptest.ResponseRecorder {
-	var req *http.Request
-	var err error
+// func (be *testBackend) requestWithUA(method, path, userAgent string, payload any) *httptest.ResponseRecorder {
+// 	var req *http.Request
+// 	var err error
 
-	if payload == nil {
-		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
-	} else {
-		payloadBytes, err2 := json.Marshal(payload)
-		require.NoError(be.t, err2)
-		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
-	}
-	req.Header.Set("User-Agent", userAgent)
+// 	if payload == nil {
+// 		req, err = http.NewRequest(method, path, bytes.NewReader(nil))
+// 	} else {
+// 		payloadBytes, err2 := json.Marshal(payload)
+// 		require.NoError(be.t, err2)
+// 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
+// 	}
+// 	req.Header.Set("User-Agent", userAgent)
 
-	require.NoError(be.t, err)
-	rr := httptest.NewRecorder()
-	be.relay.getRouter().ServeHTTP(rr, req)
-	return rr
-}
+// 	require.NoError(be.t, err)
+// 	rr := httptest.NewRecorder()
+// 	be.relay.getRouter().ServeHTTP(rr, req)
+// 	return rr
+// }
 
 func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
 	var err error
@@ -243,6 +243,7 @@ func TestRegisterValidator(t *testing.T) {
 // 	slot := uint64(2)
 // 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
 // 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+// 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 // 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
 
 // 	// Setup backend with headSlot and genesisTime
@@ -254,11 +255,19 @@ func TestRegisterValidator(t *testing.T) {
 // 		},
 // 	}
 
-// 	// Add a bid
-// 	err := backend.redis.SaveLatestBuilderBid(slot, proposerPubkey, parentHash, proposerPubkey, time.Now(), datastore.BuildEmptyBellatrixGetHeaderResponse(99))
+// 	mainnetDetails, err := common.NewEthNetworkDetails(common.EthNetworkMainnet)
 // 	require.NoError(t, err)
-// 	err = backend.redis.UpdateTopBid(slot, parentHash, proposerPubkey)
+// 	relaySk, _, err := bls.GenerateNewKeypair()
 // 	require.NoError(t, err)
+// 	blsPubKey, _ := bls.PublicKeyFromSecretKey(relaySk)
+// 	var relayPubKey types.PublicKey
+// 	err = relayPubKey.FromSlice(bls.PublicKeyToBytes(blsPubKey))
+// 	require.NoError(t, err)
+
+// 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, big.NewInt(10), relaySk, &relayPubKey, mainnetDetails.DomainBuilder)
+// 	wasUpdated, _, _, err := backend.redis.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
+// 	require.NoError(t, err)
+// 	require.True(t, wasUpdated)
 
 // 	// Check 1: regular request works and returns a bid
 // 	rr := backend.request(http.MethodGet, path, nil)

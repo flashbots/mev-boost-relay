@@ -3,23 +3,33 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/attestantio/go-builder-client/api/capella"
+	v1 "github.com/attestantio/go-builder-client/api/v1"
+	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
 	ErrInvalidForkVersion = errors.New("invalid fork version")
 	ErrHTTPErrorResponse  = errors.New("got an HTTP error response")
+	ErrIncorrectLength    = errors.New("incorrect length")
 )
 
 func makeRequest(ctx context.Context, client http.Client, method, url string, payload any) (*http.Response, error) {
@@ -59,7 +69,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 
 // ComputeDomain computes the signing domain
 func ComputeDomain(domainType types.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain types.Domain, err error) {
-	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
+	genesisValidatorsRoot := types.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
 	if err != nil || len(forkVersionBytes) != 4 {
 		return domain, ErrInvalidForkVersion
@@ -129,4 +139,51 @@ func GetEnvStrSlice(key string, defaultValue []string) []string {
 		return strings.Split(value, ",")
 	}
 	return defaultValue
+}
+
+func StrToPhase0Pubkey(s string) (ret phase0.BLSPubKey, err error) {
+	builderPubkey, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+	if err != nil {
+		return ret, err
+	}
+	if len(builderPubkey) != phase0.PublicKeyLength {
+		return ret, ErrIncorrectLength
+	}
+	copy(ret[:], builderPubkey)
+	return ret, nil
+}
+
+func _createTestBlockSubmission(builderPubkey string, value *big.Int) (*BuilderSubmitBlockRequest, error) {
+	builderPk, err := StrToPhase0Pubkey(builderPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := &BuilderSubmitBlockRequest{ //nolint:exhaustruct
+		Capella: &capella.SubmitBlockRequest{
+			Message: &v1.BidTrace{ //nolint:exhaustruct
+				BuilderPubkey: builderPk,
+				Value:         uint256.MustFromBig(value),
+			},
+			ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+			Signature:        phase0.BLSSignature{},
+		},
+	}
+	return ret, nil
+}
+
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.Int, relaySk *bls.SecretKey, relayPk *types.PublicKey, domain types.Domain) (payload *BuilderSubmitBlockRequest, getPayloadResponse *GetPayloadResponse, getHeaderResponse *GetHeaderResponse) {
+	t.Helper()
+
+	var err error
+	payload, err = _createTestBlockSubmission(builderPubkey, value)
+	require.NoError(t, err)
+
+	getHeaderResponse, err = BuildGetHeaderResponse(payload, relaySk, relayPk, domain)
+	require.NoError(t, err)
+
+	getPayloadResponse, err = BuildGetPayloadResponse(payload)
+	require.NoError(t, err)
+
+	return payload, getPayloadResponse, getHeaderResponse
 }
