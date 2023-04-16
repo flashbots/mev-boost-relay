@@ -369,7 +369,6 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		}
 	})
 }
-
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
@@ -488,4 +487,161 @@ func gzipBytes(t *testing.T, b []byte) []byte {
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 	return buf.Bytes()
+}
+
+func TestDataApiGetBuilderBlocksReceived(t *testing.T) {
+	path := "/relay/v1/data/bidtraces/builder_blocks_received"
+
+	t.Run("Reject requests with cursor", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		rr := backend.request(http.MethodGet, path+"?cursor=1", nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "cursor argument not supported")
+	})
+
+	t.Run("Accept valid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validSlot := uint64(2)
+		validSlotPath := fmt.Sprintf("%s?slot=%d", path, validSlot)
+		rr := backend.request(http.MethodGet, validSlotPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Accept valid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validSlot := uint64(2)
+		validSlotPath := fmt.Sprintf("%s?slot=%d", path, validSlot)
+		rr := backend.request(http.MethodGet, validSlotPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidSlots := []string{
+			"-1",
+			"1.1",
+		}
+
+		for _, invalidSlot := range invalidSlots {
+			invalidSlotPath := fmt.Sprintf("%s?slot=%s", path, invalidSlot)
+			rr := backend.request(http.MethodGet, invalidSlotPath, nil)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid slot argument")
+		}
+	})
+
+	t.Run("Accept valid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBlockHashes := []string{
+			// One character too long.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+			// One character too short.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Missing the 0x prefix.
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Has an invalid hex character ('z' at the end).
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaz",
+		}
+
+		for _, invalidBlockHash := range invalidBlockHashes {
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			t.Log(invalidBlockHash)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		}
+	})
+
+	t.Run("Accept valid block_number", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBlockNumber := uint64(2)
+		validBlockNumberPath := fmt.Sprintf("%s?block_number=%d", path, validBlockNumber)
+		rr := backend.request(http.MethodGet, validBlockNumberPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid block_number", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBlockNumbers := []string{
+			"-1",
+			"1.1",
+		}
+
+		for _, invalidBlockNumber := range invalidBlockNumbers {
+			invalidBlockNumberPath := fmt.Sprintf("%s?block_number=%s", path, invalidBlockNumber)
+			rr := backend.request(http.MethodGet, invalidBlockNumberPath, nil)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_number argument")
+		}
+	})
+
+	t.Run("Accept valid builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBuilderPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+		rr := backend.request(http.MethodGet, path+"?builder_pubkey="+validBuilderPubkey, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBuilderPubkeys := []string{
+			// One character too long.
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b908907921",
+			// One character too short.
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b9089079",
+			// Missing the 0x prefix.
+			"6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792",
+			// Has an invalid hex character ('z' at the end).
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b9089079z",
+		}
+
+		for _, invalidBuilderPubkey := range invalidBuilderPubkeys {
+			rr := backend.request(http.MethodGet, path+"?builder_pubkey="+invalidBuilderPubkey, nil)
+			t.Log(invalidBuilderPubkey)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid builder_pubkey argument")
+		}
+	})
+
+	t.Run("Reject no slot or block_hash or block_number or builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		rr := backend.request(http.MethodGet, path, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "need to query for specific slot or block_hash or block_number or builder_pubkey")
+	})
+
+	t.Run("Accept valid limit", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		blockNumber := uint64(1)
+		limit := uint64(1)
+		limitPath := fmt.Sprintf("%s?block_number=%d&limit=%d", path, blockNumber, limit)
+		rr := backend.request(http.MethodGet, limitPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject above max limit", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		blockNumber := uint64(1)
+		maximumLimit := uint64(500)
+		oneAboveMaxLimit := maximumLimit + 1
+		limitPath := fmt.Sprintf("%s?block_number=%d&limit=%d", path, blockNumber, oneAboveMaxLimit)
+		rr := backend.request(http.MethodGet, limitPath, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), fmt.Sprintf("maximum limit is %d", maximumLimit))
+	})
 }

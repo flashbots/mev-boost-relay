@@ -120,3 +120,30 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		return nil, ErrUnsupportedExecutionPayload
 	}
 }
+func BuilderSubmissionEntryToBidTraceV3WithEligibleTimestampMsJSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV3WithEligibleTimestampMsJSON {
+	timestamp := payload.InsertedAt
+	if payload.ReceivedAt.Valid {
+		timestamp = payload.ReceivedAt.Time
+	}
+
+	return common.BidTraceV3WithEligibleTimestampMsJSON{
+		EligibleTimestampMs: payload.EligibleAt.Time.UnixMilli(),
+		BidTraceV2WithTimestampJSON: common.BidTraceV2WithTimestampJSON{
+			Timestamp:   timestamp.Unix(),
+			TimestampMs: timestamp.UnixMilli(),
+			BidTraceV2JSON: common.BidTraceV2JSON{
+				Slot:                 payload.Slot,
+				ParentHash:           payload.ParentHash,
+				BlockHash:            payload.BlockHash,
+				BuilderPubkey:        payload.BuilderPubkey,
+				ProposerPubkey:       payload.ProposerPubkey,
+				ProposerFeeRecipient: payload.ProposerFeeRecipient,
+				GasLimit:             payload.GasLimit,
+				GasUsed:              payload.GasUsed,
+				Value:                payload.Value,
+				NumTx:                payload.NumTx,
+				BlockNumber:          payload.BlockNumber,
+			},
+		},
+	}
+}
