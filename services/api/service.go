@@ -1478,12 +1478,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("wasTopBidUpdated", updateBidResult.WasTopBidUpdated)
+	// Add fields to logs
+	log = log.WithFields(logrus.Fields{
+		"wasBidSavedInRedis":      updateBidResult.WasBidSaved,
+		"wasTopBidUpdated":        updateBidResult.WasTopBidUpdated,
+		"topBidValue":             updateBidResult.TopBidValue,
+		"topBidBuilder":           updateBidResult.TopBidBuilder,
+		"prevTopBidValue":         updateBidResult.PrevTopBidValue,
+		"prevTopBidBuilder":       updateBidResult.PrevTopBidBuilder,
+		"timestampAfterBidUpdate": time.Now().UTC().UnixMilli(),
+	})
 
-	// Only if this bid was saved to redis...
 	if updateBidResult.WasBidSaved {
 		// Bid is eligible to win the auction
 		eligibleAt = time.Now().UTC()
+		log = log.WithField("timestampEligibleAt", eligibleAt.UnixMilli())
 
 		// Save to memcache in the background
 		if api.memcached != nil {
@@ -1497,10 +1506,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// All done
-	log.WithFields(logrus.Fields{
-		"timestampEligibleAt":        eligibleAt.UnixMilli(),
-		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
-	}).Info("received block from builder") // TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
+	log.Info("received block from builder")
 	w.WriteHeader(http.StatusOK)
 }
 

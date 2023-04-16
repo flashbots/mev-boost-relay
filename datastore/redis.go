@@ -416,8 +416,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	state.PrevTopBidBuilder, state.PrevTopBidValue = builderBids.getTopBid()
 	state.TopBidBuilder, state.TopBidValue = state.PrevTopBidBuilder, state.PrevTopBidValue
 
-	// 3. Check whether to continue at all
-	// - In cancellation mode: always save latest bid
+	// 2. Do we even need to continue / save the new payload and update the top bid?
+	// - In cancellation mode: always continue to saving latest bid
 	// - In non-cancellation mode: only save if current bid is higher value than this builders previous bid
 	if !isCancellationEnabled {
 		currentBuilderLastValue := builderBids.builderValue(payload.BuilderPubkey().String())
@@ -439,23 +439,24 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 		return state, err
 	}
 
-	state.WasBidSaved = true
+	// 3. Update this builders latest bid in local cache
 	builderBids.bidValues[payload.BuilderPubkey().String()] = payload.Value()
 	state.TopBidBuilder, state.TopBidValue = builderBids.getTopBid()
+	state.WasBidSaved = true
 
-	// 3. Only proceed if top bid has changed
+	// 4. Only proceed to update top bid in redis if it changed in local cache
 	if state.TopBidValue.Cmp(state.PrevTopBidValue) == 0 {
 		return state, nil
 	}
 
-	// 4. Get the previous winning bid
+	// 5. Get the previous winning bid
 	keyBid := r.keyBlockBuilderLatestBids(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	bidStr, err := r.client.HGet(context.Background(), keyBid, state.TopBidBuilder).Result()
 	if err != nil {
 		return state, err
 	}
 
-	// 5. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
+	// 6. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
 	keyTopBid := r.keyCacheGetHeaderResponse(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	err = r.client.Set(context.Background(), keyTopBid, bidStr, expiryBidCache).Err()
 	if err != nil {
@@ -463,7 +464,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	}
 	state.WasTopBidUpdated = true
 
-	// 6. Finally, update the global top bid value
+	// 7. Finally, update the global top bid value
 	keyTopBidValue := r.keyTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	err = r.client.Set(context.Background(), keyTopBidValue, state.TopBidValue.String(), expiryBidCache).Err()
 	return state, err
