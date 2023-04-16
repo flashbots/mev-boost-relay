@@ -60,9 +60,9 @@ var DataAPIExportBids = &cobra.Command{
 		}
 
 		log.Infof("got %d bids", len(bids))
-		entries := make([]common.BidTraceV2WithTimestampJSON, len(bids))
+		entries := make([]common.BidTraceV3WithEligibleTimestampMsJSON, len(bids))
 		for i, bid := range bids {
-			entries[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(bid)
+			entries[i] = database.BuilderSubmissionEntryToBidTraceV3WithEligibleTimestampMsJSON(bid)
 		}
 
 		if len(entries) == 0 {

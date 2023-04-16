@@ -1710,9 +1710,9 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		return
 	}
 
-	response := make([]common.BidTraceV2WithTimestampJSON, len(blockSubmissions))
+	response := make([]common.BidTraceV3WithEligibleTimestampMsJSON, len(blockSubmissions))
 	for i, payload := range blockSubmissions {
-		response[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload)
+		response[i] = database.BuilderSubmissionEntryToBidTraceV3WithEligibleTimestampMsJSON(payload)
 	}
 
 	api.RespondOK(w, response)
