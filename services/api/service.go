@@ -163,6 +163,7 @@ type RelayAPI struct {
 	ffDisableLowPrioBuilders     bool
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
+	ffEnableCancellations        bool // whether to enable block builder cancellations
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
@@ -252,6 +253,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("LOG_INVALID_GETPAYLOAD_SIGNATURE") == "1" {
 		api.log.Warn("env: LOG_INVALID_GETPAYLOAD_SIGNATURE - getPayload payloads with invalid proposer signature will be logged")
 		api.ffLogInvalidSignaturePayload = true
+	}
+
+	if os.Getenv("ENABLE_BUILDER_CANCELLATIONS") == "1" {
+		api.log.Warn("env: ENABLE_BUILDER_CANCELLATIONS - builders are allowed to cancel submissions when using ?cancellation=1")
+		api.ffEnableCancellations = true
 	}
 
 	return api, nil
@@ -1147,7 +1153,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	receivedAt := time.Now().UTC()
 	headSlot := api.headSlot.Load()
 	args := req.URL.Query()
-	isCancellationEnabled := args.Get("cancellations") == "1"
+	isCancellationEnabled := api.ffEnableCancellations && args.Get("cancellations") == "1"
 
 	log := api.log.WithFields(logrus.Fields{
 		"method":                "submitNewBlock",
