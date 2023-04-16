@@ -401,16 +401,14 @@ type SaveBidAndUpdateTopBidResponse struct {
 }
 
 func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse, reqReceivedAt time.Time, isCancellationEnabled bool) (resp SaveBidAndUpdateTopBidResponse, err error) {
-	// 1. Get value of all latest bids for a given slot+parent+proposer
+	// 1. Load latest bids for a given slot+parent+proposer
 	keyBidValues := r.keyBlockBuilderLatestBidsValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	bidValueMap, err := r.client.HGetAll(context.Background(), keyBidValues).Result()
 	if err != nil {
 		return resp, err
 	}
 
-	// 2. Load current bids
 	builderBids := NewBuilderBids(bidValueMap)
-	currentBuilderLastValue := builderBids.builderValue(payload.BuilderPubkey().String())
 	resp.TopBidBuilderPubkey, resp.TopBidValue = builderBids.getTopBid()
 
 	// 3. Check whether to continue at all
@@ -420,8 +418,12 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	// Example bid update orders (BA=non cancelling builder, BC=builder using cancellations):
 	//    BA1=5, BC1=10, BA2=6, BC2=5 -> winning bid should be BA2 (6)
 	//    BA1=5, BC1=10, BA2=4, BC2=5 -> winning bid should be BA1 (5)
-	if !isCancellationEnabled && payload.Value().Cmp(currentBuilderLastValue) < 1 {
-		return resp, nil
+	if !isCancellationEnabled {
+		currentBuilderLastValue := builderBids.builderValue(payload.BuilderPubkey().String())
+		if payload.Value().Cmp(currentBuilderLastValue) < 1 {
+			// do nothing -- bid is lower than last bid of this builder
+			return resp, nil
+		}
 	}
 
 	// Time to save things in Redis
@@ -431,28 +433,30 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 		return resp, err
 	}
 
-	resp.WasBidSaved = true
-
 	// 2. Save this bid
 	err = r.SaveBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
 		return resp, err
 	}
 
+	resp.WasBidSaved = true
+
 	//
 	// Decide if winning bid should be updated
 	//
 	if payload.Value().Cmp(resp.TopBidValue) == 1 {
-		// update if this payload is new top bid
+		// current payload is the new top bid -- continue
 		resp.TopBidValue = payload.Value()
 		resp.TopBidBuilderPubkey = payload.BuilderPubkey().String()
 	} else if isCancellationEnabled {
 		// In cancellation mode, builder can overwrite his own last bid with lower value.
-		prevTopBidValue := resp.TopBidValue
+		// Update BuilderBids cache with current payload
+		_prevTopBidValue := resp.TopBidValue
 		builderBids.bidValues[payload.BuilderPubkey().String()] = payload.Value()
 		resp.TopBidBuilderPubkey, resp.TopBidValue = builderBids.getTopBid()
-		if resp.TopBidValue.Cmp(prevTopBidValue) == 0 {
-			// Top bid hasn't changed, abort now
+
+		// Only proceed if bid value for current builder has changed
+		if resp.TopBidValue.Cmp(_prevTopBidValue) == 0 {
 			return resp, nil
 		}
 	} else {

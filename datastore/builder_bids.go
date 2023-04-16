@@ -31,9 +31,9 @@ func (b *BuilderBids) getTopBid() (string, *big.Int) {
 }
 
 func (b *BuilderBids) builderValue(builderPubkey string) *big.Int {
-	ret := b.bidValues[builderPubkey]
-	if ret == nil {
+	val := b.bidValues[builderPubkey]
+	if val == nil {
 		return big.NewInt(0)
 	}
-	return ret
+	return val
 }
