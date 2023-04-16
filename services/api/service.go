@@ -913,6 +913,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
+	receivedAt := time.Now().UTC()
 	log := api.log.WithFields(logrus.Fields{
 		"method":                "getPayload",
 		"ua":                    ua,
@@ -920,8 +921,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"contentLength":         req.ContentLength,
 		"headSlot":              headSlot,
 		"idArg":                 req.URL.Query().Get("id"),
-		"timestampRequestStart": time.Now().UTC().UnixMilli(),
+		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
+
+	// Log at start and end of request
+	log.Info("request initiated")
+	defer log.WithFields(logrus.Fields{
+		"timestampRequestFin": time.Now().UTC().UnixMilli(),
+		"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+	}).Info("request finished")
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
@@ -1148,6 +1156,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"cancellationEnabled":   isCancellationEnabled,
 		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
+
+	// Log at start and end of request
+	log.Info("request initiated")
+	defer log.WithFields(logrus.Fields{
+		"timestampRequestFin": time.Now().UTC().UnixMilli(),
+		"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+	}).Info("request finished")
 
 	var err error
 	var r io.Reader = req.Body
@@ -1450,19 +1465,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// 2. Save bid and recalculate top bid
-	wasUpdated, _, _, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// If this was a new top bid, only then save to memcache
-	if wasUpdated {
-		// At this point, the bid is eligible to win the auction
+	log = log.WithField("wasTopBidUpdated", updateBidResult.WasTopBidUpdated)
+
+	// Only if this bid was saved to redis...
+	if updateBidResult.WasBidSaved {
+		// Bid is eligible to win the auction
 		eligibleAt = time.Now().UTC()
 
-		// Kickoff saving to memcache in the background
+		// Save to memcache in the background
 		if api.memcached != nil {
 			go func() {
 				err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
@@ -1475,7 +1492,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// All done
 	log.WithFields(logrus.Fields{
-		"bidIsNowTopBid":             wasUpdated,
 		"timestampEligibleAt":        eligibleAt.UnixMilli(),
 		"timestampAfterUpdateTopBid": time.Now().UTC().UnixMilli(),
 	}).Info("received block from builder") // TODO: proper response data type https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
