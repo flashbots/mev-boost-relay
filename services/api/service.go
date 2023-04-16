@@ -1025,10 +1025,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Check whether getPayload has already been called
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			log.WithError(err).Error("failed to get delivered payload slot from redis")
-		}
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if payload.Slot() <= slotLastPayloadDelivered {
 		log.Warn("getPayload was already called for this slot")
 		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
@@ -1316,10 +1314,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
 	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			log.WithError(err).Error("failed to get delivered payload slot from redis")
-		}
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if payload.Slot() <= slotLastPayloadDelivered {
 		log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
