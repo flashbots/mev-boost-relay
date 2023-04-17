@@ -274,12 +274,25 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
-type BidTraceV3WithEligibleTimestampMsJSON struct {
-	BidTraceV2WithTimestampJSON
-	EligibleTimestampMs int64 `json:"eligible_timestamp_ms,string,omitempty"`
+type BidTraceV3JSON struct {
+	Slot                  uint64 `json:"slot,string"`
+	ParentHash            string `json:"parent_hash"`
+	BlockHash             string `json:"block_hash"`
+	BuilderPubkey         string `json:"builder_pubkey"`
+	ProposerPubkey        string `json:"proposer_pubkey"`
+	ProposerFeeRecipient  string `json:"proposer_fee_recipient"`
+	GasLimit              uint64 `json:"gas_limit,string"`
+	GasUsed               uint64 `json:"gas_used,string"`
+	Value                 string `json:"value"`
+	NumTx                 uint64 `json:"num_tx,string"`
+	BlockNumber           uint64 `json:"block_number,string"`
+	Timestamp             int64  `json:"timestamp,string,omitempty"`
+	TimestampMs           int64  `json:"timestamp_ms,string,omitempty"`
+	EligibleAtTimestampMs int64  `json:"eligible_at_timestamp_ms,string,omitempty"`
+	SignedAtTimestampMs   int64  `json:"signed_at_timestamp_ms,string,omitempty"`
 }
 
-func (b *BidTraceV3WithEligibleTimestampMsJSON) CSVHeader() []string {
+func (b *BidTraceV3JSON) CSVHeader() []string {
 	return []string{
 		"slot",
 		"parent_hash",
@@ -294,11 +307,12 @@ func (b *BidTraceV3WithEligibleTimestampMsJSON) CSVHeader() []string {
 		"block_number",
 		"timestamp",
 		"timestamp_ms",
-		"eligible_timestamp_ms",
+		"eligible_at_timestamp_ms",
+		"signed_at_timestamp_ms",
 	}
 }
 
-func (b *BidTraceV3WithEligibleTimestampMsJSON) ToCSVRecord() []string {
+func (b *BidTraceV3JSON) ToCSVRecord() []string {
 	return []string{
 		fmt.Sprint(b.Slot),
 		b.ParentHash,
@@ -313,7 +327,8 @@ func (b *BidTraceV3WithEligibleTimestampMsJSON) ToCSVRecord() []string {
 		fmt.Sprint(b.BlockNumber),
 		fmt.Sprint(b.Timestamp),
 		fmt.Sprint(b.TimestampMs),
-		fmt.Sprint(b.EligibleTimestampMs),
+		fmt.Sprint(b.EligibleAtTimestampMs),
+		fmt.Sprint(b.SignedAtTimestampMs),
 	}
 }
 

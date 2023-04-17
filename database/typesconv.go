@@ -120,30 +120,60 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		return nil, ErrUnsupportedExecutionPayload
 	}
 }
-func BuilderSubmissionEntryToBidTraceV3WithEligibleTimestampMsJSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV3WithEligibleTimestampMsJSON {
+
+func DeliveredPayloadEntryToBidTraceV3JSON(payload *DeliveredPayloadEntry) common.BidTraceV3JSON {
+	bidTrace := common.BidTraceV3JSON{
+		Slot:                  payload.Slot,
+		ParentHash:            payload.ParentHash,
+		BlockHash:             payload.BlockHash,
+		BuilderPubkey:         payload.BuilderPubkey,
+		ProposerPubkey:        payload.ProposerPubkey,
+		ProposerFeeRecipient:  payload.ProposerFeeRecipient,
+		GasLimit:              payload.GasLimit,
+		GasUsed:               payload.GasUsed,
+		Value:                 payload.Value,
+		NumTx:                 payload.NumTx,
+		BlockNumber:           payload.BlockNumber,
+		Timestamp:             int64(0),
+		TimestampMs:           int64(0),
+		SignedAtTimestampMs:   int64(0),
+		EligibleAtTimestampMs: int64(0),
+	}
+
+	if payload.SignedAt.Valid {
+		bidTrace.SignedAtTimestampMs = payload.SignedAt.Time.UnixMilli()
+	}
+
+	return bidTrace
+}
+
+func BuilderSubmissionEntryToBidTraceV3JSON(payload *BuilderBlockSubmissionEntry) common.BidTraceV3JSON {
 	timestamp := payload.InsertedAt
 	if payload.ReceivedAt.Valid {
 		timestamp = payload.ReceivedAt.Time
 	}
 
-	return common.BidTraceV3WithEligibleTimestampMsJSON{
-		EligibleTimestampMs: payload.EligibleAt.Time.UnixMilli(),
-		BidTraceV2WithTimestampJSON: common.BidTraceV2WithTimestampJSON{
-			Timestamp:   timestamp.Unix(),
-			TimestampMs: timestamp.UnixMilli(),
-			BidTraceV2JSON: common.BidTraceV2JSON{
-				Slot:                 payload.Slot,
-				ParentHash:           payload.ParentHash,
-				BlockHash:            payload.BlockHash,
-				BuilderPubkey:        payload.BuilderPubkey,
-				ProposerPubkey:       payload.ProposerPubkey,
-				ProposerFeeRecipient: payload.ProposerFeeRecipient,
-				GasLimit:             payload.GasLimit,
-				GasUsed:              payload.GasUsed,
-				Value:                payload.Value,
-				NumTx:                payload.NumTx,
-				BlockNumber:          payload.BlockNumber,
-			},
-		},
+	bidtrace := common.BidTraceV3JSON{
+		Timestamp:             timestamp.Unix(),
+		TimestampMs:           timestamp.UnixMilli(),
+		Slot:                  payload.Slot,
+		ParentHash:            payload.ParentHash,
+		BlockHash:             payload.BlockHash,
+		BuilderPubkey:         payload.BuilderPubkey,
+		ProposerPubkey:        payload.ProposerPubkey,
+		ProposerFeeRecipient:  payload.ProposerFeeRecipient,
+		GasLimit:              payload.GasLimit,
+		GasUsed:               payload.GasUsed,
+		Value:                 payload.Value,
+		NumTx:                 payload.NumTx,
+		BlockNumber:           payload.BlockNumber,
+		EligibleAtTimestampMs: int64(0),
+		SignedAtTimestampMs:   int64(0),
 	}
+
+	if payload.EligibleAt.Valid {
+		bidtrace.EligibleAtTimestampMs = payload.EligibleAt.Time.UnixMilli()
+	}
+
+	return bidtrace
 }
