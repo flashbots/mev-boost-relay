@@ -130,9 +130,9 @@ func (r *RedisCache) keyActiveValidators(t time.Time) string {
 	return fmt.Sprintf("%s:%s", r.prefixActiveValidators, t.UTC().Format("2006-01-02T15"))
 }
 
-// keyBlockBuilderLatestBid returns the hashmap key for the getHeader response the latest bid by a specific builder
-func (r *RedisCache) keyBlockBuilderLatestBids(slot uint64, parentHash, proposerPubkey string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixBlockBuilderLatestBids, slot, parentHash, proposerPubkey)
+// keyLatestBidByBuilder returns the key for the getHeader response the latest bid by a specific builder
+func (r *RedisCache) keyLatestBidByBuilder(slot uint64, parentHash, proposerPubkey, builderPubkey string) string {
+	return fmt.Sprintf("%s:%d_%s_%s/%s", r.prefixBlockBuilderLatestBids, slot, parentHash, proposerPubkey, builderPubkey)
 }
 
 // keyBlockBuilderLatestBidValue returns the hashmap key for the value of the latest bid by a specific builder
@@ -366,9 +366,10 @@ func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(slot uint64, builderPubke
 }
 
 // SaveBuilderBid saves the latest bid by a specific builder. TODO: use transaction to make these writes atomic
-func (r *RedisCache) SaveBuilderBid(slot uint64, builderPubkey, parentHash, proposerPubkey string, receivedAt time.Time, headerResp *common.GetHeaderResponse) (err error) {
-	keyLatestBids := r.keyBlockBuilderLatestBids(slot, parentHash, proposerPubkey)
-	err = r.HSetObj(keyLatestBids, builderPubkey, headerResp, expiryBidCache)
+func (r *RedisCache) SaveBuilderBid(slot uint64, parentHash, proposerPubkey, builderPubkey string, receivedAt time.Time, headerResp *common.GetHeaderResponse) (err error) {
+	// save the actual bid
+	keyLatestBid := r.keyLatestBidByBuilder(slot, parentHash, proposerPubkey, builderPubkey)
+	err = r.SetObj(keyLatestBid, headerResp, expiryBidCache)
 	if err != nil {
 		return err
 	}
@@ -435,7 +436,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	}
 
 	// 2. Save this bid
-	err = r.SaveBuilderBid(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey(), reqReceivedAt, getHeaderResponse)
+	err = r.SaveBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
 		return state, err
 	}
@@ -450,24 +451,20 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 		return state, nil
 	}
 
+	// 5. Copy winning bid to top bid cache
+	keyBidSource := r.keyLatestBidByBuilder(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), state.TopBidBuilder)
+	keyTopBid := r.keyCacheGetHeaderResponse(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	wasCopied, err := r.client.Copy(context.Background(), keyBidSource, keyTopBid, 0, true).Result()
+	if err != nil {
+		return state, err
+	} else if wasCopied == 0 {
+		return state, fmt.Errorf("could not copy %s to %s", keyBidSource, keyTopBid) //nolint:goerr113
+	}
+
 	state.WasTopBidUpdated = true
 	state.IsNewTopBid = payload.Value().Cmp(state.TopBidValue) == 0
 
-	// 5. If it's not the current payload, load the new winning bid
-	keyBid := r.keyBlockBuilderLatestBids(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	bidStr, err := r.client.HGet(context.Background(), keyBid, state.TopBidBuilder).Result()
-	if err != nil {
-		return state, err
-	}
-
-	// 6. Save the top bid - TODO: consider improving by using redis COPY command (if it wouldn't be a hash)
-	keyTopBid := r.keyCacheGetHeaderResponse(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	err = r.client.Set(context.Background(), keyTopBid, bidStr, expiryBidCache).Err()
-	if err != nil {
-		return state, err
-	}
-
-	// 7. Finally, update the global top bid value
+	// 6. Finally, update the global top bid value
 	keyTopBidValue := r.keyTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	err = r.client.Set(context.Background(), keyTopBidValue, state.TopBidValue.String(), expiryBidCache).Err()
 	return state, err
