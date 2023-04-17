@@ -394,8 +394,9 @@ func (r *RedisCache) SaveBuilderBid(slot uint64, builderPubkey, parentHash, prop
 }
 
 type SaveBidAndUpdateTopBidResponse struct {
-	WasBidSaved      bool
-	WasTopBidUpdated bool
+	WasBidSaved      bool // Whether this bid was saved
+	WasTopBidUpdated bool // Whether the top bid was updated
+	IsNewTopBid      bool // Whether the submitted bid became the new top bid
 
 	TopBidValue   *big.Int
 	TopBidBuilder string
@@ -449,7 +450,10 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 		return state, nil
 	}
 
-	// 5. Get the previous winning bid
+	state.WasTopBidUpdated = true
+	state.IsNewTopBid = payload.Value().Cmp(state.TopBidValue) == 0
+
+	// 5. If it's not the current payload, load the new winning bid
 	keyBid := r.keyBlockBuilderLatestBids(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	bidStr, err := r.client.HGet(context.Background(), keyBid, state.TopBidBuilder).Result()
 	if err != nil {
@@ -462,7 +466,6 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	if err != nil {
 		return state, err
 	}
-	state.WasTopBidUpdated = true
 
 	// 7. Finally, update the global top bid value
 	keyTopBidValue := r.keyTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())

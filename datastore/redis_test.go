@@ -199,6 +199,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 
@@ -208,6 +209,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, resp.WasBidSaved)
 	require.False(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 
@@ -217,6 +219,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 	require.Equal(t, big.NewInt(10), resp.PrevTopBidValue)
@@ -231,6 +234,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
 
@@ -240,6 +244,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.False(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
 
@@ -253,6 +258,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 }
