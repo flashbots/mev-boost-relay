@@ -1153,7 +1153,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	receivedAt := time.Now().UTC()
 	headSlot := api.headSlot.Load()
 	args := req.URL.Query()
-	isCancellationEnabled := api.ffEnableCancellations && args.Get("cancellations") == "1"
+	isCancellationEnabled := args.Get("cancellations") == "1"
 
 	log := api.log.WithFields(logrus.Fields{
 		"method":                "submitNewBlock",
@@ -1169,6 +1169,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampRequestFin": time.Now().UTC().UnixMilli(),
 		"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
 	}).Info("request finished")
+
+	// If cancellations are disabled but builder requested it, return error
+	if isCancellationEnabled && !api.ffEnableCancellations {
+		log.Info("builder submitted with cancellations enabled, but feature flag is disabled")
+		api.RespondError(w, http.StatusBadRequest, "cancellations are disabled")
+		return
+	}
 
 	var err error
 	var r io.Reader = req.Body
