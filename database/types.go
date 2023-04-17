@@ -181,6 +181,8 @@ type DeliveredPayloadEntry struct {
 
 	NumTx uint64 `db:"num_tx"`
 	Value string `db:"value"`
+
+	PublishMs uint64 `db:"publish_ms"`
 }
 
 type BlockBuilderEntry struct {
@@ -200,4 +202,14 @@ type BlockBuilderEntry struct {
 	NumSubmissionsSimError uint64 `db:"num_submissions_simerror" json:"num_submissions_simerror"`
 
 	NumSentGetPayload uint64 `db:"num_sent_getpayload" json:"num_sent_getpayload"`
+}
+
+type TooLateGetPayloadEntry struct {
+	ID         int64     `db:"id"`
+	InsertedAt time.Time `db:"inserted_at"`
+
+	Slot           uint64 `db:"slot"`
+	ProposerPubkey string `db:"proposer_pubkey"`
+	BlockHash      string `db:"block_hash"`
+	MsIntoSlot     uint64 `db:"ms_into_slot"`
 }
