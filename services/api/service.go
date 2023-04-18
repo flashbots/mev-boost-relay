@@ -978,7 +978,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"blockHash":            payload.BlockHash(),
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,
-		"requestStart":         receivedAt.UnixMilli(),
 		"timestampAfterDecode": decodeTime.UnixMilli(),
 	})
 
@@ -1049,7 +1048,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 
 		go func() {
-			err := api.db.InsertTooLateGetPayload(payload.Slot(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), proposerPubkey.String(), payload.BlockHash(), uint64(msIntoSlot))
+			err := api.db.InsertTooLateGetPayload(payload.Slot(), proposerPubkey.String(), payload.BlockHash(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), uint64(msIntoSlot))
 			if err != nil {
 				log.WithError(err).Error("failed to insert payload too late into db")
 			}
