@@ -3,23 +3,33 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/attestantio/go-builder-client/api/capella"
+	v1 "github.com/attestantio/go-builder-client/api/v1"
+	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
 	ErrInvalidForkVersion = errors.New("invalid fork version")
 	ErrHTTPErrorResponse  = errors.New("got an HTTP error response")
+	ErrIncorrectLength    = errors.New("incorrect length")
 )
 
 func makeRequest(ctx context.Context, client http.Client, method, url string, payload any) (*http.Response, error) {
@@ -59,7 +69,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 
 // ComputeDomain computes the signing domain
 func ComputeDomain(domainType types.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain types.Domain, err error) {
-	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
+	genesisValidatorsRoot := types.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
 	if err != nil || len(forkVersionBytes) != 4 {
 		return domain, ErrInvalidForkVersion
@@ -129,4 +139,92 @@ func GetEnvStrSlice(key string, defaultValue []string) []string {
 		return strings.Split(value, ",")
 	}
 	return defaultValue
+}
+
+func StrToPhase0Pubkey(s string) (ret phase0.BLSPubKey, err error) {
+	pubkeyBytes, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+	if err != nil {
+		return ret, err
+	}
+	if len(pubkeyBytes) != phase0.PublicKeyLength {
+		return ret, ErrIncorrectLength
+	}
+	copy(ret[:], pubkeyBytes)
+	return ret, nil
+}
+
+func StrToPhase0Hash(s string) (ret phase0.Hash32, err error) {
+	hashBytes, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+	if err != nil {
+		return ret, err
+	}
+	if len(hashBytes) != phase0.Hash32Length {
+		return ret, ErrIncorrectLength
+	}
+	copy(ret[:], hashBytes)
+	return ret, nil
+}
+
+type CreateTestBlockSubmissionOpts struct {
+	relaySk bls.SecretKey
+	relayPk types.PublicKey
+	domain  types.Domain
+
+	Slot           uint64
+	ParentHash     string
+	ProposerPubkey string
+}
+
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.Int, opts *CreateTestBlockSubmissionOpts) (payload *BuilderSubmitBlockRequest, getPayloadResponse *GetPayloadResponse, getHeaderResponse *GetHeaderResponse) {
+	t.Helper()
+	var err error
+
+	slot := uint64(0)
+	relaySk := bls.SecretKey{}
+	relayPk := types.PublicKey{}
+	domain := types.Domain{}
+	proposerPk := phase0.BLSPubKey{}
+	parentHash := phase0.Hash32{}
+
+	if opts != nil {
+		relaySk = opts.relaySk
+		relayPk = opts.relayPk
+		domain = opts.domain
+		slot = opts.Slot
+
+		if opts.ProposerPubkey != "" {
+			proposerPk, err = StrToPhase0Pubkey(opts.ProposerPubkey)
+			require.NoError(t, err)
+		}
+
+		if opts.ParentHash != "" {
+			parentHash, err = StrToPhase0Hash(opts.ParentHash)
+			require.NoError(t, err)
+		}
+	}
+
+	builderPk, err := StrToPhase0Pubkey(builderPubkey)
+	require.NoError(t, err)
+
+	payload = &BuilderSubmitBlockRequest{ //nolint:exhaustruct
+		Capella: &capella.SubmitBlockRequest{
+			Message: &v1.BidTrace{ //nolint:exhaustruct
+				BuilderPubkey:  builderPk,
+				Value:          uint256.MustFromBig(value),
+				Slot:           slot,
+				ParentHash:     parentHash,
+				ProposerPubkey: proposerPk,
+			},
+			ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+			Signature:        phase0.BLSSignature{},
+		},
+	}
+
+	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
+	require.NoError(t, err)
+
+	getPayloadResponse, err = BuildGetPayloadResponse(payload)
+	require.NoError(t, err)
+
+	return payload, getPayloadResponse, getHeaderResponse
 }
