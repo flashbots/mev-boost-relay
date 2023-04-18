@@ -14,9 +14,9 @@ var Migration006CreateTooLateGetPayload = &migrate.Migration{
 			
 			slot            bigint NOT NULL,
 
-			slot_start   bigint NOT NULL,
-			request_time bigint NOT NULL,
-			decode_time  bigint NOT NULL,
+			slot_start_timestamp   bigint NOT NULL,
+			request_timestamp bigint NOT NULL,
+			decode_timestamp  bigint NOT NULL,
 
 			proposer_pubkey varchar(98) NOT NULL,
 			block_hash      varchar(66) NOT NULL,
