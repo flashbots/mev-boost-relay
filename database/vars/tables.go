@@ -13,4 +13,5 @@ var (
 	TableDeliveredPayload       = tableBase + "_payload_delivered"
 	TableBlockBuilder           = tableBase + "_blockbuilder"
 	TableBlockedValidator       = tableBase + "_blocked_validator"
+	TableTooLateGetPayload      = tableBase + "_too_late_get_payload"
 )
