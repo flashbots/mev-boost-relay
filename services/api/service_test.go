@@ -170,8 +170,6 @@ func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
 	t.Run("Normal function", func(t *testing.T) {
-		t.Skip() // has an error at verifying the sig
-
 		backend := newTestBackend(t, 1)
 		pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
 		index := uint64(17)
