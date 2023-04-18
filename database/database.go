@@ -45,7 +45,7 @@ type IDatabaseService interface {
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
-	InsertTooLateGetPayload(slot, slotStart, requestTime, decodeTime uint64, proposerPubkey, blockHash string, msIntoSlot uint64) error
+	InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, slotStart, requestTime, decodeTime, msIntoSlot uint64) error
 }
 
 type DatabaseService struct {
@@ -501,7 +501,7 @@ func (s *DatabaseService) GetTooLateGetPayload(slot uint64) (entries []*TooLateG
 	return entries, err
 }
 
-func (s *DatabaseService) InsertTooLateGetPayload(slot, slotStart, requestTime, decodeTime uint64, proposerPubkey, blockHash string, msIntoSlot uint64) error {
+func (s *DatabaseService) InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, slotStart, requestTime, decodeTime, msIntoSlot uint64) error {
 	entry := TooLateGetPayloadEntry{
 		Slot:           slot,
 		SlotStart:      slotStart,
