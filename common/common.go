@@ -4,13 +4,17 @@ package common
 import (
 	"errors"
 	"time"
+
+	"github.com/flashbots/go-utils/cli"
 )
 
 var (
 	ErrServerAlreadyRunning = errors.New("server already running")
 
-	SlotsPerEpoch    = 32
-	DurationPerSlot  = time.Second * 12
+	SecondsPerSlot  = uint64(cli.GetEnvInt("SEC_PER_SLOT", 12))
+	DurationPerSlot = time.Duration(SecondsPerSlot) * time.Second
+
+	SlotsPerEpoch    = cli.GetEnvInt("SLOTS_PER_EPOCH", 32)
 	DurationPerEpoch = DurationPerSlot * time.Duration(SlotsPerEpoch)
 )
 

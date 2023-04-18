@@ -182,8 +182,9 @@ type ProposerDutiesResponse struct {
 }
 
 type ProposerDutiesResponseData struct {
-	Pubkey string `json:"pubkey"`
-	Slot   uint64 `json:"slot,string"`
+	Slot           uint64 `json:"slot,string"`
+	Pubkey         string `json:"pubkey"`
+	ValidatorIndex uint64 `json:"validator_index,string"`
 }
 
 // GetProposerDuties returns proposer duties for every slot in this epoch

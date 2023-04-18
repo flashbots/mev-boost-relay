@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,7 +57,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 	publicKey, err := types.BlsPublicKeyToPublicKey(pubkey)
 	require.NoError(t, err)
 
-	signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(&reqPayload, sk, &publicKey, builderSigningDomain)
+	signedBuilderBid, err := common.BuilderSubmitBlockRequestToSignedBuilderBid(&reqPayload, sk, &publicKey, builderSigningDomain)
 	require.NoError(t, err)
 
 	require.Equal(t, 0, signedBuilderBid.Message.Value.Cmp(&reqPayload.Message.Value))

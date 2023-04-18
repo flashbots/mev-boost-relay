@@ -83,7 +83,7 @@ func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *co
 			return err
 		}
 
-		payloadHeader, err := CapellaPayloadToPayloadHeader(payload.Capella.Capella)
+		payloadHeader, err := common.CapellaPayloadToPayloadHeader(payload.Capella.Capella)
 		if err != nil {
 			return err
 		}

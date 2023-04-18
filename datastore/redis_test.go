@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -172,50 +173,104 @@ func TestActiveValidators(t *testing.T) {
 }
 
 func TestBuilderBids(t *testing.T) {
+	slot := uint64(2)
+	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
+	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+	opts := common.CreateTestBlockSubmissionOpts{
+		Slot:           2,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPubkey,
+	}
+
+	// Notation:
+	// - ba1:  builder A, bid 1
+	// - ba1c: builder A, bid 1, cancellation enabled
+	//
+	// test 1: ba1=10 -> ba2=5 -> ba3c=5 -> bb1=20 -> ba4c=3 -> bb2c=2
+	//
+	bApubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	bBpubkey := "0x2e02be2c9f9eccf9856478fdb7876598fed2da09f45c233969ba647a250231150ecf38bce5771adb6171c86b79a92f16"
+
+	// Setup redis instance
 	cache := setupTestRedis(t)
 
-	slot := uint64(123)
-	parentHash := "0xa1"
-	proposerPk := "0xa2"
-	builder1pk := "0xb1"
-	builder2pk := "0xb2"
-	builder3pk := "0xb3"
+	// Helper to ensure writing to redis worked as expected
+	ensureBestBidValueEquals := func(expectedValue int64) {
+		bestBid, err := cache.GetBestBid(slot, parentHash, proposerPubkey)
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(expectedValue), bestBid.Value())
 
-	receivedAt := time.Now()
+		topBidValue, err := cache.GetTopBidValue(slot, parentHash, proposerPubkey)
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(expectedValue), topBidValue)
+	}
 
-	// 2 initial bids: 99 and 100 value
-	err := cache.SaveLatestBuilderBid(slot, builder1pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(100))
+	// submit ba1=10
+	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(10), &opts)
+	resp, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
-	err = cache.SaveLatestBuilderBid(slot, builder2pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
-	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	topBid, err := cache.GetBestBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	require.Equal(t, "100", topBid.Value().String())
+	require.True(t, resp.WasBidSaved, resp)
+	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(10), resp.TopBidValue)
+	require.Equal(t, bApubkey, resp.TopBidBuilder)
+	ensureBestBidValueEquals(10)
 
-	// new top bid by builder3: 101
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(101))
+	// submit ba2=5 (should not update)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
+	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	require.Equal(t, "101", topBid.Value().String())
+	require.False(t, resp.WasBidSaved, resp)
+	require.False(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(10), resp.TopBidValue)
+	require.Equal(t, bApubkey, resp.TopBidBuilder)
+	ensureBestBidValueEquals(10)
 
-	// builder3 cancels 101 bid, by sending 100 value
-	err = cache.SaveLatestBuilderBid(slot, builder3pk, parentHash, proposerPk, receivedAt, BuildEmptyBellatrixGetHeaderResponse(99))
+	// submit ba3c=5 (should update, because of cancellation)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
+	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
 	require.NoError(t, err)
-	err = cache.UpdateTopBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	topBid, err = cache.GetBestBid(slot, parentHash, proposerPk)
-	require.NoError(t, err)
-	require.Equal(t, "100", topBid.Value().String())
+	require.True(t, resp.WasBidSaved)
+	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(5), resp.TopBidValue)
+	require.Equal(t, bApubkey, resp.TopBidBuilder)
+	require.Equal(t, big.NewInt(10), resp.PrevTopBidValue)
+	ensureBestBidValueEquals(5)
 
-	// double-check the receivedAt timestamp
-	ts, err := cache.GetBuilderLatestPayloadReceivedAt(slot, builder3pk, parentHash, proposerPk)
+	// submit bb1=20
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), &opts)
+	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false)
 	require.NoError(t, err)
-	require.Equal(t, receivedAt.UnixMilli(), ts)
+	require.True(t, resp.WasBidSaved)
+	require.True(t, resp.WasTopBidUpdated)
+	require.True(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(20), resp.TopBidValue)
+	require.Equal(t, bBpubkey, resp.TopBidBuilder)
+	ensureBestBidValueEquals(20)
+
+	// submit ba4c=3
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
+	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
+	require.NoError(t, err)
+	require.True(t, resp.WasBidSaved)
+	require.False(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(20), resp.TopBidValue)
+	require.Equal(t, bBpubkey, resp.TopBidBuilder)
+	ensureBestBidValueEquals(20)
+
+	// submit bb2c=2 (cancels prev top bid bb1)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(2), &opts)
+	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true)
+	require.NoError(t, err)
+	require.True(t, resp.WasBidSaved)
+	require.True(t, resp.WasTopBidUpdated)
+	require.False(t, resp.IsNewTopBid)
+	require.Equal(t, big.NewInt(5), resp.TopBidValue)
+	require.Equal(t, bApubkey, resp.TopBidBuilder)
+	ensureBestBidValueEquals(5)
 }
 
 func TestRedisURIs(t *testing.T) {

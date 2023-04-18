@@ -150,13 +150,13 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 * `NO_HEADER_USERAGENTS` - proposer API - comma separated list of user agents for which no bids should be returned
+* `ENABLE_BUILDER_CANCELLATIONS` - whether to enable block builder cancellations
 
 #### Feature Flags
 
 * `DISABLE_PAYLOAD_DATABASE_STORAGE` - builder API - disable storing execution payloads in the database (i.e. when using memcached as data availability redundancy)
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
-* `MEMCACHE_ALLOW_SAVING_FAIL` -- don't abort builder submission if memcache saving fails
 
 #### Development Environment Variables
 
