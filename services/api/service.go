@@ -1398,7 +1398,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if simErr != nil {
 		log = log.WithField("simErr", simErr.Error())
 		log.WithError(simErr).WithFields(logrus.Fields{
-			"duration":   time.Since(timeBeforeValidation).Milliseconds(),
+			"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
 			"numWaiting": api.blockSimRateLimiter.currentCounter(),
 		}).Info("block validation failed")
 
@@ -1413,7 +1413,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampAfterValidation", time.Now().UTC().UnixMilli())
 	log.WithFields(logrus.Fields{
-		"duration":   time.Since(timeBeforeValidation).Milliseconds(),
+		"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.currentCounter(),
 	}).Info("block validation successful")
 
