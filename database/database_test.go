@@ -144,7 +144,7 @@ func TestUpsertTooLateGetPayload(t *testing.T) {
 	pk := "0x8996515293fcd87ca09b5c6ffe5c17f043c6a1a3639cc9494a82ec8eb50a9b55c34b47675e573be40d9be308b1ca2908"
 	hash := "0x00bb8996515293fcd87ca09b5c6ffe5c17f043c600bb8996515293fcd8012343"
 	ms := uint64(4001)
-	err := db.InsertTooLateGetPayload(slot, pk, hash, ms)
+	err := db.InsertTooLateGetPayload(slot, 1, 2, 3, pk, hash, ms)
 	require.NoError(t, err)
 
 	entries, err := db.GetTooLateGetPayload(slot)
@@ -156,7 +156,7 @@ func TestUpsertTooLateGetPayload(t *testing.T) {
 	require.Equal(t, ms, entry.MsIntoSlot)
 
 	// Duplicate.
-	err = db.InsertTooLateGetPayload(slot, pk, hash, ms+1)
+	err = db.InsertTooLateGetPayload(slot, 1, 2, 3, pk, hash, ms+1)
 	require.NoError(t, err)
 	entries, err = db.GetTooLateGetPayload(slot)
 	require.NoError(t, err)
@@ -165,7 +165,8 @@ func TestUpsertTooLateGetPayload(t *testing.T) {
 
 	// New block hash (to save equivocations).
 	hash2 := "0xFFbb8996515293fcd87ca09b5c6ffe5c17f043c600bb8996515293fcd8012343"
-	err = db.InsertTooLateGetPayload(slot, pk, hash2, ms)
+	err = db.InsertTooLateGetPayload(slot, 1, 2, 3, pk, hash2, ms)
+
 	require.NoError(t, err)
 
 	entries, err = db.GetTooLateGetPayload(slot)

@@ -104,6 +104,6 @@ func (db MockDB) GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayload
 	return nil, nil
 }
 
-func (db MockDB) InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, msIntoSlot uint64) error {
+func (db MockDB) InsertTooLateGetPayload(slot, slotStart, requestTime, decodeTime uint64, proposerPubkey, blockHash string, msIntoSlot uint64) error {
 	return nil
 }

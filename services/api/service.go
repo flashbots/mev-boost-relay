@@ -912,6 +912,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
+	requestStart := time.Now().UTC()
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
 
@@ -924,7 +925,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"contentLength":         req.ContentLength,
 		"headSlot":              headSlot,
 		"idArg":                 req.URL.Query().Get("id"),
-		"timestampRequestStart": time.Now().UTC().UnixMilli(),
+		"timestampRequestStart": requestStart.UnixMilli(),
 	})
 
 	// Read the body first, so we can decode it later
@@ -960,15 +961,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Take time after the decoding, and add to logging
-	requestTime := time.Now().UTC()
+	decodeTime := time.Now().UTC()
 	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * 12)
-	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
+	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 	log = log.WithFields(logrus.Fields{
 		"slot":                 payload.Slot(),
 		"blockHash":            payload.BlockHash(),
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,
-		"timestampAfterDecode": requestTime.UnixMilli(),
+		"requestStart":         requestStart.UnixMilli(),
+		"timestampAfterDecode": decodeTime.UnixMilli(),
 	})
 
 	// Get the proposer pubkey based on the validator index from the payload
@@ -1038,7 +1040,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 
 		go func() {
-			err := api.db.InsertTooLateGetPayload(payload.Slot(), proposerPubkey.String(), payload.BlockHash(), uint64(msIntoSlot))
+			err := api.db.InsertTooLateGetPayload(payload.Slot(), slotStartTimestamp, uint64(requestStart.UnixMilli()), uint64(decodeTime.UnixMilli()), proposerPubkey.String(), payload.BlockHash(), uint64(msIntoSlot))
 			if err != nil {
 				log.WithError(err).Error("failed to insert payload too late into db")
 			}
@@ -1120,7 +1122,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
 		}
 
-		err = api.db.SaveDeliveredPayload(bidTrace, payload, requestTime, msNeededForPublishing)
+		err = api.db.SaveDeliveredPayload(bidTrace, payload, decodeTime, msNeededForPublishing)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"bidTrace": bidTrace,

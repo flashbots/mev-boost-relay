@@ -208,7 +208,12 @@ type TooLateGetPayloadEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
 
-	Slot           uint64 `db:"slot"`
+	Slot uint64 `db:"slot"`
+
+	SlotStart   uint64 `db:"slot_start"`
+	RequestTime uint64 `db:"request_time"`
+	DecodeTime  uint64 `db:"decode_time"`
+
 	ProposerPubkey string `db:"proposer_pubkey"`
 	BlockHash      string `db:"block_hash"`
 	MsIntoSlot     uint64 `db:"ms_into_slot"`
