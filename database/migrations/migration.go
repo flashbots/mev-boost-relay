@@ -13,5 +13,6 @@ var Migrations = migrate.MemoryMigrationSource{
 		Migration004BlockedValidator,
 		Migration005RemoveBlockedValidator,
 		Migration006CreateTooLateGetPayload,
+		Migration007BuilderSubmissionWasSimulated,
 	},
 }
