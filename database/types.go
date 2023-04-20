@@ -136,6 +136,7 @@ type BuilderBlockSubmissionEntry struct {
 	WasSimulated bool   `db:"was_simulated"`
 	SimSuccess   bool   `db:"sim_success"`
 	SimError     string `db:"sim_error"`
+	SimReqError  string `db:"sim_req_error"`
 
 	// BidTrace data
 	Signature string `db:"signature"`
