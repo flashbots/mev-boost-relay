@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,8 @@ import (
 )
 
 var (
-	ErrRequestClosed = errors.New("request context closed")
+	ErrRequestClosed    = errors.New("request context closed")
+	ErrSimulationFailed = errors.New("simulation failed")
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 3000)) * time.Millisecond
@@ -104,5 +106,8 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 		return nil, err, nil
 	}
 
-	return res, nil, res.Error
+	if res.Error != nil {
+		return res, nil, fmt.Errorf("%w: %s", ErrSimulationFailed, res.Error.Message)
+	}
+	return res, nil, nil
 }
