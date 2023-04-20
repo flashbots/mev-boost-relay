@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
-	github.com/alicebob/miniredis/v2 v2.23.0
+	github.com/alicebob/miniredis/v2 v2.30.2
 	github.com/attestantio/go-builder-client v0.2.8
 	github.com/attestantio/go-eth2-client v0.15.8
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
@@ -95,7 +95,7 @@ require (
 	github.com/tdewolff/test v1.0.7 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
-	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
+	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
