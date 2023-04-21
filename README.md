@@ -343,13 +343,19 @@ ExecStart=/home/ubuntu/prysm/bazel-bin/cmd/beacon-chain/beacon-chain_/beacon-cha
         --execution-endpoint=http://localhost:8551 \
         --jwt-secret=/var/lib/goethereum/jwtsecret \
         --min-sync-peers=1 \
-        --grpc-max-msg-size 104857600
+        --grpc-max-msg-size 104857600 \
+        --prepare-all-payloads \
+        --disable-reorg-late-blocks
 
 [Install]
 WantedBy=default.target
 ```
 
 </details>
+
+## Bid Cancellations
+
+Block builders can opt into cancellations by submitting blocks to `/relay/v1/builder/blocks?cancellations=1`. This may incur a performance penalty (i.e. validation of submissions taking significantly longer). See also https://github.com/flashbots/mev-boost-relay/issues/348
 
 ---
 
