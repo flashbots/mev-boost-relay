@@ -1358,19 +1358,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	var simErr error
+	var wasSimulated bool
+	var requestErr, validationErr error
 	var eligibleAt time.Time
 
 	// Save the builder submission to the database whenever this function ends
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simErr, receivedAt, eligibleAt, savePayloadToDatabase)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, requestErr, validationErr, receivedAt, eligibleAt, wasSimulated, savePayloadToDatabase)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
 		}
 
-		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, simErr != nil)
+		err = api.db.UpsertBlockBuilderEntryAfterSubmission(submissionEntry, validationErr != nil)
 		if err != nil {
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
@@ -1401,47 +1402,51 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		BuilderSubmitBlockRequest: *payload,
 		RegisteredGasLimit:        slotDuty.GasLimit,
 	}
-	simErr = api.blockSimRateLimiter.send(req.Context(), validationRequestPayload, builderIsHighPrio)
+	requestErr, validationErr = api.blockSimRateLimiter.Send(req.Context(), validationRequestPayload, builderIsHighPrio)
+	validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
+	log = log.WithFields(logrus.Fields{
+		"timestampAfterValidation": time.Now().UTC().UnixMilli(),
+		"validationDurationMs":     validationDurationMs,
+	})
 
-	if simErr != nil {
-		log = log.WithField("simErr", simErr.Error())
-		log.WithError(simErr).WithFields(logrus.Fields{
-			"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
-			"numWaiting": api.blockSimRateLimiter.currentCounter(),
-		}).Info("block validation failed")
-
-		if os.IsTimeout(simErr) {
+	if requestErr != nil {
+		// Request error -- log and return error
+		log.WithFields(logrus.Fields{
+			"requestErr": requestErr.Error(),
+			"durationMs": validationDurationMs,
+		}).Info("block validation failed - request error")
+		if os.IsTimeout(requestErr) {
 			api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
+		} else {
+			api.RespondError(w, http.StatusBadRequest, requestErr.Error())
+		}
+		return
+	} else {
+		wasSimulated = true
+		if validationErr != nil {
+			log.WithFields(logrus.Fields{
+				"validationErr": validationErr.Error(),
+				"durationMs":    validationDurationMs,
+			}).Info("block validation failed - validation error")
+			api.RespondError(w, http.StatusBadRequest, validationErr.Error())
 			return
 		}
-
-		api.RespondError(w, http.StatusBadRequest, simErr.Error())
-		return
 	}
 
-	log = log.WithField("timestampAfterValidation", time.Now().UTC().UnixMilli())
-	log.WithFields(logrus.Fields{
-		"durationMs": time.Since(timeBeforeValidation).Milliseconds(),
-		"numWaiting": api.blockSimRateLimiter.currentCounter(),
-	}).Info("block validation successful")
+	// Log successful validation
+	log.WithField("durationMs", validationDurationMs).Info("block validation successful")
 
+	// If cancellations are enabled, then abort now if this submission is not the latest one
 	if isCancellationEnabled {
-		// Ensure this request is still the latest one. This logic intentionally
-		// ignores the value of the bids and makes the current active bid the one
-		// that arrived at the relay last. This allows for builders to reduce the
-		// value of their bid (effectively cancel a high bid) by ensuring a lower
-		// bid arrives later. Even if the higher bid takes longer to simulate,
-		// by checking the receivedAt timestamp, this logic ensures that the low bid
+		// Ensure this request is still the latest one. This logic intentionally ignores the value of the bids and makes the current active bid the one
+		// that arrived at the relay last. This allows for builders to reduce the value of their bid (effectively cancel a high bid) by ensuring a lower
+		// bid arrives later. Even if the higher bid takes longer to simulate, by checking the receivedAt timestamp, this logic ensures that the low bid
 		// is not overwritten by the high bid.
 		//
-		// NOTE: this can lead to a rather tricky race condition. If a builder
-		// submits two blocks to the relay concurrently, then the randomness of
-		// network latency will make it impossible to predict which arrives first.
-		// Thus a high bid could unintentionally be overwritten by a low bid that
-		// happened to arrive a few microseconds later. If builders are submitting
-		// blocks at a frequency where they cannot reliably predict which bid will
-		// arrive at the relay first, they should instead use multiple pubkeys to
-		// avoid uninitentionally overwriting their own bids.
+		// NOTE: this can lead to a rather tricky race condition. If a builder submits two blocks to the relay concurrently, then the randomness of network
+		// latency will make it impossible to predict which arrives first. Thus a high bid could unintentionally be overwritten by a low bid that happened
+		// to arrive a few microseconds later. If builders are submitting blocks at a frequency where they cannot reliably predict which bid will arrive at
+		// the relay first, they should instead use multiple pubkeys to avoid uninitentionally overwriting their own bids.
 		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
 		if err != nil {
 			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
