@@ -932,10 +932,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Log at start and end of request
 	log.Info("request initiated")
-	defer log.WithFields(logrus.Fields{
-		"timestampRequestFin": time.Now().UTC().UnixMilli(),
-		"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
-	}).Info("request finished")
+	defer func() {
+		log.WithFields(logrus.Fields{
+			"timestampRequestFin": time.Now().UTC().UnixMilli(),
+			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+		}).Info("request finished")
+	}()
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
@@ -1030,17 +1032,49 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterSignatureVerify", time.Now().UTC().UnixMilli())
 	log.Info("getPayload request received")
 
-	// Check whether getPayload has already been called
-	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else if payload.Slot() <= slotLastPayloadDelivered {
-		log.Warn("getPayload was already called for this slot")
-		api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
-		return
+	// TODO: store signed blinded block in database (always)
+
+	// Get the response - from Redis, Memcache or DB
+	// note that recent mev-boost versions only send getPayload to relays that provided the bid
+	getPayloadResp, err := api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+	if err != nil || getPayloadResp == nil {
+		log.WithError(err).Warn("failed getting execution payload (1/2)")
+		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
+
+		// Try again
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+		if err != nil {
+			log.WithError(err).Error("failed getting execution payload (2/2) - due to error")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		} else if getPayloadResp == nil {
+			log.Warn("failed getting execution payload (2/2)")
+			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
+			return
+		}
 	}
 
-	log = log.WithField("timestampAfterAlreadyDelivered", time.Now().UTC().UnixMilli())
+	// Now we know this relay also has the payload
+	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
+
+	// Check whether getPayload has already been called -- TODO: do we need to allow multiple submissions of one blinded block?
+	err = api.redis.CheckAndSetLastSlotDelivered(payload.Slot())
+	log = log.WithField("timestampAfterAlreadyDeliveredCheck", time.Now().UTC().UnixMilli())
+	if err != nil {
+		if errors.Is(err, datastore.ErrSlotAlreadyDelivered) {
+			// BAD VALIDATOR, 2x GETPAYLOAD
+			log.Warn("validator called getPayload twice")
+			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
+			return
+		} else if errors.Is(err, redis.TxFailedErr) {
+			// BAD VALIDATOR, 2x GETPAYLOAD + RACE
+			log.Warn("validator called getPayload twice (race)")
+			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered (race)")
+			return
+		} else {
+			log.WithError(err).Error("redis.CheckAndSetLastSlotDelivered failed")
+		}
+	}
 
 	// Handle early/late requests
 	if msIntoSlot < 0 {
@@ -1066,26 +1100,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Get the response - from Redis, Memcache or DB
-	// note that recent mev-boost versions only send getPayload to relays that provided the bid
-	getPayloadResp, err := api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
-	if err != nil || getPayloadResp == nil {
-		log.WithError(err).Warn("failed getting execution payload (1/2)")
-		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
-
-		// Try again
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
-		if err != nil {
-			log.WithError(err).Error("failed getting execution payload (2/2) - due to error")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		} else if getPayloadResp == nil {
-			log.Warn("failed getting execution payload (2/2)")
-			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
-			return
-		}
-	}
-
+	// Introduce a random delay (disabled by default)
 	if getPayloadPublishDelayMs > 0 {
 		delayMillis := rand.Intn(getPayloadPublishDelayMs) //nolint:gosec
 		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
@@ -1113,14 +1128,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	msNeededForPublishing := uint64(timeAfterPublish - timeBeforePublish)
 	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
 	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
-
-	// Remember that getPayload has already been called
-	go func() {
-		err := api.redis.SetStats(datastore.RedisStatsFieldSlotLastPayloadDelivered, payload.Slot())
-		if err != nil {
-			log.WithError(err).Error("failed to save delivered payload slot to redis")
-		}
-	}()
 
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
@@ -1183,10 +1190,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Log at start and end of request
 	log.Info("request initiated")
-	defer log.WithFields(logrus.Fields{
-		"timestampRequestFin": time.Now().UTC().UnixMilli(),
-		"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
-	}).Info("request finished")
+	defer func() {
+		log.WithFields(logrus.Fields{
+			"timestampRequestFin": time.Now().UTC().UnixMilli(),
+			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+		}).Info("request finished")
+	}()
 
 	// If cancellations are disabled but builder requested it, return error
 	if isCancellationEnabled && !api.ffEnableCancellations {
@@ -1359,7 +1368,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
-	slotLastPayloadDelivered, err := api.redis.GetStatsUint64(datastore.RedisStatsFieldSlotLastPayloadDelivered)
+	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if payload.Slot() <= slotLastPayloadDelivered {
