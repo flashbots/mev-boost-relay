@@ -320,12 +320,12 @@ func (r *RedisCache) GetStatsUint64(field string) (value uint64, err error) {
 	return value, err
 }
 
-func (r *RedisCache) SetProposerDuties(proposerDuties []boostTypes.BuilderGetValidatorsResponseEntry) (err error) {
+func (r *RedisCache) SetProposerDuties(proposerDuties []common.BuilderGetValidatorsResponseEntry) (err error) {
 	return r.SetObj(r.keyProposerDuties, proposerDuties, 0)
 }
 
-func (r *RedisCache) GetProposerDuties() (proposerDuties []boostTypes.BuilderGetValidatorsResponseEntry, err error) {
-	proposerDuties = make([]boostTypes.BuilderGetValidatorsResponseEntry, 0)
+func (r *RedisCache) GetProposerDuties() (proposerDuties []common.BuilderGetValidatorsResponseEntry, err error) {
+	proposerDuties = make([]common.BuilderGetValidatorsResponseEntry, 0)
 	err = r.GetObj(r.keyProposerDuties, &proposerDuties)
 	if errors.Is(err, redis.Nil) {
 		return proposerDuties, nil

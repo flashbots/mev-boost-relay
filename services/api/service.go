@@ -145,8 +145,8 @@ type RelayAPI struct {
 	capellaEpoch   uint64
 
 	proposerDutiesLock       sync.RWMutex
-	proposerDutiesResponse   []boostTypes.BuilderGetValidatorsResponseEntry
-	proposerDutiesMap        map[uint64]*boostTypes.RegisterValidatorRequestMessage
+	proposerDutiesResponse   *[]byte // raw http response
+	proposerDutiesMap        map[uint64]*common.BuilderGetValidatorsResponseEntry
 	proposerDutiesSlot       uint64
 	isUpdatingProposerDuties uberatomic.Bool
 
@@ -228,7 +228,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
-		proposerDutiesResponse: []boostTypes.BuilderGetValidatorsResponseEntry{},
+		proposerDutiesResponse: &[]byte{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
 		activeValidatorC: make(chan boostTypes.PubkeyHex, 450_000),
@@ -590,30 +590,41 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 		return
 	}
 
-	// Get duties from mem
+	// Load upcoming proposer duties from Redis
 	duties, err := api.redis.GetProposerDuties()
-	dutiesMap := make(map[uint64]*boostTypes.RegisterValidatorRequestMessage)
-	for _, duty := range duties {
-		dutiesMap[duty.Slot] = duty.Entry.Message
+	if err != nil {
+		api.log.WithError(err).Error("failed getting proposer duties from redis")
+		return
 	}
 
-	if err == nil {
-		api.proposerDutiesLock.Lock()
-		api.proposerDutiesResponse = duties
-		api.proposerDutiesMap = dutiesMap
-		api.proposerDutiesSlot = headSlot
-		api.proposerDutiesLock.Unlock()
-
-		// pretty-print
-		_duties := make([]string, len(duties))
-		for i, duty := range duties {
-			_duties[i] = fmt.Sprint(duty.Slot)
-		}
-		sort.Strings(_duties)
-		api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
-	} else {
-		api.log.WithError(err).Error("failed to update proposer duties")
+	// Prepare raw bytes for HTTP response
+	respBytes, err := json.Marshal(duties)
+	if err != nil {
+		api.log.WithError(err).Error("error marshalling duties")
 	}
+
+	// Prepare the map for lookup by slot
+	dutiesMap := make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+	for index, duty := range duties {
+		dutiesMap[duty.Slot] = &duties[index]
+	}
+
+	// Update
+	api.proposerDutiesLock.Lock()
+	if len(respBytes) > 0 {
+		api.proposerDutiesResponse = &respBytes
+	}
+	api.proposerDutiesMap = dutiesMap
+	api.proposerDutiesSlot = headSlot
+	api.proposerDutiesLock.Unlock()
+
+	// pretty-print
+	_duties := make([]string, len(duties))
+	for i, duty := range duties {
+		_duties[i] = fmt.Sprint(duty.Slot)
+	}
+	sort.Strings(_duties)
+	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
@@ -983,7 +994,26 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,
 		"timestampAfterDecode": decodeTime.UnixMilli(),
+		"proposerIndex":        payload.ProposerIndex(),
 	})
+
+	// Ensure the proposer index is expected
+	api.proposerDutiesLock.RLock()
+	slotDuty := api.proposerDutiesMap[payload.Slot()]
+	api.proposerDutiesLock.RUnlock()
+	if slotDuty == nil {
+		log.Warn("could not find slot duty")
+	} else if slotDuty.ValidatorIndex != payload.ProposerIndex() {
+		log.WithFields(logrus.Fields{
+			"expectedProposerIndex": slotDuty.ValidatorIndex,
+			"actualProposerIndex":   payload.ProposerIndex(),
+		}).Warn("not the expected proposer index")
+		api.RespondError(w, http.StatusBadRequest, "not the expected proposer index")
+		return
+	}
+
+	// Add fee recipient to logs
+	log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient)
 
 	// Get the proposer pubkey based on the validator index from the payload
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
@@ -1171,8 +1201,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 // --------------------
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	api.proposerDutiesLock.RLock()
-	defer api.proposerDutiesLock.RUnlock()
-	api.RespondOK(w, api.proposerDutiesResponse)
+	_, err := w.Write(*api.proposerDutiesResponse)
+	api.proposerDutiesLock.RUnlock()
+	if err != nil {
+		api.log.WithError(err).Warn("failed to write response for builderGetValidators")
+	}
 }
 
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
@@ -1301,8 +1334,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log.Warn("could not find slot duty")
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
 		return
-	} else if slotDuty.FeeRecipient.String() != payload.ProposerFeeRecipient() {
-		log.Info("fee recipient does not match")
+	} else if slotDuty.Entry.Message.FeeRecipient.String() != payload.ProposerFeeRecipient() {
+		log.WithFields(logrus.Fields{
+			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
+			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
+		}).Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
 		return
 	}
@@ -1420,7 +1456,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UTC().UnixMilli())
 	validationRequestPayload := &common.BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: *payload,
-		RegisteredGasLimit:        slotDuty.GasLimit,
+		RegisteredGasLimit:        slotDuty.Entry.Message.GasLimit,
 	}
 	requestErr, validationErr = api.blockSimRateLimiter.Send(req.Context(), validationRequestPayload, builderIsHighPrio)
 	validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
