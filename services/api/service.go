@@ -1042,8 +1042,18 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	log = log.WithField("timestampAfterAlreadyDelivered", time.Now().UTC().UnixMilli())
 
-	// Only allow getPayload requests for the current slot until a certain cutoff time
-	if getPayloadRequestCutoffMs > 0 && msIntoSlot > 0 && msIntoSlot > int64(getPayloadRequestCutoffMs) {
+	// Handle early/late requests
+	if msIntoSlot < 0 {
+		// Wait until slot start (t=0) if still in the future
+		_msSinceSlotStart := time.Now().UTC().UnixMilli() - int64((slotStartTimestamp * 1000))
+		if _msSinceSlotStart < 0 {
+			delayMillis := (_msSinceSlotStart * -1) + int64(rand.Intn(50)) //nolint:gosec
+			log = log.WithField("delayMillis", delayMillis)
+			log.Info("waiting until slot start t=0")
+			time.Sleep(time.Duration(delayMillis) * time.Millisecond)
+		}
+	} else if getPayloadRequestCutoffMs > 0 && msIntoSlot > int64(getPayloadRequestCutoffMs) {
+		// Reject requests after cutoff time
 		log.Warn("getPayload sent too late")
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 
