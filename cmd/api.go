@@ -27,12 +27,20 @@ var (
 	apiDefaultPprofEnabled       = os.Getenv("PPROF") == "1"
 	apiDefaultInternalAPIEnabled = os.Getenv("ENABLE_INTERNAL_API") == "1"
 
+	// Default Builder, Data, and Proposer API as true.
+	apiDefaultBuilderAPIEnabled  = os.Getenv("DISABLE_BUILDER_API") != "1"
+	apiDefaultDataAPIEnabled     = os.Getenv("DISABLE_DATA_API") != "1"
+	apiDefaultProposerAPIEnabled = os.Getenv("DISABLE_PROPOSER_API") != "1"
+
 	apiListenAddr   string
 	apiPprofEnabled bool
 	apiSecretKey    string
 	apiBlockSimURL  string
 	apiDebug        bool
 	apiInternalAPI  bool
+	apiBuilderAPI   bool
+	apiDataAPI      bool
+	apiProposerAPI  bool
 	apiLogTag       string
 )
 
@@ -55,6 +63,9 @@ func init() {
 
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", apiDefaultPprofEnabled, "enable pprof API")
 	apiCmd.Flags().BoolVar(&apiInternalAPI, "internal-api", apiDefaultInternalAPIEnabled, "enable internal API (/internal/...)")
+	apiCmd.Flags().BoolVar(&apiBuilderAPI, "builder-api", apiDefaultBuilderAPIEnabled, "enable internal API (/builder/...)")
+	apiCmd.Flags().BoolVar(&apiDataAPI, "data-api", apiDefaultDataAPIEnabled, "enable internal API (/data/...)")
+	apiCmd.Flags().BoolVar(&apiProposerAPI, "proposer-api", apiDefaultProposerAPIEnabled, "enable internal API (/proposer/...)")
 }
 
 var apiCmd = &cobra.Command{
@@ -139,10 +150,10 @@ var apiCmd = &cobra.Command{
 			EthNetDetails: *networkInfo,
 			BlockSimURL:   apiBlockSimURL,
 
-			ProposerAPI:     true,
-			BlockBuilderAPI: true,
-			DataAPI:         true,
 			InternalAPI:     apiInternalAPI,
+			BlockBuilderAPI: apiBuilderAPI,
+			DataAPI:         apiDataAPI,
+			ProposerAPI:     apiProposerAPI,
 			PprofAPI:        apiPprofEnabled,
 		}
 
