@@ -18,7 +18,7 @@ func setupTestRedis(t *testing.T) *RedisCache {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisService, err := NewRedisCache(redisTestServer.Addr(), "")
+	redisService, err := NewRedisCache(redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 
 	return redisService
@@ -281,9 +281,9 @@ func TestRedisURIs(t *testing.T) {
 	require.NoError(t, err)
 
 	// test connection with and without protocol
-	_, err = NewRedisCache(redisTestServer.Addr(), "")
+	_, err = NewRedisCache(redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
-	_, err = NewRedisCache("redis://"+redisTestServer.Addr(), "")
+	_, err = NewRedisCache("redis://"+redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 
 	// test connection w/ credentials
@@ -291,14 +291,14 @@ func TestRedisURIs(t *testing.T) {
 	password := "pass"
 	redisTestServer.RequireUserAuth(username, password)
 	fullURL := "redis://" + username + ":" + password + "@" + redisTestServer.Addr()
-	_, err = NewRedisCache(fullURL, "")
+	_, err = NewRedisCache(fullURL, "", "")
 	require.NoError(t, err)
 
 	// ensure malformed URL throws error
 	malformURL := "http://" + username + ":" + password + "@" + redisTestServer.Addr()
-	_, err = NewRedisCache(malformURL, "")
+	_, err = NewRedisCache(malformURL, "", "")
 	require.Error(t, err)
 	malformURL = "redis://" + username + ":" + "wrongpass" + "@" + redisTestServer.Addr()
-	_, err = NewRedisCache(malformURL, "")
+	_, err = NewRedisCache(malformURL, "", "")
 	require.Error(t, err)
 }

@@ -62,7 +62,8 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 }
 
 type RedisCache struct {
-	client *redis.Client
+	client         *redis.Client
+	readonlyClient *redis.Client
 
 	// prefixes (keys generated with a function)
 	prefixGetHeaderResponse           string
@@ -84,14 +85,25 @@ type RedisCache struct {
 	keyBlockBuilderStatus string
 }
 
-func NewRedisCache(redisURI, prefix string) (*RedisCache, error) {
+func NewRedisCache(redisURI, prefix, readonlyURI string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
 	}
 
+	var roClient *redis.Client
+	if readonlyURI != "" {
+		roClient, err = connectRedis(readonlyURI)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		roClient = client
+	}
+
 	return &RedisCache{
-		client: client,
+		client:         client,
+		readonlyClient: roClient,
 
 		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
@@ -184,7 +196,7 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 
 func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, error) {
 	validators := make(map[uint64]boostTypes.PubkeyHex)
-	entries, err := r.client.HGetAll(context.Background(), r.keyKnownValidators).Result()
+	entries, err := r.readonlyClient.HGetAll(context.Background(), r.keyKnownValidators).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +258,7 @@ func (r *RedisCache) GetActiveValidators() (map[boostTypes.PubkeyHex]bool, error
 	validators := make(map[boostTypes.PubkeyHex]bool)
 	for i := 0; i < hours; i++ {
 		key := r.keyActiveValidators(now.Add(time.Duration(-i) * time.Hour))
-		entries, err := r.client.HGetAll(context.Background(), key).Result()
+		entries, err := r.readonlyClient.HGetAll(context.Background(), key).Result()
 		if err != nil {
 			return nil, err
 		}
