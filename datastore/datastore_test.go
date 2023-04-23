@@ -18,7 +18,7 @@ func setupTestDatastore(t *testing.T) *Datastore {
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisDs, err := NewRedisCache(redisTestServer.Addr(), "")
+	redisDs, err := NewRedisCache(redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 
 	// TODO: add support for testing datastore with memcached enabled
