@@ -108,7 +108,7 @@ var apiCmd = &cobra.Command{
 
 		// Connect to Redis
 		log.Infof("Connecting to Redis at %s ...", redisURI)
-		redis, err := datastore.NewRedisCache(redisURI, networkInfo.Name, redisReadonlyURI)
+		redis, err := datastore.NewRedisCache(networkInfo.Name, redisURI, redisReadonlyURI)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}

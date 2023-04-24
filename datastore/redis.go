@@ -85,7 +85,7 @@ type RedisCache struct {
 	keyBlockBuilderStatus string
 }
 
-func NewRedisCache(redisURI, prefix, readonlyURI string) (*RedisCache, error) {
+func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err

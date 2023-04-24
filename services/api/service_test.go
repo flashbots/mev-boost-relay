@@ -33,7 +33,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	redisClient, err := miniredis.Run()
 	require.NoError(t, err)
 
-	redisCache, err := datastore.NewRedisCache(redisClient.Addr(), "", "")
+	redisCache, err := datastore.NewRedisCache("", redisClient.Addr(), "")
 	require.NoError(t, err)
 
 	db := database.MockDB{}
