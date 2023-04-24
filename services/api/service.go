@@ -926,6 +926,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":         req.ContentLength,
 		"headSlot":              headSlot,
+		"headSlotEpochPos":      (headSlot % uint64(common.SlotsPerEpoch)) + 1,
 		"idArg":                 req.URL.Query().Get("id"),
 		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
@@ -975,6 +976,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 	log = log.WithFields(logrus.Fields{
 		"slot":                 payload.Slot(),
+		"slotEpochPos":         (payload.Slot() % uint64(common.SlotsPerEpoch)) + 1,
 		"blockHash":            payload.BlockHash(),
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,
