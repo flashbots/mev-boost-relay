@@ -151,6 +151,8 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 * `NO_HEADER_USERAGENTS` - proposer API - comma separated list of user agents for which no bids should be returned
 * `ENABLE_BUILDER_CANCELLATIONS` - whether to enable block builder cancellations
+* `REDIS_URI` - main redis URI (default: `localhost:6379`)
+* `REDIS_READONLY_URI` - optional, a secondary redis instance for heavy read operations
 
 #### Feature Flags
 
