@@ -219,7 +219,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.BuilderSubm
 		NumTx: uint64(payload.NumTx()),
 		Value: payload.Value().String(),
 
-		Epoch:       payload.Slot() / uint64(common.SlotsPerEpoch),
+		Epoch:       payload.Slot() / common.SlotsPerEpoch,
 		BlockNumber: payload.BlockNumber(),
 	}
 	err = s.nstmtInsertBlockBuilderSubmission.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
@@ -264,7 +264,7 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, sign
 		SignedBlindedBeaconBlock: NewNullString(string(_signedBlindedBeaconBlock)),
 
 		Slot:  bidTrace.Slot,
-		Epoch: bidTrace.Slot / uint64(common.SlotsPerEpoch),
+		Epoch: bidTrace.Slot / common.SlotsPerEpoch,
 
 		BuilderPubkey:        bidTrace.BuilderPubkey.String(),
 		ProposerPubkey:       bidTrace.ProposerPubkey.String(),
