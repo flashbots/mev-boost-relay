@@ -1071,9 +1071,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.Warn("validator called getPayload twice (race)")
 			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered (race)")
 			return
-		} else {
-			log.WithError(err).Error("redis.CheckAndSetLastSlotDelivered failed")
 		}
+		log.WithError(err).Error("redis.CheckAndSetLastSlotDelivered failed")
 	}
 
 	// Handle early/late requests
