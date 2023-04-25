@@ -24,12 +24,12 @@ var (
 	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
 	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
-	RedisConfigFieldPubkey                  = "pubkey"
-	RedisStatsFieldLatestSlot               = "latest-slot"
-	RedisStatsFieldValidatorsTotal          = "validators-total"
-	RedisStatsFieldSlotLastPayloadDelivered = "slot-last-payload-delivered"
+	RedisConfigFieldPubkey         = "pubkey"
+	RedisStatsFieldLatestSlot      = "latest-slot"
+	RedisStatsFieldValidatorsTotal = "validators-total"
 
 	ErrFailedUpdatingTopBidNoBids = errors.New("failed to update top bid because no bids were found")
+	ErrSlotAlreadyDelivered       = errors.New("payload for slot was already delivered")
 )
 
 type BlockBuilderStatus string
@@ -83,6 +83,7 @@ type RedisCache struct {
 	keyStats              string
 	keyProposerDuties     string
 	keyBlockBuilderStatus string
+	keyLastSlotDelivered  string
 }
 
 func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
@@ -122,6 +123,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
 		keyBlockBuilderStatus: fmt.Sprintf("%s/%s:block-builder-status", redisPrefix, prefix),
+		keyLastSlotDelivered:  fmt.Sprintf("%s/%s:last-slot-delivered", redisPrefix, prefix),
 	}, nil
 }
 
@@ -268,6 +270,35 @@ func (r *RedisCache) GetActiveValidators() (map[boostTypes.PubkeyHex]bool, error
 	}
 
 	return validators, nil
+}
+
+func (r *RedisCache) CheckAndSetLastSlotDelivered(slot uint64) (err error) {
+	// More details about Redis optimistic locking:
+	// - https://redis.uptrace.dev/guide/go-redis-pipelines.html#transactions
+	// - https://github.com/redis/go-redis/blob/6ecbcf6c90919350c42181ce34c1cbdfbd5d1463/race_test.go#L183
+	txf := func(tx *redis.Tx) error {
+		lastSlotDelivered, err := tx.Get(context.Background(), r.keyLastSlotDelivered).Uint64()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return err
+		}
+
+		if slot <= lastSlotDelivered {
+			return ErrSlotAlreadyDelivered
+		}
+
+		_, err = tx.TxPipelined(context.Background(), func(pipe redis.Pipeliner) error {
+			pipe.Set(context.Background(), r.keyLastSlotDelivered, slot, 0)
+			return nil
+		})
+
+		return err
+	}
+
+	return r.client.Watch(context.Background(), txf, r.keyLastSlotDelivered)
+}
+
+func (r *RedisCache) GetLastSlotDelivered() (slot uint64, err error) {
+	return r.client.Get(context.Background(), r.keyLastSlotDelivered).Uint64()
 }
 
 func (r *RedisCache) SetStats(field string, value any) (err error) {
