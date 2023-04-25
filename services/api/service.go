@@ -314,7 +314,7 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 	if api.capellaEpoch == 0 { // CL didn't yet have it
 		return false
 	}
-	epoch := slot / uint64(common.SlotsPerEpoch)
+	epoch := slot / common.SlotsPerEpoch
 	return epoch >= api.capellaEpoch
 }
 
@@ -336,7 +336,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// Helpers
 	currentSlot := bestSyncStatus.HeadSlot
-	currentEpoch := currentSlot / uint64(common.SlotsPerEpoch)
+	currentEpoch := currentSlot / common.SlotsPerEpoch
 
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
@@ -566,11 +566,11 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	}
 
 	// log
-	epoch := headSlot / uint64(common.SlotsPerEpoch)
+	epoch := headSlot / common.SlotsPerEpoch
 	api.log.WithFields(logrus.Fields{
 		"epoch":              epoch,
 		"slotHead":           headSlot,
-		"slotStartNextEpoch": (epoch + 1) * uint64(common.SlotsPerEpoch),
+		"slotStartNextEpoch": (epoch + 1) * common.SlotsPerEpoch,
 	}).Infof("updated headSlot to %d", headSlot)
 
 	if api.isBellatrix(prevHeadSlot) && api.isCapella(headSlot) {
@@ -926,6 +926,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":         req.ContentLength,
 		"headSlot":              headSlot,
+		"headSlotEpochPos":      (headSlot % common.SlotsPerEpoch) + 1,
 		"idArg":                 req.URL.Query().Get("id"),
 		"timestampRequestStart": receivedAt.UnixMilli(),
 	})
@@ -977,6 +978,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 	log = log.WithFields(logrus.Fields{
 		"slot":                 payload.Slot(),
+		"slotEpochPos":         (payload.Slot() % common.SlotsPerEpoch) + 1,
 		"blockHash":            payload.BlockHash(),
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,

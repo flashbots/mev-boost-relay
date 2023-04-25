@@ -162,10 +162,10 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	}()
 
 	hk.headSlot.Store(headSlot)
-	currentEpoch := headSlot / uint64(common.SlotsPerEpoch)
+	currentEpoch := headSlot / common.SlotsPerEpoch
 	log.WithFields(logrus.Fields{
 		"epoch":              currentEpoch,
-		"slotStartNextEpoch": (currentEpoch + 1) * uint64(common.SlotsPerEpoch),
+		"slotStartNextEpoch": (currentEpoch + 1) * common.SlotsPerEpoch,
 	}).Infof("updated headSlot to %d", headSlot)
 }
 
@@ -230,11 +230,12 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 	defer hk.isUpdatingProposerDuties.Store(false)
 
-	if headSlot%uint64(common.SlotsPerEpoch/2) != 0 && headSlot-hk.proposerDutiesSlot < uint64(common.SlotsPerEpoch/2) {
+	slotsForHalfAnEpoch := common.SlotsPerEpoch / 2
+	if headSlot%slotsForHalfAnEpoch != 0 && headSlot-hk.proposerDutiesSlot < slotsForHalfAnEpoch {
 		return
 	}
 
-	epoch := headSlot / uint64(common.SlotsPerEpoch)
+	epoch := headSlot / common.SlotsPerEpoch
 
 	log := hk.log.WithFields(logrus.Fields{
 		"epochFrom": epoch,

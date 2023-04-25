@@ -14,7 +14,7 @@ var (
 	SecondsPerSlot  = uint64(cli.GetEnvInt("SEC_PER_SLOT", 12))
 	DurationPerSlot = time.Duration(SecondsPerSlot) * time.Second
 
-	SlotsPerEpoch    = cli.GetEnvInt("SLOTS_PER_EPOCH", 32)
+	SlotsPerEpoch    = uint64(cli.GetEnvInt("SLOTS_PER_EPOCH", 32))
 	DurationPerEpoch = DurationPerSlot * time.Duration(SlotsPerEpoch)
 )
 
