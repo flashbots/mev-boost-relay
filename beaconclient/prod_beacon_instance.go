@@ -109,18 +109,10 @@ func (c *ProdBeaconInstance) SubscribeToPayloadAttributesEvents(payloadAttribute
 	}
 }
 
-func (c *ProdBeaconInstance) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
-	vd, err := fetchAllValidators(c.beaconURI, headSlot)
-	if err != nil {
-		return nil, err
-	}
-
-	newValidatorSet := make(map[types.PubkeyHex]ValidatorResponseEntry)
-	for _, vs := range vd.Data {
-		newValidatorSet[types.NewPubkeyHex(vs.Validator.Pubkey)] = vs
-	}
-
-	return newValidatorSet, nil
+type GetStateValidatorsResponse struct {
+	ExecutionOptimistic bool `json:"execution_optimistic"`
+	Finalized           bool `json:"finalized"`
+	Data                []ValidatorResponseEntry
 }
 
 type ValidatorResponseEntry struct {
@@ -131,19 +123,32 @@ type ValidatorResponseEntry struct {
 }
 
 type ValidatorResponseValidatorData struct {
-	Pubkey string `json:"pubkey"`
+	Pubkey                string `json:"pubkey"`
+	WithdrawalCredentials string `json:"withdrawal_credentials"`
+	EffectiveBalance      string `json:"effective_balance"`
+	Slashed               bool   `json:"slashed"`
+	ActivationEligibility uint64 `json:"activation_eligibility_epoch,string"`
+	ActivationEpoch       uint64 `json:"activation_epoch,string"`
+	ExitEpoch             uint64 `json:"exit_epoch,string"`
+	WithdrawableEpoch     uint64 `json:"withdrawable_epoch,string"`
 }
 
-type AllValidatorsResponse struct {
-	Data []ValidatorResponseEntry
-}
-
-func fetchAllValidators(endpoint string, headSlot uint64) (*AllValidatorsResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%d/validators?status=active,pending", endpoint, headSlot)
-	// https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
-	vd := new(AllValidatorsResponse)
+// GetStateValidators loads all active and pending validators
+// https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
+func (c *ProdBeaconInstance) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%s/validators?status=active,pending", c.beaconURI, stateID)
+	vd := new(GetStateValidatorsResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, vd)
-	return vd, err
+	if err != nil {
+		return nil, err
+	}
+
+	newValidatorSet := make(map[types.PubkeyHex]ValidatorResponseEntry)
+	for _, vs := range vd.Data {
+		newValidatorSet[types.NewPubkeyHex(vs.Validator.Pubkey)] = vs
+	}
+
+	return newValidatorSet, nil
 }
 
 // SyncStatusPayload is the response payload for /eth/v1/node/syncing

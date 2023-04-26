@@ -68,7 +68,7 @@ func TestBeaconInstance(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	vals, err := bc.FetchValidators(1)
+	vals, err := bc.GetStateValidators("1")
 	require.NoError(t, err)
 	require.Equal(t, 1, len(vals))
 	require.Contains(t, vals, types.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
@@ -159,7 +159,7 @@ func TestFetchValidators(t *testing.T) {
 		backend := newTestBackend(t, 2)
 		backend.beaconInstances[0].MockFetchValidatorsErr = errTest
 		backend.beaconInstances[1].MockFetchValidatorsErr = errTest
-		status, err := backend.beaconClient.FetchValidators(1)
+		status, err := backend.beaconClient.GetStateValidators("1")
 		require.Error(t, err)
 		require.Nil(t, status)
 	})
@@ -179,7 +179,7 @@ func TestFetchValidators(t *testing.T) {
 		backend.beaconInstances[1].AddValidator(entry)
 		backend.beaconInstances[2].MockFetchValidatorsErr = errTest
 
-		validators, err := backend.beaconClient.FetchValidators(1)
+		validators, err := backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
 		require.Equal(t, 1, len(validators))
 		require.Contains(t, validators, types.PubkeyHex(testPubKey))
@@ -190,7 +190,7 @@ func TestFetchValidators(t *testing.T) {
 		backend.beaconInstances[2].AddValidator(entry)
 
 		t.Log(backend.beaconInstances[1].NumValidators())
-		validators, err = backend.beaconClient.FetchValidators(1)
+		validators, err = backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
 		require.Equal(t, 0, len(validators))
 	})

@@ -173,7 +173,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 	// Query beacon node for known validators
 	hk.log.Debug("Querying validators from beacon node... (this may take a while)")
 	timeStartFetching := time.Now()
-	validators, err := hk.beaconClient.FetchValidators(hk.headSlot.Load() - 1) // -1 to avoid "Invalid state ID: requested slot number is higher than head slot number" with multiple BNs
+	validators, err := hk.beaconClient.GetStateValidators(beaconclient.StateIDHead) // head is fastest
 	if err != nil {
 		hk.log.WithError(err).Error("failed to fetch validators from all beacon nodes")
 		return

@@ -24,4 +24,4 @@
 .DS_Store
 /website-index.html
 /README.internal.md
-/internal/investigations/_*
+/internal/_investigations/

@@ -9,7 +9,14 @@ import (
 	"net/http"
 )
 
-var ErrHTTPErrorResponse = errors.New("got an HTTP error response")
+var (
+	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
+
+	StateIDHead      = "head"
+	StateIDGenesis   = "genesis"
+	StateIDFinalized = "finalized"
+	StateIDJustified = "justified"
+)
 
 func fetchBeacon(method, url string, payload, dst any) (code int, err error) {
 	var req *http.Request

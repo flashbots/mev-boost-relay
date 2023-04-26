@@ -27,8 +27,8 @@ type IMultiBeaconClient interface {
 	// SubscribeToPayloadAttributesEvents subscribes to payload attributes events to validate fields such as prevrandao and withdrawals
 	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent)
 
-	// FetchValidators returns all active and pending validators from the beacon node
-	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
+	// GetStateValidators returns all active and pending validators from the beacon node
+	GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
@@ -45,7 +45,7 @@ type IBeaconInstance interface {
 	CurrentSlot() (uint64, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
 	SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent)
-	FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error)
+	GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
@@ -149,7 +149,7 @@ func (c *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan Payloa
 	}
 }
 
-func (c *MultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MultiBeaconClient) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	// return the first successful beacon node response
 	clients := c.beaconInstancesByLastResponse()
 
@@ -157,7 +157,7 @@ func (c *MultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHe
 		log := c.log.WithField("uri", client.GetURI())
 		log.Debug("fetching validators")
 
-		validators, err := client.FetchValidators(headSlot)
+		validators, err := client.GetStateValidators(stateID)
 		if err != nil {
 			log.WithError(err).Error("failed to fetch validators")
 			continue
