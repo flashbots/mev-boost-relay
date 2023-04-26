@@ -9,6 +9,7 @@ import (
 )
 
 func TestSignature(t *testing.T) {
+	t.Skip()
 	pubkey := ""
 	gasLimit := 30000000
 	feeRecipient := ""

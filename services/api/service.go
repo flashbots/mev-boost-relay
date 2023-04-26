@@ -72,6 +72,7 @@ var (
 	// number of goroutines to save active validator
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
+	regValContinueOnError        = os.Getenv("REGISTER_VALIDATOR_CONTINUE_ON_ERROR") == "1" // whether to continue processing validators if one fails
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
 	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
 	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
@@ -675,10 +676,11 @@ func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
-		"method":    "registerValidator",
-		"ua":        ua,
-		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
-		"headSlot":  api.headSlot.Load(),
+		"method":        "registerValidator",
+		"ua":            ua,
+		"mevBoostV":     common.GetMevBoostVersionFromUserAgent(ua),
+		"headSlot":      api.headSlot.Load(),
+		"contentLength": req.ContentLength,
 	})
 
 	start := time.Now().UTC()
@@ -690,14 +692,24 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	numRegNew := 0
 	processingStoppedByError := false
 
-	respondError := func(code int, msg string) {
+	// Setup error handling
+	handleError := func(_log *logrus.Entry, code int, msg string) {
 		processingStoppedByError = true
-		log.Warnf("error: %s", msg)
+		_log.Warnf("error: %s", msg)
 		api.RespondError(w, code, msg)
 	}
 
+	if regValContinueOnError {
+		// Overload the handleError function to not return an error, but just log it
+		handleError = func(_log *logrus.Entry, code int, msg string) {
+			_log.Warnf("error: %s", msg)
+		}
+	}
+
+	// Start processing
 	if req.ContentLength == 0 {
-		respondError(http.StatusBadRequest, "empty request")
+		log.Info("empty request")
+		api.RespondError(w, http.StatusBadRequest, "empty request")
 		return
 	}
 
@@ -786,29 +798,33 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 		numRegProcessed += 1
+		regLog := log.WithFields(logrus.Fields{
+			"numRegistrationsSoFar":     numRegTotal,
+			"numRegistrationsProcessed": numRegProcessed,
+		})
 
 		// Extract immediately necessary registration fields
 		signedValidatorRegistration, err := parseRegistration(value)
 		if err != nil {
-			respondError(http.StatusBadRequest, err.Error())
+			handleError(regLog, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		// Add validator pubkey to logs
 		pkHex := signedValidatorRegistration.Message.Pubkey.PubkeyHex()
-		regLog := api.log.WithField("pubkey", pkHex)
+		regLog = regLog.WithField("pubkey", pkHex)
 
 		// Ensure registration is not too far in the future
 		registrationTime := time.Unix(int64(signedValidatorRegistration.Message.Timestamp), 0)
 		if registrationTime.After(registrationTimeUpperBound) {
-			respondError(http.StatusBadRequest, "timestamp too far in the future")
+			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
 			return
 		}
 
 		// Check if a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
-			respondError(http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex.String()))
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex.String()))
 			return
 		}
 
@@ -832,7 +848,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Verify the signature
 		ok, err := boostTypes.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
-			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
 			return
 		} else if !ok {
 			regLog.WithFields(logrus.Fields{
@@ -841,7 +857,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 				"gasLimit":     signedValidatorRegistration.Message.GasLimit,
 				"timestamp":    signedValidatorRegistration.Message.Timestamp,
 			}).Info("invalid validator signature")
-			respondError(http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
 			return
 		}
 
@@ -856,11 +872,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 	})
 
-	if err != nil {
-		respondError(http.StatusBadRequest, "error in traversing json")
-		return
-	}
-
 	log = log.WithFields(logrus.Fields{
 		"timeNeededSec":             time.Since(start).Seconds(),
 		"timeNeededMs":              time.Since(start).Milliseconds(),
@@ -870,6 +881,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"numRegistrationsNew":       numRegNew,
 		"processingStoppedByError":  processingStoppedByError,
 	})
+
+	if err != nil {
+		handleError(log, http.StatusBadRequest, "error in traversing json")
+		return
+	}
+
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
 }
