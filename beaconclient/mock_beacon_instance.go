@@ -67,7 +67,7 @@ func (c *MockBeaconInstance) NumValidators() uint64 {
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconInstance) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconInstance) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
 	c.addDelay()
 	return c.validatorSet, c.MockFetchValidatorsErr
 }
