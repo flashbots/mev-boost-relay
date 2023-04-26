@@ -560,7 +560,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	api.headSlot.Store(headSlot)
 
 	// only for builder-api
-	if api.opts.BlockBuilderAPI {
+	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {
 		// update proposer duties in the background
 		go api.updateProposerDuties(headSlot)
 	}
