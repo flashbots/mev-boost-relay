@@ -1201,8 +1201,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 // --------------------
 func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http.Request) {
 	api.proposerDutiesLock.RLock()
-	_, err := w.Write(*api.proposerDutiesResponse)
+	resp := api.proposerDutiesResponse
 	api.proposerDutiesLock.RUnlock()
+	_, err := w.Write(*resp)
 	if err != nil {
 		api.log.WithError(err).Warn("failed to write response for builderGetValidators")
 	}
