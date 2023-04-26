@@ -8,30 +8,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSignature(t *testing.T) {
+// TestValidatorRegistrationSignature can be used to validate the signature of an arbitrary validator registration
+func TestValidatorRegistrationSignature(t *testing.T) {
 	t.Skip()
+
+	// Fill in validator registration details
 	pubkey := ""
 	gasLimit := 30000000
 	feeRecipient := ""
 	timestamp := 0
 	signature := ""
 
-	_pk, err := boostTypes.HexToPubkey(pubkey)
-	require.NoError(t, err)
-	_sig, err := boostTypes.HexToSignature(signature)
-	require.NoError(t, err)
-	_feeRecipient, err := boostTypes.HexToAddress(feeRecipient)
-	require.NoError(t, err)
-
+	// Constructing the object
 	payload := boostTypes.SignedValidatorRegistration{
 		Message: &boostTypes.RegisterValidatorRequestMessage{
-			FeeRecipient: _feeRecipient,
-			GasLimit:     uint64(gasLimit),
-			Timestamp:    uint64(timestamp),
-			Pubkey:       _pk,
+			GasLimit:  uint64(gasLimit),
+			Timestamp: uint64(timestamp),
 		},
-		Signature: _sig,
 	}
+
+	var err error
+	payload.Message.Pubkey, err = boostTypes.HexToPubkey(pubkey)
+	require.NoError(t, err)
+	payload.Signature, err = boostTypes.HexToSignature(signature)
+	require.NoError(t, err)
+	payload.Message.FeeRecipient, err = boostTypes.HexToAddress(feeRecipient)
+	require.NoError(t, err)
 
 	mainnetDetails, err := common.NewEthNetworkDetails(common.EthNetworkMainnet)
 	require.NoError(t, err)
