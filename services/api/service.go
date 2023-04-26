@@ -708,23 +708,74 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
-	parseRegistration := func(value []byte) (pkHex boostTypes.PubkeyHex, timestampInt int64, err error) {
-		pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
+	parseRegistration := func(value []byte) (reg *boostTypes.SignedValidatorRegistration, err error) {
+		// Pubkey
+		_pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
-			return pkHex, timestampInt, fmt.Errorf("registration message error (pubkey): %w", err)
+			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
 		}
 
-		timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
+		pubkey, err := boostTypes.HexToPubkey(_pubkey)
 		if err != nil {
-			return pkHex, timestampInt, fmt.Errorf("registration message error (timestamp): %w", err)
+			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
 		}
 
-		timestampInt, err = strconv.ParseInt(timestamp, 10, 64)
+		// Timestamp
+		_timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
 		if err != nil {
-			return pkHex, timestampInt, fmt.Errorf("invalid timestamp: %w", err)
+			return nil, fmt.Errorf("registration message error (timestamp): %w", err)
 		}
 
-		return boostTypes.PubkeyHex(pubkey), timestampInt, nil
+		timestamp, err := strconv.ParseUint(_timestamp, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %w", err)
+		}
+
+		// GasLimit
+		_gasLimit, err := jsonparser.GetUnsafeString(value, "message", "gas_limit")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (gasLimit): %w", err)
+		}
+
+		gasLimit, err := strconv.ParseUint(_gasLimit, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid gasLimit: %w", err)
+		}
+
+		// FeeRecipient
+		_feeRecipient, err := jsonparser.GetUnsafeString(value, "message", "fee_recipient")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
+		}
+
+		feeRecipient, err := boostTypes.HexToAddress(_feeRecipient)
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
+		}
+
+		// Signature
+		_signature, err := jsonparser.GetUnsafeString(value, "signature")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (signature): %w", err)
+		}
+
+		signature, err := boostTypes.HexToSignature(_signature)
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (signature): %w", err)
+		}
+
+		// Construct and return full registration object
+		reg = &boostTypes.SignedValidatorRegistration{
+			Message: &boostTypes.RegisterValidatorRequestMessage{
+				FeeRecipient: feeRecipient,
+				GasLimit:     gasLimit,
+				Timestamp:    timestamp,
+				Pubkey:       pubkey,
+			},
+			Signature: signature,
+		}
+
+		return reg, nil
 	}
 
 	// Iterate over the registrations
@@ -736,17 +787,18 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		numRegProcessed += 1
 
 		// Extract immediately necessary registration fields
-		pkHex, timestampInt, err := parseRegistration(value)
+		signedValidatorRegistration, err := parseRegistration(value)
 		if err != nil {
 			respondError(http.StatusBadRequest, err.Error())
 			return
 		}
 
 		// Add validator pubkey to logs
-		regLog := api.log.WithField("pubkey", pkHex.String())
+		pkHex := signedValidatorRegistration.Message.Pubkey.PubkeyHex()
+		regLog := api.log.WithField("pubkey", pkHex)
 
 		// Ensure registration is not too far in the future
-		registrationTime := time.Unix(timestampInt, 0)
+		registrationTime := time.Unix(int64(signedValidatorRegistration.Message.Timestamp), 0)
 		if registrationTime.After(registrationTimeUpperBound) {
 			respondError(http.StatusBadRequest, "timestamp too far in the future")
 			return
@@ -759,7 +811,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return
 		}
 
-		// Track active validators here
+		// Keep track of active validators
 		numRegActive += 1
 		select {
 		case api.activeValidatorC <- pkHex:
@@ -771,33 +823,23 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
 		if err != nil {
 			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if prevTimestamp >= uint64(timestampInt) {
+		} else if prevTimestamp >= signedValidatorRegistration.Message.Timestamp {
 			// abort if the current registration timestamp is older or equal to the last known one
-			return
-		}
-
-		// Now we have a new registration to process
-		numRegNew += 1
-
-		// JSON-decode the registration now (needed for signature verification)
-		signedValidatorRegistration := new(boostTypes.SignedValidatorRegistration)
-		err = json.Unmarshal(value, signedValidatorRegistration)
-		if err != nil {
-			regLog.WithError(err).Error("error unmarshalling signed validator registration")
-			respondError(http.StatusBadRequest, fmt.Sprintf("error unmarshalling signed validator registration: %s", err.Error()))
 			return
 		}
 
 		// Verify the signature
 		ok, err := boostTypes.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
-			regLog.WithError(err).Error("error verifying registerValidator signature")
 			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
 			return
 		} else if !ok {
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+			respondError(http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
 			return
 		}
+
+		// Now we have a new registration to process
+		numRegNew += 1
 
 		// Save to database
 		select {
