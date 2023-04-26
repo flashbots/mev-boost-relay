@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"net/url"
 	"os"
-	"strings"
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
@@ -18,49 +16,13 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
 var (
 	ErrUnknownNetwork = errors.New("unknown network")
 	ErrEmptyPayload   = errors.New("empty payload")
-)
 
-// BuilderEntry represents a builder that is allowed to send blocks
-// Address will be schema://hostname:port
-type BuilderEntry struct {
-	Address string
-	Pubkey  hexutil.Bytes
-	URL     *url.URL
-}
-
-// NewBuilderEntry creates a new instance based on an input string
-// builderURL can be IP@PORT, PUBKEY@IP:PORT, https://IP, etc.
-func NewBuilderEntry(builderURL string) (entry *BuilderEntry, err error) {
-	if !strings.HasPrefix(builderURL, "http") {
-		builderURL = "http://" + builderURL
-	}
-
-	parsedURL, err := url.Parse(builderURL)
-	if err != nil {
-		return nil, err
-	}
-
-	var pubkey hexutil.Bytes
-	err = pubkey.UnmarshalText([]byte(entry.URL.User.Username()))
-	if err != nil {
-		return nil, err
-	}
-
-	return &BuilderEntry{
-		URL:     parsedURL,
-		Address: parsedURL.Scheme + "://" + parsedURL.Host,
-		Pubkey:  pubkey,
-	}, nil
-}
-
-var (
 	EthNetworkRopsten  = "ropsten"
 	EthNetworkSepolia  = "sepolia"
 	EthNetworkGoerli   = "goerli"
@@ -166,6 +128,12 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 func (e *EthNetworkDetails) String() string {
 	return fmt.Sprintf("EthNetworkDetails{Name: %s, GenesisForkVersionHex: %s, GenesisValidatorsRootHex: %s, BellatrixForkVersionHex: %s, CapellaForkVersionHex: %s, DomainBuilder: %x, DomainBeaconProposerBellatrix: %x, DomainBeaconProposerCapella: %x}",
 		e.Name, e.GenesisForkVersionHex, e.GenesisValidatorsRootHex, e.BellatrixForkVersionHex, e.CapellaForkVersionHex, e.DomainBuilder, e.DomainBeaconProposerBellatrix, e.DomainBeaconProposerCapella)
+}
+
+type BuilderGetValidatorsResponseEntry struct {
+	Slot           uint64                                  `json:"slot,string"`
+	ValidatorIndex uint64                                  `json:"validator_index,string"`
+	Entry          *boostTypes.SignedValidatorRegistration `json:"entry"`
 }
 
 type BidTraceV2 struct {

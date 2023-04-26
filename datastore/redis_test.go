@@ -140,7 +140,7 @@ func TestRedisValidatorRegistrations(t *testing.T) {
 
 func TestRedisProposerDuties(t *testing.T) {
 	cache := setupTestRedis(t)
-	duties := []types.BuilderGetValidatorsResponseEntry{
+	duties := []common.BuilderGetValidatorsResponseEntry{
 		{
 			Slot: 1,
 			Entry: &types.SignedValidatorRegistration{

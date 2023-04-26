@@ -282,13 +282,14 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	// Prepare proposer duties
-	proposerDuties := []types.BuilderGetValidatorsResponseEntry{}
+	proposerDuties := []common.BuilderGetValidatorsResponseEntry{}
 	for _, duty := range entries {
 		reg := signedValidatorRegistrations[duty.Pubkey]
 		if reg != nil {
-			proposerDuties = append(proposerDuties, types.BuilderGetValidatorsResponseEntry{
-				Slot:  duty.Slot,
-				Entry: reg,
+			proposerDuties = append(proposerDuties, common.BuilderGetValidatorsResponseEntry{
+				Slot:           duty.Slot,
+				ValidatorIndex: duty.ValidatorIndex,
+				Entry:          reg,
 			})
 		}
 	}
