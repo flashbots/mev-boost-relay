@@ -678,6 +678,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"method":    "registerValidator",
 		"ua":        ua,
 		"mevBoostV": common.GetMevBoostVersionFromUserAgent(ua),
+		"headSlot":  api.headSlot.Load(),
 	})
 
 	start := time.Now().UTC()
@@ -834,6 +835,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			respondError(http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
 			return
 		} else if !ok {
+			regLog.WithFields(logrus.Fields{
+				"signature":    signedValidatorRegistration.Signature.String(),
+				"feeRecipient": signedValidatorRegistration.Message.FeeRecipient.String(),
+				"gasLimit":     signedValidatorRegistration.Message.GasLimit,
+				"timestamp":    signedValidatorRegistration.Message.Timestamp,
+			}).Info("invalid validator signature")
 			respondError(http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
 			return
 		}
