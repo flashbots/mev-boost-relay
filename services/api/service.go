@@ -1003,17 +1003,14 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	api.proposerDutiesLock.RUnlock()
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
-	} else if slotDuty.ValidatorIndex != payload.ProposerIndex() {
-		log.WithFields(logrus.Fields{
-			"expectedProposerIndex": slotDuty.ValidatorIndex,
-			"actualProposerIndex":   payload.ProposerIndex(),
-		}).Warn("not the expected proposer index")
-		api.RespondError(w, http.StatusBadRequest, "not the expected proposer index")
-		return
+	} else {
+		log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient)
+		if slotDuty.ValidatorIndex != payload.ProposerIndex() {
+			log.WithField("expectedProposerIndex", slotDuty.ValidatorIndex).Warn("not the expected proposer index")
+			api.RespondError(w, http.StatusBadRequest, "not the expected proposer index")
+			return
+		}
 	}
-
-	// Add fee recipient to logs
-	log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient)
 
 	// Get the proposer pubkey based on the validator index from the payload
 	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
