@@ -72,19 +72,22 @@ var (
 	// number of goroutines to save active validator
 	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
-	regValContinueOnError        = os.Getenv("REGISTER_VALIDATOR_CONTINUE_ON_ERROR") == "1" // whether to continue processing validators if one fails
-	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
-	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
-	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
 
+	// various timings
+	timeoutGetPayloadRetryMs  = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
+	getPayloadRequestCutoffMs = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
+	getPayloadResponseDelayMs = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
+
+	// api settings
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
 
+	// user-agents which shouldn't receive bids
 	apiNoHeaderUserAgents = common.GetEnvStrSlice("NO_HEADER_USERAGENTS", []string{
-		"mev-boost/v1.5.0 Go-http-client/1.1",
+		"mev-boost/v1.5.0 Go-http-client/1.1", // Prysm v4.0.1 (Shapella signing issue)
 	})
 )
 
@@ -163,6 +166,7 @@ type RelayAPI struct {
 	ffDisablePayloadDBStorage    bool // disable storing the execution payloads in the database
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
 	ffEnableCancellations        bool // whether to enable block builder cancellations
+	ffRegValContinueOnInvalidSig bool // whether to continue processing further validators if one fails
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
@@ -257,6 +261,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("ENABLE_BUILDER_CANCELLATIONS") == "1" {
 		api.log.Warn("env: ENABLE_BUILDER_CANCELLATIONS - builders are allowed to cancel submissions when using ?cancellation=1")
 		api.ffEnableCancellations = true
+	}
+
+	if os.Getenv("REGISTER_VALIDATOR_CONTINUE_ON_INVALID_SIG") == "1" {
+		api.log.Warn("env: REGISTER_VALIDATOR_CONTINUE_ON_INVALID_SIG - validator registration will continue processing even if one validator has an invalid signature")
+		api.ffRegValContinueOnInvalidSig = true
 	}
 
 	return api, nil
@@ -699,13 +708,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		api.RespondError(w, code, msg)
 	}
 
-	if regValContinueOnError {
-		// Overload the handleError function to not return an error, but just log it
-		handleError = func(_log *logrus.Entry, code int, msg string) {
-			_log.Warnf("error: %s", msg)
-		}
-	}
-
 	// Start processing
 	if req.ContentLength == 0 {
 		log.Info("empty request")
@@ -812,10 +814,22 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Add validator pubkey to logs
 		pkHex := signedValidatorRegistration.Message.Pubkey.PubkeyHex()
-		regLog = regLog.WithField("pubkey", pkHex)
+		regLog = regLog.WithFields(logrus.Fields{
+			"pubkey":       pkHex,
+			"signature":    signedValidatorRegistration.Signature.String(),
+			"feeRecipient": signedValidatorRegistration.Message.FeeRecipient.String(),
+			"gasLimit":     signedValidatorRegistration.Message.GasLimit,
+			"timestamp":    signedValidatorRegistration.Message.Timestamp,
+		})
 
-		// Ensure registration is not too far in the future
-		registrationTime := time.Unix(int64(signedValidatorRegistration.Message.Timestamp), 0)
+		// Ensure a valid timestamp (not too early, and not too far in the future)
+		registrationTimestamp := int64(signedValidatorRegistration.Message.Timestamp)
+		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) {
+			handleError(regLog, http.StatusBadRequest, "timestamp too early")
+			return
+		}
+
+		registrationTime := time.Unix(registrationTimestamp, 0)
 		if registrationTime.After(registrationTimeUpperBound) {
 			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
 			return
@@ -848,17 +862,16 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Verify the signature
 		ok, err := boostTypes.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
-			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("error verifying registerValidator signature: %s", err.Error()))
+			regLog.WithError(err).Error("error verifying registerValidator signature")
 			return
 		} else if !ok {
-			regLog.WithFields(logrus.Fields{
-				"signature":    signedValidatorRegistration.Signature.String(),
-				"feeRecipient": signedValidatorRegistration.Message.FeeRecipient.String(),
-				"gasLimit":     signedValidatorRegistration.Message.GasLimit,
-				"timestamp":    signedValidatorRegistration.Message.Timestamp,
-			}).Info("invalid validator signature")
-			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
-			return
+			regLog.Info("invalid validator signature")
+			if api.ffRegValContinueOnInvalidSig {
+				return
+			} else {
+				handleError(regLog, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+				return
+			}
 		}
 
 		// Now we have a new registration to process
