@@ -169,6 +169,17 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	}).Infof("updated headSlot to %d", headSlot)
 }
 
+func (hk *Housekeeper) flushKnownValidators(indexPkMap map[uint64]types.PubkeyHex) {
+	err := hk.redis.SetMultiKnownValidator(indexPkMap)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to set known validators in Redis")
+	} else {
+		for proposerIndex, publickeyHex := range indexPkMap {
+			hk.proposersAlreadySaved[proposerIndex] = publickeyHex.String()
+		}
+	}
+}
+
 func (hk *Housekeeper) updateKnownValidators() {
 	// Query beacon node for known validators
 	hk.log.Debug("Querying validators from beacon node... (this may take a while)")
@@ -196,11 +207,10 @@ func (hk *Housekeeper) updateKnownValidators() {
 	printCounter := len(hk.proposersAlreadySaved) == 0 // only on first round
 	i := 0
 	newValidators := 0
+	bufferSize := 10000
+	indexPkMap := make(map[uint64]types.PubkeyHex)
 	for _, validator := range validators {
 		i++
-		if printCounter && i%10000 == 0 {
-			hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
-		}
 
 		// avoid resaving if index->pubkey mapping is the same
 		prevPubkeyForIndex := hk.proposersAlreadySaved[validator.Index]
@@ -208,13 +218,22 @@ func (hk *Housekeeper) updateKnownValidators() {
 			continue
 		}
 
-		err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Validator.Pubkey), validator.Index)
-		if err != nil {
-			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
-		} else {
-			hk.proposersAlreadySaved[validator.Index] = validator.Validator.Pubkey
-			newValidators++
+		indexPkMap[validator.Index] = types.PubkeyHex(validator.Validator.Pubkey)
+
+		if i%bufferSize == 0 {
+			hk.flushKnownValidators(indexPkMap)
+			indexPkMap = make(map[uint64]types.PubkeyHex)
+			newValidators += bufferSize
+			if printCounter {
+				hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
+			}
 		}
+	}
+
+	hk.flushKnownValidators(indexPkMap)
+	newValidators += len(indexPkMap)
+	if printCounter {
+		hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
 	}
 
 	log.WithFields(logrus.Fields{
