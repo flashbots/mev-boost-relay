@@ -340,14 +340,14 @@ func (hk *Housekeeper) updateBlockBuildersInRedis() {
 	}
 
 	hk.log.Infof("updating %d block builders in Redis...", len(builders))
-	pairs := []datastore.PubKeyStatusPair{}
+	pkStatusMap := make(map[string]datastore.BlockBuilderStatus)
 
 	for _, builder := range builders {
 		status := datastore.MakeBlockBuilderStatus(builder.IsHighPrio, builder.IsBlacklisted)
 		hk.log.Infof("updating block builder in Redis: %s - %s", builder.BuilderPubkey, status)
-		pairs = append(pairs, datastore.PubKeyStatusPair{PubKey: builder.BuilderPubkey, Status: status})
+		pkStatusMap[builder.BuilderPubkey] = status
 	}
-	err = hk.redis.SetMultiBlockBuilderStatus(pairs)
+	err = hk.redis.SetMultiBlockBuilderStatus(pkStatusMap)
 	if err != nil {
 		hk.log.WithError(err).Error("failed to set block builders status in redis")
 	}

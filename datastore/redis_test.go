@@ -202,10 +202,10 @@ func TestBlockBuilderStatus(t *testing.T) {
 	})
 
 	t.Run("Set and get multi block builder statuses", func(t *testing.T) {
-		pairs := []PubKeyStatusPair{
-			{PubKey: pk1, Status: RedisBlockBuilderStatusLowPrio},
-			{PubKey: pk2, Status: RedisBlockBuilderStatusHighPrio},
-			{PubKey: pk3, Status: RedisBlockBuilderStatusBlacklisted},
+		pairs := map[string]BlockBuilderStatus{
+			pk1: RedisBlockBuilderStatusLowPrio,
+			pk2: RedisBlockBuilderStatusHighPrio,
+			pk3: RedisBlockBuilderStatusBlacklisted,
 		}
 
 		// Set multi status test
@@ -227,7 +227,7 @@ func TestBlockBuilderStatus(t *testing.T) {
 		require.True(t, isBlacklisted)
 
 		// Update multi status test
-		pairs[0].Status = RedisBlockBuilderStatusBlacklisted
+		pairs[pk1] = RedisBlockBuilderStatusBlacklisted
 
 		require.NoError(t, cache.SetMultiBlockBuilderStatus(pairs))
 

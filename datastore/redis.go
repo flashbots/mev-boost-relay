@@ -40,11 +40,6 @@ var (
 	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
 )
 
-type PubKeyStatusPair struct {
-	PubKey string
-	Status BlockBuilderStatus
-}
-
 func PubkeyHexToLowerStr(pk boostTypes.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
@@ -390,17 +385,17 @@ func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) 
 	return resp, err
 }
 
-func (r *RedisCache) SetMultiBlockBuilderStatus(pairs []PubKeyStatusPair) (err error) {
+func (r *RedisCache) SetMultiBlockBuilderStatus(pkStatusMap map[string]BlockBuilderStatus) (err error) {
 	values := []string{}
-	for _, v := range pairs {
-		values = append(values, v.PubKey, string(v.Status))
+	for publicKey, status := range pkStatusMap {
+		values = append(values, publicKey, string(status))
 	}
 
 	return r.client.HMSet(context.Background(), r.keyBlockBuilderStatus, values).Err()
 }
 
 func (r *RedisCache) SetBlockBuilderStatus(builderPubkey string, status BlockBuilderStatus) (err error) {
-	return r.SetMultiBlockBuilderStatus([]PubKeyStatusPair{{Status: status, PubKey: builderPubkey}})
+	return r.SetMultiBlockBuilderStatus(map[string]BlockBuilderStatus{builderPubkey: status})
 }
 
 func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, isBlacklisted bool, err error) {
