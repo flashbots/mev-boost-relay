@@ -660,7 +660,7 @@ func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message strin
 	}
 }
 
-func (api *RelayAPI) RespondOK(w http.ResponseWriter, code int, response any) {
+func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -995,7 +995,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"value":     bid.Value().String(),
 		"blockHash": bid.BlockHash().String(),
 	}).Info("bid delivered")
-	api.RespondOK(w, http.StatusOK, bid)
+	api.Respond(w, http.StatusOK, bid)
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
@@ -1229,7 +1229,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
 	// respond to the HTTP request
-	api.RespondOK(w, http.StatusOK, getPayloadResp)
+	api.Respond(w, http.StatusOK, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
 		"numTx":       getPayloadResp.NumTx(),
 		"blockNumber": payload.BlockNumber(),
@@ -1512,7 +1512,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// Without cancellations, discard lower or similar value submissions to previous top bid
 		if !isCancellationEnabled && payload.Value().Cmp(topBidValue) < 1 {
 			log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
-			api.RespondOK(w, http.StatusAccepted, "ignoring submission because it is lower or equal to the top bid and cancellations are not enabled")
+			api.Respond(w, http.StatusAccepted, "ignoring submission because it is lower or equal to the top bid and cancellations are not enabled")
 			return
 		}
 	}
@@ -1673,7 +1673,7 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 			return
 		}
 
-		api.RespondOK(w, http.StatusOK, builderEntry)
+		api.Respond(w, http.StatusOK, builderEntry)
 		return
 	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
 		args := req.URL.Query()
@@ -1696,7 +1696,7 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 			api.log.WithError(err).Error("could not set block builder status in database")
 		}
 
-		api.RespondOK(w, http.StatusOK, struct{ newStatus string }{newStatus: string(newStatus)})
+		api.Respond(w, http.StatusOK, struct{ newStatus string }{newStatus: string(newStatus)})
 	}
 }
 
@@ -1794,7 +1794,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		response[i] = database.DeliveredPayloadEntryToBidTraceV2JSON(payload)
 	}
 
-	api.RespondOK(w, http.StatusOK, response)
+	api.Respond(w, http.StatusOK, response)
 }
 
 func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *http.Request) {
@@ -1879,7 +1879,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 		response[i] = database.BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload)
 	}
 
-	api.RespondOK(w, http.StatusOK, response)
+	api.Respond(w, http.StatusOK, response)
 }
 
 func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req *http.Request) {
@@ -1914,5 +1914,5 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 		return
 	}
 
-	api.RespondOK(w, http.StatusOK, signedRegistration)
+	api.Respond(w, http.StatusOK, signedRegistration)
 }
