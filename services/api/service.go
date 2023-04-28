@@ -1139,7 +1139,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
 	signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
-	if err != nil || code != 200 {
+	if err != nil || code != http.StatusOK {
 		log.WithError(err).WithField("code", code).Error("failed to publish block")
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return
