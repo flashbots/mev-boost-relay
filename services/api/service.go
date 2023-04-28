@@ -1107,7 +1107,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Wait until slot start (t=0) if still in the future
 		_msSinceSlotStart := time.Now().UTC().UnixMilli() - int64((slotStartTimestamp * 1000))
 		if _msSinceSlotStart < 0 {
-			delayMillis := (_msSinceSlotStart * -1)
+			delayMillis := _msSinceSlotStart * -1
 			log = log.WithField("delayMillis", delayMillis)
 			log.Info("waiting until slot start t=0")
 			time.Sleep(time.Duration(delayMillis) * time.Millisecond)
