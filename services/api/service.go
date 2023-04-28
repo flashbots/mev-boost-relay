@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -75,7 +74,6 @@ var (
 	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 	timeoutGetPayloadRetryMs     = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
 	getPayloadRequestCutoffMs    = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
-	getPayloadPublishDelayMs     = cli.GetEnvInt("GETPAYLOAD_PUBLISH_DELAY_MS", 0)
 	getPayloadResponseDelayMs    = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
 
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
@@ -1109,7 +1107,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		// Wait until slot start (t=0) if still in the future
 		_msSinceSlotStart := time.Now().UTC().UnixMilli() - int64((slotStartTimestamp * 1000))
 		if _msSinceSlotStart < 0 {
-			delayMillis := (_msSinceSlotStart * -1) + int64(rand.Intn(50)) //nolint:gosec
+			delayMillis := _msSinceSlotStart * -1
 			log = log.WithField("delayMillis", delayMillis)
 			log.Info("waiting until slot start t=0")
 			time.Sleep(time.Duration(delayMillis) * time.Millisecond)
@@ -1126,12 +1124,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			}
 		}()
 		return
-	}
-
-	// Introduce a random delay (disabled by default)
-	if getPayloadPublishDelayMs > 0 {
-		delayMillis := rand.Intn(getPayloadPublishDelayMs) //nolint:gosec
-		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
 	}
 
 	// Check that ExecutionPayloadHeader fields (sent by the proposer) match our known ExecutionPayload
