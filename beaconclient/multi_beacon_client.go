@@ -3,6 +3,7 @@ package beaconclient
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -265,7 +266,7 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 	}
 
 	log.Error("failed to publish block on any CL node")
-	return lastErrPublishResp.code, lastErrPublishResp.err
+	return lastErrPublishResp.code, fmt.Errorf("last error: %w", lastErrPublishResp.err)
 }
 
 // GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
