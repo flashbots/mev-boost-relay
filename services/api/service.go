@@ -693,7 +693,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	})
 
 	start := time.Now().UTC()
-	registrationTimeUpperBound := start.Add(10 * time.Second)
+	registrationTimestampUpperBound := start.Unix() + 10 // 10 seconds from now
 
 	numRegTotal := 0
 	numRegProcessed := 0
@@ -827,10 +827,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) {
 			handleError(regLog, http.StatusBadRequest, "timestamp too early")
 			return
-		}
-
-		registrationTime := time.Unix(registrationTimestamp, 0)
-		if registrationTime.After(registrationTimeUpperBound) {
+		} else if registrationTimestamp > registrationTimestampUpperBound {
 			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
 			return
 		}
