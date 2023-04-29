@@ -32,6 +32,11 @@ var (
 	ErrIncorrectLength    = errors.New("incorrect length")
 )
 
+// SlotPos returns the slot's position in the epoch (1-based, i.e. 1..32)
+func SlotPos(slot uint64) uint64 {
+	return (slot % SlotsPerEpoch) + 1
+}
+
 func makeRequest(ctx context.Context, client http.Client, method, url string, payload any) (*http.Response, error) {
 	var req *http.Request
 	var err error

@@ -64,6 +64,12 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	relay, err := NewRelayAPI(opts)
 	require.NoError(t, err)
 
+	relay.genesisInfo = &beaconclient.GetGenesisResponse{
+		Data: beaconclient.GetGenesisResponseData{
+			GenesisTime: 1606824023,
+		},
+	}
+
 	backend := testBackend{
 		t:         t,
 		relay:     relay,
@@ -184,14 +190,13 @@ func TestRegisterValidator(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, pubkeyHex, pkH)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		payload := []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
+		rr := backend.request(http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 		time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
 
-		// req, err := backend.datastore.GetValidatorRegistration(pubkeyHex)
-		// require.NoError(t, err)
-		// require.NotNil(t, req)
-		// require.Equal(t, pubkeyHex, req.Message.Pubkey.PubkeyHex())
+		isKnown := backend.datastore.IsKnownValidator(pubkeyHex)
+		require.True(t, isKnown)
 	})
 
 	t.Run("not a known validator", func(t *testing.T) {
