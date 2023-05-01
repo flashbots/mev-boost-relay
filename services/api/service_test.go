@@ -59,6 +59,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 		ProposerAPI:     true,
 		BlockBuilderAPI: true,
 		DataAPI:         true,
+		InternalAPI:     true,
 	}
 
 	relay, err := NewRelayAPI(opts)

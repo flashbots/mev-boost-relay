@@ -57,8 +57,9 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 	}
 
 	return common.BidTraceV2WithTimestampJSON{
-		Timestamp:   timestamp.Unix(),
-		TimestampMs: timestamp.UnixMilli(),
+		Timestamp:            timestamp.Unix(),
+		TimestampMs:          timestamp.UnixMilli(),
+		OptimisticSubmission: payload.OptimisticSubmission,
 		BidTraceV2JSON: common.BidTraceV2JSON{
 			Slot:                 payload.Slot,
 			ParentHash:           payload.ParentHash,

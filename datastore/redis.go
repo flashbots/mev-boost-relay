@@ -32,14 +32,6 @@ var (
 	ErrSlotAlreadyDelivered       = errors.New("payload for slot was already delivered")
 )
 
-type BlockBuilderStatus string
-
-var (
-	RedisBlockBuilderStatusLowPrio     BlockBuilderStatus = ""
-	RedisBlockBuilderStatusHighPrio    BlockBuilderStatus = "high-prio"
-	RedisBlockBuilderStatusBlacklisted BlockBuilderStatus = "blacklisted"
-)
-
 func PubkeyHexToLowerStr(pk boostTypes.PubkeyHex) string {
 	return strings.ToLower(string(pk))
 }
@@ -383,20 +375,6 @@ func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) 
 		return nil, nil
 	}
 	return resp, err
-}
-
-func (r *RedisCache) SetBlockBuilderStatus(builderPubkey string, status BlockBuilderStatus) (err error) {
-	return r.client.HSet(context.Background(), r.keyBlockBuilderStatus, builderPubkey, string(status)).Err()
-}
-
-func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, isBlacklisted bool, err error) {
-	res, err := r.client.HGet(context.Background(), r.keyBlockBuilderStatus, builderPubkey).Result()
-	if errors.Is(err, redis.Nil) {
-		return false, false, nil
-	}
-	isHighPrio = BlockBuilderStatus(res) == RedisBlockBuilderStatusHighPrio
-	isBlacklisted = BlockBuilderStatus(res) == RedisBlockBuilderStatusBlacklisted
-	return isHighPrio, isBlacklisted, err
 }
 
 func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(slot uint64, builderPubkey, parentHash, proposerPubkey string) (int64, error) {

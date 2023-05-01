@@ -1,19 +1,49 @@
 package database
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
+	v1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/holiman/uint256"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	slot                 = uint64(42)
+	collateral           = 1000
+	collateralStr        = "1000"
+	builderID            = "builder0x69"
+	randao               = "01234567890123456789012345678901"
+	optimisticSubmission = true
+)
+
 var (
-	runDBTests = os.Getenv("RUN_DB_TESTS") == "1" //|| true
-	testDBDSN  = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	runDBTests   = os.Getenv("RUN_DB_TESTS") == "1" //|| true
+	feeRecipient = bellatrix.ExecutionAddress{0x02}
+	blockHashStr = "0xa645370cc112c2e8e3cce121416c7dc849e773506d4b6fb9b752ada711355369"
+	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	profile      = common.Profile{
+		Decode:      42,
+		Prechecks:   43,
+		Simulation:  44,
+		RedisUpdate: 45,
+		Total:       46,
+	}
+	errFoo = fmt.Errorf("fake simulation error")
 )
 
 func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
@@ -24,6 +54,42 @@ func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
 		GasLimit:     30000000,
 		Signature:    "0xab6fa6462f658708f1a9030faeac588d55b1e28cc1f506b3ef938eeeec0171d4209865fb66bbb94e52c0c160a63975e51795ee8d1da38219b3f80d7d14f003421a255d99b744bd71f45f0cb2cd17948afff67ad6c9163fcd20b48f6315dac7cc",
 	}
+}
+
+func getTestKeyPair(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey) {
+	t.Helper()
+	sk, _, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	blsPubkey, err := bls.PublicKeyFromSecretKey(sk)
+	require.NoError(t, err)
+	var pubkey phase0.BLSPubKey
+	bytes := blsPubkey.Bytes()
+	copy(pubkey[:], bytes[:])
+	return &pubkey, sk
+}
+
+func insertTestBuilder(t *testing.T, db IDatabaseService) string {
+	t.Helper()
+	pk, sk := getTestKeyPair(t)
+	var testBlockHash phase0.Hash32
+	hashSlice, err := hexutil.Decode(blockHashStr)
+	require.NoError(t, err)
+	copy(testBlockHash[:], hashSlice)
+	req := common.TestBuilderSubmitBlockRequest(sk, &common.BidTraceV2{
+		BidTrace: v1.BidTrace{
+			BlockHash:            testBlockHash,
+			Slot:                 slot,
+			BuilderPubkey:        *pk,
+			ProposerPubkey:       *pk,
+			ProposerFeeRecipient: feeRecipient,
+			Value:                uint256.NewInt(collateral),
+		},
+	})
+	entry, err := db.SaveBuilderBlockSubmission(&req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
+	require.NoError(t, err)
+	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
+	require.NoError(t, err)
+	return req.BuilderPubkey().String()
 }
 
 func resetDatabase(t *testing.T) *DatabaseService {
@@ -136,6 +202,208 @@ func TestMigrations(t *testing.T) {
 	err := db.DB.QueryRow(query).Scan(&rowCount)
 	require.NoError(t, err)
 	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
+}
+
+func TestSetBlockBuilderStatus(t *testing.T) {
+	db := resetDatabase(t)
+	// Four test builders, 2 with matching builder id, 2 with no builder id.
+	pubkey1 := insertTestBuilder(t, db)
+	pubkey2 := insertTestBuilder(t, db)
+	pubkey3 := insertTestBuilder(t, db)
+	pubkey4 := insertTestBuilder(t, db)
+
+	// Builder 1 & 2 share a builder id.
+	err := db.SetBlockBuilderCollateral(pubkey1, builderID, collateralStr)
+	require.NoError(t, err)
+	err = db.SetBlockBuilderCollateral(pubkey2, builderID, collateralStr)
+	require.NoError(t, err)
+
+	// Before status change.
+	for _, v := range []string{pubkey1, pubkey2, pubkey3, pubkey4} {
+		builder, err := db.GetBlockBuilderByPubkey(v)
+		require.NoError(t, err)
+		require.False(t, builder.IsHighPrio)
+		require.False(t, builder.IsOptimistic)
+		require.False(t, builder.IsBlacklisted)
+	}
+
+	// Update status of builder 1 and 3.
+	err = db.SetBlockBuilderStatus(pubkey1, common.BuilderStatus{
+		IsHighPrio:   true,
+		IsOptimistic: true,
+	}, true)
+	require.NoError(t, err)
+	err = db.SetBlockBuilderStatus(pubkey3, common.BuilderStatus{
+		IsHighPrio:   true,
+		IsOptimistic: true,
+	}, true)
+	require.NoError(t, err)
+
+	// After status change, builders 1, 2, 3 should be modified.
+	for _, v := range []string{pubkey1, pubkey2, pubkey3} {
+		builder, err := db.GetBlockBuilderByPubkey(v)
+		require.NoError(t, err)
+		require.True(t, builder.IsHighPrio)
+		require.True(t, builder.IsOptimistic)
+		require.False(t, builder.IsBlacklisted)
+	}
+	// Builder 4 should be unchanged.
+	builder, err := db.GetBlockBuilderByPubkey(pubkey4)
+	require.NoError(t, err)
+	require.False(t, builder.IsHighPrio)
+	require.False(t, builder.IsOptimistic)
+	require.False(t, builder.IsBlacklisted)
+
+	// Update status of just builder 1.
+	err = db.SetBlockBuilderStatus(pubkey1, common.BuilderStatus{
+		IsHighPrio:   true,
+		IsOptimistic: false,
+	}, false)
+	require.NoError(t, err)
+	// Builder 1 should be non-optimistic.
+	builder, err = db.GetBlockBuilderByPubkey(pubkey1)
+	require.NoError(t, err)
+	require.False(t, builder.IsOptimistic)
+
+	// Builder 2 should be optimistic.
+	builder, err = db.GetBlockBuilderByPubkey(pubkey2)
+	require.NoError(t, err)
+	require.True(t, builder.IsOptimistic)
+}
+
+func TestSetBlockBuilderCollateral(t *testing.T) {
+	db := resetDatabase(t)
+	pubkey := insertTestBuilder(t, db)
+
+	// Before collateral change.
+	builder, err := db.GetBlockBuilderByPubkey(pubkey)
+	require.NoError(t, err)
+	require.Equal(t, "", builder.BuilderID)
+	require.Equal(t, "0", builder.Collateral)
+
+	err = db.SetBlockBuilderCollateral(pubkey, builderID, collateralStr)
+	require.NoError(t, err)
+
+	// After collateral change.
+	builder, err = db.GetBlockBuilderByPubkey(pubkey)
+	require.NoError(t, err)
+	require.Equal(t, builderID, builder.BuilderID)
+	require.Equal(t, collateralStr, builder.Collateral)
+}
+
+func TestInsertBuilderDemotion(t *testing.T) {
+	db := resetDatabase(t)
+	pk, sk := getTestKeyPair(t)
+	var testBlockHash phase0.Hash32
+	hashSlice, err := hexutil.Decode(blockHashStr)
+	require.NoError(t, err)
+	copy(testBlockHash[:], hashSlice)
+	trace := &common.BidTraceV2{
+		BidTrace: v1.BidTrace{
+			BlockHash:            testBlockHash,
+			Slot:                 slot,
+			BuilderPubkey:        *pk,
+			ProposerPubkey:       *pk,
+			ProposerFeeRecipient: feeRecipient,
+			Value:                uint256.NewInt(collateral),
+		},
+	}
+	req := common.TestBuilderSubmitBlockRequest(sk, trace)
+	err = db.InsertBuilderDemotion(&req, errFoo)
+	require.NoError(t, err)
+
+	entry, err := db.GetBuilderDemotion(trace)
+	require.NoError(t, err)
+	require.Equal(t, slot, entry.Slot)
+	require.Equal(t, pk.String(), entry.BuilderPubkey)
+	require.Equal(t, blockHashStr, entry.BlockHash)
+}
+
+func TestUpdateBuilderDemotion(t *testing.T) {
+	db := resetDatabase(t)
+
+	pk, sk := getTestKeyPair(t)
+	var testBlockHash phase0.Hash32
+	hashSlice, err := hexutil.Decode(blockHashStr)
+	require.NoError(t, err)
+	copy(testBlockHash[:], hashSlice)
+	bt := &common.BidTraceV2{
+		BidTrace: v1.BidTrace{
+			BlockHash:            testBlockHash,
+			Slot:                 slot,
+			BuilderPubkey:        *pk,
+			ProposerFeeRecipient: feeRecipient,
+			Value:                uint256.NewInt(collateral),
+		},
+	}
+	req := common.TestBuilderSubmitBlockRequest(sk, bt)
+	// Should return ErrNoRows because there is no demotion yet.
+	demotion, err := db.GetBuilderDemotion(bt)
+	require.Equal(t, sql.ErrNoRows, err)
+	require.Nil(t, demotion)
+
+	// Insert demotion
+	err = db.InsertBuilderDemotion(&req, errFoo)
+	require.NoError(t, err)
+
+	// Now demotion should show up.
+	demotion, err = db.GetBuilderDemotion(bt)
+	require.NoError(t, err)
+
+	// Signed block and validation should be invalid and empty.
+	require.False(t, demotion.SignedBeaconBlock.Valid)
+	require.Empty(t, demotion.SignedBeaconBlock.String)
+	require.False(t, demotion.SignedValidatorRegistration.Valid)
+	require.Empty(t, demotion.SignedValidatorRegistration.String)
+
+	// Update demotion with the signedBlock and signedRegistration.
+	bb := &common.SignedBeaconBlock{
+		Capella: &consensuscapella.SignedBeaconBlock{},
+	}
+	err = db.UpdateBuilderDemotion(bt, bb, &types.SignedValidatorRegistration{})
+	require.NoError(t, err)
+
+	// Signed block and validation should now be valid and non-empty.
+	demotion, err = db.GetBuilderDemotion(bt)
+	require.NoError(t, err)
+	require.True(t, demotion.SignedBeaconBlock.Valid)
+	require.NotEmpty(t, demotion.SignedBeaconBlock.String)
+	require.True(t, demotion.SignedValidatorRegistration.Valid)
+	require.NotEmpty(t, demotion.SignedValidatorRegistration.String)
+}
+
+func TestGetBlockSubmissionEntry(t *testing.T) {
+	db := resetDatabase(t)
+	pubkey := insertTestBuilder(t, db)
+
+	entry, err := db.GetBlockSubmissionEntry(slot, pubkey, blockHashStr)
+	require.NoError(t, err)
+
+	require.Equal(t, profile.Decode, entry.DecodeDuration)
+	require.Equal(t, profile.Prechecks, entry.PrechecksDuration)
+	require.Equal(t, profile.Simulation, entry.SimulationDuration)
+	require.Equal(t, profile.RedisUpdate, entry.RedisUpdateDuration)
+	require.Equal(t, profile.Total, entry.TotalDuration)
+
+	require.True(t, entry.OptimisticSubmission)
+	require.True(t, entry.EligibleAt.Valid)
+}
+
+func TestGetBuilderSubmissions(t *testing.T) {
+	db := resetDatabase(t)
+	pubkey := insertTestBuilder(t, db)
+
+	entries, err := db.GetBuilderSubmissions(GetBuilderSubmissionsFilters{
+		BuilderPubkey: pubkey,
+		Limit:         1,
+	})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	e := entries[0]
+	require.Equal(t, optimisticSubmission, e.OptimisticSubmission)
+	require.Equal(t, pubkey, e.BuilderPubkey)
+	require.Equal(t, feeRecipient.String(), e.ProposerFeeRecipient)
+	require.Equal(t, fmt.Sprint(collateral), e.Value)
 }
 
 func TestUpsertTooLateGetPayload(t *testing.T) {
