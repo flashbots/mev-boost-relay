@@ -1497,18 +1497,18 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	// Get the latest top bid value from Redis
-	topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	// Get the latest builder bid value from Redis.
+	latestBuilderValue, err := api.redis.GetBuilderLatestValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
 	if err != nil {
-		log.WithError(err).Error("failed to get top bid value from redis")
+		log.WithError(err).Error("failed to get latest builder bid value from redis")
 	} else {
 		log = log.WithFields(logrus.Fields{
-			"preTopBidValue":       topBidValue.String(),
-			"newBidHasHigherValue": payload.Value().Cmp(topBidValue) == 1,
+			"latestValue":          latestBuilderValue.String(),
+			"newBidHasHigherValue": payload.Value().Cmp(latestBuilderValue) == 1,
 		})
 
-		// Without cancellations, discard lower or similar value submissions to previous top bid
-		if !isCancellationEnabled && payload.Value().Cmp(topBidValue) < 1 {
+		// Without cancellations, discard lower or similar value submissions.
+		if !isCancellationEnabled && payload.Value().Cmp(latestBuilderValue) < 1 {
 			log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
 			api.Respond(w, http.StatusAccepted, struct{ message string }{message: "ignoring submission because not highest value"})
 			return
