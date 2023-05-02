@@ -203,7 +203,7 @@ func TestBuilderBids(t *testing.T) {
 	cache := setupTestRedis(t)
 
 	// Helper to ensure writing to redis worked as expected
-	ensureBestBidValueEquals := func(expectedValue int64) {
+	ensureBestBidValueEquals := func(expectedValue int64, builderPubkey string) {
 		bestBid, err := cache.GetBestBid(slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(expectedValue), bestBid.Value())
@@ -211,6 +211,10 @@ func TestBuilderBids(t *testing.T) {
 		topBidValue, err := cache.GetTopBidValue(slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(expectedValue), topBidValue)
+
+		latestBidValue, err := cache.GetBuilderLatestValue(slot, parentHash, proposerPubkey, builderPubkey)
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(expectedValue), latestBidValue)
 	}
 
 	// submit ba1=10
@@ -222,7 +226,7 @@ func TestBuilderBids(t *testing.T) {
 	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(10)
+	ensureBestBidValueEquals(10, bApubkey)
 
 	// submit ba2=5 (should not update)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -233,7 +237,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(10)
+	ensureBestBidValueEquals(10, bApubkey)
 
 	// submit ba3c=5 (should update, because of cancellation)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -245,7 +249,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 	require.Equal(t, big.NewInt(10), resp.PrevTopBidValue)
-	ensureBestBidValueEquals(5)
+	ensureBestBidValueEquals(5, bApubkey)
 
 	// submit bb1=20
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), &opts)
@@ -256,7 +260,7 @@ func TestBuilderBids(t *testing.T) {
 	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(20)
+	ensureBestBidValueEquals(20, bBpubkey)
 
 	// submit ba4c=3
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -267,7 +271,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(20)
+	ensureBestBidValueEquals(20, bBpubkey)
 
 	// submit bb2c=2 (cancels prev top bid bb1)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(2), &opts)
@@ -278,7 +282,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(5)
+	ensureBestBidValueEquals(5, bApubkey)
 }
 
 func TestRedisURIs(t *testing.T) {
