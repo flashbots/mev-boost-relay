@@ -651,20 +651,18 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 }
 
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	resp := HTTPErrorResp{code, message}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		api.log.WithField("response", resp).WithError(err).Error("Couldn't write error response")
-		http.Error(w, "", http.StatusInternalServerError)
-	}
+	api.Respond(w, code, HTTPErrorResp{code, message})
 }
 
 func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
+	api.Respond(w, http.StatusOK, response)
+}
+
+func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		api.log.WithField("response", response).WithError(err).Error("Couldn't write OK response")
+		api.log.WithField("response", response).WithError(err).Error("Couldn't write response")
 		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
@@ -1512,7 +1510,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// Without cancellations, discard lower or similar value submissions to previous top bid
 		if !isCancellationEnabled && payload.Value().Cmp(topBidValue) < 1 {
 			log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
-			w.WriteHeader(http.StatusOK)
+			api.Respond(w, http.StatusAccepted, struct{ message string }{message: "ignoring submission because not highest value"})
 			return
 		}
 	}
