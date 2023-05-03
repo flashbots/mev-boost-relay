@@ -1348,13 +1348,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	if payload.Slot() <= headSlot {
-		api.log.Info("submitNewBlock failed: submission for past slot")
+		log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return
 	}
 
 	if payload.Slot() > headSlot+1 {
-		api.log.Info("submitNewBlock failed: submission for future slot")
+		log.Info("submitNewBlock failed: submission for future slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for future slot")
 		return
 	}
@@ -1409,7 +1409,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Don't accept blocks with 0 value
 	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.NumTx() == 0 {
-		api.log.Info("submitNewBlock failed: block with 0 value or no txs")
+		log.Info("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
