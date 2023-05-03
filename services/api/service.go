@@ -1502,27 +1502,46 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.WithError(err).Error("failed to get latest builder bid value from redis")
 	} else {
+		bidHasHigherValue := payload.Value().Cmp(latestBuilderValue) == 1
 		log = log.WithFields(logrus.Fields{
 			"latestValue":          latestBuilderValue.String(),
-			"newBidHasHigherValue": payload.Value().Cmp(latestBuilderValue) == 1,
+			"newBidHasHigherValue": bidHasHigherValue,
 		})
 
 		// Without cancellations, discard lower or similar value submissions.
-		if !isCancellationEnabled && payload.Value().Cmp(latestBuilderValue) < 1 {
-			log.Info("rejecting submission because it is lower or equal to the top bid (redis)")
-			api.Respond(w, http.StatusAccepted, struct{ message string }{message: "ignoring submission because not highest value"})
+		if !isCancellationEnabled && !bidHasHigherValue {
+			log.Info("rejecting submission because without cancellation and not higher value than previous bid by this builder")
+			api.Respond(w, http.StatusAccepted, struct{ message string }{message: "ignoring submission because lower or equal value than previous bid"})
 			return
 		}
 	}
 
+	// Get the latest top bid value from Redis
+	bidIsTopBid := false
+	topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	if err != nil {
+		log.WithError(err).Error("failed to get top bid value from redis")
+	} else {
+		bidIsTopBid = payload.Value().Cmp(topBidValue) == 1
+		log = log.WithFields(logrus.Fields{
+			"topBidValue":    topBidValue.String(),
+			"newBidIsTopBid": bidIsTopBid,
+		})
+	}
+
 	// Simulate the block submission and save to db
+	fastTrackValidation := builderIsHighPrio && bidIsTopBid
 	timeBeforeValidation := time.Now().UTC()
-	log = log.WithField("timestampBeforeValidation", timeBeforeValidation.UTC().UnixMilli())
+	log = log.WithFields(logrus.Fields{
+		"timestampBeforeValidation": timeBeforeValidation.UTC().UnixMilli(),
+		"fastTrackValidation":       fastTrackValidation,
+	})
+
 	validationRequestPayload := &common.BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: *payload,
 		RegisteredGasLimit:        slotDuty.Entry.Message.GasLimit,
 	}
-	requestErr, validationErr = api.blockSimRateLimiter.Send(req.Context(), validationRequestPayload, builderIsHighPrio)
+	requestErr, validationErr = api.blockSimRateLimiter.Send(req.Context(), validationRequestPayload, builderIsHighPrio, fastTrackValidation)
 	validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 	log = log.WithFields(logrus.Fields{
 		"timestampAfterValidation": time.Now().UTC().UnixMilli(),

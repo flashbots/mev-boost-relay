@@ -42,7 +42,7 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 	}
 }
 
-func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio bool) (requestErr, validationErr error) {
+func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (requestErr, validationErr error) {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
 	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
@@ -67,7 +67,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	} else if payload.Bellatrix != nil {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
 	}
-	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio)
+	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio, fastTrack)
 	return requestErr, validationErr
 }
 
@@ -77,7 +77,7 @@ func (b *BlockSimulationRateLimiter) CurrentCounter() int64 {
 }
 
 // SendJSONRPCRequest sends the request to URL and returns the general JsonRpcResponse, or an error (note: not the JSONRPCError)
-func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url string, isHighPrio bool) (res *jsonrpc.JSONRPCResponse, requestErr, validationErr error) {
+func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url string, isHighPrio, fastTrack bool) (res *jsonrpc.JSONRPCResponse, requestErr, validationErr error) {
 	buf, err := json.Marshal(req)
 	if err != nil {
 		return nil, err, nil
@@ -92,6 +92,9 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	httpReq.Header.Add("Content-Type", "application/json")
 	if isHighPrio {
 		httpReq.Header.Add("X-High-Priority", "true")
+	}
+	if fastTrack {
+		httpReq.Header.Add("X-Fast-Track", "true")
 	}
 
 	// execute request
