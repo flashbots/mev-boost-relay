@@ -60,6 +60,8 @@ func testBuilderSubmitBlockRequest(pubkey types.PublicKey, signature types.Signa
 				},
 			},
 		}
+	case consensusspec.DataVersionDeneb:
+		fallthrough
 	case consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionCapella:
 		fallthrough
 	default:

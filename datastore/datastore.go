@@ -185,6 +185,8 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 			Bellatrix: &bellatrix,
 			Capella:   nil,
 		}, nil
+	case consensusspec.DataVersionDeneb:
+		return nil, errors.New("todo")
 	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
 		return nil, errors.New("unsupported execution payload version")
 	default:
