@@ -58,3 +58,26 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0x74bfedcdd2da65b4fb14800340ce1abbb202a0dee73aed80b1cf18fb5bc88190", hexutil.Encode(htr[:]))
 }
+
+func BenchmarkDecoding(b *testing.B) {
+	jsonBytes, err := os.ReadFile("../testdata/getHeaderResponseCapella_Mainnet.json")
+	require.NoError(b, err)
+
+	sszBytes, err := os.ReadFile("../testdata/getHeaderResponseCapella_Mainnet.ssz")
+	require.NoError(b, err)
+
+	payload := new(spec.VersionedSignedBuilderBid)
+	b.Run("json", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			err = json.Unmarshal(jsonBytes, &payload)
+			require.NoError(b, err)
+		}
+	})
+	payload.Capella = new(capella.SignedBuilderBid)
+	b.Run("ssz", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			err = payload.Capella.UnmarshalSSZ(sszBytes)
+			require.NoError(b, err)
+		}
+	})
+}

@@ -1326,7 +1326,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log = log.WithField("req-encoding", "ssz")
 		payload.Capella = new(builderCapella.SubmitBlockRequest)
 		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
-			log.WithError(err).Warn("could not ssz-decode payload")
+			log.WithError(err).Warn("could not decode payload - SSZ")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -1334,7 +1334,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	} else {
 		log = log.WithField("req-encoding", "json")
 		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
-			log.WithError(err).Warn("could not decode payload")
+			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
