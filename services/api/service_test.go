@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -387,20 +388,25 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	path := "/relay/v1/builder/blocks"
 	backend := newTestBackend(t, 1)
 
+	headSlot := uint64(32)
+	submissionSlot := headSlot + 1
+	submissionTimestamp := 1606824419
+
+	// Payload attributes
+	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json"
 	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
 	require.NoError(t, err)
 	withdrawalsRoot, err := hexutil.Decode("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
 	require.NoError(t, err)
-
-	slot := uint64(32)
+	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
 
 	// Setup the test relay backend
-	backend.relay.headSlot.Store(slot)
+	backend.relay.headSlot.Store(headSlot)
 	backend.relay.capellaEpoch = 1
 	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
-	backend.relay.proposerDutiesMap[slot+1] = &common.BuilderGetValidatorsResponseEntry{
-		Slot: slot,
+	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
+		Slot: headSlot,
 		Entry: &types.SignedValidatorRegistration{
 			Message: &types.RegisterValidatorRequestMessage{
 				FeeRecipient: feeRec,
@@ -409,42 +415,75 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 	backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
 	backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
-		slot:       slot + 1,
+		slot:       submissionSlot,
 		parentHash: parentHash,
 		payloadAttributes: beaconclient.PayloadAttributes{
-			PrevRandao: "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4",
+			PrevRandao: prevRandao,
 		},
 		withdrawalsRoot: phase0.Root(withdrawalsRoot),
 	}
 
-	requestPayloadJSONBytes, err := os.ReadFile("../../testdata/submitBlockPayloadCapella_Goerli.json")
-	require.NoError(t, err)
-
+	// Prepare the request payload
 	req := new(common.BuilderSubmitBlockRequest)
+	requestPayloadJSONBytes, err := os.ReadFile(payloadJSONFilename)
+	require.NoError(t, err)
 	err = json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)
 
-	req.Capella.Message.Slot = slot + 1
-	req.Capella.ExecutionPayload.Timestamp = 1606824419
+	// Update
+	req.Capella.Message.Slot = submissionSlot
+	req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
 
-	// JSON encoding
-	reqBytes, err := req.Capella.MarshalJSON()
+	// Send JSON encoded request
+	reqJSONBytes, err := req.Capella.MarshalJSON()
 	require.NoError(t, err)
-	require.Equal(t, 704810, len(reqBytes))
-	reqBytes2, err := json.Marshal(req.Capella)
+	require.Equal(t, 704810, len(reqJSONBytes))
+	reqJSONBytes2, err := json.Marshal(req.Capella)
 	require.NoError(t, err)
-	require.Equal(t, reqBytes, reqBytes2)
-	rr := backend.requestBytes(http.MethodPost, path, reqBytes, nil)
+	require.Equal(t, reqJSONBytes, reqJSONBytes2)
+	rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
 	require.Contains(t, rr.Body.String(), "invalid signature")
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 
-	// SSZ encoding
-	reqSSZ, err := req.Capella.MarshalSSZ()
+	// Send SSZ encoded request
+	reqSSZBytes, err := req.Capella.MarshalSSZ()
 	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZ))
-	rr = backend.requestBytes(http.MethodPost, path, reqSSZ, map[string]string{
+	require.Equal(t, 352239, len(reqSSZBytes))
+	rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
 		"Content-Type": "application/octet-stream",
 	})
 	require.Contains(t, rr.Body.String(), "invalid signature")
 	require.Equal(t, http.StatusBadRequest, rr.Code)
+
+	// Send JSON+GZIP encoded request
+	headers := map[string]string{
+		"Content-Encoding": "gzip",
+	}
+	jsonGzip := gzipBytes(t, reqJSONBytes)
+	require.Equal(t, 207788, len(jsonGzip))
+	rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+	require.Contains(t, rr.Body.String(), "invalid signature")
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+
+	// Send SSZ+GZIP encoded request
+	headers = map[string]string{
+		"Content-Type":     "application/octet-stream",
+		"Content-Encoding": "gzip",
+	}
+
+	sszGzip := gzipBytes(t, reqSSZBytes)
+	require.Equal(t, 195923, len(sszGzip))
+	rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+	require.Contains(t, rr.Body.String(), "invalid signature")
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func gzipBytes(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, err := zw.Write(b)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
 }
