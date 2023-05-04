@@ -1,9 +1,0 @@
-{
-    "signature": "0xafdbe1644bc5b7716169fbf5a28ca42e367ad5b8fe1e7187f3569ea9bb5c4dbe33ad42646177cdbbd150b4e85befc15c0d68eabccdc8d80025a12a13ab0caee2907d9ed241cba3e57234efa0564ddf69c674f2315f156a6821f4e381bedaca33",
-    "message": {
-        "slot": "123"
-    },
-    "execution_payload": {
-        "parent_hash": "0xf1dcfe18646b3a2b15aa576c36212e926c900b02ac64c89f8871d1724dac4d99"
-    }
-}
