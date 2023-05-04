@@ -945,11 +945,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if slot > headSlot+1 {
-		api.RespondError(w, http.StatusBadRequest, "slot is too far into the future")
-		return
-	}
-
 	log.Debug("getHeader request received")
 
 	if slices.Contains(apiNoHeaderUserAgents, ua) {
@@ -1350,12 +1345,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if payload.Slot() <= headSlot {
 		log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
-		return
-	}
-
-	if payload.Slot() > headSlot+1 {
-		log.Info("submitNewBlock failed: submission for future slot")
-		api.RespondError(w, http.StatusBadRequest, "submission for future slot")
 		return
 	}
 
