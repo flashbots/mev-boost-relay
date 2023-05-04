@@ -7,10 +7,14 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	builderCapella "github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -79,7 +83,25 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	return &backend
 }
 
-func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
+func (be *testBackend) requestBytes(method, path string, payload []byte, headers map[string]string) *httptest.ResponseRecorder {
+	var req *http.Request
+	var err error
+
+	req, err = http.NewRequest(method, path, bytes.NewReader(payload))
+	require.NoError(be.t, err)
+
+	// Set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	// lfg
+	rr := httptest.NewRecorder()
+	be.relay.getRouter().ServeHTTP(rr, req)
+	return rr
+}
+
+func (be *testBackend) request(method, path string, payload any, headers map[string]string) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -90,8 +112,14 @@ func (be *testBackend) request(method, path string, payload any) *httptest.Respo
 		require.NoError(be.t, err2)
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
-
 	require.NoError(be.t, err)
+
+	// Set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	// lfg
 	rr := httptest.NewRecorder()
 	be.relay.getRouter().ServeHTTP(rr, req)
 	return rr
@@ -161,14 +189,14 @@ func TestWebserver(t *testing.T) {
 
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
-	rr := backend.request(http.MethodGet, "/", nil)
+	rr := backend.request(http.MethodGet, "/", nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestStatus(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/eth/v1/builder/status"
-	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
+	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -191,7 +219,7 @@ func TestRegisterValidator(t *testing.T) {
 		require.Equal(t, pubkeyHex, pkH)
 
 		payload := []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
-		rr := backend.request(http.MethodPost, path, payload)
+		rr := backend.request(http.MethodPost, path, payload, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 		time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
 
@@ -202,7 +230,7 @@ func TestRegisterValidator(t *testing.T) {
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
@@ -218,7 +246,7 @@ func TestRegisterValidator(t *testing.T) {
 		_, err = backend.datastore.RefreshKnownValidators()
 		require.NoError(t, err)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload}, nil)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 		// Disallow +11 sec
@@ -230,7 +258,7 @@ func TestRegisterValidator(t *testing.T) {
 		_, err = backend.datastore.RefreshKnownValidators()
 		require.NoError(t, err)
 
-		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	})
@@ -267,7 +295,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check 1: regular request works and returns a bid
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := common.GetHeaderResponse{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -293,7 +321,7 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	require.NoError(t, err)
 	backend.relay.proposerDutiesResponse = &responseBytes
 
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	resp := []common.BuilderGetValidatorsResponseEntry{}
@@ -311,7 +339,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
@@ -330,10 +358,93 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		}
 
 		for _, invalidBlockHash := range invalidBlockHashes {
-			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil, nil)
 			t.Log(invalidBlockHash)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
 		}
 	})
+}
+
+func TestBuilderSubmitBlockSSZ(t *testing.T) {
+	requestPayloadJSONBytes, err := os.ReadFile("../../testdata/submitBlockPayloadCapella_Goerli.json")
+	require.NoError(t, err)
+
+	req := new(common.BuilderSubmitBlockRequest)
+	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	require.NoError(t, err)
+
+	reqSSZ, err := req.Capella.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, 352239, len(reqSSZ))
+
+	test := new(builderCapella.SubmitBlockRequest)
+	err = test.UnmarshalSSZ(reqSSZ)
+	require.NoError(t, err)
+}
+
+func TestBuilderSubmitBlock(t *testing.T) {
+	path := "/relay/v1/builder/blocks"
+	backend := newTestBackend(t, 1)
+
+	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
+	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
+	require.NoError(t, err)
+	withdrawalsRoot, err := hexutil.Decode("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
+	require.NoError(t, err)
+
+	slot := uint64(32)
+
+	// Setup the test relay backend
+	backend.relay.headSlot.Store(slot)
+	backend.relay.capellaEpoch = 1
+	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+	backend.relay.proposerDutiesMap[slot+1] = &common.BuilderGetValidatorsResponseEntry{
+		Slot: slot,
+		Entry: &types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: feeRec,
+			},
+		},
+	}
+	backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
+	backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
+		slot:       slot + 1,
+		parentHash: parentHash,
+		payloadAttributes: beaconclient.PayloadAttributes{
+			PrevRandao: "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4",
+		},
+		withdrawalsRoot: phase0.Root(withdrawalsRoot),
+	}
+
+	requestPayloadJSONBytes, err := os.ReadFile("../../testdata/submitBlockPayloadCapella_Goerli.json")
+	require.NoError(t, err)
+
+	req := new(common.BuilderSubmitBlockRequest)
+	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	require.NoError(t, err)
+
+	req.Capella.Message.Slot = slot + 1
+	req.Capella.ExecutionPayload.Timestamp = 1606824419
+
+	// JSON encoding
+	reqBytes, err := req.Capella.MarshalJSON()
+	require.NoError(t, err)
+	require.Equal(t, 704810, len(reqBytes))
+	reqBytes2, err := json.Marshal(req.Capella)
+	require.NoError(t, err)
+	require.Equal(t, reqBytes, reqBytes2)
+	rr := backend.requestBytes(http.MethodPost, path, reqBytes, nil)
+	require.Contains(t, rr.Body.String(), "invalid signature")
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+
+	// SSZ encoding
+	reqSSZ, err := req.Capella.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, 352239, len(reqSSZ))
+	rr = backend.requestBytes(http.MethodPost, path, reqSSZ, map[string]string{
+		"Content-Type": "application/octet-stream",
+	})
+	require.Contains(t, rr.Body.String(), "invalid signature")
+	require.Equal(t, http.StatusBadRequest, rr.Code)
 }

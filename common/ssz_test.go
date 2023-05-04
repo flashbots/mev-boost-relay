@@ -23,9 +23,12 @@ func TestSSZBuilderSubmission(t *testing.T) {
 	ssz, err := depositData.MarshalSSZ()
 	require.NoError(t, err)
 
+	// err = os.WriteFile("/tmp/test.ssz", ssz, 0644)
+	// require.NoError(t, err)
+
 	sszExpectedBytes, err := os.ReadFile("../testdata/submitBlockPayloadCapella_Goerli.ssz")
 	require.NoError(t, err)
-	require.Equal(t, string(sszExpectedBytes), hexutil.Encode(ssz))
+	require.Equal(t, sszExpectedBytes, ssz)
 
 	htr, err := depositData.HashTreeRoot()
 	require.NoError(t, err)
@@ -44,9 +47,12 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 	ssz, err := payload.Capella.MarshalSSZ()
 	require.NoError(t, err)
 
+	// err = os.WriteFile("/tmp/test.ssz", ssz, 0644)
+	// require.NoError(t, err)
+
 	sszExpectedBytes, err := os.ReadFile("../testdata/getHeaderResponseCapella_Mainnet.ssz")
 	require.NoError(t, err)
-	require.Equal(t, string(sszExpectedBytes), hexutil.Encode(ssz))
+	require.Equal(t, sszExpectedBytes, ssz)
 
 	htr, err := payload.Capella.HashTreeRoot()
 	require.NoError(t, err)

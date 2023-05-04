@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
@@ -1309,11 +1310,32 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log = log.WithField("gzip-req", true)
 	}
 
-	payload := new(common.BuilderSubmitBlockRequest)
-	if err := json.NewDecoder(r).Decode(payload); err != nil {
-		log.WithError(err).Warn("could not decode payload")
+	requestPayloadBytes, err := io.ReadAll(r)
+	if err != nil {
+		log.WithError(err).Warn("could not read payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	payload := new(common.BuilderSubmitBlockRequest)
+
+	// Check for SSZ encoding
+	contentType := req.Header.Get("Content-Type")
+	if contentType == "application/octet-stream" {
+		log = log.WithField("ssz-req", true)
+		payload.Capella = new(builderCapella.SubmitBlockRequest)
+		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
+			log.WithError(err).Warn("could not ssz-decode payload")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		log.Debug("received ssz-encoded payload")
+	} else {
+		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
+			log.WithError(err).Warn("could not decode payload")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	log = log.WithFields(logrus.Fields{
@@ -1387,7 +1409,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log.Warn("could not find slot duty")
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
 		return
-	} else if slotDuty.Entry.Message.FeeRecipient.String() != payload.ProposerFeeRecipient() {
+	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), payload.ProposerFeeRecipient()) {
 		log.WithFields(logrus.Fields{
 			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
 			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
