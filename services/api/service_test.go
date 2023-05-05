@@ -102,7 +102,7 @@ func (be *testBackend) requestBytes(method, path string, payload []byte, headers
 	return rr
 }
 
-func (be *testBackend) request(method, path string, payload any, headers map[string]string) *httptest.ResponseRecorder {
+func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -114,11 +114,6 @@ func (be *testBackend) request(method, path string, payload any, headers map[str
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
 	require.NoError(be.t, err)
-
-	// Set headers
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
 
 	// lfg
 	rr := httptest.NewRecorder()
@@ -190,14 +185,14 @@ func TestWebserver(t *testing.T) {
 
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
-	rr := backend.request(http.MethodGet, "/", nil, nil)
+	rr := backend.request(http.MethodGet, "/", nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestStatus(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/eth/v1/builder/status"
-	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator, nil)
+	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -220,7 +215,7 @@ func TestRegisterValidator(t *testing.T) {
 		require.Equal(t, pubkeyHex, pkH)
 
 		payload := []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
-		rr := backend.request(http.MethodPost, path, payload, nil)
+		rr := backend.request(http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 		time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
 
@@ -231,7 +226,7 @@ func TestRegisterValidator(t *testing.T) {
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}, nil)
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
@@ -247,7 +242,7 @@ func TestRegisterValidator(t *testing.T) {
 		_, err = backend.datastore.RefreshKnownValidators()
 		require.NoError(t, err)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload}, nil)
+		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 		// Disallow +11 sec
@@ -259,7 +254,7 @@ func TestRegisterValidator(t *testing.T) {
 		_, err = backend.datastore.RefreshKnownValidators()
 		require.NoError(t, err)
 
-		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload}, nil)
+		rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	})
@@ -296,7 +291,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check 1: regular request works and returns a bid
-	rr := backend.request(http.MethodGet, path, nil, nil)
+	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := common.GetHeaderResponse{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -322,7 +317,7 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	require.NoError(t, err)
 	backend.relay.proposerDutiesResponse = &responseBytes
 
-	rr := backend.request(http.MethodGet, path, nil, nil)
+	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	resp := []common.BuilderGetValidatorsResponseEntry{}
@@ -340,7 +335,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil, nil)
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
@@ -359,7 +354,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		}
 
 		for _, invalidBlockHash := range invalidBlockHashes {
-			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil, nil)
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
 			t.Log(invalidBlockHash)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
