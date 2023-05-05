@@ -75,8 +75,8 @@ github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
 github.com/armon/go-radix v1.0.0/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
-github.com/attestantio/go-builder-client v0.2.8 h1:Z4FSbzSWz6sB3QJn9ckjzFDcTBJ1CCxpQ1B2gau9YO8=
-github.com/attestantio/go-builder-client v0.2.8/go.mod h1:hEC/cKf5HGLSC0gpo/uqZ7xbWLRu14ILi51o1+HXZEE=
+github.com/attestantio/go-builder-client v0.3.0 h1:NY7pUNT070T3tx/N8hCaO5KpExvaVQhH//9zsgRh43M=
+github.com/attestantio/go-builder-client v0.3.0/go.mod h1:DwesMTOqnCp4u+n3uZ+fWL8wwnSBZVD9VMIVPDR+AZE=
 github.com/attestantio/go-eth2-client v0.16.3 h1:D6LLwswDlHbUwsAqfBKaKXjWdBzRlNQRXUoC+5vFsDw=
 github.com/attestantio/go-eth2-client v0.16.3/go.mod h1:Om16oH+H34E2JHoOY8hLWg+64twlO+AjAE7kkK3f1Xc=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
