@@ -180,6 +180,78 @@ func TestActiveValidators(t *testing.T) {
 	require.True(t, vals[pk1])
 }
 
+func TestBlockBuilderStatus(t *testing.T) {
+	cache := setupTestRedis(t)
+
+	pk1 := "0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249"
+	pk2 := "0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249"
+	pk3 := "0x8016d3229030424cfeff6c5b813970ea193f8d012cfa767270ca9057d58eddc556e96c14544bf4c038dbed5f24aa8da0"
+
+	t.Run("Set and get single block builder status", func(t *testing.T) {
+		// Set status test
+		require.NoError(t, cache.SetBlockBuilderStatus(pk1, RedisBlockBuilderStatusHighPrio))
+
+		isHighPrio, isBlacklisted, err := cache.GetBlockBuilderStatus(pk1)
+		require.NoError(t, err)
+		require.True(t, isHighPrio)
+		require.False(t, isBlacklisted)
+
+		// Update status test
+		require.NoError(t, cache.SetBlockBuilderStatus(pk1, RedisBlockBuilderStatusBlacklisted))
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk1)
+		require.NoError(t, err)
+		require.False(t, isHighPrio)
+		require.True(t, isBlacklisted)
+	})
+
+	t.Run("Set and get multi block builder statuses", func(t *testing.T) {
+		pairs := map[string]BlockBuilderStatus{
+			pk1: RedisBlockBuilderStatusLowPrio,
+			pk2: RedisBlockBuilderStatusHighPrio,
+			pk3: RedisBlockBuilderStatusBlacklisted,
+		}
+
+		// Set multi status test
+		require.NoError(t, cache.SetMultiBlockBuilderStatus(pairs))
+
+		isHighPrio, isBlacklisted, err := cache.GetBlockBuilderStatus(pk1)
+		require.NoError(t, err)
+		require.False(t, isHighPrio)
+		require.False(t, isBlacklisted)
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk2)
+		require.NoError(t, err)
+		require.True(t, isHighPrio)
+		require.False(t, isBlacklisted)
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk3)
+		require.NoError(t, err)
+		require.False(t, isHighPrio)
+		require.True(t, isBlacklisted)
+
+		// Update multi status test
+		pairs[pk1] = RedisBlockBuilderStatusBlacklisted
+
+		require.NoError(t, cache.SetMultiBlockBuilderStatus(pairs))
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk1)
+		require.NoError(t, err)
+		require.False(t, isHighPrio)
+		require.True(t, isBlacklisted)
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk2)
+		require.NoError(t, err)
+		require.True(t, isHighPrio)
+		require.False(t, isBlacklisted)
+
+		isHighPrio, isBlacklisted, err = cache.GetBlockBuilderStatus(pk3)
+		require.NoError(t, err)
+		require.False(t, isHighPrio)
+		require.True(t, isBlacklisted)
+	})
+}
+
 func TestBuilderBids(t *testing.T) {
 	slot := uint64(2)
 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"

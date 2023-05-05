@@ -385,8 +385,17 @@ func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) 
 	return resp, err
 }
 
+func (r *RedisCache) SetMultiBlockBuilderStatus(pkStatusMap map[string]BlockBuilderStatus) (err error) {
+	values := []string{}
+	for publicKey, status := range pkStatusMap {
+		values = append(values, publicKey, string(status))
+	}
+
+	return r.client.HMSet(context.Background(), r.keyBlockBuilderStatus, values).Err()
+}
+
 func (r *RedisCache) SetBlockBuilderStatus(builderPubkey string, status BlockBuilderStatus) (err error) {
-	return r.client.HSet(context.Background(), r.keyBlockBuilderStatus, builderPubkey, string(status)).Err()
+	return r.SetMultiBlockBuilderStatus(map[string]BlockBuilderStatus{builderPubkey: status})
 }
 
 func (r *RedisCache) GetBlockBuilderStatus(builderPubkey string) (isHighPrio, isBlacklisted bool, err error) {
