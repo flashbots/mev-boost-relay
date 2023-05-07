@@ -133,7 +133,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	}).Infof("updated headSlot to %d", headSlot)
 }
 
-func (hk *Housekeeper) flushKnownValidators(indexPkMap map[uint64]types.PubkeyHex) {
+func (hk *Housekeeper) saveKnownValidators(indexPkMap map[uint64]types.PubkeyHex) {
 	err := hk.redis.SetMultiKnownValidator(indexPkMap)
 	if err != nil {
 		hk.log.WithError(err).Error("failed to set known validators in Redis")
@@ -237,7 +237,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 		indexPkMap[validator.Index] = types.PubkeyHex(validator.Validator.Pubkey)
 
 		if i%bufferSize == 0 {
-			hk.flushKnownValidators(indexPkMap)
+			hk.saveKnownValidators(indexPkMap)
 			indexPkMap = make(map[uint64]types.PubkeyHex)
 			newValidators += bufferSize
 			if printCounter {
@@ -246,7 +246,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 		}
 	}
 
-	hk.flushKnownValidators(indexPkMap)
+	hk.saveKnownValidators(indexPkMap)
 	newValidators += len(indexPkMap)
 	if printCounter {
 		hk.log.Debugf("writing to redis: %d / %d", i, numValidators)

@@ -222,7 +222,7 @@ func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.Pub
 		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
 	}
 
-	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
+	return r.client.HSet(context.Background(), r.keyKnownValidators, values).Err()
 }
 
 func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
