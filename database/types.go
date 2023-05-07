@@ -238,7 +238,7 @@ type BuilderDemotionEntry struct {
 
 	BlockHash string `db:"block_hash"`
 
-	SubmitBlockSimError string `db:"submit_block_sim_error"`
+	SimError string `db:"sim_error"`
 }
 
 type TooLateGetPayloadEntry struct {

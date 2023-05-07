@@ -10,7 +10,7 @@ type MockBlockSimulationRateLimiter struct {
 	simulationError error
 }
 
-func (m *MockBlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio bool) (error, error) {
+func (m *MockBlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (error, error) {
 	return nil, m.simulationError
 }
 

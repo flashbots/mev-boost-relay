@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/go-redis/redis/v9"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -199,7 +203,7 @@ func TestBuilderBids(t *testing.T) {
 	cache := setupTestRedis(t)
 
 	// Helper to ensure writing to redis worked as expected
-	ensureBestBidValueEquals := func(expectedValue int64) {
+	ensureBestBidValueEquals := func(expectedValue int64, builderPubkey string) {
 		bestBid, err := cache.GetBestBid(slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(expectedValue), bestBid.Value())
@@ -207,6 +211,10 @@ func TestBuilderBids(t *testing.T) {
 		topBidValue, err := cache.GetTopBidValue(slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(expectedValue), topBidValue)
+
+		latestBidValue, err := cache.GetBuilderLatestValue(slot, parentHash, proposerPubkey, builderPubkey)
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(expectedValue), latestBidValue)
 	}
 
 	// submit ba1=10
@@ -218,7 +226,7 @@ func TestBuilderBids(t *testing.T) {
 	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(10)
+	ensureBestBidValueEquals(10, bApubkey)
 
 	// submit ba2=5 (should not update)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -229,7 +237,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(10)
+	ensureBestBidValueEquals(10, bApubkey)
 
 	// submit ba3c=5 (should update, because of cancellation)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -241,7 +249,7 @@ func TestBuilderBids(t *testing.T) {
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
 	require.Equal(t, big.NewInt(10), resp.PrevTopBidValue)
-	ensureBestBidValueEquals(5)
+	ensureBestBidValueEquals(5, bApubkey)
 
 	// submit bb1=20
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), &opts)
@@ -252,7 +260,7 @@ func TestBuilderBids(t *testing.T) {
 	require.True(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(20)
+	ensureBestBidValueEquals(20, bBpubkey)
 
 	// submit ba4c=3
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
@@ -263,7 +271,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(20), resp.TopBidValue)
 	require.Equal(t, bBpubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(20)
+	ensureBestBidValueEquals(20, bBpubkey)
 
 	// submit bb2c=2 (cancels prev top bid bb1)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(2), &opts)
@@ -274,7 +282,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(5), resp.TopBidValue)
 	require.Equal(t, bApubkey, resp.TopBidBuilder)
-	ensureBestBidValueEquals(5)
+	ensureBestBidValueEquals(5, bApubkey)
 }
 
 func TestRedisURIs(t *testing.T) {
@@ -397,4 +405,39 @@ func _CheckAndSetLastSlotDeliveredForTesting(r *RedisCache, waitC chan bool, wg 
 	}
 
 	return r.client.Watch(context.Background(), txf, r.keyLastSlotDelivered)
+}
+
+func TestGetBuilderLatestValue(t *testing.T) {
+	cache := setupTestRedis(t)
+
+	slot := uint64(123)
+	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
+	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+
+	// With no bids, should return "0".
+	v, err := cache.GetBuilderLatestValue(slot, parentHash, proposerPubkey, builderPubkey)
+	require.NoError(t, err)
+	require.Equal(t, v.Text(10), "0")
+
+	// Set a bid of 1 ETH.
+	newVal, err := uint256.FromDecimal("1000000000000000000")
+	require.NoError(t, err)
+	getHeaderResp := &common.GetHeaderResponse{
+		Capella: &spec.VersionedSignedBuilderBid{
+			Version: consensusspec.DataVersionCapella,
+			Capella: &capella.SignedBuilderBid{
+				Message: &capella.BuilderBid{
+					Value: newVal,
+				},
+			},
+		},
+	}
+	err = cache.SaveBuilderBid(slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
+	require.NoError(t, err)
+
+	// Check new string.
+	v, err = cache.GetBuilderLatestValue(slot, parentHash, proposerPubkey, builderPubkey)
+	require.NoError(t, err)
+	require.Zero(t, v.Cmp(newVal.ToBig()))
 }

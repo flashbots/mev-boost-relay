@@ -44,3 +44,6 @@ cover-html:
 
 docker-image:
 	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t flashbots/mev-boost-relay
+
+lt: lint test
+flt: fmt lint test

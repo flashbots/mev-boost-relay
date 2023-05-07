@@ -505,3 +505,18 @@ func (r *RedisCache) GetTopBidValue(slot uint64, parentHash, proposerPubkey stri
 	topBidValue.SetString(topBidValueStr, 10)
 	return topBidValue, nil
 }
+
+// GetBuilderLatestValue gets the latest bid value for a given slot+parent+proposer combination for a specific builder pubkey.
+func (r *RedisCache) GetBuilderLatestValue(slot uint64, parentHash, proposerPubkey, builderPubkey string) (topBidValue *big.Int, err error) {
+	keyLatestValue := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
+	topBidValueStr, err := r.client.HGet(context.Background(), keyLatestValue, builderPubkey).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	topBidValue = new(big.Int)
+	topBidValue.SetString(topBidValueStr, 10)
+	return topBidValue, nil
+}
