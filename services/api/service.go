@@ -1311,7 +1311,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	requestPayloadBytes, err := io.ReadAll(r)
+	limitReader := io.LimitReader(r, 10*1024*1024) // 10 MB
+	requestPayloadBytes, err := io.ReadAll(limitReader)
 	if err != nil {
 		log.WithError(err).Warn("could not read payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
