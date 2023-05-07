@@ -378,7 +378,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			pubkey, secretkey, backend := startTestBackend(t)
-			backend.relay.optimisticSlot = slot
+			backend.relay.optimisticSlot.Store(slot)
 			backend.relay.capellaEpoch = 1
 			var randaoHash boostTypes.Hash
 			err := randaoHash.FromSlice([]byte(randao))
