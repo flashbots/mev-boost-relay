@@ -20,6 +20,7 @@ import (
 var (
 	ErrRequestClosed    = errors.New("request context closed")
 	ErrSimulationFailed = errors.New("simulation failed")
+	ErrJSONDecodeFailed = errors.New("json error")
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 10000)) * time.Millisecond
@@ -119,10 +120,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	// try json parsing
 	res = new(jsonrpc.JSONRPCResponse)
 	if err := json.NewDecoder(bytes.NewReader(rawResp)).Decode(res); err != nil {
-		// JSON parsing didn't work, return *jsonrpc.JSONRPCResponse with full response for debugging
-		res.Error = &jsonrpc.JSONRPCError{ //nolint:exhaustruct
-			Message: fmt.Sprintf("json error: %v", string(rawResp[:])),
-		}
+		return nil, fmt.Errorf("%w: %v", ErrJSONDecodeFailed, string(rawResp[:])), nil
 	}
 
 	if res.Error != nil {

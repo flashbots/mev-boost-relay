@@ -197,7 +197,7 @@ type RelayAPI struct {
 	// The number of optimistic blocks being processed (only used for logging).
 	optimisticBlocksInFlight uberatomic.Uint64
 	// Wait group used to monitor status of per-slot optimistic processing.
-	optimisticBlocks sync.WaitGroup
+	optimisticBlocksWG sync.WaitGroup
 	// Cache for builder statuses and collaterals.
 	blockBuildersCache map[string]*blockBuilderCacheEntry
 }
@@ -535,14 +535,14 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (e
 		"duration":   time.Since(t).Seconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
-	if simErr != nil &&
-		simErr.Error() != ErrBlockAlreadyKnown &&
-		simErr.Error() != ErrBlockRequiresReorg &&
-		!strings.Contains(simErr.Error(), ErrMissingTrieNode) {
-		// Mark builder as non-optimistic.
-		opts.builder.status.IsOptimistic = false
-		log.WithError(simErr).Error("block validation failed")
-		return nil, simErr
+	if simErr != nil {
+		ignoreError := simErr.Error() == ErrBlockAlreadyKnown || simErr.Error() == ErrBlockRequiresReorg || strings.Contains(simErr.Error(), ErrMissingTrieNode)
+		if !ignoreError {
+			// Mark builder as non-optimistic.
+			opts.builder.status.IsOptimistic = false
+			log.WithError(simErr).Error("block validation failed")
+			return nil, simErr
+		}
 	}
 	if reqErr != nil {
 		log.WithError(reqErr).Error("block validation failed: request error")
@@ -583,8 +583,8 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 	api.optimisticBlocksInFlight.Add(1)
 	defer func() { api.optimisticBlocksInFlight.Sub(1) }()
-	api.optimisticBlocks.Add(1)
-	defer api.optimisticBlocks.Done()
+	api.optimisticBlocksWG.Add(1)
+	defer api.optimisticBlocksWG.Done()
 
 	ctx := context.Background()
 	builderPubkey := opts.req.BuilderPubkey().String()
@@ -685,7 +685,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		go api.updateProposerDuties(headSlot)
 
 		// update the optimistic slot
-		go api.updateOptimisticSlot(headSlot)
+		go api.prepareOptimisticSlot(headSlot)
 	}
 
 	// log
@@ -750,10 +750,10 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
-func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
+func (api *RelayAPI) prepareOptimisticSlot(headSlot uint64) {
 	// Wait until there are no optimistic blocks being processed. Then we can
 	// safely update the slot.
-	api.optimisticBlocks.Wait()
+	api.optimisticBlocksWG.Wait()
 	api.optimisticSlot.Store(headSlot + 1)
 
 	builders, err := api.db.GetBlockBuilders()
@@ -762,23 +762,22 @@ func (api *RelayAPI) updateOptimisticSlot(headSlot uint64) {
 		return
 	}
 	for _, v := range builders {
-		collStr := v.Collateral
-
-		// Try to parse builder collateral string to big int.
-		var builderCollateral big.Int
-		err = builderCollateral.UnmarshalText([]byte(collStr))
-		if err != nil {
-			api.log.WithError(err).Error("could not parse builder collateral string")
-			builderCollateral.SetInt64(0)
-		}
-		api.blockBuildersCache[v.BuilderPubkey] = &blockBuilderCacheEntry{
+		entry := &blockBuilderCacheEntry{
 			status: common.BuilderStatus{
 				IsHighPrio:    v.IsHighPrio,
 				IsBlacklisted: v.IsBlacklisted,
 				IsOptimistic:  v.IsOptimistic,
 			},
-			collateral: &builderCollateral,
 		}
+		// Try to parse builder collateral string to big int.
+		builderCollateral, ok := big.NewInt(0).SetString(v.Collateral, 10)
+		if !ok {
+			api.log.WithError(err).Errorf("could not parse builder collateral string %s", v.Collateral)
+			entry.collateral = big.NewInt(0)
+		} else {
+			entry.collateral = builderCollateral
+		}
+		api.blockBuildersCache[v.BuilderPubkey] = entry
 	}
 }
 
@@ -1398,7 +1397,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 
 		// Wait until optimistic blocks are complete.
-		api.optimisticBlocks.Wait()
+		api.optimisticBlocksWG.Wait()
 
 		// Check if there is a demotion for the winning block.
 		_, err = api.db.GetBuilderDemotion(bidTrace)
