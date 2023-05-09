@@ -762,7 +762,7 @@ func (api *RelayAPI) prepareOptimisticSlot(headSlot uint64) {
 		return
 	}
 	for _, v := range builders {
-		entry := &blockBuilderCacheEntry{
+		entry := &blockBuilderCacheEntry{ //nolint:exhaustruct
 			status: common.BuilderStatus{
 				IsHighPrio:    v.IsHighPrio,
 				IsBlacklisted: v.IsBlacklisted,
