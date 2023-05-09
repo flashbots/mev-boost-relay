@@ -1301,7 +1301,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	var err error
 	var r io.Reader = req.Body
 	isGzip := req.Header.Get("Content-Encoding") == "gzip"
-	log = log.WithField("req-gzip", isGzip)
+	log = log.WithField("reqIsGzip", isGzip)
 	if isGzip {
 		r, err = gzip.NewReader(req.Body)
 		if err != nil {
@@ -1324,7 +1324,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
-		log = log.WithField("req-encoding", "ssz")
+		log = log.WithField("reqContentType", "ssz")
 		payload.Capella = new(builderCapella.SubmitBlockRequest)
 		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
 			log.WithError(err).Warn("could not decode payload - SSZ")
@@ -1333,7 +1333,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 		log.Debug("received ssz-encoded payload")
 	} else {
-		log = log.WithField("req-encoding", "json")
+		log = log.WithField("reqContentType", "json")
 		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
 			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
