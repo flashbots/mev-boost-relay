@@ -1466,7 +1466,7 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
-func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
+func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit
 	var pf common.Profile
 	var prevTime, nextTime time.Time
 
