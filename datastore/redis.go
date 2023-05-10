@@ -481,10 +481,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(payload *common.BuilderSubmitBlockRe
 	// 2. Do we even need to continue / save the new payload and update the top bid?
 	// - In cancellation mode: always continue to saving latest bid
 	// - In non-cancellation mode: only save if current bid is higher value than floor value
-	if !isCancellationEnabled {
-		if payload.Value().Cmp(floorValue) < 1 {
-			return state, nil
-		}
+	if !isCancellationEnabled && payload.Value().Cmp(floorValue) < 1 {
+		return state, nil
 	}
 
 	// Time to save things in Redis
