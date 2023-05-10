@@ -317,12 +317,12 @@ func TestDemoteBuilder(t *testing.T) {
 	require.True(t, mockDB.Demotions[pkStr])
 }
 
-func TestPrepareOptimisticBuildersForSlot(t *testing.T) {
+func TestPrepareBuildersForSlot(t *testing.T) {
 	pubkey, _, backend := startTestBackend(t)
 	pkStr := pubkey.String()
 	// Clear cache.
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{}
-	backend.relay.prepareOptimisticBuildersForSlot(slot + 1)
+	backend.relay.prepareBuildersForSlot(slot + 1)
 	entry, ok := backend.relay.blockBuildersCache[pkStr]
 	require.True(t, ok)
 	require.Equal(t, true, entry.status.IsHighPrio)

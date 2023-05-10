@@ -538,12 +538,11 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 	if validationErr != nil {
 		ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
 		if !ignoreError {
-			// Mark builder as non-optimistic.
-			opts.builder.status.IsOptimistic = false
 			log.WithError(validationErr).Warn("block validation failed")
 			return nil, validationErr
 		}
-		log.WithError(validationErr).Warn("block validation failed with an ignorable error")
+		log.WithError(validationErr).Warn("ignorable error during block simulation")
+		return nil, nil
 	}
 	if requestErr != nil {
 		log.WithError(requestErr).Warn("block validation failed: request error")
@@ -597,8 +596,9 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
 	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.BlockHash())
 	reqErr, simErr := api.simulateBlock(ctx, opts)
-
 	if reqErr != nil || simErr != nil {
+		// Mark builder as non-optimistic.
+		opts.builder.status.IsOptimistic = false
 		api.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, demoting builder")
 
 		// Demote the builder.
@@ -686,7 +686,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		go api.updateProposerDuties(headSlot)
 
 		// update the optimistic slot
-		go api.prepareOptimisticBuildersForSlot(headSlot)
+		go api.prepareBuildersForSlot(headSlot)
 	}
 
 	// log
@@ -751,7 +751,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
-func (api *RelayAPI) prepareOptimisticBuildersForSlot(headSlot uint64) {
+func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 	// Wait until there are no optimistic blocks being processed. Then we can
 	// safely update the slot.
 	api.optimisticBlocksWG.Wait()
