@@ -317,7 +317,7 @@ func TestDemoteBuilder(t *testing.T) {
 	require.True(t, mockDB.Demotions[pkStr])
 }
 
-func TestprepareOptimisticBuildersForSlot(t *testing.T) {
+func TestPrepareOptimisticBuildersForSlot(t *testing.T) {
 	pubkey, _, backend := startTestBackend(t)
 	pkStr := pubkey.String()
 	// Clear cache.
