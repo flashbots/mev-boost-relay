@@ -543,6 +543,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 			log.WithError(validationErr).Warn("block validation failed")
 			return nil, validationErr
 		}
+		log.WithError(validationErr).Warn("block validation failed with an ignorable error")
 	}
 	if requestErr != nil {
 		log.WithError(requestErr).Warn("block validation failed: request error")
