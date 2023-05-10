@@ -528,25 +528,25 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
-func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (error, error) {
+func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (requestErr, validationErr error) {
 	t := time.Now()
-	reqErr, simErr := api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
+	requestErr, validationErr = api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
 	log := opts.log.WithFields(logrus.Fields{
 		"duration":   time.Since(t).Seconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
-	if simErr != nil {
-		ignoreError := simErr.Error() == ErrBlockAlreadyKnown || simErr.Error() == ErrBlockRequiresReorg || strings.Contains(simErr.Error(), ErrMissingTrieNode)
+	if validationErr != nil {
+		ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
 		if !ignoreError {
 			// Mark builder as non-optimistic.
 			opts.builder.status.IsOptimistic = false
-			log.WithError(simErr).Error("block validation failed")
-			return nil, simErr
+			log.WithError(validationErr).Warn("block validation failed")
+			return nil, validationErr
 		}
 	}
-	if reqErr != nil {
-		log.WithError(reqErr).Error("block validation failed: request error")
-		return reqErr, nil
+	if requestErr != nil {
+		log.WithError(requestErr).Warn("block validation failed: request error")
+		return requestErr, nil
 	}
 	log.Info("block validation successful")
 	return nil, nil
@@ -598,7 +598,7 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 	reqErr, simErr := api.simulateBlock(ctx, opts)
 
 	if reqErr != nil || simErr != nil {
-		api.log.WithError(simErr).Error("block simulation failed in processOptimisticBlock, demoting builder")
+		api.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, demoting builder")
 
 		// Demote the builder.
 		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, simErr)
@@ -685,7 +685,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		go api.updateProposerDuties(headSlot)
 
 		// update the optimistic slot
-		go api.prepareOptimisticSlot(headSlot)
+		go api.prepareOptimisticBuildersForSlot(headSlot)
 	}
 
 	// log
@@ -750,7 +750,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
-func (api *RelayAPI) prepareOptimisticSlot(headSlot uint64) {
+func (api *RelayAPI) prepareOptimisticBuildersForSlot(headSlot uint64) {
 	// Wait until there are no optimistic blocks being processed. Then we can
 	// safely update the slot.
 	api.optimisticBlocksWG.Wait()
@@ -1417,7 +1417,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			"slot":          bidTrace.Slot,
 			"blockHash":     bidTrace.BlockHash,
 		})
-		log.Error("demotion found in getPayload, inserting refund justification")
+		log.Warn("demotion found in getPayload, inserting refund justification")
 
 		// Prepare refund data.
 		signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
@@ -1761,8 +1761,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
-	if builderEntry.collateral.Cmp(payload.Value()) >= 0 &&
-		builderEntry.status.IsOptimistic &&
+	if builderEntry.status.IsOptimistic &&
+		builderEntry.collateral.Cmp(payload.Value()) >= 0 &&
 		payload.Slot() == api.optimisticSlot.Load() {
 		optimisticSubmission = true
 		go api.processOptimisticBlock(opts)
