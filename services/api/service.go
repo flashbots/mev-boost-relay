@@ -1470,7 +1470,7 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
-func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit
+func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit,maintidx
 	var pf common.Profile
 	var prevTime, nextTime time.Time
 
@@ -1563,7 +1563,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	builderPubkey := payload.BuilderPubkey()
 	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
 	if !ok {
-		log.Warnf("unable to read builder: %x from the builder cache, using low-prio and no collateral", builderPubkey.String())
+		log.Warnf("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
 		builderEntry = &blockBuilderCacheEntry{
 			status: common.BuilderStatus{
 				IsHighPrio:    false,
