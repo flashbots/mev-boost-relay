@@ -536,12 +536,13 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
 	if validationErr != nil {
+		// TODO(mikeneuder): consider the negation logic here if it improves readability.
 		ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
 		if !ignoreError {
 			log.WithError(validationErr).Warn("block validation failed")
 			return nil, validationErr
 		}
-		log.WithError(validationErr).Warn("ignorable error during block simulation")
+		log.WithError(validationErr).Warn("block validation failed with ignorable error")
 		return nil, nil
 	}
 	if requestErr != nil {
@@ -762,6 +763,7 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 		api.log.WithError(err).Error("unable to read block builders from db, not updating builder cache")
 		return
 	}
+	newCache := make(map[string]*blockBuilderCacheEntry)
 	for _, v := range builders {
 		entry := &blockBuilderCacheEntry{ //nolint:exhaustruct
 			status: common.BuilderStatus{
@@ -778,8 +780,9 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 		} else {
 			entry.collateral = builderCollateral
 		}
-		api.blockBuildersCache[v.BuilderPubkey] = entry
+		newCache[v.BuilderPubkey] = entry
 	}
+	api.blockBuildersCache = newCache
 }
 
 func (api *RelayAPI) startKnownValidatorUpdates() {
@@ -1467,7 +1470,7 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
-func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint
+func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit
 	var pf common.Profile
 	var prevTime, nextTime time.Time
 
