@@ -285,10 +285,12 @@ func (r *RedisCache) CheckAndSetLastSlotAndHashDelivered(slot uint64, hash strin
 			return err
 		}
 
+		// slot in the past, reject request
 		if slot < lastSlotDelivered {
 			return ErrPastSlotAlreadyDelivered
 		}
 
+		// current slot, reject request if hash is different
 		if slot == lastSlotDelivered {
 			lastHashDelivered, err := tx.Get(context.Background(), r.keyLastHashDelivered).Result()
 			if err != nil && !errors.Is(err, redis.Nil) {
@@ -309,7 +311,7 @@ func (r *RedisCache) CheckAndSetLastSlotAndHashDelivered(slot uint64, hash strin
 		return err
 	}
 
-	return r.client.Watch(context.Background(), txf, r.keyLastSlotDelivered)
+	return r.client.Watch(context.Background(), txf, r.keyLastSlotDelivered, r.keyLastHashDelivered)
 }
 
 func (r *RedisCache) GetLastSlotDelivered() (slot uint64, err error) {
