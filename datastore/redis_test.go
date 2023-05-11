@@ -243,6 +243,10 @@ func TestBuilderBids(t *testing.T) {
 		require.Equal(t, big.NewInt(expectedValue), floorValue)
 	}
 
+	// deleting a bid that doesn't exist should not error
+	err := cache.DelBuilderBid(slot, parentHash, proposerPubkey, bApubkey)
+	require.NoError(t, err)
+
 	// submit ba1=10
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(10), &opts)
 	resp, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
@@ -254,7 +258,15 @@ func TestBuilderBids(t *testing.T) {
 	ensureBestBidValueEquals(10, bApubkey)
 	ensureBidFloor(10)
 
-	// submit ba2=5 (should not update)
+	// deleting ba1
+	err = cache.DelBuilderBid(slot, parentHash, proposerPubkey, bApubkey)
+	require.NoError(t, err)
+
+	// best bid and floor should still exist, because it was the floor bid
+	ensureBestBidValueEquals(10, "")
+	ensureBidFloor(10)
+
+	// submit ba2=5 (should not update, because floor is 10)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
@@ -262,7 +274,7 @@ func TestBuilderBids(t *testing.T) {
 	require.False(t, resp.WasTopBidUpdated)
 	require.False(t, resp.IsNewTopBid)
 	require.Equal(t, big.NewInt(10), resp.TopBidValue)
-	ensureBestBidValueEquals(10, bApubkey)
+	ensureBestBidValueEquals(10, "")
 	ensureBidFloor(10)
 
 	// submit ba3c=5 (should not update, because floor is 10)
