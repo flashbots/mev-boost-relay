@@ -102,26 +102,29 @@ func (db MockDB) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, err
 	return builder, nil
 }
 
-func (db MockDB) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus, allKeys bool) error {
+func (db MockDB) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus) error {
 	builder, ok := db.Builders[pubkey]
 	if !ok {
 		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey) //nolint:goerr113
 	}
-	// All keys updated.
-	if builder.BuilderID != "" && allKeys {
-		for _, v := range db.Builders {
-			if v.BuilderID == builder.BuilderID {
-				v.IsHighPrio = status.IsHighPrio
-				v.IsBlacklisted = status.IsBlacklisted
-				v.IsOptimistic = status.IsOptimistic
-			}
-		}
-		return nil
-	}
+
 	// Single key.
 	builder.IsHighPrio = status.IsHighPrio
 	builder.IsBlacklisted = status.IsBlacklisted
 	builder.IsOptimistic = status.IsOptimistic
+	return nil
+}
+
+func (db MockDB) SetBlockBuilderIDStatusIsOptimistic(pubkey string, isOptimistic bool) error {
+	builder, ok := db.Builders[pubkey]
+	if !ok {
+		return fmt.Errorf("builder with pubkey %v not in Builders map", pubkey) //nolint:goerr113
+	}
+	for _, v := range db.Builders {
+		if v.BuilderID == builder.BuilderID {
+			v.IsOptimistic = isOptimistic
+		}
+	}
 	return nil
 }
 

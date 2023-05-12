@@ -421,7 +421,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 func TestInternalBuilderStatus(t *testing.T) {
 	pubkey, _, backend := startTestBackend(t)
 	// Set all to false initially.
-	err := backend.relay.db.SetBlockBuilderStatus(pubkey.String(), common.BuilderStatus{}, false)
+	err := backend.relay.db.SetBlockBuilderStatus(pubkey.String(), common.BuilderStatus{})
 	require.NoError(t, err)
 	path := "/internal/v1/builder/" + pubkey.String()
 

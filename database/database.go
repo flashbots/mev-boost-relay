@@ -41,7 +41,8 @@ type IDatabaseService interface {
 
 	GetBlockBuilders() ([]*BlockBuilderEntry, error)
 	GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderEntry, error)
-	SetBlockBuilderStatus(pubkey string, status common.BuilderStatus, allKeys bool) error
+	SetBlockBuilderStatus(pubkey string, status common.BuilderStatus) error
+	SetBlockBuilderIDStatusIsOptimistic(pubkey string, isOptimistic bool) error
 	SetBlockBuilderCollateral(pubkey, builderID, collateral string) error
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError bool) error
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
@@ -490,20 +491,22 @@ func (s *DatabaseService) GetBlockBuilderByPubkey(pubkey string) (*BlockBuilderE
 	return entry, err
 }
 
-func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus, allKeys bool) error {
+func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, status common.BuilderStatus) error {
+	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2, is_optimistic=$3 WHERE builder_pubkey=$4;`
+	_, err := s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic, pubkey)
+	return err
+}
+
+func (s *DatabaseService) SetBlockBuilderIDStatusIsOptimistic(pubkey string, isOptimistic bool) error {
 	builder, err := s.GetBlockBuilderByPubkey(pubkey)
 	if err != nil {
 		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
-	var query string
-	queryPrefix := `UPDATE ` + vars.TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2, is_optimistic=$3 `
-	// If there is a builder ID and allKeys is true, then update statuses of all pubkeys.
-	if builder.BuilderID != "" && allKeys {
-		query = queryPrefix + fmt.Sprintf("WHERE builder_id='%v';", builder.BuilderID)
-	} else { // Otherwise, just update the single pubkey.
-		query = queryPrefix + fmt.Sprintf("WHERE builder_pubkey='%v';", pubkey)
+	if builder.BuilderID == "" {
+		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:goerr113
 	}
-	_, err = s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic)
+	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_optimistic=$1 WHERE builder_id=$2;`
+	_, err = s.DB.Exec(query, isOptimistic, builder.BuilderID)
 	return err
 }
 
