@@ -15,5 +15,6 @@ var Migrations = migrate.MemoryMigrationSource{
 		Migration006CreateTooLateGetPayload,
 		Migration007BuilderSubmissionWasSimulated,
 		Migration008Optimistic,
+		Migration009BlockBuilderRemoveReference,
 	},
 }
