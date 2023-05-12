@@ -315,9 +315,10 @@ func TestRedisURIs(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCheckAndSetLastSlotDelivered(t *testing.T) {
+func TestCheckAndSetLastSlotAndHashDelivered(t *testing.T) {
 	cache := setupTestRedis(t)
 	newSlot := uint64(123)
+	newHash := "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 	// should return redis.Nil if wasn't set
 	slot, err := cache.GetLastSlotDelivered()
@@ -325,7 +326,7 @@ func TestCheckAndSetLastSlotDelivered(t *testing.T) {
 	require.Equal(t, uint64(0), slot)
 
 	// should be able to set once
-	err = cache.CheckAndSetLastSlotDelivered(newSlot)
+	err = cache.CheckAndSetLastSlotAndHashDelivered(newSlot, newHash)
 	require.NoError(t, err)
 
 	// should get slot
@@ -333,20 +334,31 @@ func TestCheckAndSetLastSlotDelivered(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, newSlot, slot)
 
-	// should fail on second time
-	err = cache.CheckAndSetLastSlotDelivered(newSlot)
-	require.ErrorIs(t, err, ErrSlotAlreadyDelivered)
+	// should get hash
+	hash, err := cache.GetLastHashDelivered()
+	require.NoError(t, err)
+	require.Equal(t, newHash, hash)
+
+	// should fail on a different payload (mismatch block hash)
+	differentHash := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	err = cache.CheckAndSetLastSlotAndHashDelivered(newSlot, differentHash)
+	require.ErrorIs(t, err, ErrAnotherPayloadAlreadyDeliveredForSlot)
+
+	// should not return error for same hash
+	err = cache.CheckAndSetLastSlotAndHashDelivered(newSlot, newHash)
+	require.NoError(t, err)
 
 	// should also fail on earlier slots
-	err = cache.CheckAndSetLastSlotDelivered(newSlot - 1)
-	require.ErrorIs(t, err, ErrSlotAlreadyDelivered)
+	err = cache.CheckAndSetLastSlotAndHashDelivered(newSlot-1, newHash)
+	require.ErrorIs(t, err, ErrPastSlotAlreadyDelivered)
 }
 
-// Test_CheckAndSetLastSlotDeliveredForTesting ensures the optimistic locking works
-// i.e. running CheckAndSetLastSlotDelivered leading to err == redis.TxFailedErr
-func Test_CheckAndSetLastSlotDeliveredForTesting(t *testing.T) {
+// Test_CheckAndSetLastSlotAndHashDeliveredForTesting ensures the optimistic locking works
+// i.e. running CheckAndSetLastSlotAndHashDelivered leading to err == redis.TxFailedErr
+func Test_CheckAndSetLastSlotAndHashDeliveredForTesting(t *testing.T) {
 	cache := setupTestRedis(t)
 	newSlot := uint64(123)
+	hash := "0x0000000000000000000000000000000000000000000000000000000000000000"
 	n := 3
 
 	errC := make(chan error, n)
@@ -357,7 +369,7 @@ func Test_CheckAndSetLastSlotDeliveredForTesting(t *testing.T) {
 	for i := 0; i < n; i++ {
 		syncWG.Add(1)
 		go func() {
-			errC <- _CheckAndSetLastSlotDeliveredForTesting(cache, waitC, &syncWG, newSlot)
+			errC <- _CheckAndSetLastSlotAndHashDeliveredForTesting(cache, waitC, &syncWG, newSlot, hash)
 		}()
 	}
 
@@ -375,13 +387,14 @@ func Test_CheckAndSetLastSlotDeliveredForTesting(t *testing.T) {
 		require.ErrorIs(t, err, redis.TxFailedErr)
 	}
 
-	// Any later call should return ErrSlotAlreadyDelivered
-	err = _CheckAndSetLastSlotDeliveredForTesting(cache, waitC, &syncWG, newSlot)
+	// Any later call with a different hash should return ErrPayloadAlreadyDeliveredForSlot
+	differentHash := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	err = _CheckAndSetLastSlotAndHashDeliveredForTesting(cache, waitC, &syncWG, newSlot, differentHash)
 	waitC <- true
-	require.ErrorIs(t, err, ErrSlotAlreadyDelivered)
+	require.ErrorIs(t, err, ErrAnotherPayloadAlreadyDeliveredForSlot)
 }
 
-func _CheckAndSetLastSlotDeliveredForTesting(r *RedisCache, waitC chan bool, wg *sync.WaitGroup, slot uint64) (err error) {
+func _CheckAndSetLastSlotAndHashDeliveredForTesting(r *RedisCache, waitC chan bool, wg *sync.WaitGroup, slot uint64, hash string) (err error) {
 	// copied from redis.go, with added channel and waitgroup to test the race condition in a controlled way
 	txf := func(tx *redis.Tx) error {
 		lastSlotDelivered, err := tx.Get(context.Background(), r.keyLastSlotDelivered).Uint64()
@@ -389,8 +402,19 @@ func _CheckAndSetLastSlotDeliveredForTesting(r *RedisCache, waitC chan bool, wg 
 			return err
 		}
 
-		if slot <= lastSlotDelivered {
-			return ErrSlotAlreadyDelivered
+		if slot < lastSlotDelivered {
+			return ErrPastSlotAlreadyDelivered
+		}
+
+		if slot == lastSlotDelivered {
+			lastHashDelivered, err := tx.Get(context.Background(), r.keyLastHashDelivered).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+			if hash != lastHashDelivered {
+				return ErrAnotherPayloadAlreadyDeliveredForSlot
+			}
+			return nil
 		}
 
 		wg.Done()
@@ -398,6 +422,7 @@ func _CheckAndSetLastSlotDeliveredForTesting(r *RedisCache, waitC chan bool, wg 
 
 		_, err = tx.TxPipelined(context.Background(), func(pipe redis.Pipeliner) error {
 			pipe.Set(context.Background(), r.keyLastSlotDelivered, slot, 0)
+			pipe.Set(context.Background(), r.keyLastHashDelivered, hash, 0)
 			return nil
 		})
 

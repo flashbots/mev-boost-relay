@@ -1305,21 +1305,25 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
 
 	// Check whether getPayload has already been called -- TODO: do we need to allow multiple submissions of one blinded block?
-	err = api.redis.CheckAndSetLastSlotDelivered(payload.Slot())
+	err = api.redis.CheckAndSetLastSlotAndHashDelivered(payload.Slot(), payload.BlockHash())
 	log = log.WithField("timestampAfterAlreadyDeliveredCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
-		if errors.Is(err, datastore.ErrSlotAlreadyDelivered) {
-			// BAD VALIDATOR, 2x GETPAYLOAD
-			log.Warn("validator called getPayload twice")
-			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
+		if errors.Is(err, datastore.ErrAnotherPayloadAlreadyDeliveredForSlot) {
+			// BAD VALIDATOR, 2x GETPAYLOAD FOR DIFFERENT PAYLOADS
+			log.Warn("validator called getPayload twice for different payload hashes")
+			api.RespondError(w, http.StatusBadRequest, "another payload for this slot was already delivered")
 			return
+		} else if errors.Is(err, datastore.ErrPastSlotAlreadyDelivered) {
+			// BAD VALIDATOR, 2x GETPAYLOAD FOR PAST SLOT
+			log.Warn("validator called getPayload for past slot")
+			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
 		} else if errors.Is(err, redis.TxFailedErr) {
 			// BAD VALIDATOR, 2x GETPAYLOAD + RACE
 			log.Warn("validator called getPayload twice (race)")
 			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered (race)")
 			return
 		}
-		log.WithError(err).Error("redis.CheckAndSetLastSlotDelivered failed")
+		log.WithError(err).Error("redis.CheckAndSetLastSlotAndHashDelivered failed")
 	}
 
 	// Handle early/late requests
