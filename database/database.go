@@ -503,7 +503,7 @@ func (s *DatabaseService) SetBlockBuilderIDStatusIsOptimistic(pubkey string, isO
 		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
 	if builder.BuilderID == "" {
-		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey)
+		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:goerr113
 	}
 	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_optimistic=$1 WHERE builder_id=$2;`
 	_, err = s.DB.Exec(query, isOptimistic, builder.BuilderID)
