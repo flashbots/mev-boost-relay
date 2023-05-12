@@ -496,14 +496,15 @@ func (s *DatabaseService) SetBlockBuilderStatus(pubkey string, status common.Bui
 		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
 	var query string
-	queryPrefix := `UPDATE ` + vars.TableBlockBuilder + ` SET is_high_prio=$1, is_blacklisted=$2, is_optimistic=$3 `
+	queryPrefix := `UPDATE ` + vars.TableBlockBuilder
 	// If there is a builder ID and allKeys is true, then update statuses of all pubkeys.
 	if builder.BuilderID != "" && allKeys {
-		query = queryPrefix + fmt.Sprintf("WHERE builder_id='%v';", builder.BuilderID)
+		query = queryPrefix + fmt.Sprintf(" SET is_optimistic=$1 WHERE builder_id='%v';", builder.BuilderID)
+		_, err = s.DB.Exec(query, status.IsOptimistic)
 	} else { // Otherwise, just update the single pubkey.
-		query = queryPrefix + fmt.Sprintf("WHERE builder_pubkey='%v';", pubkey)
+		query = queryPrefix + fmt.Sprintf(" SET is_high_prio=$1, is_blacklisted=$2, is_optimistic=$3 WHERE builder_pubkey='%v';", pubkey)
+		_, err = s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic)
 	}
-	_, err = s.DB.Exec(query, status.IsHighPrio, status.IsBlacklisted, status.IsOptimistic)
 	return err
 }
 

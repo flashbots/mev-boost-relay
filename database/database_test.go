@@ -243,9 +243,8 @@ func TestSetBlockBuilderStatus(t *testing.T) {
 	for _, v := range []string{pubkey1, pubkey2, pubkey3} {
 		builder, err := db.GetBlockBuilderByPubkey(v)
 		require.NoError(t, err)
-		require.True(t, builder.IsHighPrio)
+		// Just is optimistic should change.
 		require.True(t, builder.IsOptimistic)
-		require.False(t, builder.IsBlacklisted)
 	}
 	// Builder 4 should be unchanged.
 	builder, err := db.GetBlockBuilderByPubkey(pubkey4)
