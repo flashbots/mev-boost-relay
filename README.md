@@ -2,37 +2,34 @@
 
 [![Goreport status](https://goreportcard.com/badge/github.com/flashbots/mev-boost-relay)](https://goreportcard.com/report/github.com/flashbots/mev-boost-relay)
 [![Test status](https://github.com/flashbots/mev-boost-relay/workflows/Checks/badge.svg)](https://github.com/flashbots/mev-boost-relay/actions?query=workflow%3A%22Checks%22)
+[![Docker hub](https://badgen.net/docker/size/flashbots/mev-boost-relay?icon=docker&label=image)](https://hub.docker.com/r/flashbots/mev-boost-relay/tags)
 
 MEV-Boost Relay for Ethereum proposer/builder separation (PBS).
 
 Currently live at:
 
-* https://boost-relay.flashbots.net (also on [Goerli](https://boost-relay-sepolia.flashbots.net) and [Sepolia](https://boost-relay-goerli.flashbots.net))
-* https://relay.ultrasound.money
-* https://agnostic-relay.net
-* bloXroute relays (running a light [fork](https://github.com/bloXroute-Labs/mev-relay))
-* https://mainnet.aestus.live
-* https://relayooor.wtf
-* https://relay.edennetwork.io/info
-* https://mainnet-relay.securerpc.com
+* [boost-relay.flashbots.net](https://boost-relay.flashbots.net) (also on [Goerli](https://boost-relay-sepolia.flashbots.net) and [Sepolia](https://boost-relay-goerli.flashbots.net))
+* [relay.ultrasound.money](https://relay.ultrasound.money), [agnostic-relay.net](https://agnostic-relay.net), bloXroute relays ([light fork](https://github.com/bloXroute-Labs/mev-relay))
+* [mainnet.aestus.live](https://mainnet.aestus.live), [relay.edennetwork.io/info](https://relay.edennetwork.io/info), [mainnet-relay.securerpc.com](https://mainnet-relay.securerpc.com)
 
-#### Components
+Alternatives (not audited or endorsed): [blocknative/dreamboat](https://github.com/blocknative/dreamboat), [manifold/mev-freelay](https://github.com/manifoldfinance/mev-freelay)
 
-The relay consists of several components that are designed to run and scale independently and to be as simple as possible:
-
-1. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): for proposer, block builder, data.
-1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): handles the root website requests (information is pulled from Redis and database).
-1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): update known validators, proposer duties.
-
-#### See also
+### See also
 
 * [Docker images](https://hub.docker.com/r/flashbots/mev-boost-relay)
 * [mev-boost](https://github.com/flashbots/mev-boost)
 * [Relay API specs](https://flashbots.github.io/relay-specs)
-* [Guider for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
+* [Guide for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
 
+### Components
 
-#### Dependencies
+The relay consists of three main components, which are designed to run and scale independently, and to be as simple as possible:
+
+1. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): Services that provide APIs for (a) proposers, (b) block builders, (c) data.
+1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): Serving the [website requests](https://boost-relay.flashbots.net/) (information is pulled from Redis and database).
+1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): Service that updates known validators, proposer duties, and more in the background. Only a single instance of this should run.
+
+### Dependencies
 
 1. Redis
 1. PostgreSQL
@@ -40,37 +37,25 @@ The relay consists of several components that are designed to run and scale inde
 1. block submission validation nodes
 1. [optional] Memcached
 
-#### Beacon nodes / CL clients
+### Beacon nodes / CL clients
 
 - The relay services need access to one or more beacon node for event subscriptions (in particular the `head` and `payload_attributes` topics).
 - You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
 - The beacon nodes need to support the []`payload_attributes` SSE event](https://github.com/ethereum/beacon-APIs/pull/305).
 - As of now, this is either:
-  - **Lighthouse v4.0.1+** (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint), with the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168). Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
-  - **Prysm v4.0.0+** with the [validate-before-broadcast patch](https://github.com/flashbots/prysm/pull/17/commits/11f997f5933654cfd6e2c8298b61cd1d38bb6d5d) or the more experimental [fast-validate-before-broadcast patch](https://gist.github.com/terencechain/8dbd40da7a640b4833fbedf0976595ad)
+  - **Lighthouse+** (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint), with the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168). Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
+  - **Prysm** with the [validate-before-broadcast patch](https://github.com/prysmaticlabs/prysm/pull/12335)
 
 **Relays are strongly advised to run multiple beacon nodes!**
 * The reason is that on getPayload, the block has to be validated and broadcast by a local beacon node before it is returned to the proposer.
 * If the local beacon nodes don't accept it (i.e. because it's down), the block won't be returned to the proposer, which leads to the proposer missing the slot.
 * The relay makes the validate+broadcast request to all beacon nodes concurrently, and returns as soon as the first request is successful.
 
-#### Security
+### Security
 
 A security assessment for the relay was conducted on 2022-08-22 by [lotusbumi](https://github.com/lotusbumi). Additional information can be found in the [Security](#security) section of this repository.
 
 If you find a security vulnerability on this project or any other initiative related to Flashbots, please let us know sending an email to security@flashbots.net.
-
----
-
-# Table of contents
-
-- [Background](#background)
-- [Usage](#usage)
-- [Technical notes](#technical-notes)
-- [Maintainers](#maintainers)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
 
 ---
 
@@ -178,6 +163,7 @@ The website is using:
 * [PureCSS](https://purecss.io/)
 * [HeroIcons](https://heroicons.com/)
 
+---
 
 # Technical Notes
 
@@ -264,9 +250,8 @@ Sending blocks to the validation node:
 
 ### Lighthouse
 
-- Use Lighthouse v4.0.1+
+- Lighthouse with validation and equivocaation check before broadcast: https://github.com/sigp/lighthouse/pull/4168
 - with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint
-- use the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168)
 
 Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
 
@@ -312,8 +297,7 @@ WantedBy=default.target
 
 ### Prysm
 
-- Prysm v4.0.0+
-- with this [validate-before-broadcast patch](https://github.com/flashbots/prysm/pull/17/commits/11f997f5933654cfd6e2c8298b61cd1d38bb6d5d) or the more experimental [fast-validate-before-broadcast patch](https://gist.github.com/terencechain/8dbd40da7a640b4833fbedf0976595ad)
+- Prysm with validation and equivocaation check before broadcast: https://github.com/prysmaticlabs/prysm/pull/12335
 - use `--grpc-max-msg-size 104857600`, because by default the getAllValidators response is too big and fails
 
 Here's an example Prysm systemd config:
