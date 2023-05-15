@@ -1810,16 +1810,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		optimisticSubmission = true
 		go api.processOptimisticBlock(opts)
 	} else {
-		// Simulate block (synchronously).
-		reqErr, simErr := api.simulateBlock(req.Context(), opts)
+		// Simulate block (synchronously)
+		reqErr, simErr := api.simulateBlock(req.Context(), opts) // success/error logging happens inside
 		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 		log = log.WithFields(logrus.Fields{
 			"timestampAfterValidation": time.Now().UTC().UnixMilli(),
 			"validationDurationMs":     validationDurationMs,
 		})
-		if reqErr != nil {
-			// Request error -- log and return error
-			log.WithField("requestErr", reqErr.Error()).Info("block validation failed - request error")
+		if reqErr != nil { // Request error
 			if os.IsTimeout(reqErr) {
 				api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
 			} else {
@@ -1829,7 +1827,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		} else {
 			wasSimulated = true
 			if simErr != nil {
-				log.WithField("validationErr", simErr.Error()).Info("block validation failed - validation error")
 				api.RespondError(w, http.StatusBadRequest, simErr.Error())
 				return
 			}
