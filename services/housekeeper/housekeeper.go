@@ -153,7 +153,6 @@ func (hk *Housekeeper) updateKnownValidators() {
 		"lastUpdateSlot": lastUpdateSlot,
 		"method":         "updateKnownValidators",
 	})
-	log.Debug("updateKnownValidators init")
 
 	// Abort if we already had this slot
 	if headSlot <= lastUpdateSlot {
@@ -165,6 +164,8 @@ func (hk *Housekeeper) updateKnownValidators() {
 	if slotsSinceLastUpdate < 6 {
 		return
 	}
+
+	log.Debug("updateKnownValidators init")
 
 	// Force update after a longer time since last successful update
 	forceUpdate := slotsSinceLastUpdate > 32
