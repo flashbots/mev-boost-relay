@@ -533,7 +533,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 	t := time.Now()
 	requestErr, validationErr = api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
 	log := opts.log.WithFields(logrus.Fields{
-		"duration":   time.Since(t).Seconds(),
+		"durationMs": time.Since(t).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
 	if validationErr != nil {
@@ -764,6 +764,8 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 		api.log.WithError(err).Error("unable to read block builders from db, not updating builder cache")
 		return
 	}
+	api.log.Debugf("Updating builder cache with %d builders from database", len(builders))
+
 	newCache := make(map[string]*blockBuilderCacheEntry)
 	for _, v := range builders {
 		entry := &blockBuilderCacheEntry{ //nolint:exhaustruct
@@ -1610,7 +1612,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 	log = log.WithFields(logrus.Fields{
-		"builderEntry": builderEntry,
+		"builderEntry":      builderEntry,
+		"builderIsHighPrio": builderEntry.status.IsHighPrio,
 	})
 
 	// Timestamp check
@@ -1816,10 +1819,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 		if reqErr != nil {
 			// Request error -- log and return error
-			log.WithFields(logrus.Fields{
-				"requestErr": reqErr.Error(),
-				"durationMs": validationDurationMs,
-			}).Info("block validation failed - request error")
+			log.WithField("requestErr", reqErr.Error()).Info("block validation failed - request error")
 			if os.IsTimeout(reqErr) {
 				api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
 			} else {
@@ -1829,10 +1829,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		} else {
 			wasSimulated = true
 			if simErr != nil {
-				log.WithFields(logrus.Fields{
-					"validationErr": simErr.Error(),
-					"durationMs":    validationDurationMs,
-				}).Info("block validation failed - validation error")
+				log.WithField("validationErr", simErr.Error()).Info("block validation failed - validation error")
 				api.RespondError(w, http.StatusBadRequest, simErr.Error())
 				return
 			}
@@ -1842,11 +1839,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	nextTime = time.Now().UTC()
 	pf.Simulation = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
-
-	log = log.WithField("timestampAfterValidation", time.Now().UTC().UnixMilli())
-	log.WithFields(logrus.Fields{
-		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
-	}).Info("block validation successful")
 
 	// If cancellations are enabled, then abort now if this submission is not the latest one
 	if isCancellationEnabled {

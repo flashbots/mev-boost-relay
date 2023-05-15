@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 var (
@@ -16,6 +17,10 @@ var (
 	StateIDGenesis   = "genesis"
 	StateIDFinalized = "finalized"
 	StateIDJustified = "justified"
+
+	beaconHTTPClient = http.Client{ //nolint:exhaustruct
+		Timeout: 5 * time.Second,
+	}
 )
 
 func fetchBeacon(method, url string, payload, dst any) (code int, err error) {
@@ -39,7 +44,7 @@ func fetchBeacon(method, url string, payload, dst any) (code int, err error) {
 	}
 	req.Header.Set("accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := beaconHTTPClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("client refused for %s: %w", url, err)
 	}
