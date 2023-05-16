@@ -31,11 +31,3 @@ func (b *BuilderBids) getTopBid() (string, *big.Int) {
 	}
 	return topBidBuilderPubkey, topBidValue
 }
-
-func (b *BuilderBids) builderValue(builderPubkey string) *big.Int {
-	val := b.bidValues[builderPubkey]
-	if val == nil {
-		return big.NewInt(0)
-	}
-	return val
-}

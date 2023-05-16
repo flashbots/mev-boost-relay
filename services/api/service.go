@@ -811,6 +811,10 @@ func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 	api.Respond(w, http.StatusOK, response)
 }
 
+func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
+	api.Respond(w, code, struct{ message string }{message: msg})
+}
+
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -1545,7 +1549,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
 			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
-				log.WithError(err).Warn("could not decode payload - SSZ or JSON")
+				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
 			}
@@ -1747,21 +1751,21 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	// Get the latest builder bid value from Redis.
-	latestBuilderValue, err := api.redis.GetBuilderLatestValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
+	// Grab floor bid value
+	floorBidValue, err := api.redis.GetFloorBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
-		log.WithError(err).Error("failed to get latest builder bid value from redis")
+		log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
-		bidHasHigherValue := payload.Value().Cmp(latestBuilderValue) == 1
+		isBidAboveFloor := payload.Value().Cmp(floorBidValue) == 1
 		log = log.WithFields(logrus.Fields{
-			"latestValue":          latestBuilderValue.String(),
-			"newBidHasHigherValue": bidHasHigherValue,
+			"floorBidValue":   floorBidValue.String(),
+			"isBidAboveFloor": isBidAboveFloor,
 		})
 
-		// Without cancellations, discard lower or similar value submissions.
-		if !isCancellationEnabled && !bidHasHigherValue {
-			log.Info("rejecting submission because without cancellation and not higher value than previous bid by this builder")
-			api.Respond(w, http.StatusAccepted, struct{ message string }{message: "ignoring submission because lower or equal value than previous bid"})
+		// Without cancellations, discard bids below floor value
+		if !isCancellationEnabled && !isBidAboveFloor {
+			log.Info("ignoring submission without cancellation and below floor bid value")
+			api.RespondMsg(w, http.StatusAccepted, "ignoring submission without cancellation and below floor bid value")
 			return
 		}
 	}
@@ -1892,7 +1896,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// 2. Save bid and recalculate top bid
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
@@ -1904,9 +1908,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"wasBidSavedInRedis":      updateBidResult.WasBidSaved,
 		"wasTopBidUpdated":        updateBidResult.WasTopBidUpdated,
 		"topBidValue":             updateBidResult.TopBidValue,
-		"topBidBuilder":           updateBidResult.TopBidBuilder,
 		"prevTopBidValue":         updateBidResult.PrevTopBidValue,
-		"prevTopBidBuilder":       updateBidResult.PrevTopBidBuilder,
 		"timestampAfterBidUpdate": time.Now().UTC().UnixMilli(),
 	})
 
