@@ -10,6 +10,8 @@ package housekeeper
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -28,6 +31,9 @@ type HousekeeperOpts struct {
 	Redis        *datastore.RedisCache
 	DB           database.IDatabaseService
 	BeaconClient beaconclient.IMultiBeaconClient
+
+	PprofAPI           bool
+	PprofListenAddress string
 }
 
 type Housekeeper struct {
@@ -37,6 +43,9 @@ type Housekeeper struct {
 	redis        *datastore.RedisCache
 	db           database.IDatabaseService
 	beaconClient beaconclient.IMultiBeaconClient
+
+	pprofAPI           bool
+	pprofListenAddress string
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
@@ -59,6 +68,8 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		redis:                 opts.Redis,
 		db:                    opts.DB,
 		beaconClient:          opts.BeaconClient,
+		pprofAPI:              opts.PprofAPI,
+		pprofListenAddress:    opts.PprofListenAddress,
 		proposersAlreadySaved: make(map[uint64]string),
 	}
 
@@ -78,6 +89,11 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
+	// Start pprof API, if requested
+	if hk.pprofAPI {
+		go hk.startPprofAPI()
+	}
+
 	// Start initial tasks
 	go hk.updateValidatorRegistrationsInRedis()
 
@@ -90,6 +106,20 @@ func (hk *Housekeeper) Start() (err error) {
 	for {
 		headEvent := <-c
 		hk.processNewSlot(headEvent.Slot)
+	}
+}
+
+func (hk *Housekeeper) startPprofAPI() {
+	r := mux.NewRouter()
+	hk.log.Infof("Starting pprof API at %s", hk.pprofListenAddress)
+	r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	srv := http.Server{ //nolint:gosec
+		Addr:    hk.pprofListenAddress,
+		Handler: r,
+	}
+	err := srv.ListenAndServe()
+	if err != nil {
+		hk.log.WithError(err).Error("failed to start pprof API")
 	}
 }
 
