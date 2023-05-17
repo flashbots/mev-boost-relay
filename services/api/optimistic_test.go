@@ -264,6 +264,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
+			simResultC := make(chan *blockSimResult, 1)
 			backend.relay.processOptimisticBlock(blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
@@ -276,13 +277,20 @@ func TestProcessOptimisticBlock(t *testing.T) {
 					BuilderSubmitBlockRequest: common.TestBuilderSubmitBlockRequest(
 						secretkey, getTestBidTrace(*pubkey, collateral)),
 				},
-			})
+			}, simResultC)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStatus.IsOptimistic, builder.IsOptimistic)
 			require.Equal(t, tc.wantStatus.IsHighPrio, builder.IsHighPrio)
+
+			// Make sure channel receives correct result
+			simResult := <-simResultC
+			require.True(t, simResult.optimisticSubmission)
+			require.Equal(t, tc.simulationError, simResult.validationErr)
+			require.Nil(t, simResult.requestErr)
+			require.True(t, simResult.wasSimulated)
 
 			// Check demotion but no refund.
 			if tc.simulationError != nil {
