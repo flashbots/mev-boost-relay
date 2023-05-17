@@ -1787,6 +1787,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 		// Without cancellations, discard bids below floor value
 		if !isCancellationEnabled && !isBidAboveFloor {
+			simResultC <- &blockSimResult{false, false, nil, nil}
 			log.Info("ignoring submission without cancellation and below floor bid value")
 			api.RespondMsg(w, http.StatusAccepted, "ignoring submission without cancellation and below floor bid value")
 			return
