@@ -1811,23 +1811,23 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		go api.processOptimisticBlock(opts)
 	} else {
 		// Simulate block (synchronously)
-		reqErr, simErr := api.simulateBlock(req.Context(), opts) // success/error logging happens inside
+		requestErr, validationErr = api.simulateBlock(req.Context(), opts) // success/error logging happens inside
 		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 		log = log.WithFields(logrus.Fields{
 			"timestampAfterValidation": time.Now().UTC().UnixMilli(),
 			"validationDurationMs":     validationDurationMs,
 		})
-		if reqErr != nil { // Request error
-			if os.IsTimeout(reqErr) {
+		if requestErr != nil { // Request error
+			if os.IsTimeout(requestErr) {
 				api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
 			} else {
-				api.RespondError(w, http.StatusBadRequest, reqErr.Error())
+				api.RespondError(w, http.StatusBadRequest, requestErr.Error())
 			}
 			return
 		} else {
 			wasSimulated = true
-			if simErr != nil {
-				api.RespondError(w, http.StatusBadRequest, simErr.Error())
+			if validationErr != nil {
+				api.RespondError(w, http.StatusBadRequest, validationErr.Error())
 				return
 			}
 		}
