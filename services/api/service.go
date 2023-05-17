@@ -603,8 +603,15 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions) {
 		opts.builder.status.IsOptimistic = false
 		api.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, demoting builder")
 
+		var demotionErr error
+		if reqErr != nil {
+			demotionErr = reqErr
+		} else {
+			demotionErr = simErr
+		}
+
 		// Demote the builder.
-		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, simErr)
+		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, demotionErr)
 	}
 }
 
