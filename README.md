@@ -8,7 +8,7 @@ MEV-Boost Relay for Ethereum proposer/builder separation (PBS).
 
 Currently live at:
 
-* [boost-relay.flashbots.net](https://boost-relay.flashbots.net) (also on [Goerli](https://boost-relay-sepolia.flashbots.net) and [Sepolia](https://boost-relay-goerli.flashbots.net))
+* [boost-relay.flashbots.net](https://boost-relay.flashbots.net) (also on [Goerli](https://boost-relay-goerli.flashbots.net) and [Sepolia](https://boost-relay-sepolia.flashbots.net))
 * [relay.ultrasound.money](https://relay.ultrasound.money), [agnostic-relay.net](https://agnostic-relay.net), bloXroute relays ([light fork](https://github.com/bloXroute-Labs/mev-relay))
 * [mainnet.aestus.live](https://mainnet.aestus.live), [relay.edennetwork.io/info](https://relay.edennetwork.io/info), [mainnet-relay.securerpc.com](https://mainnet-relay.securerpc.com)
 
