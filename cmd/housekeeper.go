@@ -16,7 +16,7 @@ import (
 
 var (
 	hkDefaultPprofEnabled    = os.Getenv("PPROF") == "1"
-	hkDefaultPprofListenAddr = common.GetEnv("PPROF_LISTEN_ADDR", "localhost:8080")
+	hkDefaultPprofListenAddr = common.GetEnv("PPROF_LISTEN_ADDR", "localhost:9064")
 
 	hkPprofEnabled    bool
 	hkPprofListenAddr string
