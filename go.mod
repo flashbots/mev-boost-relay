@@ -106,17 +106,11 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// removed tag
-retract v1.0.0-alpha1
-
-// removed tag
-retract v1.0.0-alpha2
-
-// removed tag
-retract v1.0.0-alpha3
-
-// removed tag
-retract v1.0.0-alpha4
-
-// removed tag
-retract v1.15.2
+// https://go.dev/ref/mod#go-mod-file-retract
+retract (
+	v1.15.2
+	v1.0.0-alpha4
+	v1.0.0-alpha3
+	v1.0.0-alpha2
+	v1.0.0-alpha1
+)
