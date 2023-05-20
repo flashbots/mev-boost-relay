@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -11,6 +12,14 @@ import (
 	"github.com/flashbots/mev-boost-relay/services/housekeeper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+)
+
+var (
+	hkDefaultPprofEnabled    = os.Getenv("PPROF") == "1"
+	hkDefaultPprofListenAddr = common.GetEnv("PPROF_LISTEN_ADDR", "localhost:9064")
+
+	hkPprofEnabled    bool
+	hkPprofListenAddr string
 )
 
 func init() {
@@ -23,6 +32,9 @@ func init() {
 	housekeeperCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
 
 	housekeeperCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
+
+	housekeeperCmd.Flags().BoolVar(&hkPprofEnabled, "pprof", hkDefaultPprofEnabled, "enable pprof API")
+	housekeeperCmd.Flags().StringVar(&hkPprofListenAddr, "pprof-listen-addr", hkDefaultPprofListenAddr, "listen address for pprof server")
 }
 
 var housekeeperCmd = &cobra.Command{
@@ -77,6 +89,9 @@ var housekeeperCmd = &cobra.Command{
 			Redis:        redis,
 			DB:           db,
 			BeaconClient: beaconClient,
+
+			PprofAPI:           hkPprofEnabled,
+			PprofListenAddress: hkPprofListenAddr,
 		}
 		service := housekeeper.NewHousekeeper(opts)
 		log.Info("Starting housekeeper service...")
