@@ -189,6 +189,7 @@ type RelayAPI struct {
 	ffLogInvalidSignaturePayload bool // log payload if getPayload signature validation fails
 	ffEnableCancellations        bool // whether to enable block builder cancellations
 	ffRegValContinueOnInvalidSig bool // whether to continue processing further validators if one fails
+	ffIgnorableValidationErrors  bool // whether to enable ignorable validation errors
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
@@ -297,6 +298,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("REGISTER_VALIDATOR_CONTINUE_ON_INVALID_SIG") == "1" {
 		api.log.Warn("env: REGISTER_VALIDATOR_CONTINUE_ON_INVALID_SIG - validator registration will continue processing even if one validator has an invalid signature")
 		api.ffRegValContinueOnInvalidSig = true
+	}
+
+	if os.Getenv("ENABLE_IGNORABLE_VALIDATION_ERRORS") == "1" {
+		api.log.Warn("env: ENABLE_IGNORABLE_VALIDATION_ERRORS - some validation errors will be ignored")
+		api.ffIgnorableValidationErrors = true
 	}
 
 	return api, nil
@@ -537,14 +543,16 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
 	if validationErr != nil {
-		// TODO(mikeneuder): consider the negation logic here if it improves readability.
-		ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
-		if !ignoreError {
-			log.WithError(validationErr).Warn("block validation failed")
-			return nil, validationErr
+		if api.ffIgnorableValidationErrors {
+			// Operators chooses to ignore certain validation errors
+			ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
+			if ignoreError {
+				log.WithError(validationErr).Warn("block validation failed with ignorable error")
+				return nil, nil
+			}
 		}
-		log.WithError(validationErr).Warn("block validation failed with ignorable error")
-		return nil, nil
+		log.WithError(validationErr).Warn("block validation failed")
+		return nil, validationErr
 	}
 	if requestErr != nil {
 		log.WithError(requestErr).Warn("block validation failed: request error")
