@@ -20,6 +20,7 @@ Alternatives (not audited or endorsed): [blocknative/dreamboat](https://github.c
 * [mev-boost](https://github.com/flashbots/mev-boost)
 * [Relay API specs](https://flashbots.github.io/relay-specs)
 * [Guide for running mev-boost-relay at scale](https://flashbots.notion.site/Running-mev-boost-relay-at-scale-draft-4040ccd5186c425d9a860cbb29bbfe09)
+* [Running relay and builders in custom devnets](https://gist.github.com/metachris/66df812f2920e6b0047afb9fdaf7df91#using-unnamed-devnets)
 
 ### Components
 
