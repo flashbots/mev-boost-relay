@@ -254,6 +254,10 @@ func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.Pub
 		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
 	}
 
+	if len(values) == 0 {
+		return nil
+	}
+
 	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
 }
 
