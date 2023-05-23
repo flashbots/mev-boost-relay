@@ -108,6 +108,7 @@ require (
 
 // https://go.dev/ref/mod#go-mod-file-retract
 retract (
+	v1.15.3
 	v1.15.2
 	v1.0.0-alpha4
 	v1.0.0-alpha3
