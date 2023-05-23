@@ -248,9 +248,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 	log.Debug("Writing to Redis...")
 	timeStartWriting := time.Now()
 
-	// This process can take very long, that's why it prints a log line every 10k validators
-	printCounter := len(hk.proposersAlreadySaved) == 0 // only do this on service startup
-
+	// This writes a large amount of validators to redis (~600k), which can take a while
 	i := 0
 	newValidators := 0
 	bufferSize := 10000
@@ -268,19 +266,15 @@ func (hk *Housekeeper) updateKnownValidators() {
 
 		if i%bufferSize == 0 {
 			hk.saveKnownValidators(indexPkMap)
-			indexPkMap = make(map[uint64]types.PubkeyHex)
 			newValidators += bufferSize
-			if printCounter {
-				log.Debugf("writing to redis: %d / %d", i, numValidators)
-			}
+			indexPkMap = make(map[uint64]types.PubkeyHex)
+			log.Debugf("wrote known validators to redis: %d / %d", i, numValidators)
 		}
 	}
 
 	hk.saveKnownValidators(indexPkMap)
 	newValidators += len(indexPkMap)
-	if printCounter {
-		log.Debugf("writing to redis: %d / %d", i, numValidators)
-	}
+	log.Debugf("wrote known validators to redis: %d / %d", i, numValidators)
 
 	log.WithFields(logrus.Fields{
 		"durationRedisWrite": time.Since(timeStartWriting).Seconds(),
