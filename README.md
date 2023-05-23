@@ -153,6 +153,10 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `RUN_INTEGRATION_TESTS` - when set to "1" enables integration tests, currently used for testing Memcached using comma separated list of endpoints specified by `MEMCACHED_URIS`
 * `TEST_DB_DSN` - specifies connection string using Data Source Name (DSN) for Postgres (default: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable)
 
+#### Redis tuning
+
+* `REDIS_CONNECTION_POOL_SIZE`, `REDIS_MIN_IDLE_CONNECTIONS`, `REDIS_READ_TIMEOUT_SEC`, `REDIS_POOL_TIMEOUT_SEC`, `REDIS_WRITE_TIMEOUT_SEC` (see also [the code here](https://github.com/flashbots/mev-boost-relay/blob/e39cd38010de26bf9a51d1a3e77fc235ea87b12f/datastore/redis.go#L35-L41))
+
 ## Updating the website
 
 * Edit the HTML in `services/website/website.html`

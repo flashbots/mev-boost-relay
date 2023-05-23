@@ -271,7 +271,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 			indexPkMap = make(map[uint64]types.PubkeyHex)
 			newValidators += bufferSize
 			if printCounter {
-				hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
+				log.Debugf("writing to redis: %d / %d", i, numValidators)
 			}
 		}
 	}
@@ -279,7 +279,7 @@ func (hk *Housekeeper) updateKnownValidators() {
 	hk.saveKnownValidators(indexPkMap)
 	newValidators += len(indexPkMap)
 	if printCounter {
-		hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
+		log.Debugf("writing to redis: %d / %d", i, numValidators)
 	}
 
 	log.WithFields(logrus.Fields{
