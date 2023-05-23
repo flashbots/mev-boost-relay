@@ -21,9 +21,6 @@ var (
 
 	expiryBidCache = 45 * time.Second
 
-	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
-	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
-
 	RedisConfigFieldPubkey         = "pubkey"
 	RedisStatsFieldLatestSlot      = "latest-slot"
 	RedisStatsFieldValidatorsTotal = "validators-total"
@@ -31,6 +28,16 @@ var (
 	ErrFailedUpdatingTopBidNoBids            = errors.New("failed to update top bid because no bids were found")
 	ErrAnotherPayloadAlreadyDeliveredForSlot = errors.New("another payload block hash for slot was already delivered")
 	ErrPastSlotAlreadyDelivered              = errors.New("payload for past slot was already delivered")
+
+	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
+	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
+
+	// Docs about redis settings: https://redis.io/docs/reference/clients/
+	redisConnectionPoolSize = cli.GetEnvInt("REDIS_CONNECTION_POOL_SIZE", 0) // 0 means use default (10 per CPU)
+	redisMinIdleConnections = cli.GetEnvInt("REDIS_MIN_IDLE_CONNECTIONS", 0) // 0 means use default
+	redisReadTimeoutSec     = cli.GetEnvInt("REDIS_READ_TIMEOUT_SEC", 0)     // 0 means use default (3 sec)
+	redisPoolTimeoutSec     = cli.GetEnvInt("REDIS_POOL_TIMEOUT_SEC", 0)     // 0 means use default (ReadTimeout + 1 sec)
+	redisWriteTimeoutSec    = cli.GetEnvInt("REDIS_WRITE_TIMEOUT_SEC", 0)    // 0 means use default (3 seconds)
 )
 
 func PubkeyHexToLowerStr(pk boostTypes.PubkeyHex) string {
@@ -42,11 +49,29 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 	if !strings.HasPrefix(redisURI, "redis://") && !strings.HasPrefix(redisURI, "rediss://") {
 		redisURI = "redis://" + redisURI
 	}
-	opt, err := redis.ParseURL(redisURI)
+
+	redisOpts, err := redis.ParseURL(redisURI)
 	if err != nil {
 		return nil, err
 	}
-	redisClient := redis.NewClient(opt)
+
+	if redisConnectionPoolSize > 0 {
+		redisOpts.PoolSize = redisConnectionPoolSize
+	}
+	if redisMinIdleConnections > 0 {
+		redisOpts.MinIdleConns = redisMinIdleConnections
+	}
+	if redisReadTimeoutSec > 0 {
+		redisOpts.ReadTimeout = time.Duration(redisReadTimeoutSec) * time.Second
+	}
+	if redisPoolTimeoutSec > 0 {
+		redisOpts.PoolTimeout = time.Duration(redisPoolTimeoutSec) * time.Second
+	}
+	if redisWriteTimeoutSec > 0 {
+		redisOpts.WriteTimeout = time.Duration(redisWriteTimeoutSec) * time.Second
+	}
+
+	redisClient := redis.NewClient(redisOpts)
 	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
 		// unable to connect to redis
 		return nil, err
@@ -88,14 +113,12 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		return nil, err
 	}
 
-	var roClient *redis.Client
+	roClient := client
 	if readonlyURI != "" {
 		roClient, err = connectRedis(readonlyURI)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		roClient = client
 	}
 
 	return &RedisCache{
