@@ -104,6 +104,24 @@ func TestRedisKnownValidators(t *testing.T) {
 		require.Contains(t, knownVals, index2)
 		require.Equal(t, key2, knownVals[index2])
 	})
+
+	t.Run("Can save multi and get known validators", func(t *testing.T) {
+		key1 := types.NewPubkeyHex("0x1a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		index1 := uint64(1)
+		key2 := types.NewPubkeyHex("0x2a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+		index2 := uint64(2)
+
+		indexPkMap := map[uint64]types.PubkeyHex{index1: key1, index2: key2}
+		require.NoError(t, cache.SetMultiKnownValidator(indexPkMap))
+
+		knownVals, err := cache.GetKnownValidators()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(knownVals))
+		require.Contains(t, knownVals, index1)
+		require.Equal(t, key1, knownVals[index1])
+		require.Contains(t, knownVals, index2)
+		require.Equal(t, key2, knownVals[index2])
+	})
 }
 
 func TestRedisValidatorRegistrations(t *testing.T) {

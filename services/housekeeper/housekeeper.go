@@ -162,6 +162,17 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	}).Infof("updated headSlot to %d", headSlot)
 }
 
+func (hk *Housekeeper) saveKnownValidators(indexPkMap map[uint64]types.PubkeyHex) {
+	err := hk.redis.SetMultiKnownValidator(indexPkMap)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to set known validators in Redis")
+	} else {
+		for proposerIndex, publickeyHex := range indexPkMap {
+			hk.proposersAlreadySaved[proposerIndex] = publickeyHex.String()
+		}
+	}
+}
+
 // updateKnownValidators queries the full list of known validators from the beacon node
 // and stores it in redis. For the CL client this is an expensive operation and takes a bunch
 // of resources. This is why we schedule the requests for slot 4 and 20 of every epoch,
@@ -242,11 +253,10 @@ func (hk *Housekeeper) updateKnownValidators() {
 
 	i := 0
 	newValidators := 0
+	bufferSize := 10000
+	indexPkMap := make(map[uint64]types.PubkeyHex)
 	for _, validator := range validators {
 		i++
-		if printCounter && i%10000 == 0 {
-			log.Debugf("writing to redis: %d / %d", i, numValidators)
-		}
 
 		// avoid resaving if index->pubkey mapping is the same
 		prevPubkeyForIndex := hk.proposersAlreadySaved[validator.Index]
@@ -254,13 +264,22 @@ func (hk *Housekeeper) updateKnownValidators() {
 			continue
 		}
 
-		err := hk.redis.SetKnownValidator(types.PubkeyHex(validator.Validator.Pubkey), validator.Index)
-		if err != nil {
-			log.WithError(err).WithField("pubkey", validator.Validator.Pubkey).Error("failed to set known validator in Redis")
-		} else {
-			hk.proposersAlreadySaved[validator.Index] = validator.Validator.Pubkey
-			newValidators++
+		indexPkMap[validator.Index] = types.PubkeyHex(validator.Validator.Pubkey)
+
+		if i%bufferSize == 0 {
+			hk.saveKnownValidators(indexPkMap)
+			indexPkMap = make(map[uint64]types.PubkeyHex)
+			newValidators += bufferSize
+			if printCounter {
+				hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
+			}
 		}
+	}
+
+	hk.saveKnownValidators(indexPkMap)
+	newValidators += len(indexPkMap)
+	if printCounter {
+		hk.log.Debugf("writing to redis: %d / %d", i, numValidators)
 	}
 
 	log.WithFields(logrus.Fields{

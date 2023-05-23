@@ -225,8 +225,17 @@ func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, erro
 	return validators, nil
 }
 
+func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.PubkeyHex) error {
+	values := []string{}
+	for proposerIndex, publickeyHex := range indexPkMap {
+		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
+	}
+
+	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
+}
+
 func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
-	return r.client.HSet(context.Background(), r.keyKnownValidators, proposerIndex, PubkeyHexToLowerStr(pubkeyHex)).Err()
+	return r.SetMultiKnownValidator(map[uint64]boostTypes.PubkeyHex{proposerIndex: pubkeyHex})
 }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
