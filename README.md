@@ -28,7 +28,7 @@ The relay consists of three main components, which are designed to run and scale
 
 1. [API](https://github.com/flashbots/mev-boost-relay/tree/main/services/api): Services that provide APIs for (a) proposers, (b) block builders, (c) data.
 1. [Website](https://github.com/flashbots/mev-boost-relay/tree/main/services/website): Serving the [website requests](https://boost-relay.flashbots.net/) (information is pulled from Redis and database).
-1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): Service that updates known validators, proposer duties, and more in the background. Only a single instance of this should run.
+1. [Housekeeper](https://github.com/flashbots/mev-boost-relay/tree/main/services/housekeeper): Updates known validators, proposer duties, and more in the background. Only a single instance of this should run.
 
 ### Dependencies
 
