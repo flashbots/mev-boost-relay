@@ -10,6 +10,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/attestantio/go-builder-client/api/capella"
+	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-boost-utils/types"
@@ -25,8 +26,8 @@ func setupTestRedis(t *testing.T) *RedisCache {
 
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
-
 	redisService, err := NewRedisCache("", redisTestServer.Addr(), "")
+	// redisService, err := NewRedisCache("", "localhost:6379", "")
 	require.NoError(t, err)
 
 	return redisService
@@ -208,6 +209,12 @@ func TestBuilderBids(t *testing.T) {
 		ProposerPubkey: proposerPubkey,
 	}
 
+	trace := &common.BidTraceV2{
+		BidTrace: v1.BidTrace{
+			Value: uint256.NewInt(123),
+		},
+	}
+
 	// Notation:
 	// - ba1:  builder A, bid 1
 	// - ba1c: builder A, bid 1, cancellation enabled
@@ -238,7 +245,7 @@ func TestBuilderBids(t *testing.T) {
 	}
 
 	ensureBidFloor := func(expectedValue int64) {
-		floorValue, err := cache.GetFloorBidValue(slot, parentHash, proposerPubkey)
+		floorValue, err := cache.GetFloorBidValue(context.Background(), cache.client.Pipeline(), slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
 		require.Equal(t, big.NewInt(expectedValue), floorValue)
 	}
@@ -249,7 +256,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit ba1=10
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(10), &opts)
-	resp, err := cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved, resp)
 	require.True(t, resp.WasTopBidUpdated)
@@ -268,7 +275,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit ba2=5 (should not update, because floor is 10)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
-	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.False(t, resp.WasBidSaved, resp)
 	require.False(t, resp.WasTopBidUpdated)
@@ -279,7 +286,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit ba3c=5 (should not update, because floor is 10)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
-	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.False(t, resp.WasTopBidUpdated)
@@ -291,7 +298,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit bb1=20
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), &opts)
-	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
@@ -302,7 +309,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit bb2c=22
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(22), &opts)
-	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
@@ -313,7 +320,7 @@ func TestBuilderBids(t *testing.T) {
 
 	// submit bb3c=12 (should update top bid, using floor at 20)
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(12), &opts)
-	resp, err = cache.SaveBidAndUpdateTopBid(payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
 	require.True(t, resp.WasTopBidUpdated)
@@ -496,7 +503,10 @@ func TestGetBuilderLatestValue(t *testing.T) {
 			},
 		},
 	}
-	err = cache.SaveBuilderBid(slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
+
+	_, err = cache.client.TxPipelined(context.Background(), func(tx redis.Pipeliner) error {
+		return cache.SaveBuilderBid(tx, slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
+	})
 	require.NoError(t, err)
 
 	// Check new string.
@@ -504,3 +514,31 @@ func TestGetBuilderLatestValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, v.Cmp(newVal.ToBig()))
 }
+
+// func TestPipeline(t *testing.T) {
+// 	cache := setupTestRedis(t)
+
+// 	key1 := "test1"
+// 	key2 := "test123"
+// 	val := "foo"
+// 	err := cache.client.Set(context.Background(), key1, val, 0).Err()
+// 	require.NoError(t, err)
+
+// 	_, err = cache.client.TxPipelined(context.Background(), func(tx redis.Pipeliner) error {
+// 		c := tx.Get(context.Background(), key1)
+// 		_, err := tx.Exec(context.Background())
+// 		require.NoError(t, err)
+// 		str, err := c.Result()
+// 		require.NoError(t, err)
+// 		require.Equal(t, val, str)
+
+// 		err = tx.Set(context.Background(), key2, val, 0).Err()
+// 		require.NoError(t, err)
+// 		return nil
+// 	})
+// 	require.NoError(t, err)
+
+// 	str, err := cache.client.Get(context.Background(), key2).Result()
+// 	require.NoError(t, err)
+// 	require.Equal(t, val, str)
+// }

@@ -1751,7 +1751,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Grab floor bid value
-	floorBidValue, err := api.redis.GetFloorBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	floorBidValue, err := api.redis.GetFloorBidValue(req.Context(), api.redis.NewPipeline(), payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
@@ -1894,17 +1894,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	//
 	// Save to Redis
 	//
-	// 1. Save BidTrace
-	log = log.WithField("timestampBeforeUpdateTopBid", time.Now().UTC().UnixMilli())
-	err = api.redis.SaveBidTrace(&bidTrace)
-	if err != nil {
-		log.WithError(err).Error("failed saving bidTrace in redis")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// 2. Save bid and recalculate top bid
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(req.Context(), &bidTrace, payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
