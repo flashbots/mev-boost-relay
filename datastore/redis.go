@@ -683,13 +683,6 @@ func (r *RedisCache) DelBuilderBid(slot uint64, parentHash, proposerPubkey, buil
 		return err
 	}
 
-	// delete the bid
-	keyLatestBid := r.keyLatestBidByBuilder(slot, parentHash, proposerPubkey, builderPubkey)
-	err = r.client.Del(context.Background(), keyLatestBid).Err()
-	if err != nil {
-		return err
-	}
-
 	// update bids now to compute current top bid
 	state := SaveBidAndUpdateTopBidResponse{} //nolint:exhaustruct
 	_, err = r._UpdateTopBid(state, nil, slot, parentHash, proposerPubkey, nil)

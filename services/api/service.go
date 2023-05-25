@@ -1949,7 +1949,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
 		return
 	}
 
