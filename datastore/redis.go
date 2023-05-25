@@ -625,7 +625,7 @@ func (r *RedisCache) _UpdateTopBid(state SaveBidAndUpdateTopBidResponse, builder
 		return state, err
 	}
 
-	state.WasTopBidUpdated = state.PrevTopBidValue.Cmp(state.TopBidValue) != 0
+	state.WasTopBidUpdated = state.PrevTopBidValue == nil || state.PrevTopBidValue.Cmp(state.TopBidValue) != 0
 
 	// 6. Finally, update the global top bid value
 	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)

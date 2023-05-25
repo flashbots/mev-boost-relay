@@ -1803,7 +1803,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			if isCancellationEnabled {
 				// if cancellations are enabled, we don't need to validate, but we may need to cancel this builders previous cancellable bid (if higher than floor)
 				simResultC <- &blockSimResult{false, false, nil, nil}
-				log.Info("submission with cancellation and below floor bid value - deleting previous bid")
+				log.Info("submission below floor bid value, with cancellation")
 				err := api.redis.DelBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
 				if err != nil {
 					log.WithError(err).Error("failed processing cancellable bid below floor")
@@ -1814,8 +1814,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 				return
 			} else {
 				simResultC <- &blockSimResult{false, false, nil, nil}
-				log.Info("ignoring submission without cancellation and below floor bid value")
-				api.RespondMsg(w, http.StatusAccepted, "ignoring submission without cancellation and below floor bid value")
+				log.Info("submission below floor bid value, without cancellation")
+				api.RespondMsg(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 				return
 			}
 		}
