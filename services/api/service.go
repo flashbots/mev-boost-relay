@@ -1792,32 +1792,28 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
+		log = log.WithField("floorBidValue", floorBidValue.String())
 		isBidAboveFloor := payload.Value().Cmp(floorBidValue) == 1
-		log = log.WithFields(logrus.Fields{
-			"floorBidValue":   floorBidValue.String(),
-			"isBidAboveFloor": isBidAboveFloor,
-		})
+		isBidBelowFloor := payload.Value().Cmp(floorBidValue) == -1
 
-		// Without cancellations, discard bids below floor value
-		if !isBidAboveFloor {
-			if isCancellationEnabled {
-				// if cancellations are enabled, we don't need to validate, but we may need to cancel this builders previous cancellable bid (if higher than floor)
-				simResultC <- &blockSimResult{false, false, nil, nil}
-				log.Info("submission below floor bid value, with cancellation")
-				err := api.redis.DelBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
-				if err != nil {
-					log.WithError(err).Error("failed processing cancellable bid below floor")
-					api.RespondError(w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
-					return
-				}
-				api.Respond(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
-				return
-			} else {
-				simResultC <- &blockSimResult{false, false, nil, nil}
-				log.Info("submission below floor bid value, without cancellation")
-				api.RespondMsg(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
+		if isCancellationEnabled && isBidBelowFloor {
+			// With cancellations, delete previous bid if below floor
+			simResultC <- &blockSimResult{false, false, nil, nil}
+			log.Info("submission below floor bid value, with cancellation")
+			err := api.redis.DelBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
+			if err != nil {
+				log.WithError(err).Error("failed processing cancellable bid below floor")
+				api.RespondError(w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
 				return
 			}
+			api.Respond(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
+			return
+		} else if !isCancellationEnabled && !isBidAboveFloor {
+			// Without cancellations, ignore bids if at or below floor value
+			simResultC <- &blockSimResult{false, false, nil, nil}
+			log.Info("submission below floor bid value, without cancellation")
+			api.RespondMsg(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
+			return
 		}
 	}
 
