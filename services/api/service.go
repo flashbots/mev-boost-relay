@@ -841,6 +841,11 @@ func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
+	if response == nil {
+		return
+	}
+
+	// write the json response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		api.log.WithField("response", response).WithError(err).Error("Couldn't write response")
 		http.Error(w, "", http.StatusInternalServerError)
@@ -1787,19 +1792,28 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
-		isBidAboveFloor := payload.Value().Cmp(floorBidValue) == 1
-		log = log.WithFields(logrus.Fields{
-			"floorBidValue":   floorBidValue.String(),
-			"isBidAboveFloor": isBidAboveFloor,
-		})
+		log = log.WithField("floorBidValue", floorBidValue.String())
+	}
 
-		// Without cancellations, discard bids below floor value
-		if !isCancellationEnabled && !isBidAboveFloor {
-			simResultC <- &blockSimResult{false, false, nil, nil}
-			log.Info("ignoring submission without cancellation and below floor bid value")
-			api.RespondMsg(w, http.StatusAccepted, "ignoring submission without cancellation and below floor bid value")
+	// Check if submission can be skipped (if it's below the floor bid value)
+	isBidBelowFloor := floorBidValue != nil && payload.Value().Cmp(floorBidValue) == -1
+	isBidAtOrBelowFloor := floorBidValue != nil && payload.Value().Cmp(floorBidValue) < 1
+	if isCancellationEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
+		simResultC <- &blockSimResult{false, false, nil, nil}
+		log.Info("submission below floor bid value, with cancellation")
+		err := api.redis.DelBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
+		if err != nil {
+			log.WithError(err).Error("failed processing cancellable bid below floor")
+			api.RespondError(w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
 			return
 		}
+		api.Respond(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
+		return
+	} else if !isCancellationEnabled && isBidAtOrBelowFloor { // without cancellations: if at or below floor -> ignore
+		simResultC <- &blockSimResult{false, false, nil, nil}
+		log.Info("submission below floor bid value, without cancellation")
+		api.RespondMsg(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
+		return
 	}
 
 	// Get the latest top bid value from Redis
@@ -1930,7 +1944,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
-		api.RespondError(w, http.StatusInternalServerError, err.Error())
+		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
 		return
 	}
 

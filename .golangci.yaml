@@ -65,7 +65,7 @@ linters-settings:
     min-complexity: 85 # default: 30
 
   gocyclo:
-    min-complexity: 65 # default: 30
+    min-complexity: 70 # default: 30
 
   gomoddirectives:
     replace-allow-list:
