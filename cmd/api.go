@@ -37,9 +37,9 @@ var (
 	apiSecretKey    string
 	apiBlockSimURL  string
 	apiDebug        bool
-	apiInternalAPI  bool
 	apiBuilderAPI   bool
 	apiDataAPI      bool
+	apiInternalAPI  bool
 	apiProposerAPI  bool
 	apiLogTag       string
 )
