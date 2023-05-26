@@ -71,9 +71,9 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	var simReq *jsonrpc.JSONRPCRequest
 	if payload.Capella != nil {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
-	} else if payload.Bellatrix != nil {
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV1", payload)
 	}
+	// TODO: add deneb support.
+
 	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio, fastTrack)
 	return requestErr, validationErr
 }

@@ -54,7 +54,7 @@ var (
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
-	ErrMissingForkVersions        = errors.New("invalid bellatrix/capella fork version from beacon node")
+	ErrMissingForkVersions        = errors.New("invalid fork version from beacon node")
 )
 
 var (
@@ -170,10 +170,9 @@ type RelayAPI struct {
 	memcached    *datastore.Memcached
 	db           database.IDatabaseService
 
-	headSlot       uberatomic.Uint64
-	genesisInfo    *beaconclient.GetGenesisResponse
-	bellatrixEpoch uint64
-	capellaEpoch   uint64
+	headSlot     uberatomic.Uint64
+	genesisInfo  *beaconclient.GetGenesisResponse
+	capellaEpoch uint64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -371,10 +370,6 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 	return epoch >= api.capellaEpoch
 }
 
-func (api *RelayAPI) isBellatrix(slot uint64) bool {
-	return !api.isCapella(slot)
-}
-
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
@@ -409,21 +404,16 @@ func (api *RelayAPI) StartServer() (err error) {
 	for _, fork := range forkSchedule.Data {
 		api.log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
-		case api.opts.EthNetDetails.BellatrixForkVersionHex:
-			api.bellatrixEpoch = fork.Epoch
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
 			api.capellaEpoch = fork.Epoch
+			// TODO: add deneb support.
 		}
 	}
 
 	// Print fork version information
+	// TODO: add deneb support.
 	if api.isCapella(currentSlot) {
-		api.log.Infof("capella fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
-	} else if api.isBellatrix(currentSlot) {
-		api.log.Infof("bellatrix fork detected (currentEpoch: %d / bellatrixEpoch: %d / capellaEpoch: %d)", currentEpoch, api.bellatrixEpoch, api.capellaEpoch)
-		if api.capellaEpoch == 0 {
-			api.log.Infof("no capella fork scheduled. update your beacon-node in time.")
-		}
+		api.log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", currentEpoch, api.capellaEpoch)
 	} else {
 		return ErrMismatchedForkVersions
 	}
@@ -721,10 +711,6 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotHead":           headSlot,
 		"slotStartNextEpoch": (epoch + 1) * common.SlotsPerEpoch,
 	}).Infof("updated headSlot to %d", headSlot)
-
-	if api.isBellatrix(prevHeadSlot) && api.isCapella(headSlot) {
-		api.log.Info("====================== NOW ON CAPELLA ======================")
-	}
 }
 
 func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
@@ -1219,20 +1205,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.SignedBlindedBeaconBlock)
-	if api.isCapella(headSlot + 1) {
-		payload.Capella = new(capella.SignedBlindedBeaconBlock)
-		if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
-			log.WithError(err).Warn("failed to decode capella getPayload request")
-			api.RespondError(w, http.StatusBadRequest, "failed to decode capella payload")
-			return
-		}
-	} else {
-		payload.Bellatrix = new(boostTypes.SignedBlindedBeaconBlock)
-		if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Bellatrix); err != nil {
-			log.WithError(err).Warn("failed to decode bellatrix getPayload request")
-			api.RespondError(w, http.StatusBadRequest, "failed to decode bellatrix payload")
-			return
-		}
+	// TODO: add deneb support.
+	payload.Capella = new(capella.SignedBlindedBeaconBlock)
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
+		log.WithError(err).Warn("failed to decode capella getPayload request")
+		api.RespondError(w, http.StatusBadRequest, "failed to decode capella payload")
+		return
 	}
 
 	// Take time after the decoding, and add to logging
@@ -1284,29 +1262,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Validate proposer signature (first attempt verifying the Capella signature)
-	if api.isCapella(headSlot + 1) {
-		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
-		if !ok || err != nil {
-			if api.ffLogInvalidSignaturePayload {
-				txt, _ := json.Marshal(payload) //nolint:errchkjson
-				fmt.Println("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
-			}
-			log.WithError(err).Warn("could not verify capella payload signature")
-			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
-			return
+	// TODO: add deneb support.
+	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
+	if !ok || err != nil {
+		if api.ffLogInvalidSignaturePayload {
+			txt, _ := json.Marshal(payload) //nolint:errchkjson
+			fmt.Println("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
 		}
-	} else {
-		// Fall-back to verifying the bellatrix signature
-		ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerBellatrix, pk[:], payload.Signature())
-		if !ok || err != nil {
-			if api.ffLogInvalidSignaturePayload {
-				txt, _ := json.Marshal(payload) //nolint:errchkjson
-				fmt.Println("payload_invalid_sig_bellatrix: ", string(txt), "pubkey:", proposerPubkey.String())
-			}
-			log.WithError(err).Warn("could not verify bellatrix payload signature")
-			api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
-			return
-		}
+		log.WithError(err).Warn("could not verify capella payload signature")
+		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
+		return
 	}
 
 	// Log about received payload (with a valid proposer signature)
@@ -1614,13 +1579,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if api.isCapella(headSlot+1) && payload.Capella == nil {
+	// TODO: add deneb support.
+	if payload.Capella == nil {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
-		return
-	} else if api.isBellatrix(headSlot+1) && payload.Bellatrix == nil {
-		log.Info("rejecting submission - non bellatrix payload for bellatrix fork")
-		api.RespondError(w, http.StatusBadRequest, "not belltrix payload")
 		return
 	}
 
