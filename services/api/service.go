@@ -1316,6 +1316,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			// BAD VALIDATOR, 2x GETPAYLOAD FOR PAST SLOT
 			log.Warn("validator called getPayload for past slot")
 			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
+			return
 		} else if errors.Is(err, redis.TxFailedErr) {
 			// BAD VALIDATOR, 2x GETPAYLOAD + RACE
 			log.Warn("validator called getPayload twice (race)")
