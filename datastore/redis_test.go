@@ -505,7 +505,7 @@ func TestGetBuilderLatestValue(t *testing.T) {
 	}
 
 	_, err = cache.client.TxPipelined(context.Background(), func(tx redis.Pipeliner) error {
-		return cache.SaveBuilderBid(tx, slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
+		return cache.SaveBuilderBid(context.Background(), tx, slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
 	})
 	require.NoError(t, err)
 
