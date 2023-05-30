@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/attestantio/go-builder-client/api"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -42,14 +40,6 @@ var (
 	feeRecipient = bellatrix.ExecutionAddress{0x02}
 	errFake      = fmt.Errorf("foo error")
 )
-
-func getTestBlockHash(t *testing.T) boostTypes.Hash {
-	t.Helper()
-	var blockHash boostTypes.Hash
-	err := blockHash.FromSlice([]byte("98765432109876543210987654321098"))
-	require.NoError(t, err)
-	return blockHash
-}
 
 func getTestBidTrace(pubkey phase0.BLSPubKey, value uint64) *common.BidTraceV2 {
 	return &common.BidTraceV2{
@@ -135,33 +125,8 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	backend.relay.redis = mockRedis
 	backend.relay.db = mockDB
 
-	// Prepare redis.
+	// Prepare redis
 	err = backend.relay.redis.SetKnownValidator(boostTypes.NewPubkeyHex(pubkey.String()), proposerInd)
-	require.NoError(t, err)
-	comResp := &common.GetPayloadResponse{
-		Capella: &api.VersionedExecutionPayload{
-			Version: consensusspec.DataVersionCapella,
-			Capella: &consensuscapella.ExecutionPayload{
-				Transactions: []bellatrix.Transaction{},
-			},
-		},
-	}
-	err = backend.relay.redis.SaveExecutionPayload(
-		slot,
-		pkStr,
-		getTestBlockHash(t).String(),
-		comResp,
-	)
-	require.NoError(t, err)
-	err = backend.relay.redis.SaveBidTrace(&common.BidTraceV2{
-		BidTrace: v1.BidTrace{
-			Slot:           slot,
-			ProposerPubkey: pubkey,
-			BlockHash:      phase0.Hash32(getTestBlockHash(t)),
-			BuilderPubkey:  pubkey,
-			Value:          uint256.NewInt(5),
-		},
-	})
 	require.NoError(t, err)
 
 	count, err := backend.relay.datastore.RefreshKnownValidators()
