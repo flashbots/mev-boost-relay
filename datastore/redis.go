@@ -214,6 +214,7 @@ func (r *RedisCache) SetObj(key string, value any, expiration time.Duration) (er
 	return r.client.Set(context.Background(), key, marshalledValue, expiration).Err()
 }
 
+// SetObjPipelined saves an object in the given Redis key on a Redis pipeline (JSON encoded)
 func (r *RedisCache) SetObjPipelined(ctx context.Context, tx redis.Pipeliner, key string, value any, expiration time.Duration) (err error) {
 	marshalledValue, err := json.Marshal(value)
 	if err != nil {
