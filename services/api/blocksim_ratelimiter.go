@@ -21,6 +21,7 @@ var (
 	ErrRequestClosed    = errors.New("request context closed")
 	ErrSimulationFailed = errors.New("simulation failed")
 	ErrJSONDecodeFailed = errors.New("json error")
+	ErrNoCapellaPayload = errors.New("capella payload is nil")
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 10000)) * time.Millisecond
@@ -69,12 +70,24 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}
 
 	var simReq *jsonrpc.JSONRPCRequest
-	if payload.Capella != nil {
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+	if payload.Capella == nil {
+		return ErrNoCapellaPayload, nil
 	}
 	// TODO: add deneb support.
 
-	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, isHighPrio, fastTrack)
+	// Prepare headers
+	headers := http.Header{}
+	headers.Add("X-Request-ID", fmt.Sprintf("%d/%s", payload.Slot(), payload.BlockHash()))
+	if isHighPrio {
+		headers.Add("X-High-Priority", "true")
+	}
+	if fastTrack {
+		headers.Add("X-Fast-Track", "true")
+	}
+
+	// Create and fire off JSON-RPC request
+	simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
 	return requestErr, validationErr
 }
 
@@ -84,7 +97,7 @@ func (b *BlockSimulationRateLimiter) CurrentCounter() int64 {
 }
 
 // SendJSONRPCRequest sends the request to URL and returns the general JsonRpcResponse, or an error (note: not the JSONRPCError)
-func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url string, isHighPrio, fastTrack bool) (res *jsonrpc.JSONRPCResponse, requestErr, validationErr error) {
+func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url string, headers http.Header) (res *jsonrpc.JSONRPCResponse, requestErr, validationErr error) {
 	buf, err := json.Marshal(req)
 	if err != nil {
 		return nil, err, nil
@@ -97,11 +110,8 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 
 	// set request headers
 	httpReq.Header.Add("Content-Type", "application/json")
-	if isHighPrio {
-		httpReq.Header.Add("X-High-Priority", "true")
-	}
-	if fastTrack {
-		httpReq.Header.Add("X-Fast-Track", "true")
+	for k, v := range headers {
+		httpReq.Header.Add(k, v[0])
 	}
 
 	// execute request
