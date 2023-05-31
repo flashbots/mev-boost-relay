@@ -67,9 +67,15 @@ func (c *MockBeaconInstance) NumValidators() uint64 {
 	return uint64(len(c.validatorSet))
 }
 
-func (c *MockBeaconInstance) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *MockBeaconInstance) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
 	c.addDelay()
-	return c.validatorSet, c.MockFetchValidatorsErr
+	validatorResp := &GetStateValidatorsResponse{ //nolint:exhaustruct
+		Data: make([]ValidatorResponseEntry, 0),
+	}
+	for _, entry := range c.validatorSet {
+		validatorResp.Data = append(validatorResp.Data, entry)
+	}
+	return validatorResp, c.MockFetchValidatorsErr
 }
 
 func (c *MockBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {

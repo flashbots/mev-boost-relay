@@ -17,6 +17,14 @@ const testPubKey = "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a74
 
 var errTest = errors.New("test error")
 
+func validatorResponseEntryToMap(entries []ValidatorResponseEntry) map[string]ValidatorResponseEntry {
+	m := make(map[string]ValidatorResponseEntry)
+	for _, entry := range entries {
+		m[entry.Validator.Pubkey] = entry
+	}
+	return m
+}
+
 type testBackend struct {
 	t               require.TestingT
 	beaconInstances []*MockBeaconInstance
@@ -70,8 +78,8 @@ func TestBeaconInstance(t *testing.T) {
 
 	vals, err := bc.GetStateValidators("1")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(vals))
-	require.Contains(t, vals, types.PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"))
+	require.Equal(t, 1, len(vals.Data))
+	require.Contains(t, validatorResponseEntryToMap(vals.Data), "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")
 }
 
 func TestGetSyncStatus(t *testing.T) {
@@ -181,18 +189,19 @@ func TestFetchValidators(t *testing.T) {
 
 		validators, err := backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
-		require.Equal(t, 1, len(validators))
-		require.Contains(t, validators, types.PubkeyHex(testPubKey))
+		require.Equal(t, 1, len(validators.Data))
+		require.Contains(t, validatorResponseEntryToMap(validators.Data), testPubKey)
 
+		// only beacon 2 should have a validator, and should be used by default
 		backend.beaconInstances[0].MockFetchValidatorsErr = nil
 		backend.beaconInstances[1].SetValidators(make(map[types.PubkeyHex]ValidatorResponseEntry))
 		backend.beaconInstances[2].MockFetchValidatorsErr = nil
 		backend.beaconInstances[2].AddValidator(entry)
 
-		t.Log(backend.beaconInstances[1].NumValidators())
+		// t.Log("beacon0/1/2 validators:", backend.beaconInstances[0].NumValidators(), backend.beaconInstances[1].NumValidators(), backend.beaconInstances[2].NumValidators())
 		validators, err = backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
-		require.Equal(t, 0, len(validators))
+		require.Equal(t, 1, len(validators.Data))
 	})
 }
 

@@ -230,42 +230,42 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	return r.client.Expire(context.Background(), key, expiration).Err()
 }
 
-func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, error) {
-	validators := make(map[uint64]boostTypes.PubkeyHex)
-	entries, err := r.readonlyClient.HGetAll(context.Background(), r.keyKnownValidators).Result()
-	if err != nil {
-		return nil, err
-	}
-	for proposerIndexStr, pubkey := range entries {
-		if strings.HasPrefix(proposerIndexStr, "0x") {
-			// remove -- it's an artifact of the previous storage by pubkey
-			r.client.HDel(context.Background(), r.keyKnownValidators, proposerIndexStr)
-			continue
-		}
-		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
-		if err == nil {
-			validators[proposerIndex] = boostTypes.PubkeyHex(pubkey)
-		}
-	}
-	return validators, nil
-}
+// func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, error) {
+// 	validators := make(map[uint64]boostTypes.PubkeyHex)
+// 	entries, err := r.readonlyClient.HGetAll(context.Background(), r.keyKnownValidators).Result()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	for proposerIndexStr, pubkey := range entries {
+// 		if strings.HasPrefix(proposerIndexStr, "0x") {
+// 			// remove -- it's an artifact of the previous storage by pubkey
+// 			r.client.HDel(context.Background(), r.keyKnownValidators, proposerIndexStr)
+// 			continue
+// 		}
+// 		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
+// 		if err == nil {
+// 			validators[proposerIndex] = boostTypes.PubkeyHex(pubkey)
+// 		}
+// 	}
+// 	return validators, nil
+// }
 
-func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.PubkeyHex) error {
-	values := []string{}
-	for proposerIndex, publickeyHex := range indexPkMap {
-		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
-	}
+// func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.PubkeyHex) error {
+// 	values := []string{}
+// 	for proposerIndex, publickeyHex := range indexPkMap {
+// 		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
+// 	}
 
-	if len(values) == 0 {
-		return nil
-	}
+// 	if len(values) == 0 {
+// 		return nil
+// 	}
 
-	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
-}
+// 	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
+// }
 
-func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
-	return r.SetMultiKnownValidator(map[uint64]boostTypes.PubkeyHex{proposerIndex: pubkeyHex})
-}
+// func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
+// 	return r.SetMultiKnownValidator(map[uint64]boostTypes.PubkeyHex{proposerIndex: pubkeyHex})
+// }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
 	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
