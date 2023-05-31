@@ -78,8 +78,8 @@ var (
 	pathInternalBuilderCollateral = "/internal/v1/builder/collateral/{pubkey:0x[a-fA-F0-9]+}"
 
 	// number of goroutines to save active validator
-	numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
-	numValidatorRegProcessors    = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
+	// numActiveValidatorProcessors = cli.GetEnvInt("NUM_ACTIVE_VALIDATOR_PROCESSORS", 10)
+	numValidatorRegProcessors = cli.GetEnvInt("NUM_VALIDATOR_REG_PROCESSORS", 10)
 
 	// various timings
 	timeoutGetPayloadRetryMs  = cli.GetEnvInt("GETPAYLOAD_RETRY_TIMEOUT_MS", 100)
@@ -182,8 +182,8 @@ type RelayAPI struct {
 
 	blockSimRateLimiter IBlockSimRateLimiter
 
-	activeValidatorC chan boostTypes.PubkeyHex
-	validatorRegC    chan boostTypes.SignedValidatorRegistration
+	// activeValidatorC chan boostTypes.PubkeyHex
+	validatorRegC chan boostTypes.SignedValidatorRegistration
 
 	// used to wait on any active getPayload calls on shutdown
 	getPayloadCallsInFlight sync.WaitGroup
@@ -272,8 +272,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		proposerDutiesResponse: &[]byte{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
-		activeValidatorC: make(chan boostTypes.PubkeyHex, 450_000),
-		validatorRegC:    make(chan boostTypes.SignedValidatorRegistration, 450_000),
+		// activeValidatorC: make(chan boostTypes.PubkeyHex, 450_000),
+		validatorRegC: make(chan boostTypes.SignedValidatorRegistration, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -430,10 +430,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		go api.startKnownValidatorUpdates()
 
 		// Start the worker pool to process active validators
-		api.log.Infof("starting %d active validator processors", numActiveValidatorProcessors)
-		for i := 0; i < numActiveValidatorProcessors; i++ {
-			go api.startActiveValidatorProcessor()
-		}
+		// api.log.Infof("starting %d active validator processors", numActiveValidatorProcessors)
+		// for i := 0; i < numActiveValidatorProcessors; i++ {
+		// 	go api.startActiveValidatorProcessor()
+		// }
 
 		// Start the validator registration db-save processor
 		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
@@ -507,14 +507,14 @@ func (api *RelayAPI) StopServer() (err error) {
 }
 
 // startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
-func (api *RelayAPI) startActiveValidatorProcessor() {
-	for pubkey := range api.activeValidatorC {
-		err := api.redis.SetActiveValidator(pubkey)
-		if err != nil {
-			api.log.WithError(err).Infof("error setting active validator")
-		}
-	}
-}
+// func (api *RelayAPI) startActiveValidatorProcessor() {
+// 	for pubkey := range api.activeValidatorC {
+// 		err := api.redis.SetActiveValidator(pubkey)
+// 		if err != nil {
+// 			api.log.WithError(err).Infof("error setting active validator")
+// 		}
+// 	}
+// }
 
 // startActiveValidatorProcessor keeps listening on the channel and saving active validators to redis
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
@@ -1009,12 +1009,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Keep track of active validators
-		numRegActive += 1
-		select {
-		case api.activeValidatorC <- pkHex:
-		default:
-			regLog.Error("active validator channel full")
-		}
+		// numRegActive += 1
+		// select {
+		// case api.activeValidatorC <- pkHex:
+		// default:
+		// 	regLog.Error("active validator channel full")
+		// }
 
 		// Check for a previous registration timestamp
 		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)

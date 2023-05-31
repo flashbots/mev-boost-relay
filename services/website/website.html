@@ -186,19 +186,15 @@
 
                     <table class="pure-table pure-table-horizontal">
                         <tbody>
-                            <tr title="Currently active or pending validators on Ethereum PoS.">
+                            <tr title="Currently active or pending validators on Ethereum PoS">
                                 <td>Validators total</td>
                                 <td>{{ .ValidatorsTotal | prettyInt }}</td>
                             </tr>
-                            <!-- <tr title="Validators who have sent a registration at least once. ">
+                            <tr title="Validators who have sent a registration at least once">
                                 <td>Validators registered</td>
                                 <td>{{ .ValidatorsRegistered| prettyInt }}</td>
-                            </tr> -->
-                            <tr title="Validators who sent a registration in the last 3 hours.">
-                                <td>Validators connected</td>
-                                <td>{{ .ValidatorsActive| prettyInt }}</td>
                             </tr>
-                            <tr>
+                            <tr title="Last slot delivered through this relay">
                                 <td>Latest slot</td>
                                 <td>{{ .HeadSlot| prettyInt }}</td>
                             </tr>

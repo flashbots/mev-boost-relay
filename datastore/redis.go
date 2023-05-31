@@ -29,8 +29,8 @@ var (
 	ErrAnotherPayloadAlreadyDeliveredForSlot = errors.New("another payload block hash for slot was already delivered")
 	ErrPastSlotAlreadyDelivered              = errors.New("payload for past slot was already delivered")
 
-	activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
-	expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
+	// activeValidatorsHours  = cli.GetEnvInt("ACTIVE_VALIDATOR_HOURS", 3)
+	// expiryActiveValidators = time.Duration(activeValidatorsHours) * time.Hour // careful with this setting - for each hour a hash set is created with each active proposer as field. for a lot of hours this can take a lot of space in redis.
 
 	// Docs about redis settings: https://redis.io/docs/reference/clients/
 	redisConnectionPoolSize = cli.GetEnvInt("REDIS_CONNECTION_POOL_SIZE", 0) // 0 means use default (10 per CPU)
@@ -162,9 +162,9 @@ func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash str
 }
 
 // keyActiveValidators returns the key for the date + hour of the given time
-func (r *RedisCache) keyActiveValidators(t time.Time) string {
-	return fmt.Sprintf("%s:%s", r.prefixActiveValidators, t.UTC().Format("2006-01-02T15"))
-}
+// func (r *RedisCache) keyActiveValidators(t time.Time) string {
+// 	return fmt.Sprintf("%s:%s", r.prefixActiveValidators, t.UTC().Format("2006-01-02T15"))
+// }
 
 // keyLatestBidByBuilder returns the key for the getHeader response the latest bid by a specific builder
 func (r *RedisCache) keyLatestBidByBuilder(slot uint64, parentHash, proposerPubkey, builderPubkey string) string {
@@ -298,34 +298,34 @@ func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey boostTypes
 	return r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, proposerPubkey.String(), timestamp).Err()
 }
 
-func (r *RedisCache) SetActiveValidator(pubkeyHex boostTypes.PubkeyHex) error {
-	key := r.keyActiveValidators(time.Now())
-	err := r.client.HSet(context.Background(), key, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
-	if err != nil {
-		return err
-	}
+// func (r *RedisCache) SetActiveValidator(pubkeyHex boostTypes.PubkeyHex) error {
+// 	key := r.keyActiveValidators(time.Now())
+// 	err := r.client.HSet(context.Background(), key, PubkeyHexToLowerStr(pubkeyHex), "1").Err()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// set expiry
-	return r.client.Expire(context.Background(), key, expiryActiveValidators).Err()
-}
+// 	// set expiry
+// 	return r.client.Expire(context.Background(), key, expiryActiveValidators).Err()
+// }
 
-func (r *RedisCache) GetActiveValidators() (map[boostTypes.PubkeyHex]bool, error) {
-	hours := activeValidatorsHours
-	now := time.Now()
-	validators := make(map[boostTypes.PubkeyHex]bool)
-	for i := 0; i < hours; i++ {
-		key := r.keyActiveValidators(now.Add(time.Duration(-i) * time.Hour))
-		entries, err := r.readonlyClient.HGetAll(context.Background(), key).Result()
-		if err != nil {
-			return nil, err
-		}
-		for pubkey := range entries {
-			validators[boostTypes.PubkeyHex(pubkey)] = true
-		}
-	}
+// func (r *RedisCache) GetActiveValidators() (map[boostTypes.PubkeyHex]bool, error) {
+// 	hours := activeValidatorsHours
+// 	now := time.Now()
+// 	validators := make(map[boostTypes.PubkeyHex]bool)
+// 	for i := 0; i < hours; i++ {
+// 		key := r.keyActiveValidators(now.Add(time.Duration(-i) * time.Hour))
+// 		entries, err := r.readonlyClient.HGetAll(context.Background(), key).Result()
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		for pubkey := range entries {
+// 			validators[boostTypes.PubkeyHex(pubkey)] = true
+// 		}
+// 	}
 
-	return validators, nil
-}
+// 	return validators, nil
+// }
 
 func (r *RedisCache) CheckAndSetLastSlotAndHashDelivered(slot uint64, hash string) (err error) {
 	// More details about Redis optimistic locking:
