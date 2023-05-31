@@ -713,7 +713,7 @@ func (r *RedisCache) GetFloorBidValue(ctx context.Context, tx redis.Pipeliner, s
 	return floorValue, nil
 }
 
-func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn
+func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.Pipeline()
 }
 
