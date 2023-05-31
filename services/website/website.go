@@ -94,7 +94,6 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 	server.statusHTMLData = StatusHTMLData{
 		Network:                     opts.NetworkDetails.Name,
 		RelayPubkey:                 opts.RelayPubkeyHex,
-		ValidatorsActive:            0,
 		ValidatorsTotal:             0,
 		ValidatorsRegistered:        0,
 		BellatrixForkVersion:        opts.NetworkDetails.BellatrixForkVersionHex,
@@ -166,11 +165,6 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	_activeVals, err := srv.redis.GetActiveValidators()
-	if err != nil {
-		srv.log.WithError(err).Error("error getting active validators in updateStatusHTMLData")
-	}
-
 	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")
@@ -208,7 +202,6 @@ func (srv *Webserver) updateHTML() {
 
 	srv.statusHTMLData.ValidatorsTotal = _validatorsTotalInt
 	srv.statusHTMLData.ValidatorsRegistered = _numRegistered
-	srv.statusHTMLData.ValidatorsActive = uint64(len(_activeVals))
 	srv.statusHTMLData.NumPayloadsDelivered = _numPayloadsDelivered
 	srv.statusHTMLData.HeadSlot = _latestSlotInt
 

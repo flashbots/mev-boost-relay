@@ -24,7 +24,6 @@ type StatusHTMLData struct { //nolint:musttag
 	RelayPubkey                 string
 	ValidatorsTotal             uint64
 	ValidatorsRegistered        uint64
-	ValidatorsActive            uint64
 	BellatrixForkVersion        string
 	CapellaForkVersion          string
 	GenesisForkVersion          string
