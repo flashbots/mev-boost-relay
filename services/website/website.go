@@ -165,11 +165,6 @@ func (srv *Webserver) updateHTML() {
 		srv.log.WithError(err).Error("error getting number of registered validators in updateStatusHTMLData")
 	}
 
-	// _activeVals, err := srv.redis.GetActiveValidators()
-	// if err != nil {
-	// 	srv.log.WithError(err).Error("error getting active validators in updateStatusHTMLData")
-	// }
-
 	payloads, err := srv.db.GetRecentDeliveredPayloads(database.GetPayloadsFilters{Limit: 30})
 	if err != nil {
 		srv.log.WithError(err).Error("error getting recent payloads")

@@ -187,18 +187,6 @@ func TestRedisProposerDuties(t *testing.T) {
 	require.Equal(t, duties[0].Entry.Message.FeeRecipient, duties2[0].Entry.Message.FeeRecipient)
 }
 
-// func TestActiveValidators(t *testing.T) {
-// 	pk1 := types.NewPubkeyHex("0x8016d3229030424cfeff6c5b813970ea193f8d012cfa767270ca9057d58eddc556e96c14544bf4c038dbed5f24aa8da0")
-// 	cache := setupTestRedis(t)
-// 	err := cache.SetActiveValidator(pk1)
-// 	require.NoError(t, err)
-
-// 	vals, err := cache.GetActiveValidators()
-// 	require.NoError(t, err)
-// 	require.Equal(t, 1, len(vals))
-// 	require.True(t, vals[pk1])
-// }
-
 func TestBuilderBids(t *testing.T) {
 	slot := uint64(2)
 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
