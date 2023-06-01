@@ -778,21 +778,6 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 	api.blockBuildersCache = newCache
 }
 
-// func (api *RelayAPI) startKnownValidatorUpdates() {
-// 	for {
-// 		// Refresh known validators
-// 		cnt, err := api.datastore.RefreshKnownValidators()
-// 		if err != nil {
-// 			api.log.WithError(err).Error("error getting known validators")
-// 		} else {
-// 			api.log.WithField("cnt", cnt).Info("updated known validators")
-// 		}
-
-// 		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
-// 		time.Sleep(common.DurationPerEpoch / 2)
-// 	}
-// }
-
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
 	api.Respond(w, code, HTTPErrorResp{code, message})
 }
