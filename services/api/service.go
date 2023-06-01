@@ -1523,6 +1523,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	prevTime = nextTime
 
 	log = log.WithFields(logrus.Fields{
+		"payloadBytes":           len(requestPayloadBytes),
 		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
 		"slot":                   payload.Slot(),
 		"builderPubkey":          payload.BuilderPubkey().String(),
