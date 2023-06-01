@@ -77,6 +77,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 
 	// Prepare headers
 	headers := http.Header{}
+	headers.Add("X-Request-Slot", fmt.Sprint(payload.Slot()))
 	headers.Add("X-Request-ID", fmt.Sprintf("%d/%s", payload.Slot(), payload.BlockHash()))
 	if isHighPrio {
 		headers.Add("X-High-Priority", "true")
