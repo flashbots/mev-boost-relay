@@ -1565,10 +1565,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			collateral: big.NewInt(0),
 		}
 	}
-	log = log.WithFields(logrus.Fields{
-		"builderEntry":      builderEntry,
-		"builderIsHighPrio": builderEntry.status.IsHighPrio,
-	})
+	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
 
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
@@ -1889,8 +1886,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
 	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
 
-	// All done
-	log.Info("received block from builder")
+	// All done, log with profiling information
+	log.WithFields(logrus.Fields{
+		"profileDecodeUs":    pf.Decode,
+		"profilePrechecksUs": pf.Prechecks,
+		"profileSimUs":       pf.Simulation,
+		"profileRedisUs":     pf.RedisUpdate,
+		"profileTotalUs":     pf.Total,
+	}).Info("received block from builder")
 	w.WriteHeader(http.StatusOK)
 }
 
