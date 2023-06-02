@@ -3,17 +3,21 @@ package datastore
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/attestantio/go-builder-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	uberatomic "go.uber.org/atomic"
 )
 
 type GetHeaderResponseKey struct {
@@ -36,9 +40,11 @@ type Datastore struct {
 	memcached *Memcached
 	db        database.IDatabaseService
 
-	knownValidatorsByPubkey map[types.PubkeyHex]uint64
-	knownValidatorsByIndex  map[uint64]types.PubkeyHex
-	knownValidatorsLock     sync.RWMutex
+	knownValidatorsByPubkey   map[types.PubkeyHex]uint64
+	knownValidatorsByIndex    map[uint64]types.PubkeyHex
+	knownValidatorsLock       sync.RWMutex
+	knownValidatorsIsUpdating uberatomic.Bool
+	knownValidatorsLastSlot   uberatomic.Uint64
 }
 
 func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
@@ -54,23 +60,89 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcache
 	return ds, err
 }
 
-// RefreshKnownValidators loads known validators from Redis into memory
-func (ds *Datastore) RefreshKnownValidators() (cnt int, err error) {
-	knownValidatorsByIndex, err := ds.redis.GetKnownValidators()
-	if err != nil {
-		return 0, err
+// RefreshKnownValidators loads known validators from CL client into memory
+//
+// For the CL client this is an expensive operation and takes a bunch of resources.
+// This is why we schedule the requests for slot 4 and 20 of every epoch, 6 seconds
+// into the slot (on suggestion of @potuz). It's also run once at startup.
+func (ds *Datastore) RefreshKnownValidators(beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
+	// Ensure there's only one at a time
+	if isAlreadyUpdating := ds.knownValidatorsIsUpdating.Swap(true); isAlreadyUpdating {
+		return
+	}
+	defer ds.knownValidatorsIsUpdating.Store(false)
+
+	headSlotPos := common.SlotPos(slot) // 1-based position in epoch (32 slots, 1..32)
+	lastUpdateSlot := ds.knownValidatorsLastSlot.Load()
+	log := ds.log.WithFields(logrus.Fields{
+		"method":         "RefreshKnownValidators",
+		"headSlot":       slot,
+		"headSlotPos":    headSlotPos,
+		"lastUpdateSlot": lastUpdateSlot,
+	})
+
+	// Only proceed if slot newer than last updated
+	if slot <= lastUpdateSlot {
+		return
 	}
 
+	// 	// Minimum amount of slots between updates
+	slotsSinceLastUpdate := slot - lastUpdateSlot
+	if slotsSinceLastUpdate < 6 {
+		return
+	}
+
+	log.Debug("RefreshKnownValidators init")
+
+	// Proceed only if forced, or on slot-position 4 or 20
+	forceUpdate := slotsSinceLastUpdate > 32
+	if !forceUpdate && headSlotPos != 4 && headSlotPos != 20 {
+		return
+	}
+
+	// Wait for 6s into the slot
+	if lastUpdateSlot > 0 {
+		time.Sleep(6 * time.Second)
+	}
+
+	log.Info("Querying validators from beacon node... (this may take a while)")
+	timeStartFetching := time.Now()
+	validators, err := beaconClient.GetStateValidators(beaconclient.StateIDHead) // head is fastest
+	if err != nil {
+		log.WithError(err).Error("failed to fetch validators from all beacon nodes")
+		return
+	}
+
+	numValidators := len(validators.Data)
+	log = log.WithFields(logrus.Fields{
+		"numKnownValidators":        numValidators,
+		"durationFetchValidatorsMs": time.Since(timeStartFetching).Milliseconds(),
+	})
+	log.Infof("received known validators from beacon-node")
+
+	err = ds.redis.SetStats(RedisStatsFieldValidatorsTotal, fmt.Sprint(numValidators))
+	if err != nil {
+		log.WithError(err).Error("failed to set stats for RedisStatsFieldValidatorsTotal")
+	}
+
+	// At this point, consider the update successful
+	ds.knownValidatorsLastSlot.Store(slot)
+
 	knownValidatorsByPubkey := make(map[types.PubkeyHex]uint64)
-	for index, pubkey := range knownValidatorsByIndex {
-		knownValidatorsByPubkey[pubkey] = index
+	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
+
+	for _, valEntry := range validators.Data {
+		pk := types.NewPubkeyHex(valEntry.Validator.Pubkey)
+		knownValidatorsByPubkey[pk] = valEntry.Index
+		knownValidatorsByIndex[valEntry.Index] = pk
 	}
 
 	ds.knownValidatorsLock.Lock()
-	defer ds.knownValidatorsLock.Unlock()
 	ds.knownValidatorsByPubkey = knownValidatorsByPubkey
 	ds.knownValidatorsByIndex = knownValidatorsByIndex
-	return len(knownValidatorsByIndex), nil
+	ds.knownValidatorsLock.Unlock()
+
+	log.Infof("known validators updated")
 }
 
 func (ds *Datastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {

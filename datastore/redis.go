@@ -84,7 +84,6 @@ type RedisCache struct {
 	prefixGetHeaderResponse           string
 	prefixGetPayloadResponse          string
 	prefixBidTrace                    string
-	prefixActiveValidators            string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
 	prefixBlockBuilderLatestBidsTime  string // when the request was received, to avoid older requests overwriting newer ones after a slot validation
@@ -93,7 +92,6 @@ type RedisCache struct {
 	prefixFloorBidValue               string
 
 	// keys
-	keyKnownValidators                string
 	keyValidatorRegistrationTimestamp string
 
 	keyRelayConfig        string
@@ -125,7 +123,6 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
 		prefixBidTrace:           fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
-		prefixActiveValidators:   fmt.Sprintf("%s/%s:active-validators", redisPrefix, prefix), // one entry per hour
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
 		prefixBlockBuilderLatestBidsValue: fmt.Sprintf("%s/%s:block-builder-latest-bid-value", redisPrefix, prefix), // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -134,7 +131,6 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixFloorBid:                    fmt.Sprintf("%s/%s:bid-floor", redisPrefix, prefix),                      // prefix:slot_parentHash_proposerPubkey
 		prefixFloorBidValue:               fmt.Sprintf("%s/%s:bid-floor-value", redisPrefix, prefix),                // prefix:slot_parentHash_proposerPubkey
 
-		keyKnownValidators:                fmt.Sprintf("%s/%s:known-validators", redisPrefix, prefix),
 		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
 		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
@@ -228,43 +224,6 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	}
 
 	return r.client.Expire(context.Background(), key, expiration).Err()
-}
-
-func (r *RedisCache) GetKnownValidators() (map[uint64]boostTypes.PubkeyHex, error) {
-	validators := make(map[uint64]boostTypes.PubkeyHex)
-	entries, err := r.readonlyClient.HGetAll(context.Background(), r.keyKnownValidators).Result()
-	if err != nil {
-		return nil, err
-	}
-	for proposerIndexStr, pubkey := range entries {
-		if strings.HasPrefix(proposerIndexStr, "0x") {
-			// remove -- it's an artifact of the previous storage by pubkey
-			r.client.HDel(context.Background(), r.keyKnownValidators, proposerIndexStr)
-			continue
-		}
-		proposerIndex, err := strconv.ParseUint(proposerIndexStr, 10, 64)
-		if err == nil {
-			validators[proposerIndex] = boostTypes.PubkeyHex(pubkey)
-		}
-	}
-	return validators, nil
-}
-
-func (r *RedisCache) SetMultiKnownValidator(indexPkMap map[uint64]boostTypes.PubkeyHex) error {
-	values := []string{}
-	for proposerIndex, publickeyHex := range indexPkMap {
-		values = append(values, strconv.FormatUint(proposerIndex, 10), PubkeyHexToLowerStr(publickeyHex))
-	}
-
-	if len(values) == 0 {
-		return nil
-	}
-
-	return r.client.HMSet(context.Background(), r.keyKnownValidators, values).Err()
-}
-
-func (r *RedisCache) SetKnownValidator(pubkeyHex boostTypes.PubkeyHex, proposerIndex uint64) error {
-	return r.SetMultiKnownValidator(map[uint64]boostTypes.PubkeyHex{proposerIndex: pubkeyHex})
 }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
@@ -713,7 +672,7 @@ func (r *RedisCache) GetFloorBidValue(ctx context.Context, tx redis.Pipeliner, s
 	return floorValue, nil
 }
 
-func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn
+func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.Pipeline()
 }
 

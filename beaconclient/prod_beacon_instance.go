@@ -135,20 +135,11 @@ type ValidatorResponseValidatorData struct {
 
 // GetStateValidators loads all active and pending validators
 // https://ethereum.github.io/beacon-APIs/#/Beacon/getStateValidators
-func (c *ProdBeaconInstance) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+func (c *ProdBeaconInstance) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%s/validators?status=active,pending", c.beaconURI, stateID)
 	vd := new(GetStateValidatorsResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, vd, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	newValidatorSet := make(map[types.PubkeyHex]ValidatorResponseEntry)
-	for _, vs := range vd.Data {
-		newValidatorSet[types.NewPubkeyHex(vs.Validator.Pubkey)] = vs
-	}
-
-	return newValidatorSet, nil
+	return vd, err
 }
 
 // SyncStatusPayload is the response payload for /eth/v1/node/syncing

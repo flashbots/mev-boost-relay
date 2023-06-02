@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -29,7 +28,7 @@ type IMultiBeaconClient interface {
 	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent)
 
 	// GetStateValidators returns all active and pending validators from the beacon node
-	GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error)
+	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
@@ -46,7 +45,7 @@ type IBeaconInstance interface {
 	CurrentSlot() (uint64, error)
 	SubscribeToHeadEvents(slotC chan HeadEventData)
 	SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent)
-	GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error)
+	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
 	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
@@ -150,11 +149,9 @@ func (c *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan Payloa
 	}
 }
 
-func (c *MultiBeaconClient) GetStateValidators(stateID string) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
-	// return the first successful beacon node response
-	clients := c.beaconInstancesByLastResponse()
-
-	for i, client := range clients {
+// GetStateValidators returns all known validators, and queries the beacon nodes in reverse order (because it is a heavy request for the CL client)
+func (c *MultiBeaconClient) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
+	for i, client := range c.beaconInstancesByLeastUsed() {
 		log := c.log.WithField("uri", client.GetURI())
 		log.Debug("fetching validators")
 
@@ -209,6 +206,17 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 	copy(instances, c.beaconInstances)
 	instances[0], instances[index] = instances[index], instances[0]
 
+	return instances
+}
+
+// beaconInstancesByLastResponse returns a list of beacon clients that has the client
+// with the last successful response as the first element of the slice
+func (c *MultiBeaconClient) beaconInstancesByLeastUsed() []IBeaconInstance {
+	beaconInstances := c.beaconInstancesByLastResponse()
+	instances := make([]IBeaconInstance, len(c.beaconInstances))
+	for i := 0; i < len(beaconInstances); i++ {
+		instances[i] = beaconInstances[len(beaconInstances)-i-1]
+	}
 	return instances
 }
 

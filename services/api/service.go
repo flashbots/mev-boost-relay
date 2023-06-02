@@ -423,9 +423,6 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// start things specific for the proposer API
 	if api.opts.ProposerAPI {
-		// Update list of known validators, and start refresh loop
-		go api.startKnownValidatorUpdates()
-
 		// Start the validator registration db-save processor
 		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
 		for i := 0; i < numValidatorRegProcessors; i++ {
@@ -684,6 +681,10 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		go api.prepareBuildersForSlot(headSlot)
 	}
 
+	if api.opts.ProposerAPI {
+		go api.datastore.RefreshKnownValidators(api.beaconClient, headSlot)
+	}
+
 	// log
 	epoch := headSlot / common.SlotsPerEpoch
 	api.log.WithFields(logrus.Fields{
@@ -775,21 +776,6 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 		newCache[v.BuilderPubkey] = entry
 	}
 	api.blockBuildersCache = newCache
-}
-
-func (api *RelayAPI) startKnownValidatorUpdates() {
-	for {
-		// Refresh known validators
-		cnt, err := api.datastore.RefreshKnownValidators()
-		if err != nil {
-			api.log.WithError(err).Error("error getting known validators")
-		} else {
-			api.log.WithField("cnt", cnt).Info("updated known validators")
-		}
-
-		// Wait for one epoch (at the beginning, because initially the validators have already been queried)
-		time.Sleep(common.DurationPerEpoch / 2)
-	}
 }
 
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
