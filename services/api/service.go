@@ -1669,8 +1669,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	// Create the redis pipeline tx
+	tx := api.redis.NewTxPipeline()
+
 	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
-	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered()
+	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered(context.Background(), tx)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if payload.Slot() <= slotLastPayloadDelivered {
@@ -1711,7 +1714,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}()
 
 	// Grab floor bid value
-	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), api.redis.NewPipeline(), payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
@@ -1726,7 +1729,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if isCancellationEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
 		simResultC <- &blockSimResult{false, false, nil, nil}
 		log.Info("submission below floor bid value, with cancellation")
-		err := api.redis.DelBuilderBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
+		err := api.redis.DelBuilderBid(context.Background(), tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
 		if err != nil {
 			log.WithError(err).Error("failed processing cancellable bid below floor")
 			api.RespondError(w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
@@ -1747,7 +1750,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Get the latest top bid value from Redis
 	bidIsTopBid := false
-	topBidValue, err := api.redis.GetTopBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	topBidValue, err := api.redis.GetTopBidValue(context.Background(), tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		log.WithError(err).Error("failed to get top bid value from redis")
 	} else {
@@ -1826,7 +1829,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// latency will make it impossible to predict which arrives first. Thus a high bid could unintentionally be overwritten by a low bid that happened
 		// to arrive a few microseconds later. If builders are submitting blocks at a frequency where they cannot reliably predict which bid will arrive at
 		// the relay first, they should instead use multiple pubkeys to avoid uninitentionally overwriting their own bids.
-		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
+		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(context.Background(), tx, payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
 		if err != nil {
 			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
 		} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
@@ -1860,7 +1863,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	//
 	// Save to Redis
 	//
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), &bidTrace, payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), tx, &bidTrace, payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
