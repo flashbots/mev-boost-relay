@@ -209,8 +209,9 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 	return instances
 }
 
-// beaconInstancesByLastResponse returns a list of beacon clients that has the client
-// with the last successful response as the first element of the slice
+// beaconInstancesByLeastUsed returns a list of beacon clients that has the client
+// with the last successful response as the last element of the slice (used only by
+// GetStateValidators, because it's a heavy call on the CL)
 func (c *MultiBeaconClient) beaconInstancesByLeastUsed() []IBeaconInstance {
 	beaconInstances := c.beaconInstancesByLastResponse()
 	instances := make([]IBeaconInstance, len(c.beaconInstances))

@@ -1679,11 +1679,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	var eligibleAt time.Time
-	// Used to communicate simulation result to the deferred function
-	simResultC := make(chan *blockSimResult, 1)
+	// -------------------------------------------------------------------
+	// SUBMISSION SIGNATURE IS VALIDATED AND BID IS GENERALLY LOOKING GOOD
+	// -------------------------------------------------------------------
 
-	// Save the builder submission to the database whenever this function ends
+	// channel to send simulation result to the deferred function
+	simResultC := make(chan *blockSimResult, 1)
+	var eligibleAt time.Time // will be set once the bid is ready
+
+	// Deferred saving of the builder submission to database (whenever this function ends)
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
 		var simResult *blockSimResult
@@ -1714,7 +1718,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log = log.WithField("floorBidValue", floorBidValue.String())
 	}
 
-	// Check if submission can be skipped (if it's below the floor bid value)
+	// --------------------------------------------
+	// Skip submission if below the floor bid value
+	// --------------------------------------------
 	isBidBelowFloor := floorBidValue != nil && payload.Value().Cmp(floorBidValue) == -1
 	isBidAtOrBelowFloor := floorBidValue != nil && payload.Value().Cmp(floorBidValue) < 1
 	if isCancellationEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
@@ -1734,6 +1740,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondMsg(w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return
 	}
+
+	// ---------------------------------
+	// THE BID WILL BE SIMULATED SHORTLY
+	// ---------------------------------
 
 	// Get the latest top bid value from Redis
 	bidIsTopBid := false
@@ -1761,7 +1771,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
 
-	// Construct simulation request.
+	// Construct simulation request
 	opts := blockSimOptions{
 		isHighPrio: builderEntry.status.IsHighPrio,
 		fastTrack:  fastTrackValidation,
