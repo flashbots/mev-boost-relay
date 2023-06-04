@@ -433,13 +433,21 @@ type SaveBidAndUpdateTopBidResponse struct {
 
 	TopBidValue     *big.Int
 	PrevTopBidValue *big.Int
+
+	TimePrep         time.Duration
+	TimeSavePayload  time.Duration
+	TimeSaveBid      time.Duration
+	TimeSaveTrace    time.Duration
+	TimeUpdateTopBid time.Duration
+	TimeUpdateFloor  time.Duration
 }
 
 func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeliner, trace *common.BidTraceV2, payload *common.BuilderSubmitBlockRequest, getPayloadResponse *common.GetPayloadResponse, getHeaderResponse *common.GetHeaderResponse, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
-	var builderBids *BuilderBids
+	var prevTime, nextTime time.Time
+	prevTime = time.Now()
 
 	// Load latest bids for a given slot+parent+proposer
-	builderBids, err = NewBuilderBidsFromRedis(ctx, r, tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	builderBids, err := NewBuilderBidsFromRedis(ctx, r, tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
 	if err != nil {
 		return state, err
 	}
@@ -465,6 +473,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 		return state, nil
 	}
 
+	// Record time needed
+	nextTime = time.Now().UTC()
+	state.TimePrep = nextTime.Sub(prevTime)
+	prevTime = nextTime
+
 	//
 	// Time to save things in Redis
 	//
@@ -474,6 +487,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 		return state, err
 	}
 
+	// Record time needed to save payload
+	nextTime = time.Now().UTC()
+	state.TimeSavePayload = nextTime.Sub(prevTime)
+	prevTime = nextTime
+
 	// 2. Save latest bid for this builder
 	err = r.SaveBuilderBid(ctx, tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
@@ -482,11 +500,21 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 	state.WasBidSaved = true
 	builderBids.bidValues[payload.BuilderPubkey().String()] = payload.Value()
 
+	// Record time needed to save bid
+	nextTime = time.Now().UTC()
+	state.TimeSaveBid = nextTime.Sub(prevTime)
+	prevTime = nextTime
+
 	// 3. Save the bid trace
 	err = r.SaveBidTrace(ctx, tx, trace)
 	if err != nil {
 		return state, err
 	}
+
+	// Record time needed to save trace
+	nextTime = time.Now().UTC()
+	state.TimeSaveTrace = nextTime.Sub(prevTime)
+	prevTime = nextTime
 
 	// If top bid value hasn't change, abort now
 	_, state.TopBidValue = builderBids.getTopBid()
@@ -499,6 +527,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 		return state, err
 	}
 	state.IsNewTopBid = payload.Value().Cmp(state.TopBidValue) == 0
+
+	// Record time needed to update top bid
+	nextTime = time.Now().UTC()
+	state.TimeUpdateTopBid = nextTime.Sub(prevTime)
+	prevTime = nextTime
 
 	if isCancellationEnabled || !isBidAboveFloor {
 		return state, nil
@@ -530,7 +563,13 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 		return state, err
 	}
 
+	// Execute setting the floor bid
 	_, err = tx.Exec(ctx)
+
+	// Record time needed to update floor
+	nextTime = time.Now().UTC()
+	state.TimeUpdateFloor = nextTime.Sub(prevTime)
+
 	return state, err
 }
 

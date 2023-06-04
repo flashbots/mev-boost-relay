@@ -1872,11 +1872,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Add fields to logs
 	log = log.WithFields(logrus.Fields{
-		"wasBidSavedInRedis":      updateBidResult.WasBidSaved,
-		"wasTopBidUpdated":        updateBidResult.WasTopBidUpdated,
-		"topBidValue":             updateBidResult.TopBidValue,
-		"prevTopBidValue":         updateBidResult.PrevTopBidValue,
-		"timestampAfterBidUpdate": time.Now().UTC().UnixMilli(),
+		"timestampAfterBidUpdate":    time.Now().UTC().UnixMilli(),
+		"wasBidSavedInRedis":         updateBidResult.WasBidSaved,
+		"wasTopBidUpdated":           updateBidResult.WasTopBidUpdated,
+		"topBidValue":                updateBidResult.TopBidValue,
+		"prevTopBidValue":            updateBidResult.PrevTopBidValue,
+		"profileRedisSavePayloadUs":  updateBidResult.TimeSavePayload.Microseconds(),
+		"profileRedisUpdateTopBidUs": updateBidResult.TimeUpdateTopBid.Microseconds(),
+		"profileRedisUpdateFloorUs":  updateBidResult.TimeUpdateFloor.Microseconds(),
 	})
 
 	if updateBidResult.WasBidSaved {
