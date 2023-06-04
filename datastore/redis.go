@@ -494,46 +494,42 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 		return state, nil
 	}
 
-	// _, err = tx.Exec(ctx)
-	// if err != nil {
-	// 	return state, err
-	// }
-
 	state, err = r._updateTopBid(ctx, tx, state, builderBids, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), floorValue)
 	if err != nil {
 		return state, err
 	}
 	state.IsNewTopBid = payload.Value().Cmp(state.TopBidValue) == 0
 
-	// Check if should set a new bid floor
-	if !isCancellationEnabled && isBidAboveFloor {
-		keyBidSource := r.keyLatestBidByBuilder(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
-		keyFloorBid := r.keyFloorBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-		c := tx.Copy(ctx, keyBidSource, keyFloorBid, 0, true)
-		_, err = tx.Exec(ctx)
-		if err != nil {
-			return state, err
-		}
-
-		wasCopied, copyErr := c.Result()
-		if copyErr != nil {
-			return state, copyErr
-		} else if wasCopied == 0 {
-			return state, fmt.Errorf("could not copy floor bid from %s to %s", keyBidSource, keyFloorBid) //nolint:goerr113
-		}
-		err = tx.Expire(ctx, keyFloorBid, expiryBidCache).Err()
-		if err != nil {
-			return state, err
-		}
-
-		keyFloorBidValue := r.keyFloorBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-		err = tx.Set(ctx, keyFloorBidValue, payload.Value().String(), expiryBidCache).Err()
-		if err != nil {
-			return state, err
-		}
+	if isCancellationEnabled || !isBidAboveFloor {
+		return state, nil
 	}
 
-	// Final execution
+	// Non-cancellable bid above floor should set new floor
+	keyBidSource := r.keyLatestBidByBuilder(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
+	keyFloorBid := r.keyFloorBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	c := tx.Copy(ctx, keyBidSource, keyFloorBid, 0, true)
+	_, err = tx.Exec(ctx)
+	if err != nil {
+		return state, err
+	}
+
+	wasCopied, copyErr := c.Result()
+	if copyErr != nil {
+		return state, copyErr
+	} else if wasCopied == 0 {
+		return state, fmt.Errorf("could not copy floor bid from %s to %s", keyBidSource, keyFloorBid) //nolint:goerr113
+	}
+	err = tx.Expire(ctx, keyFloorBid, expiryBidCache).Err()
+	if err != nil {
+		return state, err
+	}
+
+	keyFloorBidValue := r.keyFloorBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	err = tx.Set(ctx, keyFloorBidValue, payload.Value().String(), expiryBidCache).Err()
+	if err != nil {
+		return state, err
+	}
+
 	_, err = tx.Exec(ctx)
 	return state, err
 }
@@ -623,10 +619,9 @@ func (r *RedisCache) GetTopBidValue(ctx context.Context, tx redis.Pipeliner, slo
 func (r *RedisCache) GetBuilderLatestValue(slot uint64, parentHash, proposerPubkey, builderPubkey string) (topBidValue *big.Int, err error) {
 	keyLatestValue := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
 	topBidValueStr, err := r.client.HGet(context.Background(), keyLatestValue, builderPubkey).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return big.NewInt(0), nil
-		}
+	if errors.Is(err, redis.Nil) {
+		return big.NewInt(0), nil
+	} else if err != nil {
 		return nil, err
 	}
 	topBidValue = new(big.Int)
