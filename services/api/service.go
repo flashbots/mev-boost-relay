@@ -1663,8 +1663,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	signature := payload.Signature()
 	ok, err = boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
-	if !ok || err != nil {
-		log.WithError(err).Warn("could not verify builder signature")
+	if err != nil {
+		log.WithError(err).Warn("failed verifying builder signature")
+		api.RespondError(w, http.StatusBadRequest, "failed verifying builder signature")
+		return
+	} else if !ok {
+		log.Warn("invalid builder signature")
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
 		return
 	}
