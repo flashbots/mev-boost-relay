@@ -20,7 +20,7 @@ require (
 	github.com/lib/pq v1.10.8
 	github.com/pkg/errors v0.9.1
 	github.com/r3labs/sse/v2 v2.8.1
-	github.com/sirupsen/logrus v1.9.2
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify v2.3.6+incompatible
