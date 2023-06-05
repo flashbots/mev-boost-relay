@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,14 +12,18 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/go-redis/redis/v9"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
+
+var ErrExecutionPayloadNotFound = errors.New("execution payload not found")
 
 type GetHeaderResponseKey struct {
 	Slot           uint64
@@ -194,7 +199,9 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 
 	// 1. try to get from Redis
 	resp, err := ds.redis.GetExecutionPayloadCapella(slot, _proposerPubkey, _blockHash)
-	if err != nil {
+	if errors.Is(err, redis.Nil) {
+		ds.log.WithError(err).Warn("execution payload not found in redis")
+	} else if err != nil {
 		ds.log.WithError(err).Error("error getting execution payload from redis")
 	} else {
 		ds.log.Debug("getPayload response from redis")
@@ -204,7 +211,9 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	// 2. try to get from Memcached
 	if ds.memcached != nil {
 		resp, err = ds.memcached.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
-		if err != nil {
+		if errors.Is(err, memcache.ErrCacheMiss) {
+			ds.log.WithError(err).Warn("execution payload not found in memcached")
+		} else if err != nil {
 			ds.log.WithError(err).Error("error getting execution payload from memcached")
 		} else if resp != nil {
 			ds.log.Debug("getPayload response from memcached")
@@ -214,7 +223,10 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 
 	// 3. try to get from database (should not happen, it's just a backup)
 	executionPayloadEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
+		ds.log.WithError(err).Warn("execution payload not found in database")
+		return nil, ErrExecutionPayloadNotFound
+	} else if err != nil {
 		ds.log.WithError(err).Error("error getting execution payload from database")
 		return nil, err
 	}

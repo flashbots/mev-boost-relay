@@ -1212,7 +1212,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Add proposer pubkey to logs
-	log = log.WithField("proposerPubkey", proposerPubkey)
+	log = log.WithField("proposerPubkey", proposerPubkey.String())
 
 	// Create a BLS pubkey from the hex pubkey
 	pk, err := boostTypes.HexToPubkey(proposerPubkey.String())
@@ -1250,12 +1250,22 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 		// Try again
 		getPayloadResp, err = api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
-		if err != nil {
-			log.WithError(err).Error("failed getting execution payload (2/2) - due to error")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		} else if getPayloadResp == nil {
-			log.Warn("failed getting execution payload (2/2)")
+		if err != nil || getPayloadResp == nil {
+			// Still not found! Error out now.
+			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
+				_, err := api.db.GetBlockSubmissionEntry(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+				if errors.Is(err, sql.ErrNoRows) {
+					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
+					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
+				} else if err != nil {
+					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
+				} else {
+					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
+				}
+			} else { // some other error
+				log.WithError(err).Error("failed getting execution payload (2/2) - error")
+			}
 			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 			return
 		}
@@ -1350,6 +1360,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 		if err != nil {
 			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
+			bidTrace = &common.BidTraceV2{} //nolint:exhaustruct
 		}
 
 		err = api.db.SaveDeliveredPayload(bidTrace, payload, decodeTime, msNeededForPublishing)
