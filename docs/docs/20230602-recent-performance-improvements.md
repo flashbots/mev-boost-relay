@@ -2,6 +2,8 @@
 
 2023-06-02, by [@metachris](https://twitter.com/metachris)
 
+See also [part 2 of the performance improvements documentation](20230605-more-redis-performance-improvements.md).
+
 ---
 
 There have been a number of significant performance improvements in the mev-boost-relay codebase recently, and I wanted to shine some light on them and add more details and context about the nature of the changes as well as about the impact.
