@@ -92,6 +92,9 @@ var (
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
 
+	// maximum payload bytes for a block submission to be fast-tracked (large payloads slow down other fast-tracked requests!)
+	fastTrackPayloadSizeLimit = cli.GetEnvInt("FAST_TRACK_PAYLOAD_SIZE_LIMIT", 230_000)
+
 	// user-agents which shouldn't receive bids
 	apiNoHeaderUserAgents = common.GetEnvStrSlice("NO_HEADER_USERAGENTS", []string{
 		"mev-boost/v1.5.0 Go-http-client/1.1", // Prysm v4.0.1 (Shapella signing issue)
@@ -1522,8 +1525,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
 
+	isLargeRequest := len(requestPayloadBytes) > fastTrackPayloadSizeLimit
 	log = log.WithFields(logrus.Fields{
-		"payloadBytes":           len(requestPayloadBytes),
 		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
 		"slot":                   payload.Slot(),
 		"builderPubkey":          payload.BuilderPubkey().String(),
@@ -1532,6 +1535,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"parentHash":             payload.ParentHash(),
 		"value":                  payload.Value().String(),
 		"numTx":                  payload.NumTx(),
+		"payloadBytes":           len(requestPayloadBytes),
+		"isLargeRequest":         isLargeRequest,
 	})
 
 	if payload.Message() == nil || !payload.HasExecutionPayload() {
@@ -1766,7 +1771,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Simulate the block submission and save to db
-	fastTrackValidation := builderEntry.status.IsHighPrio && bidIsTopBid
+	fastTrackValidation := builderEntry.status.IsHighPrio && bidIsTopBid && !isLargeRequest
 	timeBeforeValidation := time.Now().UTC()
 
 	log = log.WithFields(logrus.Fields{
