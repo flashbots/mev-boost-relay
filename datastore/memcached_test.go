@@ -138,41 +138,6 @@ func TestMemcached(t *testing.T) {
 			},
 		},
 		{
-			Description: "Given an invalid proposer public key, we expect an invalid key error when storing and fetching the item in memcached",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
-			TestSuite: func(tc *test) func(*testing.T) {
-				return func(t *testing.T) {
-					t.Helper()
-					payload, _ := tc.Input.ExecutionPayloadResponse()
-					err := mem.SaveExecutionPayload(tc.Input.Slot(), "", tc.Input.BlockHash(), payload)
-					require.Error(t, err)
-					require.Equal(t, err, ErrInvalidProposerPublicKey)
-
-					_, err = mem.GetExecutionPayload(tc.Input.Slot(), "", tc.Input.BlockHash())
-					require.Error(t, err)
-					require.Equal(t, err, ErrInvalidProposerPublicKey)
-				}
-			},
-		},
-		{
-			Description: "Given an invalid block hash, we expect an invalid block hash error when storing and fetching the item in memcached",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
-			TestSuite: func(tc *test) func(*testing.T) {
-				return func(t *testing.T) {
-					t.Helper()
-
-					payload, _ := tc.Input.ExecutionPayloadResponse()
-					err := mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), "", payload)
-					require.Error(t, err)
-					require.Equal(t, err, ErrInvalidBlockHash)
-
-					_, err = mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), "")
-					require.Error(t, err)
-					require.Equal(t, err, ErrInvalidBlockHash)
-				}
-			},
-		},
-		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
 			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {

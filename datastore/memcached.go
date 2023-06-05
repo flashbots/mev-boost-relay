@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -15,9 +14,6 @@ var (
 	defaultMemcachedExpirySeconds = int32(cli.GetEnvInt("MEMCACHED_EXPIRY_SECONDS", 45))
 	defaultMemcachedTimeoutMs     = cli.GetEnvInt("MEMCACHED_CLIENT_TIMEOUT_MS", 250)
 	defaultMemcachedMaxIdleConns  = cli.GetEnvInt("MEMCACHED_MAX_IDLE_CONNS", 10)
-
-	ErrInvalidProposerPublicKey = errors.New("invalid proposer public key specified")
-	ErrInvalidBlockHash         = errors.New("invalid block hash specified")
 )
 
 type Memcached struct {
@@ -29,14 +25,6 @@ type Memcached struct {
 // proposer public key, block hash, and cache prefix if specified. Note that writes to the same key value
 // (i.e. same slot, proposer public key, and block hash) will overwrite the existing entry.
 func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *common.GetPayloadResponse) error {
-	if proposerPubKey == "" {
-		return ErrInvalidProposerPublicKey
-	}
-
-	if blockHash == "" {
-		return ErrInvalidBlockHash
-	}
-
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 
@@ -52,21 +40,10 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 // GetExecutionPayload attempts to fetch execution engine payload from memcached using composite key of slot,
 // proposer public key, block hash, and cache prefix if specified.
 func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error) {
-	if proposerPubKey == "" {
-		return nil, ErrInvalidProposerPublicKey
-	}
-
-	if blockHash == "" {
-		return nil, ErrInvalidBlockHash
-	}
-
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 	item, err := m.client.Get(key)
 	if err != nil {
-		if errors.Is(err, memcache.ErrCacheMiss) {
-			return nil, nil
-		}
 		return nil, err
 	}
 
