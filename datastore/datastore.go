@@ -193,7 +193,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 	_blockHash := strings.ToLower(blockHash)
 
 	// 1. try to get from Redis
-	resp, err := ds.redis.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
+	resp, err := ds.redis.GetExecutionPayloadCapella(slot, _proposerPubkey, _blockHash)
 	if err != nil {
 		ds.log.WithError(err).Error("error getting execution payload from redis")
 	} else {

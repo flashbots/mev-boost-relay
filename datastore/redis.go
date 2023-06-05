@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/go-builder-client/api"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -82,7 +85,7 @@ type RedisCache struct {
 
 	// prefixes (keys generated with a function)
 	prefixGetHeaderResponse           string
-	prefixGetPayloadResponse          string
+	prefixExecPayloadCapella          string
 	prefixBidTrace                    string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
@@ -121,7 +124,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		readonlyClient: roClient,
 
 		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
-		prefixGetPayloadResponse: fmt.Sprintf("%s/%s:cache-getpayload-response", redisPrefix, prefix),
+		prefixExecPayloadCapella: fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
 		prefixBidTrace:           fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -146,8 +149,8 @@ func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposer
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetHeaderResponse, slot, parentHash, proposerPubkey)
 }
 
-func (r *RedisCache) keyCacheGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixGetPayloadResponse, slot, proposerPubkey, blockHash)
+func (r *RedisCache) keyExecPayloadCapella(slot uint64, proposerPubkey, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixExecPayloadCapella, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash string) string {
@@ -355,19 +358,34 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 	return resp, err
 }
 
-func (r *RedisCache) SaveExecutionPayload(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, resp *common.GetPayloadResponse) (err error) {
-	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
-	return r.SetObjPipelined(ctx, tx, key, resp, expiryBidCache)
+func (r *RedisCache) SaveExecutionPayloadCapella(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *capella.ExecutionPayload) (err error) {
+	key := r.keyExecPayloadCapella(slot, proposerPubkey, blockHash)
+	b, err := execPayload.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	return tx.Set(ctx, key, b, expiryBidCache).Err()
 }
 
-func (r *RedisCache) GetExecutionPayload(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
-	key := r.keyCacheGetPayloadResponse(slot, proposerPubkey, blockHash)
+func (r *RedisCache) GetExecutionPayloadCapella(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
 	resp := new(common.VersionedExecutionPayload)
-	err := r.GetObj(key, resp)
-	if errors.Is(err, redis.Nil) {
-		return nil, nil
+	capellaPayload := new(capella.ExecutionPayload)
+
+	key := r.keyExecPayloadCapella(slot, proposerPubkey, blockHash)
+	val, err := r.client.Get(context.Background(), key).Result()
+	if err != nil {
+		return nil, err
 	}
-	return resp, err
+
+	err = capellaPayload.UnmarshalSSZ([]byte(val))
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Capella = new(api.VersionedExecutionPayload)
+	resp.Capella.Capella = capellaPayload
+	resp.Capella.Version = consensusspec.DataVersionCapella
+	return resp, nil
 }
 
 func (r *RedisCache) SaveBidTrace(ctx context.Context, tx redis.Pipeliner, trace *common.BidTraceV2) (err error) {
@@ -482,7 +500,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 	// Time to save things in Redis
 	//
 	// 1. Save the execution payload
-	err = r.SaveExecutionPayload(ctx, tx, payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+	err = r.SaveExecutionPayloadCapella(ctx, tx, payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse.Capella.Capella)
 	if err != nil {
 		return state, err
 	}
