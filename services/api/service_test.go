@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -372,11 +371,10 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 }
 
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
-	requestPayloadJSONBytes, err := os.ReadFile("../../testdata/submitBlockPayloadCapella_Goerli.json")
-	require.NoError(t, err)
+	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
 	req := new(common.BuilderSubmitBlockRequest)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	err := json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)
 
 	reqSSZ, err := req.Capella.MarshalSSZ()
@@ -397,7 +395,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	submissionTimestamp := 1606824419
 
 	// Payload attributes
-	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json"
+	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json.gz"
 	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
 	require.NoError(t, err)
@@ -429,7 +427,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 
 	// Prepare the request payload
 	req := new(common.BuilderSubmitBlockRequest)
-	requestPayloadJSONBytes, err := os.ReadFile(payloadJSONFilename)
+	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
 	err = json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)

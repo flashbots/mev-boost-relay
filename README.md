@@ -107,7 +107,7 @@ go run . website --network sepolia --db postgres://postgres:postgres@localhost:5
 curl localhost:9062/eth/v1/builder/status
 
 # Send test validator registrations
-curl -X POST localhost:9062/eth/v1/builder/validators -d @testdata/valreg2.json
+curl -X POST -H'Content-Encoding: gzip' localhost:9062/eth/v1/builder/validators --data-binary @testdata/valreg2.json.gz
 
 # Delete previous registrations
 redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:validators-registration-timestamp
