@@ -90,7 +90,7 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		return nil, err
 	}
 	switch res {
-	case consensusspec.DataVersionCapella:
+	case consensusspec.DataVersionCapella: // todo: DataVersionCapella is 3, but in the database it's "capella"
 		executionPayload := new(capella.ExecutionPayload)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
