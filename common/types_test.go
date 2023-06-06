@@ -3,6 +3,7 @@ package common
 import (
 	"testing"
 
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -29,4 +30,10 @@ func TestBoostBidToBidTrace(t *testing.T) {
 	require.Equal(t, bidTrace.GasLimit, convertedBidTrace.GasLimit)
 	require.Equal(t, bidTrace.GasUsed, convertedBidTrace.GasUsed)
 	require.Equal(t, bidTrace.Value.BigInt().String(), convertedBidTrace.Value.ToBig().String())
+}
+
+func TestDataVersion(t *testing.T) {
+	require.Equal(t, ForkVersionStringBellatrix, consensusspec.DataVersionBellatrix.String())
+	require.Equal(t, ForkVersionStringCapella, consensusspec.DataVersionCapella.String())
+	require.Equal(t, ForkVersionStringDeneb, consensusspec.DataVersionDeneb.String())
 }
