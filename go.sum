@@ -77,8 +77,8 @@ github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj
 github.com/armon/go-radix v1.0.0/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
 github.com/attestantio/go-builder-client v0.3.0 h1:NY7pUNT070T3tx/N8hCaO5KpExvaVQhH//9zsgRh43M=
 github.com/attestantio/go-builder-client v0.3.0/go.mod h1:DwesMTOqnCp4u+n3uZ+fWL8wwnSBZVD9VMIVPDR+AZE=
-github.com/attestantio/go-eth2-client v0.16.3 h1:D6LLwswDlHbUwsAqfBKaKXjWdBzRlNQRXUoC+5vFsDw=
-github.com/attestantio/go-eth2-client v0.16.3/go.mod h1:Om16oH+H34E2JHoOY8hLWg+64twlO+AjAE7kkK3f1Xc=
+github.com/attestantio/go-eth2-client v0.16.4 h1:utfGx49JZN4W7IT6/txdwE9qobP3b/eTa3Ge1PJFRJg=
+github.com/attestantio/go-eth2-client v0.16.4/go.mod h1:lgxKsjRSxQnHSWxSbtZLGYlFkE3vFM4L+DK4bXqAxAU=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
@@ -369,6 +369,8 @@ github.com/hashicorp/serf v0.8.2/go.mod h1:6hOLApaqBFA1NXqRQAsxw9QxuDEvNxSQRwA/J
 github.com/holiman/uint256 v1.2.2 h1:TXKcSGc2WaxPD2+bmzAsVthL4+pEN0YwXcL5qED83vk=
 github.com/holiman/uint256 v1.2.2/go.mod h1:SC8Ryt4n+UBbPbIBKaG9zbbDlp4jOru9xFZmPzLUTxw=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
+github.com/huandu/go-clone v1.6.0 h1:HMo5uvg4wgfiy5FoGOqlFLQED/VGRm2D9Pi8g1FXPGc=
+github.com/huandu/go-clone/generic v1.6.0 h1:Wgmt/fUZ28r16F2Y3APotFD59sHk1p78K0XLdbUYN5U=
 github.com/huandu/xstrings v1.3.1/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
 github.com/huandu/xstrings v1.3.2/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
 github.com/huandu/xstrings v1.3.3/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
