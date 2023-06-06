@@ -22,14 +22,14 @@ func PayloadToExecPayloadEntry(payload *common.BuilderSubmitBlockRequest) (*Exec
 		if err != nil {
 			return nil, err
 		}
-		version = "bellatrix"
+		version = common.ForkVersionStringBellatrix
 	}
 	if payload.Capella != nil {
 		_payload, err = json.Marshal(payload.Capella.ExecutionPayload)
 		if err != nil {
 			return nil, err
 		}
-		version = "capella"
+		version = common.ForkVersionStringCapella
 	}
 	return &ExecutionPayloadEntry{
 		Slot:           payload.Slot(),
@@ -83,21 +83,18 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 	}
 }
 
-func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (*common.VersionedExecutionPayload, error) {
-	var res consensusspec.DataVersion
-	err := json.Unmarshal([]byte(executionPayloadEntry.Version), &res)
-	if err != nil {
-		return nil, err
-	}
-	switch res {
-	case consensusspec.DataVersionCapella: // todo: DataVersionCapella is 3, but in the database it's "capella"
+func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *common.VersionedExecutionPayload, err error) {
+	payloadVersion := executionPayloadEntry.Version
+	if payloadVersion == common.ForkVersionStringDeneb {
+		return nil, ErrUnsupportedExecutionPayload
+	} else if payloadVersion == common.ForkVersionStringCapella {
 		executionPayload := new(capella.ExecutionPayload)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
 		capella := api.VersionedExecutionPayload{
-			Version:   res,
+			Version:   consensusspec.DataVersionCapella,
 			Capella:   executionPayload,
 			Bellatrix: nil,
 		}
@@ -105,25 +102,21 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 			Capella:   &capella,
 			Bellatrix: nil,
 		}, nil
-	case consensusspec.DataVersionBellatrix:
+	} else if payloadVersion == common.ForkVersionStringBellatrix {
 		executionPayload := new(types.ExecutionPayload)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
 		bellatrix := types.GetPayloadResponse{
-			Version: types.VersionString(res.String()),
+			Version: types.VersionString(common.ForkVersionStringBellatrix),
 			Data:    executionPayload,
 		}
 		return &common.VersionedExecutionPayload{
 			Bellatrix: &bellatrix,
 			Capella:   nil,
 		}, nil
-	case consensusspec.DataVersionDeneb:
-		return nil, ErrUnsupportedExecutionPayload
-	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
-		return nil, ErrUnsupportedExecutionPayload
-	default:
+	} else {
 		return nil, ErrUnsupportedExecutionPayload
 	}
 }

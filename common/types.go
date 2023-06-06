@@ -40,6 +40,10 @@ var (
 	GenesisValidatorsRootZhejiang = "0x53a92d8f2bb1d85f62d16a156e6ebcd1bcaba652d0900b2c2f387826f3481f6f"
 	BellatrixForkVersionZhejiang  = "0x00000071"
 	CapellaForkVersionZhejiang    = "0x00000072"
+
+	ForkVersionStringBellatrix = "bellatrix"
+	ForkVersionStringCapella   = "capella"
+	ForkVersionStringDeneb     = "deneb"
 )
 
 type EthNetworkDetails struct {
