@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -9,9 +10,10 @@ import (
 )
 
 type MockDB struct {
-	Builders  map[string]*BlockBuilderEntry
-	Demotions map[string]bool
-	Refunds   map[string]bool
+	ExecPayloads map[string]*ExecutionPayloadEntry
+	Builders     map[string]*BlockBuilderEntry
+	Demotions    map[string]bool
+	Refunds      map[string]bool
 }
 
 func (db MockDB) NumRegisteredValidators() (count uint64, err error) {
@@ -43,7 +45,12 @@ func (db MockDB) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *
 }
 
 func (db MockDB) GetExecutionPayloadEntryBySlotPkHash(slot uint64, proposerPubkey, blockHash string) (entry *ExecutionPayloadEntry, err error) {
-	return nil, nil
+	key := fmt.Sprintf("%d-%s-%s", slot, proposerPubkey, blockHash)
+	entry, ok := db.ExecPayloads[key]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	return entry, nil
 }
 
 func (db MockDB) GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error) {

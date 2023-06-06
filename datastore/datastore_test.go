@@ -1,26 +1,53 @@
 package datastore
 
-// func setupTestDatastore(t *testing.T) *Datastore {
-// 	t.Helper()
-// 	var err error
+import (
+	"testing"
 
-// 	redisTestServer, err := miniredis.Run()
-// 	require.NoError(t, err)
+	"github.com/alicebob/miniredis/v2"
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/stretchr/testify/require"
+)
 
-// 	redisDs, err := NewRedisCache("", redisTestServer.Addr(), "")
-// 	require.NoError(t, err)
+func setupTestDatastore(t *testing.T, mockDB *database.MockDB) *Datastore {
+	t.Helper()
 
-// 	// TODO: add support for testing datastore with memcached enabled
-// 	ds, err := NewDatastore(common.TestLog, redisDs, nil, database.MockDB{})
+	redisTestServer, err := miniredis.Run()
+	require.NoError(t, err)
 
-// 	require.NoError(t, err)
+	redisDs, err := NewRedisCache("", redisTestServer.Addr(), "")
+	require.NoError(t, err)
 
-// 	// we should not panic when fetching execution payload response, even when memcached is nil
-// 	_, err = ds.GetGetPayloadResponse(0, "foo", "bar")
-// 	require.NoError(t, err)
+	ds, err := NewDatastore(common.TestLog, redisDs, nil, mockDB)
+	require.NoError(t, err)
 
-// 	return ds
-// }
+	return ds
+}
+
+func TestGetPayloadFailure(t *testing.T) {
+	ds := setupTestDatastore(t, &database.MockDB{})
+	_, err := ds.GetGetPayloadResponse(1, "a", "b")
+	require.Error(t, ErrExecutionPayloadNotFound, err)
+}
+
+func TestGetPayloadDatabaseFallback(t *testing.T) {
+	filename := "../testdata/executionPayloadCapella_Goerli.json.gz"
+	payloadBytes := common.LoadGzippedBytes(t, filename)
+
+	// prepare mock database with execution payload entry
+	mockDB := &database.MockDB{
+		ExecPayloads: map[string]*database.ExecutionPayloadEntry{
+			"1-a-b": {
+				Version: common.ForkVersionStringCapella,
+				Payload: string(payloadBytes),
+			},
+		},
+	}
+	ds := setupTestDatastore(t, mockDB)
+	payload, err := ds.GetGetPayloadResponse(1, "a", "b")
+	require.NoError(t, err)
+	require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", payload.Capella.Capella.BlockHash.String())
+}
 
 // func TestProdProposerValidatorRegistration(t *testing.T) {
 // 	ds := setupTestDatastore(t)
