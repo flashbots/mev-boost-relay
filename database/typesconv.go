@@ -2,9 +2,16 @@ package database
 
 import (
 	"encoding/json"
+	"errors"
 
+	"github.com/attestantio/go-builder-client/api"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
+
+var ErrUnsupportedExecutionPayload = errors.New("unsupported execution payload version")
 
 func PayloadToExecPayloadEntry(payload *common.BuilderSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
 	var _payload []byte
@@ -73,5 +80,50 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 			NumTx:                payload.NumTx,
 			BlockNumber:          payload.BlockNumber,
 		},
+	}
+}
+
+func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (*common.VersionedExecutionPayload, error) {
+	var res consensusspec.DataVersion
+	err := json.Unmarshal([]byte(executionPayloadEntry.Version), &res)
+	if err != nil {
+		return nil, err
+	}
+	switch res {
+	case consensusspec.DataVersionCapella:
+		executionPayload := new(capella.ExecutionPayload)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+		capella := api.VersionedExecutionPayload{
+			Version:   res,
+			Capella:   executionPayload,
+			Bellatrix: nil,
+		}
+		return &common.VersionedExecutionPayload{
+			Capella:   &capella,
+			Bellatrix: nil,
+		}, nil
+	case consensusspec.DataVersionBellatrix:
+		executionPayload := new(types.ExecutionPayload)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+		bellatrix := types.GetPayloadResponse{
+			Version: types.VersionString(res.String()),
+			Data:    executionPayload,
+		}
+		return &common.VersionedExecutionPayload{
+			Bellatrix: &bellatrix,
+			Capella:   nil,
+		}, nil
+	case consensusspec.DataVersionDeneb:
+		return nil, ErrUnsupportedExecutionPayload
+	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
+		return nil, ErrUnsupportedExecutionPayload
+	default:
+		return nil, ErrUnsupportedExecutionPayload
 	}
 }
