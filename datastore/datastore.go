@@ -3,15 +3,11 @@ package datastore
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -231,49 +227,7 @@ func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHas
 		return nil, err
 	}
 
-	// Got it from databaase, now deserialize execution payload and compile full response
+	// Got it from database, now deserialize execution payload and compile full response
 	ds.log.Warn("getPayload response from database, primary storage failed")
-	var res consensusspec.DataVersion
-	err = json.Unmarshal([]byte(executionPayloadEntry.Version), &res)
-	if err != nil {
-		ds.log.Debug("invalid getPayload version from database")
-		return nil, err
-	}
-	switch res {
-	case consensusspec.DataVersionCapella:
-		executionPayload := new(capella.ExecutionPayload)
-		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
-		if err != nil {
-			return nil, err
-		}
-		capella := api.VersionedExecutionPayload{
-			Version:   res,
-			Capella:   executionPayload,
-			Bellatrix: nil,
-		}
-		return &common.VersionedExecutionPayload{
-			Capella:   &capella,
-			Bellatrix: nil,
-		}, nil
-	case consensusspec.DataVersionBellatrix:
-		executionPayload := new(types.ExecutionPayload)
-		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
-		if err != nil {
-			return nil, err
-		}
-		bellatrix := types.GetPayloadResponse{
-			Version: types.VersionString(res.String()),
-			Data:    executionPayload,
-		}
-		return &common.VersionedExecutionPayload{
-			Bellatrix: &bellatrix,
-			Capella:   nil,
-		}, nil
-	case consensusspec.DataVersionDeneb:
-		return nil, errors.New("todo")
-	case consensusspec.DataVersionAltair, consensusspec.DataVersionPhase0:
-		return nil, errors.New("unsupported execution payload version")
-	default:
-		return nil, errors.New("unknown execution payload version")
-	}
+	return database.ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry)
 }

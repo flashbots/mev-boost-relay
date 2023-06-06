@@ -20,6 +20,4 @@ type HTTPErrorResp struct {
 
 var NilResponse = struct{}{}
 
-var VersionBellatrix boostTypes.VersionString = "bellatrix"
-
 var ZeroU256 = boostTypes.IntToU256(0)

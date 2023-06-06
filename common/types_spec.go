@@ -29,8 +29,6 @@ type HTTPErrorResp struct {
 
 var NilResponse = struct{}{}
 
-var VersionBellatrix boostTypes.VersionString = "bellatrix"
-
 var ZeroU256 = boostTypes.IntToU256(0)
 
 func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*GetHeaderResponse, error) {
@@ -49,7 +47,7 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 		}
 		return &GetHeaderResponse{
 			Bellatrix: &boostTypes.GetHeaderResponse{
-				Version: VersionBellatrix,
+				Version: boostTypes.VersionString(ForkVersionStringBellatrix),
 				Data:    signedBuilderBid,
 			},
 			Capella: nil,
@@ -77,7 +75,7 @@ func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*GetPayloadRes
 	if payload.Bellatrix != nil {
 		return &GetPayloadResponse{
 			Bellatrix: &boostTypes.GetPayloadResponse{
-				Version: VersionBellatrix,
+				Version: boostTypes.VersionString(ForkVersionStringBellatrix),
 				Data:    payload.Bellatrix.ExecutionPayload,
 			},
 			Capella: nil,
