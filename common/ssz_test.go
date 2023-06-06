@@ -12,19 +12,16 @@ import (
 )
 
 func TestSSZBuilderSubmission(t *testing.T) {
+	byteValue := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+
 	depositData := new(capella.SubmitBlockRequest)
-
-	byteValue, err := os.ReadFile("../testdata/submitBlockPayloadCapella_Goerli.json")
-	require.NoError(t, err)
-
-	err = json.Unmarshal(byteValue, &depositData)
+	err := json.Unmarshal(byteValue, &depositData)
 	require.NoError(t, err)
 
 	ssz, err := depositData.MarshalSSZ()
 	require.NoError(t, err)
 
-	sszExpectedBytes, err := os.ReadFile("../testdata/submitBlockPayloadCapella_Goerli.ssz")
-	require.NoError(t, err)
+	sszExpectedBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.ssz.gz")
 	require.Equal(t, sszExpectedBytes, ssz)
 
 	htr, err := depositData.HashTreeRoot()
