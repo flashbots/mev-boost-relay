@@ -2186,9 +2186,9 @@ func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Req
 		BlockNumber: header.ExecutionPayloadHeader.BlockNumber,
 	}
 
-	
-	Save to Redis
-	
+	//
+	// Save to Redis
+	//
 	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), tx, bidTrace, payload, nil, getHeaderResponse, receivedAt, isCancellationEnabled, nil)
 	if err != nil {
 		log.WithError(err).Error("could not save bid and update top bids")
@@ -2196,7 +2196,7 @@ func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	Add fields to logs
+	// Add fields to logs
 	log = log.WithFields(logrus.Fields{
 		"timestampAfterBidUpdate":    time.Now().UTC().UnixMilli(),
 		"wasBidSavedInRedis":         updateBidResult.WasBidSaved,
