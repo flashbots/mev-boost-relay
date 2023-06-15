@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
@@ -32,6 +34,7 @@ const (
 	builderID   = "builder0x69"
 	randao      = "01234567890123456789012345678901"
 	emptyHash   = "0x0000000000000000000000000000000000000000000000000000000000000000"
+	emptyPubkey = "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 	proposerInd = uint64(987)
 	genesis     = 1606824023
 )
@@ -48,6 +51,33 @@ func getTestBidTrace(pubkey phase0.BLSPubKey, value uint64) *common.BidTraceV2 {
 			BuilderPubkey:        pubkey,
 			ProposerFeeRecipient: feeRecipient,
 			Value:                uint256.NewInt(value),
+		},
+	}
+}
+
+func getTestPayload(req *common.SubmitBlockRequest) *common.BuilderSubmitBlockRequest {
+	eph := req.ExecutionPayloadHeader
+	return &common.BuilderSubmitBlockRequest{
+		Bellatrix: nil,
+		Capella: &builderCapella.SubmitBlockRequest{
+			Message: req.Message,
+			// Transactions and Withdrawals are intentionally omitted.
+			ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
+				ParentHash:    eph.ParentHash,
+				FeeRecipient:  eph.FeeRecipient,
+				StateRoot:     eph.StateRoot,
+				ReceiptsRoot:  eph.ReceiptsRoot,
+				LogsBloom:     eph.LogsBloom,
+				PrevRandao:    eph.PrevRandao,
+				BlockNumber:   eph.BlockNumber,
+				GasLimit:      eph.GasLimit,
+				GasUsed:       eph.GasUsed,
+				Timestamp:     eph.Timestamp,
+				ExtraData:     eph.ExtraData,
+				BaseFeePerGas: eph.BaseFeePerGas,
+				BlockHash:     eph.BlockHash,
+			},
+			Signature: req.Signature,
 		},
 	}
 }
@@ -145,9 +175,20 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 
 	req := common.TestBuilderSubmitBlockRequest(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue))
 	rr := backend.request(http.MethodPost, pathSubmitNewBlock, &req)
+	return rr
+}
 
-	// Let updates happen async.
-	time.Sleep(100 * time.Millisecond)
+func runOptimisticBlockSubmissionV2(t *testing.T, opts blockRequestOpts, simErr error, backend *testBackend) *httptest.ResponseRecorder {
+	t.Helper()
+	backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
+		simulationError: simErr,
+	}
+
+	req := common.TestBuilderSubmitBlockRequestV2(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue))
+	outBytes, err := req.MarshalSSZ()
+	require.NoError(t, err)
+
+	rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{})
 	return rr
 }
 
@@ -433,4 +474,122 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, resp.BuilderID, "builder0x69")
 	require.Equal(t, resp.Collateral, "10000")
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2(t *testing.T) {
+	testCases := []struct {
+		description string
+		httpCode    uint64
+		blockValue  uint64
+	}{
+		{
+			description: "value_less_than_collateral",
+			httpCode:    200, // success
+			blockValue:  collateral - 1,
+		},
+		{
+			description: "value_more_than_collateral",
+			httpCode:    400, // failure
+			blockValue:  collateral + 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			pubkey, secretkey, backend := startTestBackend(t)
+			backend.relay.optimisticSlot.Store(slot)
+			backend.relay.capellaEpoch = 1
+			var randaoHash boostTypes.Hash
+			err := randaoHash.FromSlice([]byte(randao))
+			require.NoError(t, err)
+			withRoot, err := ComputeWithdrawalsRoot([]*consensuscapella.Withdrawal{})
+			require.NoError(t, err)
+			backend.relay.payloadAttributes[emptyHash] = payloadAttributesHelper{
+				slot:            slot,
+				withdrawalsRoot: withRoot,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: randaoHash.String(),
+				},
+			}
+			rr := runOptimisticBlockSubmissionV2(t, blockRequestOpts{
+				secretkey:  secretkey,
+				pubkey:     *pubkey,
+				blockValue: tc.blockValue,
+				domain:     backend.relay.opts.EthNetDetails.DomainBuilder,
+			}, nil, backend)
+
+			// Check http code.
+			require.Equal(t, uint64(rr.Code), tc.httpCode)
+		})
+	}
+}
+
+func TestOptimisticV2SlowPath(t *testing.T) {
+	testCases := []struct {
+		description string
+		simErr      error
+		demotion    bool
+	}{
+		{
+			description: "success",
+			simErr:      nil,
+			demotion:    false,
+		},
+		{
+			description: "sim_error",
+			simErr:      errFake,
+			demotion:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			pubkey, secretkey, backend := startTestBackend(t)
+			backend.relay.optimisticSlot.Store(slot)
+
+			req := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 999))
+			payload := getTestPayload(req)
+			outBytes, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			r := bytes.NewReader(outBytes)
+			v2Opts := v2SlowPathOpts{
+				header:  req,
+				payload: payload,
+				entry: &blockBuilderCacheEntry{
+					status: common.BuilderStatus{
+						IsOptimistic: true,
+					},
+				},
+				pipeliner: backend.redis.NewTxPipeline(),
+			}
+			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
+				simulationError: tc.simErr,
+			}
+			backend.relay.optimisticV2SlowPath(r, v2Opts)
+			time.Sleep(100 * time.Millisecond)
+			// Check demotion status is set to expected.
+			mockDB, ok := backend.relay.db.(*database.MockDB)
+			require.True(t, ok)
+			require.Equal(t, mockDB.Demotions[pubkey.String()], tc.demotion)
+		})
+	}
+}
+
+func TestOptimisticV2MarshallError(t *testing.T) {
+	pubkey, secretkey, backend := startTestBackend(t)
+	backend.relay.optimisticSlot.Store(slot)
+
+	req := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 999))
+	payload := getTestPayload(req)
+	errBytes := make([]byte, req.SizeSSZ())
+	r := bytes.NewReader(errBytes)
+	v2Opts := v2SlowPathOpts{
+		header:  req,
+		payload: payload,
+	}
+	backend.relay.optimisticV2SlowPath(r, v2Opts)
+	// Check demotion status is set to true.
+	mockDB, ok := backend.relay.db.(*database.MockDB)
+	require.True(t, ok)
+	require.True(t, mockDB.Demotions[pubkey.String()])
 }

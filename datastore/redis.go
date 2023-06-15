@@ -230,7 +230,7 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 }
 
 func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey boostTypes.PubkeyHex) (uint64, error) {
-	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
+	timestamp, err := r.readonlyClient.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -499,10 +499,12 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, tx redis.Pipeli
 	//
 	// Time to save things in Redis
 	//
-	// 1. Save the execution payload
-	err = r.SaveExecutionPayloadCapella(ctx, tx, payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse.Capella.Capella)
-	if err != nil {
-		return state, err
+	// 1. Save the execution payload (only if it was passed in).
+	if getPayloadResponse != nil {
+		err = r.SaveExecutionPayloadCapella(ctx, tx, payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse.Capella.Capella)
+		if err != nil {
+			return state, err
+		}
 	}
 
 	// Record time needed to save payload

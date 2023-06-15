@@ -2,14 +2,16 @@ package common
 
 import (
 	"compress/gzip"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	bellatrixspec "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/sirupsen/logrus"
@@ -70,7 +72,7 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) BuilderSu
 			Message:   &bid.BidTrace,
 			Signature: [96]byte(signature),
 			ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
-				Transactions: []bellatrix.Transaction{[]byte{0x03}},
+				Transactions: []bellatrixspec.Transaction{[]byte{0x03}},
 				Timestamp:    bid.Slot * 12, // 12 seconds per slot.
 				PrevRandao:   _HexToHash("01234567890123456789012345678901"),
 				Withdrawals:  []*consensuscapella.Withdrawal{},
@@ -97,4 +99,30 @@ func LoadGzippedJSON(t *testing.T, filename string, dst any) {
 	b := LoadGzippedBytes(t, filename)
 	err := json.Unmarshal(b, dst)
 	require.NoError(t, err)
+}
+
+func TestBuilderSubmitBlockRequestV2(sk *bls.SecretKey, bid *BidTraceV2) *SubmitBlockRequest {
+	signature, err := boostTypes.SignMessage(bid, boostTypes.DomainBuilder, sk)
+	check(err, " SignMessage: ", bid, sk)
+
+	wRoot, err := hex.DecodeString("792930bbd5baac43bcc798ee49aa8185ef76bb3b44ba62b91d86ae569e4bb535")
+	check(err)
+	return &SubmitBlockRequest{
+		Message: &bid.BidTrace,
+		ExecutionPayloadHeader: &consensuscapella.ExecutionPayloadHeader{ //nolint:exhaustruct
+			TransactionsRoot: [32]byte{},
+			Timestamp:        bid.Slot * 12, // 12 seconds per slot.
+			PrevRandao:       _HexToHash("01234567890123456789012345678901"),
+			WithdrawalsRoot:  phase0.Root(wRoot),
+			ExtraData: []byte{
+				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+				0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+				0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+			},
+		},
+		Signature:    [96]byte(signature),
+		Transactions: []bellatrixspec.Transaction{[]byte{0x03}},
+		Withdrawals:  []*consensuscapella.Withdrawal{},
+	}
 }
