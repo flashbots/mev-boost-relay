@@ -4,16 +4,29 @@
 
 ---
 
-`mev-boost-relay` stores the payloads for all builder submissions in the Postgres database, in addition to Redis, and the database storage is also used as data availability fallback in case Redis cannot retrieve the payload.
+`mev-boost-relay` stores the payloads for all builder submissions in the
+Postgres database, in addition to Redis, and the database storage is also used
+as data availability fallback in case Redis cannot retrieve the payload.
 
-Payloads are quite big, typically a few hundred kilobytes, with a few hundred submissions per slot. This can make the database grow rapidly to many terabytes of storage, which in turn adds significant operating costs for the Postgres database service.
+Payloads are quite big, typically a few hundred kilobytes, with a few hundred
+submissions per slot. This can make the database grow rapidly to many terabytes
+of storage, which in turn adds significant operating costs for the Postgres
+database service.
 
-There are several approaches to deal with the Postgres payload storage, and to avoid storage growth:
+There are several approaches to deal with the Postgres payload storage, and to
+avoid storage growth:
 
-1. Truncating the table `mainnet_execution_payload` regularly (possibly archiving the payloads to a secondary, cheaper long-term storage).
-2. Not storing the payloads in the database at all, which can be configured through the `DISABLE_PAYLOAD_DATABASE_STORAGE` environment variable. In this case, it’s strongly advised to enable Memcached as secondary payload storage.
+1. Truncating the table `mainnet_execution_payload` regularly (possibly
+   archiving the payloads to a secondary, cheaper long-term storage).
 
-Cloud providers like AWS and Google Cloud don’t allow downscaling database storage sizes of their managed Postgres services. Therefore, if you want to reduce the costs by downscaling storage, you’ll need to migrate the data to a new database.
+2. Not storing the payloads in the database at all, which can be configured
+   through the `DISABLE_PAYLOAD_DATABASE_STORAGE` environment variable. In this
+   case, it’s strongly advised to enable Memcached as secondary payload storage.
+
+Cloud providers like AWS and Google Cloud don’t allow downscaling database
+storage sizes of their managed Postgres services. Therefore, if you want to
+reduce the costs by downscaling storage, you’ll need to migrate the data to a
+new database.
 
 This guide will help you with that.
 
@@ -21,45 +34,83 @@ This guide will help you with that.
 
 Approaches we tried:
 
-- [AWS DMS](https://aws.amazon.com/dms/) (which is [Qlik Replicate](https://www.qlik.com/us/products/qlik-replicate) under the hood, if I am any good in searching the internet for error messages)
+- [AWS DMS](https://aws.amazon.com/dms/) (which is
+  [Qlik Replicate](https://www.qlik.com/us/products/qlik-replicate) under the
+  hood, if we are any good in searching the internet for error messages)
+
 - [pgsync](https://github.com/ankane/pgsync)
+
 - [pgcopydb](https://github.com/dimitri/pgcopydb)
 
 None of the above (and other less note-worthy) options worked as expected:
 
-- DMS would seem to work in the beginning, but after a few hours of running it would start to yield some very cryptic error messages, the solutions to which would recommend tweaking Qlik's configuration parameters (to which we obviously did not have access to, as they are hidden behind AWS console).
-- `pgsync`/`pgcopydb` were found to be not mature enough (not yet at least) to deal with the amount of data updates that their respective [CDC](https://www.qlik.com/us/change-data-capture/cdc-change-data-capture) solutions would have to cope with while migrating our instance.
+- DMS would seem to work in the beginning, but after a few hours of running it
+  would start to yield some very cryptic error messages, the solutions to which
+  would recommend tweaking Qlik's configuration parameters (to which we
+  obviously did not have access to, as they are hidden behind AWS console).
 
-Which is why we opted to come up with our own (a bit creative, but work-able) solution.
+- `pgsync`/`pgcopydb` were found to be not mature enough (not yet at least) to
+  deal with the amount of data updates that their respective
+  [CDC](https://www.qlik.com/us/change-data-capture/cdc-change-data-capture)
+  solutions would have to cope with while migrating our instance.
+
+Which is why we opted to come up with our own (a bit creative, but work-able)
+solution.
 
 ## TL;DR
 
 Therefore the idea of the migration was as follows:
 
-1. Spin up a new PSQL instance (with the desired initial storage size).
+1. Spin-up a new PSQL instance (with the desired initial storage size).
+
 2. Copy the schema from old to new instance.
-3. Transfer big tables (there were 3 of them) using batch-by-batch `COPY TO`/`COPY FROM` statements.  (In the order from bigger to smaller tables, as the largest table took several days to transfer).
+
+3. Transfer the big tables (there were 3 of them) using batch-by-batch
+   `COPY TO`/`COPY FROM` statements. (In the order from bigger to smaller
+   tables, as the largest table took several days to transfer).
+
 4. Transfer the rest of data using just `pg_dump`.
+
 5. Transfer what had accumulated in the 3 largest tables between steps 3 and 4.
-6. Update sequences on the new DB so that they would begin not from `1` but from some wittingly big number (next power of 10 above the current latest `id`).
-7. Stop the services that write into the old DB → switch them to the new instance → start those services again.
+
+6. Update sequences on the new DB so that they would begin not from `1` but from
+   some wittingly big number (next power of 10 above the current latest `id`).
+
+7. Stop the services that write into the old DB → switch them to the new
+   instance → start those services again.
+
 8. Switch the read-only services to the new DB (and restart them too).
-9. Back-fill whatever new inserts were accumulated in the old DB between the moment data was last pumped and the moment of the switch-over.
+
+9. Back-fill whatever new inserts were accumulated in the old DB between the
+   moment data was last pumped and the moment of the switch-over.
 
 The approach we used worked as-expected because:
 
-- All `mev-boost-relay`'s significant tables use PSQL's auto-incrementing primary keys (that are in fact [PSQL’s sequences](https://www.postgresql.org/docs/current/sql-createsequence.html) under the hood).
-- All updates to the existing records (e.g. `xxx_blockbuilder.last_submission_slot`) are of temporal nature. This means that if we miss to migrate an update to the old instance, it's not a big deal as *eventually* there would be the next update to the same record in the *new* instance that will "make things all-right".
+- All `mev-boost-relay`'s significant tables use PSQL's auto-incrementing
+  primary keys (that are in fact
+  [PSQL’s sequences](https://www.postgresql.org/docs/current/sql-createsequence.html)
+  under the hood).
 
-Below we provide a bunch of handy scripts and queries that our fellow peers might find handy shall they want to migrate away from a huge PSQL and save some costs.
+- All updates to the existing records (e.g. `xxx_blockbuilder.last_submission_slot`)
+  are of temporal nature. This means that if we miss to migrate an update to the
+  old instance, it's not a big deal as *eventually* there would be the next
+  update to the same record in the *new* instance that will "make things
+  all-right".
 
-Disclaimer:  do not trust this blindly!  an experimental migration on some non-critical instance is highly advised (e.g. if you run something in goerli, that would be a good candidate).
+Below we provide a bunch of scripts and queries that our fellow peers might find
+handy shall they want to migrate away from a huge PSQL and save some costs.
+
+> **Disclaimer:**
+>
+> Do not trust this blindly!  an experimental migration on some non-critical
+> instance is highly advised (e.g. if you run something in goerli, that would be
+> a good candidate).
 
 ## License
 
-All scrips/queries in this article come with MIT license.
+All scripts/queries in this article come with MIT license.
 
-```
+```text
 Copyright (c) 2023 Flashbots
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -85,7 +136,8 @@ SOFTWARE.
 
 `active-sessions.sql`
 
-Helps to track current sessions to old/new instance (e.g. to make sure that all writing services are indeed migrated).
+Helps to track current sessions to old/new instance (to make sure that all
+writing services are indeed migrated).
 
 ```sql
 select
@@ -109,9 +161,12 @@ order by client_addr;
 
 `alter-sequence.sql`
 
-Query that generates a few other queries that should be ran on the *target* instance to update the sequences’ current values.
+Query that generates a few other queries that should be ran on the *target*
+instance to update the sequences’ current values.
 
-Note the `power(10, ceil(log(last_value)))` bit.  If you find it a bit wasteful, you can change the logic to something else (e.g. do simple `+ 10000`). Just make sure to avoid collisions when backfilling the records from old instance.
+Note the `power(10, ceil(log(last_value)))` bit. If you find it a bit wasteful,
+you can change the logic to something else (e.g. do simple `+ 10000`). Just make
+sure to avoid collisions when backfilling the records from old instance.
 
 ```sql
 select
@@ -193,7 +248,8 @@ time ( PGSRCDB=[SOURCE_DB_ID] ./batch-load.sh mainnet_builder_block_submission 1
 
 `put.sh`
 
-The workhorse that fills the data into the target DB.  Unmentioned `PGPASSWORD` env var should be set to the password used by both old and new instances.
+The workhorse that fills the data into the target DB. Unmentioned `PGPASSWORD`
+env var should be set to the password used by both old and new instances.
 
 ```bash
 #!/bin/bash
@@ -212,7 +268,8 @@ cat - | >&2 psql \
 
 `get-schema.sh`
 
-Retrieves just the schema from the source DB.  (Note, you might need to first transfer all the users/roles by hand).
+Retrieves just the schema from the source DB. (Note, you might need to first
+transfer all the users/roles by hand).
 
 ```bash
 #!/bin/bash
@@ -246,7 +303,7 @@ fi
 
 `get-data-with-copy.sh`
 
-Convenience wrapper around `pg_dump` to generate bulk load COPY TO statement(s).
+Convenience wrapper around `pg_dump` to generate bulk load `COPY TO` statement(s).
 
 ```bash
 #!/bin/bash
@@ -279,7 +336,10 @@ fi
 
 `batch-load.sh`
 
-The most complicated script.  Takes two parameters:  the table to transfer, and the batch size (how many records per go).  There will be a file at `./.temp/<table-name>.cur` that you can use to track progress, or to edit to re-start transfer from some particular records (e.g. when back-filling).
+The most complicated script. Takes two parameters: the table to transfer, and
+the batch size (how many records per go). There will be a file at
+`./.temp/<table-name>.cur` that you can use to track progress, or to edit to
+re-start transfer from some particular records (e.g. when back-filling).
 
 ```bash
 #!/bin/bash
@@ -384,7 +444,8 @@ rm "./.temp/${table}.dat" || true
 
 `get-start-id.sh`
 
-A script to query `max(id) + 1` in some of the tables on the target instance.  Helpful for backfilling.
+A script to query `max(id) + 1` in some of the tables on the target instance.
+Helpful for backfilling.
 
 ```bash
 #!/bin/bash
