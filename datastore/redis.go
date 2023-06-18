@@ -393,13 +393,11 @@ func (r *RedisCache) SaveBidTrace(ctx context.Context, tx redis.Pipeliner, trace
 	return r.SetObjPipelined(ctx, tx, key, trace, expiryBidCache)
 }
 
+// GetBidTrace returns (trace, nil), or (nil, redis.Nil) if the trace does not exist
 func (r *RedisCache) GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
 	key := r.keyCacheBidTrace(slot, proposerPubkey, blockHash)
 	resp := new(common.BidTraceV2)
 	err := r.GetObj(key, resp)
-	if errors.Is(err, redis.Nil) {
-		return nil, nil
-	}
 	return resp, err
 }
 
