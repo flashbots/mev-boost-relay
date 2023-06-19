@@ -35,8 +35,6 @@ type GetPayloadResponseKey struct {
 
 // Datastore provides a local memory cache with a Redis and DB backend
 type Datastore struct {
-	log *logrus.Entry
-
 	redis     *RedisCache
 	memcached *Memcached
 	db        database.IDatabaseService
@@ -46,11 +44,13 @@ type Datastore struct {
 	knownValidatorsLock       sync.RWMutex
 	knownValidatorsIsUpdating uberatomic.Bool
 	knownValidatorsLastSlot   uberatomic.Uint64
+
+	// Used for proposer-API readiness check
+	KnownValidatorsWasUpdated uberatomic.Bool
 }
 
-func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
+func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
 	ds = &Datastore{
-		log:                     log.WithField("component", "datastore"),
 		db:                      db,
 		memcached:               memcached,
 		redis:                   redisCache,
@@ -66,7 +66,7 @@ func NewDatastore(log *logrus.Entry, redisCache *RedisCache, memcached *Memcache
 // For the CL client this is an expensive operation and takes a bunch of resources.
 // This is why we schedule the requests for slot 4 and 20 of every epoch, 6 seconds
 // into the slot (on suggestion of @potuz). It's also run once at startup.
-func (ds *Datastore) RefreshKnownValidators(beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
+func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
 	// Ensure there's only one at a time
 	if isAlreadyUpdating := ds.knownValidatorsIsUpdating.Swap(true); isAlreadyUpdating {
 		return
@@ -75,11 +75,11 @@ func (ds *Datastore) RefreshKnownValidators(beaconClient beaconclient.IMultiBeac
 
 	headSlotPos := common.SlotPos(slot) // 1-based position in epoch (32 slots, 1..32)
 	lastUpdateSlot := ds.knownValidatorsLastSlot.Load()
-	log := ds.log.WithFields(logrus.Fields{
-		"method":         "RefreshKnownValidators",
-		"headSlot":       slot,
-		"headSlotPos":    headSlotPos,
-		"lastUpdateSlot": lastUpdateSlot,
+	log = log.WithFields(logrus.Fields{
+		"datastoreMethod": "RefreshKnownValidators",
+		"headSlot":        slot,
+		"headSlotPos":     headSlotPos,
+		"lastUpdateSlot":  lastUpdateSlot,
 	})
 
 	// Only proceed if slot newer than last updated
@@ -87,7 +87,7 @@ func (ds *Datastore) RefreshKnownValidators(beaconClient beaconclient.IMultiBeac
 		return
 	}
 
-	// 	// Minimum amount of slots between updates
+	// Minimum amount of slots between updates
 	slotsSinceLastUpdate := slot - lastUpdateSlot
 	if slotsSinceLastUpdate < 6 {
 		return
@@ -143,6 +143,7 @@ func (ds *Datastore) RefreshKnownValidators(beaconClient beaconclient.IMultiBeac
 	ds.knownValidatorsByIndex = knownValidatorsByIndex
 	ds.knownValidatorsLock.Unlock()
 
+	ds.KnownValidatorsWasUpdated.Store(true)
 	log.Infof("known validators updated")
 }
 
@@ -189,13 +190,8 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 }
 
 // GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
-func (ds *Datastore) GetGetPayloadResponse(slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
-	log := ds.log.WithFields(logrus.Fields{
-		"method":         "GetGetPayloadResponse",
-		"slot":           slot,
-		"proposerPubkey": proposerPubkey,
-		"blockHash":      blockHash,
-	})
+func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*common.VersionedExecutionPayload, error) {
+	log = log.WithField("datastoreMethod", "GetGetPayloadResponse")
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
 

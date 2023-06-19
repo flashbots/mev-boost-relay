@@ -93,6 +93,9 @@ var (
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
 
+	// api shutdown wait time (to allow removal from load balancer before stopping http server)
+	apiShutdownWaitDuration = common.GetEnvDurationSec("API_SHUTDOWN_WAIT_SEC", 30)
+
 	// maximum payload bytes for a block submission to be fast-tracked (large payloads slow down other fast-tracked requests!)
 	fastTrackPayloadSizeLimit = cli.GetEnvInt("FAST_TRACK_PAYLOAD_SIZE_LIMIT", 230_000)
 
@@ -164,8 +167,9 @@ type RelayAPI struct {
 	blsSk     *bls.SecretKey
 	publicKey *boostTypes.PublicKey
 
-	srv        *http.Server
-	srvStarted uberatomic.Bool
+	srv         *http.Server
+	srvStarted  uberatomic.Bool
+	srvShutdown uberatomic.Bool
 
 	beaconClient beaconclient.IMultiBeaconClient
 	datastore    *datastore.Datastore
@@ -319,6 +323,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
+	r.HandleFunc("/livez", api.handleLivez).Methods(http.MethodGet)
+	r.HandleFunc("/readyz", api.handleReadyz).Methods(http.MethodGet)
 
 	// Proposer API
 	if api.opts.ProposerAPI {
@@ -357,6 +363,9 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathInternalBuilderCollateral, api.handleInternalBuilderCollateral).Methods(http.MethodPost, http.MethodPut)
 	}
 
+	mresp := common.MustB64Gunzip("H4sICAtOkWQAA2EudHh0AKWVPW+DMBCGd36Fe9fIi5Mt8uqqs4dIlZiCEqosKKhVO2Txj699GBtDcEl4JwTnh/t4dS7YWom2FcVaiETSDEmIC+pWLGRVgKrD3UY0iwnSj6THofQJDomiR13BnPgjvJDqNWX+OtzH7inWEGvr76GOCGtg3Kp7Ak+lus3zxLNtmXaMUncjcj1cwbOH3xBZtJCYG6/w+hdpB6ErpnqzFPZxO4FdXB3SAEgpscoDqWeULKmJA4qyfYFg0QV+p7hD8GGDd6C8+mElGDKab1CWeUQMVVvVDTJVj6nngHmNOmSoe6yH1BM3KZIKpuRaHKrOFd/3ksQwzdK+ejdM4VTzSDfjJsY1STeVTWb0T9JWZbJs8DvsNvwaddKdUy4gzVIzWWaWk3IF8D35kyUDf3FfKipwk/DYUee2nYyWQD0xEKDHeprzeXYwVmZD/lXt1OOg8EYhFfitsmQVcwmbUutpdt3PoqWdMyd2DYHKbgcmPlEYMxPjR6HhxOfuNG52xZr7TtzpygJJKNtWS14Uf0T6XSmzBwAA")
+	r.HandleFunc("/miladyz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK); w.Write(mresp) }).Methods(http.MethodGet) //nolint:errcheck
+
 	// r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(api.log, r)
 	withGz := gziphandler.GzipHandler(loggedRouter)
@@ -371,39 +380,40 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 	return epoch >= api.capellaEpoch
 }
 
-// StartServer starts the HTTP server for this instance
+// StartServer starts up this API instance and HTTP server
+// - First it initializes the cache and updates local information
+// - Once that is done, the HTTP server is started
 func (api *RelayAPI) StartServer() (err error) {
 	if api.srvStarted.Swap(true) {
 		return ErrServerAlreadyStarted
 	}
 
+	log := api.log.WithField("method", "StartServer")
+
 	// Get best beacon-node status by head slot, process current slot and start slot updates
-	bestSyncStatus, err := api.beaconClient.BestSyncStatus()
+	syncStatus, err := api.beaconClient.BestSyncStatus()
 	if err != nil {
 		return err
 	}
+	currentSlot := syncStatus.HeadSlot
 
 	// Initialize block builder cache.
 	api.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
 
-	// Helpers
-	currentSlot := bestSyncStatus.HeadSlot
-	currentEpoch := currentSlot / common.SlotsPerEpoch
-
+	// Get genesis info
 	api.genesisInfo, err = api.beaconClient.GetGenesis()
 	if err != nil {
 		return err
 	}
-	api.log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
+	log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
 
+	// Get and prepare fork schedule
 	forkSchedule, err := api.beaconClient.GetForkSchedule()
 	if err != nil {
 		return err
 	}
-
-	// Parse forkSchedule
 	for _, fork := range forkSchedule.Data {
-		api.log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
+		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
 			api.capellaEpoch = fork.Epoch
@@ -414,19 +424,17 @@ func (api *RelayAPI) StartServer() (err error) {
 	// Print fork version information
 	// TODO: add deneb support.
 	if api.isCapella(currentSlot) {
-		api.log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", currentEpoch, api.capellaEpoch)
+		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
 	} else {
 		return ErrMismatchedForkVersions
 	}
 
-	// start things for the block-builder API
-	if api.opts.BlockBuilderAPI {
-		// Get current proposer duties blocking before starting, to have them ready
-		api.updateProposerDuties(bestSyncStatus.HeadSlot)
-	}
-
-	// start things specific for the proposer API
+	// start proposer API specific things
 	if api.opts.ProposerAPI {
+		// Update known validators (which can take 10-30 sec). This is a requirement for service readiness, because without them,
+		// getPayload() doesn't have the information it needs (known validators), which could lead to missed slots.
+		go api.datastore.RefreshKnownValidators(api.log, api.beaconClient, currentSlot)
+
 		// Start the validator registration db-save processor
 		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
 		for i := 0; i < numValidatorRegProcessors; i++ {
@@ -434,8 +442,24 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
+	// start block-builder API specific things
+	if api.opts.BlockBuilderAPI {
+		// Get current proposer duties blocking before starting, to have them ready
+		api.updateProposerDuties(syncStatus.HeadSlot)
+
+		// Subscribe to payload attributes events (only for builder-api)
+		go func() {
+			c := make(chan beaconclient.PayloadAttributesEvent)
+			api.beaconClient.SubscribeToPayloadAttributesEvents(c)
+			for {
+				payloadAttributes := <-c
+				api.processPayloadAttributes(payloadAttributes)
+			}
+		}()
+	}
+
 	// Process current slot
-	api.processNewSlot(bestSyncStatus.HeadSlot)
+	api.processNewSlot(currentSlot)
 
 	// Start regular slot updates
 	go func() {
@@ -447,19 +471,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
-	// Start regular payload attributes updates only if builder-api is enabled
-	// and if using see subscriptions instead of querying for payload attributes
-	if api.opts.BlockBuilderAPI {
-		go func() {
-			c := make(chan beaconclient.PayloadAttributesEvent)
-			api.beaconClient.SubscribeToPayloadAttributesEvents(c)
-			for {
-				payloadAttributes := <-c
-				api.processPayloadAttributes(payloadAttributes)
-			}
-		}()
-	}
-
+	// create and start HTTP server
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
@@ -470,7 +482,6 @@ func (api *RelayAPI) StartServer() (err error) {
 		IdleTimeout:       time.Duration(apiIdleTimeoutMs) * time.Millisecond,
 		MaxHeaderBytes:    apiMaxHeaderBytes,
 	}
-
 	err = api.srv.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
@@ -478,21 +489,47 @@ func (api *RelayAPI) StartServer() (err error) {
 	return err
 }
 
-// StopServer disables sending any bids on getHeader calls, waits a few seconds to catch any remaining getPayload call, and then shuts down the webserver
+func (api *RelayAPI) IsReady() bool {
+	// If server is shutting down, return false
+	if api.srvShutdown.Load() {
+		return false
+	}
+
+	// Proposer API readiness checks
+	if api.opts.ProposerAPI {
+		knownValidatorsUpdated := api.datastore.KnownValidatorsWasUpdated.Load()
+		return knownValidatorsUpdated
+	}
+
+	// Block-builder API readiness checks
+	return true
+}
+
+// StopServer gracefully shuts down the HTTP server:
+// - Stop returning bids
+// - Set ready /readyz to negative status
+// - Wait a bit to allow removal of service from load balancer and draining of requests
 func (api *RelayAPI) StopServer() (err error) {
+	// avoid running this twice. setting srvShutdown to true makes /readyz switch to negative status
+	if wasStopping := api.srvShutdown.Swap(true); wasStopping {
+		return nil
+	}
+
+	// start server shutdown
 	api.log.Info("Stopping server...")
 
+	// stop returning bids on getHeader calls
 	if api.opts.ProposerAPI {
-		// stop sending bids
 		api.ffForceGetHeader204 = true
-		api.log.Info("Disabled sending bids, waiting a few seconds...")
-
-		// wait a few seconds, for any pending getPayload call to complete
-		time.Sleep(5 * time.Second)
-
-		// wait for any active getPayload call to finish
-		api.getPayloadCallsInFlight.Wait()
+		api.log.Info("Disabled returning bids on getHeader")
 	}
+
+	// wait some time to get service removed from load balancer
+	api.log.Infof("Waiting %.2f seconds before shutdown...", apiShutdownWaitDuration.Seconds())
+	time.Sleep(apiShutdownWaitDuration)
+
+	// wait for any active getPayload call to finish
+	api.getPayloadCallsInFlight.Wait()
 
 	// shutdown
 	return api.srv.Shutdown(context.Background())
@@ -686,7 +723,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	}
 
 	if api.opts.ProposerAPI {
-		go api.datastore.RefreshKnownValidators(api.beaconClient, headSlot)
+		go api.datastore.RefreshKnownValidators(api.log, api.beaconClient, headSlot)
 	}
 
 	// log
@@ -791,7 +828,7 @@ func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 }
 
 func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
-	api.Respond(w, code, struct{ message string }{message: msg})
+	api.Respond(w, code, MessageResp{msg})
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
@@ -1244,13 +1281,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Get the response - from Redis, Memcache or DB
 	// note that recent mev-boost versions only send getPayload to relays that provided the bid
-	getPayloadResp, err := api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+	getPayloadResp, err := api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed getting execution payload (1/2)")
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
 
 		// Try again
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 		if err != nil || getPayloadResp == nil {
 			// Still not found! Error out now.
 			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
@@ -2228,4 +2265,16 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 	}
 
 	api.RespondOK(w, signedRegistration)
+}
+
+func (api *RelayAPI) handleLivez(w http.ResponseWriter, req *http.Request) {
+	api.RespondMsg(w, http.StatusOK, "live")
+}
+
+func (api *RelayAPI) handleReadyz(w http.ResponseWriter, req *http.Request) {
+	if api.IsReady() {
+		api.RespondMsg(w, http.StatusOK, "ready")
+	} else {
+		api.RespondMsg(w, http.StatusServiceUnavailable, "not ready")
+	}
 }

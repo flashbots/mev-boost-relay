@@ -45,7 +45,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 
 	db := database.MockDB{}
 
-	ds, err := datastore.NewDatastore(common.TestLog, redisCache, nil, db)
+	ds, err := datastore.NewDatastore(redisCache, nil, db)
 	require.NoError(t, err)
 
 	sk, _, err := bls.GenerateNewKeypair()
@@ -197,6 +197,14 @@ func TestStatus(t *testing.T) {
 	path := "/eth/v1/builder/status"
 	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
 	require.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestLivez(t *testing.T) {
+	backend := newTestBackend(t, 1)
+	path := "/livez"
+	rr := backend.request(http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
 
 func TestRegisterValidator(t *testing.T) {
