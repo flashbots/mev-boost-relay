@@ -79,8 +79,37 @@ At this point, the pod is operational and can service traffic.
 
 ---
 
+### Example k8s + AWS configuration
+
+```yaml
+ metadata:
+   name: boost-relay-api-proposer
++  annotations:
++    alb.ingress.kubernetes.io/healthcheck-interval-seconds: 10
++    alb.ingress.kubernetes.io/healthcheck-path: /readyz
++    alb.ingress.kubernetes.io/healthcheck-port: 8080
+ spec:
+  template:
+    spec:
+      containers:
+        - name: boost-relay-api-proposer
++          livenessProbe:
++            httpGet:
++              path: /livez
++              port: 8080
++              initialDelaySeconds: 5
++          readinessProbe:
++            httpGet:
++              path: /readyz
++              port: 8080
++              initialDelaySeconds: 30
+```
+
+---
+
 See also:
 
 - https://kubernetes.io/docs/reference/using-api/health-checks/
 - https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 - https://komodor.com/blog/kubernetes-health-checks-everything-you-need-to-know/
+- https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.2/guide/ingress/annotations/
