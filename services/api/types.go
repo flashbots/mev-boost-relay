@@ -21,6 +21,6 @@ type HTTPErrorResp struct {
 	Message string `json:"message"`
 }
 
-type MessageResp struct {
+type HTTPMessageResp struct {
 	Message string `json:"message"`
 }

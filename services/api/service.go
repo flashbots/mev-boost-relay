@@ -89,12 +89,15 @@ var (
 	// api settings
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
-	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10000)
-	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3000)
-	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60000)
+	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3_000)
+	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10_000)
+	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60_000)
 
-	// api shutdown wait time (to allow removal from load balancer before stopping http server)
+	// api shutdown: wait time (to allow removal from load balancer before stopping http server)
 	apiShutdownWaitDuration = common.GetEnvDurationSec("API_SHUTDOWN_WAIT_SEC", 30)
+
+	// api shutdown: whether to stop sending bids during shutdown phase (only useful if running a single-instance testnet setup)
+	apiShutdownStopSendingBids = os.Getenv("API_SHUTDOWN_STOP_SENDING_BIDS") == "1"
 
 	// maximum payload bytes for a block submission to be fast-tracked (large payloads slow down other fast-tracked requests!)
 	fastTrackPayloadSizeLimit = cli.GetEnvInt("FAST_TRACK_PAYLOAD_SIZE_LIMIT", 230_000)
@@ -518,8 +521,8 @@ func (api *RelayAPI) StopServer() (err error) {
 	// start server shutdown
 	api.log.Info("Stopping server...")
 
-	// stop returning bids on getHeader calls
-	if api.opts.ProposerAPI {
+	// stop returning bids on getHeader calls (should only be used when running a single instance)
+	if api.opts.ProposerAPI && apiShutdownStopSendingBids {
 		api.ffForceGetHeader204 = true
 		api.log.Info("Disabled returning bids on getHeader")
 	}
@@ -828,7 +831,7 @@ func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 }
 
 func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
-	api.Respond(w, code, MessageResp{msg})
+	api.Respond(w, code, HTTPMessageResp{msg})
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {

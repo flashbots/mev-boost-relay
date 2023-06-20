@@ -118,21 +118,23 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 
 #### General
 
-* `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: 3)
-* `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: 1500)
-* `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: 600)
-* `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: 10000)
-* `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: 3000)
-* `API_MAX_HEADER_BYTES` - http maximum header byted (default: 60kb)
-* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum, default: 4)
-* `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: 3000)
+* `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: `3`)
+* `API_MAX_HEADER_BYTES` - http maximum header bytes (default: `60_000`)
+* `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: `1_500`)
+* `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: `600`)
+* `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: `10_000`)
+* `API_TIMEOUT_IDLE_MS` - http idle timeout in milliseconds (default: `3_000`)
+* `API_SHUTDOWN_WAIT_SEC` - how long to wait on shutdown before stopping server, to allow draining of requests (default: `30`)
+* `API_SHUTDOWN_STOP_SENDING_BIDS` - whether API should stop sending bids during shutdown (nly useful in single-instance/testnet setups, default: `false`)
+* `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum, default: `4`)
+* `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: `3000`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
-* `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: 100)
+* `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: `100`)
 * `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
-* `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: 45)
-* `MEMCACHED_CLIENT_TIMEOUT_MS` - client timeout in milliseconds (default: 250)
-* `MEMCACHED_MAX_IDLE_CONNS` - client max idle conns (default: 10)
+* `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: `45`)
+* `MEMCACHED_CLIENT_TIMEOUT_MS` - client timeout in milliseconds (default: `250`)
+* `MEMCACHED_MAX_IDLE_CONNS` - client max idle conns (default: `10`)
 * `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 * `NO_HEADER_USERAGENTS` - proposer API - comma separated list of user agents for which no bids should be returned
@@ -181,7 +183,7 @@ By default, the execution payloads for all block submission are stored in Redis 
 to provide redundant data availability for getPayload responses. But the database table is not pruned automatically,
 because it takes a lot of resources to rebuild the indexes (and a better option is using `TRUNCATE`).
 
-Storing all the payloads in the database can lead to terrabytes of data in this particular table. Now it's also possible
+Storing all the payloads in the database can lead to terabytes of data in this particular table. Now it's also possible
 to use memcached as a second data availability layer. Using memcached is optional and disabled by default.
 
 To enable memcached, you just need to supply the memcached URIs either via environment variable (i.e.
