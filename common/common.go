@@ -19,6 +19,10 @@ var (
 	DurationPerEpoch = DurationPerSlot * time.Duration(SlotsPerEpoch)
 )
 
+func SlotToEpoch(slot uint64) uint64 {
+	return slot / SlotsPerEpoch
+}
+
 // HTTPServerTimeouts are various timeouts for requests to the mev-boost HTTP server
 type HTTPServerTimeouts struct {
 	Read       time.Duration // Timeout for body reads. None if 0.

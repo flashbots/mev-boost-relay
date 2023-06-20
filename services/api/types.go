@@ -11,6 +11,9 @@ var (
 	ErrMissingSecretKey   = errors.New("secret key is nil")
 	ErrEmptyPayload       = errors.New("nil payload")
 	ErrInvalidTransaction = errors.New("invalid transaction")
+
+	NilResponse = struct{}{}
+	ZeroU256    = boostTypes.IntToU256(0)
 )
 
 type HTTPErrorResp struct {
@@ -18,6 +21,6 @@ type HTTPErrorResp struct {
 	Message string `json:"message"`
 }
 
-var NilResponse = struct{}{}
-
-var ZeroU256 = boostTypes.IntToU256(0)
+type HTTPMessageResp struct {
+	Message string `json:"message"`
+}

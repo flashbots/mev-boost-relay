@@ -1,7 +1,9 @@
 package common
 
 import (
+	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"os"
@@ -97,4 +99,17 @@ func LoadGzippedJSON(t *testing.T, filename string, dst any) {
 	b := LoadGzippedBytes(t, filename)
 	err := json.Unmarshal(b, dst)
 	require.NoError(t, err)
+}
+
+func MustB64Gunzip(s string) []byte {
+	b, _ := base64.StdEncoding.DecodeString(s)
+	gzreader, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		panic(err)
+	}
+	output, err := io.ReadAll(gzreader)
+	if err != nil {
+		panic(err)
+	}
+	return output
 }

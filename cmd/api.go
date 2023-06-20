@@ -139,7 +139,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		log.Info("Setting up datastore...")
-		ds, err := datastore.NewDatastore(log, redis, mem, db)
+		ds, err := datastore.NewDatastore(redis, mem, db)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}

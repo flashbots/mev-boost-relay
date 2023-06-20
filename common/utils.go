@@ -11,8 +11,10 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
@@ -232,4 +234,16 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.In
 	require.NoError(t, err)
 
 	return payload, getPayloadResponse, getHeaderResponse
+}
+
+// GetEnvDurationSec returns the value of the environment variable as duration in seconds,
+// or defaultValue if the environment variable doesn't exist or is not a valid integer
+func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
+	if value, ok := os.LookupEnv(key); ok {
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return time.Duration(val) * time.Second
+		}
+	}
+	return time.Duration(defaultValueSec) * time.Second
 }
