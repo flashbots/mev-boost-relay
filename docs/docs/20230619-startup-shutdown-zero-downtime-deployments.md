@@ -1,20 +1,20 @@
 # On graceful service startup and shutdown, and zero-downtime deployments
 
-2023-06-19, by [@metachris](https://twitter.com/metachris)
+2023-06-19, by [@metachris](https://twitter.com/metachris), [@0x416e746f6e](https://github.com/0x416e746f6e)
 
 ---
 
 This document explains the details of API service startup and shutdown behavior, in particular related to:
+- Zero-downtime deployments
 - Proposer API
   - Needing data before being able to handle `getPayload` requests (known validators)
-  - Draining getPayload and other requests before shutting down
-- Zero-downtime deployments
+  - Draining requests before shutting down
 
 ---
 
-### TL;DR
+## TL;DR
 
-- We've added two endpoints: `/livez` and `/readyz` (per [k8s docs](https://kubernetes.io/docs/reference/using-api/health-checks/)):
+- We've added two endpoints: `/livez` and `/readyz` (per [k8s docs](https://kubernetes.io/docs/reference/using-api/health-checks/)) in [#469](https://github.com/flashbots/mev-boost-relay/pull/469):
 - On startup:
     - `/livez` is immediately available and positive, and will stay so until the service is shut down
     - `/readyz` starts negative, until all information is loaded to safely process requests (known validators for the proposer API)
@@ -27,7 +27,7 @@ This document explains the details of API service startup and shutdown behavior,
 
 ---
 
-### Kubernetes background about health-checks
+## Kubernetes background about health-checks
 
 There are three types of health-checks (probes): [k8s docs](https://kubernetes.io/docs/reference/using-api/health-checks/)
 
@@ -55,7 +55,7 @@ There are three types of health-checks (probes): [k8s docs](https://kubernetes.i
 
 ---
 
-### API Startup + Shutdown Sequence
+## API Startup + Shutdown Sequence
 
 The proposer API needs to load all known validators before serving traffic, otherwise, there's a risk of missed slots due to `getPayload` not having all the information it needs to succeed.
 
@@ -79,7 +79,7 @@ At this point, the pod is operational and can service traffic.
 
 ---
 
-### Example k8s + AWS configuration
+## Example k8s + AWS configuration
 
 ```yaml
  metadata:
@@ -110,7 +110,7 @@ At this point, the pod is operational and can service traffic.
 
 ---
 
-See also:
+## See also
 
 - https://kubernetes.io/docs/reference/using-api/health-checks/
 - https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
