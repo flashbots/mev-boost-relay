@@ -21,7 +21,7 @@ This document explains the details of API service startup and shutdown behavior,
     - Configure your orchestration tooling to route traffic to the service only if and when `/readyz` is positive!
 - On shutdown:
     - `/readyz` returns a negative result
-    - Wait a little and drain all requests
+    - Wait a little and drain all requests (by default, 30 sec -- make sure your orchestration graceful shutdown period is greater than that (i.e. set to 60 sec))
     - Stop the webserver, and stop the program
 - See also: https://kubernetes.io/docs/reference/using-api/health-checks/
 
@@ -84,25 +84,28 @@ At this point, the pod is operational and can service traffic.
 ```yaml
  metadata:
    name: boost-relay-api-proposer
-+  annotations:
-+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: 10
-+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
-+    alb.ingress.kubernetes.io/healthcheck-port: 8080
+   annotations:
+     alb.ingress.kubernetes.io/healthcheck-interval-seconds: "10"
+     alb.ingress.kubernetes.io/healthcheck-path: /readyz
+     alb.ingress.kubernetes.io/healthcheck-port: "8080"
  spec:
   template:
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
         - name: boost-relay-api-proposer
-+          livenessProbe:
-+            httpGet:
-+              path: /livez
-+              port: 8080
-+              initialDelaySeconds: 5
-+          readinessProbe:
-+            httpGet:
-+              path: /readyz
-+              port: 8080
-+              initialDelaySeconds: 30
+          livenessProbe:
+            initialDelaySeconds: 5
+            failureThreshold: 2
+            httpGet:
+              path: /livez
+              port: 8080
+          readinessProbe:
+            initialDelaySeconds: 5
+            failureThreshold: 2
+            httpGet:
+              path: /readyz
+              port: 8080
 ```
 
 ---
