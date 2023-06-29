@@ -67,7 +67,7 @@ var ValidPayloadRegisterValidator = boostTypes.SignedValidatorRegistration{
 func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) BuilderSubmitBlockRequest {
 	signature, err := boostTypes.SignMessage(bid, boostTypes.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	return BuilderSubmitBlockRequest{ //nolint:exhaustruct
+	return BuilderSubmitBlockRequest{
 		Capella: &capella.SubmitBlockRequest{
 			Message:   &bid.BidTrace,
 			Signature: [96]byte(signature),

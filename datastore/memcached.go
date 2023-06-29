@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -39,7 +40,7 @@ func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash 
 
 // GetExecutionPayload attempts to fetch execution engine payload from memcached using composite key of slot,
 // proposer public key, block hash, and cache prefix if specified.
-func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error) {
+func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*api.VersionedExecutionPayload, error) {
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 	item, err := m.client.Get(key)
@@ -47,7 +48,7 @@ func (m *Memcached) GetExecutionPayload(slot uint64, proposerPubKey, blockHash s
 		return nil, err
 	}
 
-	result := new(common.VersionedExecutionPayload)
+	result := new(api.VersionedExecutionPayload)
 	if err = result.UnmarshalJSON(item.Value); err != nil {
 		return nil, err
 	}
