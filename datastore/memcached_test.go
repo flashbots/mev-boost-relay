@@ -8,12 +8,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-builder-client/api/capella"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,49 +31,48 @@ var (
 	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
 
-func testBuilderSubmitBlockRequest(pubkey types.PublicKey, signature types.Signature, version consensusspec.DataVersion) common.BuilderSubmitBlockRequest {
+func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) common.BuilderSubmitBlockRequest {
 	switch version {
-	case consensusspec.DataVersionBellatrix:
+	case consensusspec.DataVersionCapella:
 		return common.BuilderSubmitBlockRequest{
-			Bellatrix: &types.BuilderSubmitBlockRequest{
+			Capella: &capella.SubmitBlockRequest{
 				Signature: signature,
-				Message: &types.BidTrace{
+				Message: &apiv1.BidTrace{
 					Slot:                 1,
-					ParentHash:           types.Hash{0x01},
-					BlockHash:            types.Hash{0x09},
+					ParentHash:           phase0.Hash32{0x01},
+					BlockHash:            phase0.Hash32{0x09},
 					BuilderPubkey:        pubkey,
-					ProposerPubkey:       types.PublicKey{0x03},
-					ProposerFeeRecipient: types.Address{0x04},
-					Value:                types.IntToU256(123),
+					ProposerPubkey:       phase0.BLSPubKey{0x03},
+					ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+					Value:                uint256.NewInt(123),
 					GasLimit:             5002,
 					GasUsed:              5003,
 				},
-				ExecutionPayload: &types.ExecutionPayload{
-					ParentHash:    types.Hash{0x01},
-					FeeRecipient:  types.Address{0x02},
-					StateRoot:     types.Root{0x03},
-					ReceiptsRoot:  types.Root{0x04},
+				ExecutionPayload: &capellaspec.ExecutionPayload{
+					ParentHash:    phase0.Hash32{0x01},
+					FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+					StateRoot:     phase0.Root{0x03},
+					ReceiptsRoot:  phase0.Root{0x04},
 					LogsBloom:     types.Bloom{0x05},
-					Random:        types.Hash{0x06},
+					PrevRandao:    phase0.Hash32{0x06},
 					BlockNumber:   5001,
 					GasLimit:      5002,
 					GasUsed:       5003,
 					Timestamp:     5004,
 					ExtraData:     []byte{0x07},
 					BaseFeePerGas: types.IntToU256(123),
-					BlockHash:     types.Hash{0x09},
-					Transactions:  []hexutil.Bytes{},
+					BlockHash:     phase0.Hash32{0x09},
+					Transactions:  []bellatrix.Transaction{},
 				},
 			},
 		}
 	case consensusspec.DataVersionDeneb:
 		fallthrough
-	case consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionCapella:
+	case consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return common.BuilderSubmitBlockRequest{
-			Bellatrix: nil,
-			Capella:   nil,
+			Capella: nil,
 		}
 	}
 }
@@ -126,7 +131,7 @@ func TestMemcached(t *testing.T) {
 	testCases := []test{
 		{
 			Description: "Given an invalid execution payload, we expect an invalid payload error when attempting to create a payload response",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, math.MaxUint64),
+			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), math.MaxUint64),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -139,7 +144,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -158,7 +163,7 @@ func TestMemcached(t *testing.T) {
 						"expected no error when marshalling execution payload response but found [%v]", err,
 					)
 
-					out := new(common.VersionedExecutionPayload)
+					out := new(api.VersionedExecutionPayload)
 					err = out.UnmarshalJSON(inputBytes)
 					require.NoError(
 						t,
@@ -190,7 +195,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -207,24 +212,24 @@ func TestMemcached(t *testing.T) {
 
 					prev, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
-					require.Equal(t, prev.NumTx(), tc.Input.NumTx())
+					require.Equal(t, len(prev.Capella.Transactions), tc.Input.NumTx())
 
 					payload.Bellatrix.Data.GasLimit++
-					require.NotEqual(t, prev.Bellatrix.Data.GasLimit, payload.Bellatrix.Data.GasLimit)
+					require.NotEqual(t, prev.Bellatrix.GasLimit, payload.Bellatrix.Data.GasLimit)
 
 					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
 					require.NoError(t, err)
 
 					current, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
-					require.Equal(t, current.Bellatrix.Data.GasLimit, payload.Bellatrix.Data.GasLimit)
-					require.NotEqual(t, current.Bellatrix.Data.GasLimit, prev.Bellatrix.Data.GasLimit)
+					require.Equal(t, current.Bellatrix.GasLimit, payload.Bellatrix.Data.GasLimit)
+					require.NotEqual(t, current.Bellatrix.GasLimit, prev.Bellatrix.GasLimit)
 				}
 			},
 		},
 		{
 			Description: fmt.Sprintf("Given a valid builder submit block request, memcached entry should expire after %d seconds", defaultMemcachedExpirySeconds),
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -236,7 +241,7 @@ func TestMemcached(t *testing.T) {
 					pk, err := types.BlsPublicKeyToPublicKey(pubkey)
 					require.NoError(t, err)
 
-					tc.Input.Bellatrix.Message.ProposerPubkey = pk
+					tc.Input.Capella.Message.ProposerPubkey = phase0.BLSPubKey(pk)
 					payload, err := tc.Input.ExecutionPayloadResponse()
 					require.NoError(
 						t,
@@ -250,7 +255,7 @@ func TestMemcached(t *testing.T) {
 
 					ret, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
-					require.Equal(t, ret.NumTx(), tc.Input.NumTx())
+					require.Equal(t, len(ret.Capella.Transactions), tc.Input.NumTx())
 
 					time.Sleep((time.Duration(defaultMemcachedExpirySeconds) + 2) * time.Second)
 					expired, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())

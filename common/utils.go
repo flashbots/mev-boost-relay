@@ -213,7 +213,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.In
 	builderPk, err := StrToPhase0Pubkey(builderPubkey)
 	require.NoError(t, err)
 
-	payload = &BuilderSubmitBlockRequest{ //nolint:exhaustruct
+	payload = &BuilderSubmitBlockRequest{
 		Capella: &capella.SubmitBlockRequest{
 			Message: &v1.BidTrace{ //nolint:exhaustruct
 				BuilderPubkey:  builderPk,
