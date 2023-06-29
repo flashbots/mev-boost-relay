@@ -370,7 +370,6 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 
 		for _, invalidBlockHash := range invalidBlockHashes {
 			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
-			t.Log(invalidBlockHash)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
 		}
@@ -383,8 +382,6 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	req := new(common.BuilderSubmitBlockRequest)
 	err := json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)
-
-	t.Log(req.Capella)
 
 	reqSSZ, err := req.Capella.MarshalSSZ()
 	require.NoError(t, err)
