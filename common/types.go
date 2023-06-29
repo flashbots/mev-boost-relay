@@ -13,7 +13,6 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -351,16 +350,12 @@ func (s *SignedBlindedBeaconBlock) Message() boostTypes.HashTreeRoot {
 }
 
 type SignedBeaconBlock struct {
-	Bellatrix *boostTypes.SignedBeaconBlock
-	Capella   *consensuscapella.SignedBeaconBlock
+	Capella *consensuscapella.SignedBeaconBlock
 }
 
 func (s *SignedBeaconBlock) MarshalJSON() ([]byte, error) {
 	if s.Capella != nil {
 		return json.Marshal(s.Capella)
-	}
-	if s.Bellatrix != nil {
-		return json.Marshal(s.Bellatrix)
 	}
 	return nil, ErrEmptyPayload
 }
@@ -369,9 +364,6 @@ func (s *SignedBeaconBlock) Slot() uint64 {
 	if s.Capella != nil {
 		return uint64(s.Capella.Message.Slot)
 	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.Slot
-	}
 	return 0
 }
 
@@ -379,65 +371,16 @@ func (s *SignedBeaconBlock) BlockHash() string {
 	if s.Capella != nil {
 		return s.Capella.Message.Body.ExecutionPayload.BlockHash.String()
 	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.Body.ExecutionPayload.BlockHash.String()
-	}
 	return ""
 }
 
-type VersionedExecutionPayload struct {
-	Bellatrix *boostTypes.GetPayloadResponse
-	Capella   *api.VersionedExecutionPayload
-}
-
-func (e *VersionedExecutionPayload) MarshalJSON() ([]byte, error) {
-	if e.Capella != nil {
-		return json.Marshal(e.Capella)
-	}
-	if e.Bellatrix != nil {
-		return json.Marshal(e.Bellatrix)
-	}
-
-	return nil, ErrEmptyPayload
-}
-
-func (e *VersionedExecutionPayload) UnmarshalJSON(data []byte) error {
-	capella := new(api.VersionedExecutionPayload)
-	err := json.Unmarshal(data, capella)
-	if err == nil && capella.Capella != nil {
-		e.Capella = capella
-		return nil
-	}
-	bellatrix := new(boostTypes.GetPayloadResponse)
-	err = json.Unmarshal(data, bellatrix)
-	if err != nil {
-		return err
-	}
-	e.Bellatrix = bellatrix
-	return nil
-}
-
-func (e *VersionedExecutionPayload) NumTx() int {
-	if e.Capella != nil {
-		return len(e.Capella.Capella.Transactions)
-	}
-	if e.Bellatrix != nil {
-		return len(e.Bellatrix.Data.Transactions)
-	}
-	return 0
-}
-
 type BuilderSubmitBlockRequest struct {
-	Bellatrix *boostTypes.BuilderSubmitBlockRequest
-	Capella   *capella.SubmitBlockRequest
+	Capella *capella.SubmitBlockRequest
 }
 
 func (b *BuilderSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 	if b.Capella != nil {
 		return json.Marshal(b.Capella)
-	}
-	if b.Bellatrix != nil {
-		return json.Marshal(b.Bellatrix)
 	}
 	return nil, ErrEmptyPayload
 }
@@ -445,16 +388,10 @@ func (b *BuilderSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 func (b *BuilderSubmitBlockRequest) UnmarshalJSON(data []byte) error {
 	capella := new(capella.SubmitBlockRequest)
 	err := json.Unmarshal(data, capella)
-	if err == nil {
-		b.Capella = capella
-		return nil
-	}
-	bellatrix := new(boostTypes.BuilderSubmitBlockRequest)
-	err = json.Unmarshal(data, bellatrix)
 	if err != nil {
 		return err
 	}
-	b.Bellatrix = bellatrix
+	b.Capella = capella
 	return nil
 }
 
@@ -462,23 +399,10 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload != nil
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload != nil
-	}
 	return false
 }
 
 func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*GetPayloadResponse, error) {
-	if b.Bellatrix != nil {
-		return &GetPayloadResponse{
-			Bellatrix: &boostTypes.GetPayloadResponse{
-				Version: boostTypes.VersionString(consensusspec.DataVersionBellatrix.String()),
-				Data:    b.Bellatrix.ExecutionPayload,
-			},
-			Capella: nil,
-		}, nil
-	}
-
 	if b.Capella != nil {
 		return &GetPayloadResponse{
 			Capella: &api.VersionedExecutionPayload{
@@ -497,18 +421,12 @@ func (b *BuilderSubmitBlockRequest) Slot() uint64 {
 	if b.Capella != nil {
 		return b.Capella.Message.Slot
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.Slot
-	}
 	return 0
 }
 
 func (b *BuilderSubmitBlockRequest) BlockHash() string {
 	if b.Capella != nil {
 		return b.Capella.Message.BlockHash.String()
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.BlockHash.String()
 	}
 	return ""
 }
@@ -517,18 +435,12 @@ func (b *BuilderSubmitBlockRequest) ExecutionPayloadBlockHash() string {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.BlockHash.String()
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.BlockHash.String()
-	}
 	return ""
 }
 
 func (b *BuilderSubmitBlockRequest) BuilderPubkey() phase0.BLSPubKey {
 	if b.Capella != nil {
 		return b.Capella.Message.BuilderPubkey
-	}
-	if b.Bellatrix != nil {
-		return phase0.BLSPubKey(b.Bellatrix.Message.BuilderPubkey)
 	}
 	return phase0.BLSPubKey{}
 }
@@ -537,18 +449,12 @@ func (b *BuilderSubmitBlockRequest) ProposerFeeRecipient() string {
 	if b.Capella != nil {
 		return b.Capella.Message.ProposerFeeRecipient.String()
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.ProposerFeeRecipient.String()
-	}
 	return ""
 }
 
 func (b *BuilderSubmitBlockRequest) Timestamp() uint64 {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.Timestamp
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.Timestamp
 	}
 	return 0
 }
@@ -557,18 +463,12 @@ func (b *BuilderSubmitBlockRequest) ProposerPubkey() string {
 	if b.Capella != nil {
 		return b.Capella.Message.ProposerPubkey.String()
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.ProposerPubkey.String()
-	}
 	return ""
 }
 
 func (b *BuilderSubmitBlockRequest) ParentHash() string {
 	if b.Capella != nil {
 		return b.Capella.Message.ParentHash.String()
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.ParentHash.String()
 	}
 	return ""
 }
@@ -577,18 +477,12 @@ func (b *BuilderSubmitBlockRequest) ExecutionPayloadParentHash() string {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.ParentHash.String()
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.ParentHash.String()
-	}
 	return ""
 }
 
 func (b *BuilderSubmitBlockRequest) Value() *big.Int {
 	if b.Capella != nil {
 		return b.Capella.Message.Value.ToBig()
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.Message.Value.BigInt()
 	}
 	return nil
 }
@@ -597,18 +491,12 @@ func (b *BuilderSubmitBlockRequest) NumTx() int {
 	if b.Capella != nil {
 		return len(b.Capella.ExecutionPayload.Transactions)
 	}
-	if b.Bellatrix != nil {
-		return len(b.Bellatrix.ExecutionPayload.Transactions)
-	}
 	return 0
 }
 
 func (b *BuilderSubmitBlockRequest) BlockNumber() uint64 {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.BlockNumber
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.BlockNumber
 	}
 	return 0
 }
@@ -617,18 +505,12 @@ func (b *BuilderSubmitBlockRequest) GasUsed() uint64 {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.GasUsed
 	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.GasUsed
-	}
 	return 0
 }
 
 func (b *BuilderSubmitBlockRequest) GasLimit() uint64 {
 	if b.Capella != nil {
 		return b.Capella.ExecutionPayload.GasLimit
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.GasLimit
 	}
 	return 0
 }
@@ -637,18 +519,12 @@ func (b *BuilderSubmitBlockRequest) Signature() phase0.BLSSignature {
 	if b.Capella != nil {
 		return b.Capella.Signature
 	}
-	if b.Bellatrix != nil {
-		return phase0.BLSSignature(b.Bellatrix.Signature)
-	}
 	return phase0.BLSSignature{}
 }
 
 func (b *BuilderSubmitBlockRequest) Random() string {
 	if b.Capella != nil {
 		return fmt.Sprintf("%#x", b.Capella.ExecutionPayload.PrevRandao)
-	}
-	if b.Bellatrix != nil {
-		return b.Bellatrix.ExecutionPayload.Random.String()
 	}
 	return ""
 }
@@ -657,27 +533,7 @@ func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
 	if b.Capella != nil {
 		return b.Capella.Message
 	}
-	if b.Bellatrix != nil {
-		return BoostBidToBidTrace(b.Bellatrix.Message)
-	}
 	return nil
-}
-
-func BoostBidToBidTrace(bidTrace *boostTypes.BidTrace) *apiv1.BidTrace {
-	if bidTrace == nil {
-		return nil
-	}
-	return &apiv1.BidTrace{
-		BuilderPubkey:        phase0.BLSPubKey(bidTrace.BuilderPubkey),
-		Slot:                 bidTrace.Slot,
-		ProposerPubkey:       phase0.BLSPubKey(bidTrace.ProposerPubkey),
-		ProposerFeeRecipient: bellatrix.ExecutionAddress(bidTrace.ProposerFeeRecipient),
-		BlockHash:            phase0.Hash32(bidTrace.BlockHash),
-		Value:                U256StrToUint256(bidTrace.Value),
-		ParentHash:           phase0.Hash32(bidTrace.ParentHash),
-		GasLimit:             bidTrace.GasLimit,
-		GasUsed:              bidTrace.GasUsed,
-	}
 }
 
 type GetPayloadResponse struct {

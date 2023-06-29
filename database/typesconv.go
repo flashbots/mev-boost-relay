@@ -7,7 +7,6 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
@@ -17,13 +16,6 @@ func PayloadToExecPayloadEntry(payload *common.BuilderSubmitBlockRequest) (*Exec
 	var _payload []byte
 	var version string
 	var err error
-	if payload.Bellatrix != nil {
-		_payload, err = json.Marshal(payload.Bellatrix.ExecutionPayload)
-		if err != nil {
-			return nil, err
-		}
-		version = common.ForkVersionStringBellatrix
-	}
 	if payload.Capella != nil {
 		_payload, err = json.Marshal(payload.Capella.ExecutionPayload)
 		if err != nil {
@@ -83,7 +75,7 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 	}
 }
 
-func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *common.VersionedExecutionPayload, err error) {
+func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *api.VersionedExecutionPayload, err error) {
 	payloadVersion := executionPayloadEntry.Version
 	if payloadVersion == common.ForkVersionStringDeneb {
 		return nil, ErrUnsupportedExecutionPayload
@@ -93,28 +85,10 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		if err != nil {
 			return nil, err
 		}
-		capella := api.VersionedExecutionPayload{
+		return &api.VersionedExecutionPayload{
 			Version:   consensusspec.DataVersionCapella,
 			Capella:   executionPayload,
 			Bellatrix: nil,
-		}
-		return &common.VersionedExecutionPayload{
-			Capella:   &capella,
-			Bellatrix: nil,
-		}, nil
-	} else if payloadVersion == common.ForkVersionStringBellatrix {
-		executionPayload := new(types.ExecutionPayload)
-		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
-		if err != nil {
-			return nil, err
-		}
-		bellatrix := types.GetPayloadResponse{
-			Version: types.VersionString(common.ForkVersionStringBellatrix),
-			Data:    executionPayload,
-		}
-		return &common.VersionedExecutionPayload{
-			Bellatrix: &bellatrix,
-			Capella:   nil,
 		}, nil
 	} else {
 		return nil, ErrUnsupportedExecutionPayload

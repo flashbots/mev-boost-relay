@@ -16,7 +16,6 @@ import (
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -385,6 +384,8 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	err := json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)
 
+	t.Log(req.Capella)
+
 	reqSSZ, err := req.Capella.MarshalSSZ()
 	require.NoError(t, err)
 	require.Equal(t, 352239, len(reqSSZ))
@@ -407,7 +408,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
 	require.NoError(t, err)
-	withdrawalsRoot, err := hexutil.Decode("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
+	var withdrawalsRoot types.Hash
+	err = withdrawalsRoot.UnmarshalText([]byte("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8"))
 	require.NoError(t, err)
 	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
 
