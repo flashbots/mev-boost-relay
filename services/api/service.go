@@ -1463,7 +1463,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// respond to the HTTP request
 	api.RespondOK(w, getPayloadResp)
 	log = log.WithFields(logrus.Fields{
-		"numTx":       getPayloadResp.NumTx(),
+		// TODO: get tx field when https://github.com/attestantio/go-builder-client/pull/14 is merged
+		// "numTx":       getPayloadResp.NumTx(),
 		"blockNumber": payload.BlockNumber(),
 	})
 	log.Info("execution payload delivered")
