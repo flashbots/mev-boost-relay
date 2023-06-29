@@ -24,5 +24,5 @@ func TestExecutionPayloadEntryToExecutionPayload(t *testing.T) {
 
 	payload, err := ExecutionPayloadEntryToExecutionPayload(entry)
 	require.NoError(t, err)
-	require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", payload.Capella.Capella.BlockHash.String())
+	require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", payload.Capella.BlockHash.String())
 }
