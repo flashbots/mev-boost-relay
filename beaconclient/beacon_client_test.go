@@ -198,7 +198,6 @@ func TestFetchValidators(t *testing.T) {
 		backend.beaconInstances[2].MockFetchValidatorsErr = nil
 		backend.beaconInstances[2].AddValidator(entry)
 
-		// t.Log("beacon0/1/2 validators:", backend.beaconInstances[0].NumValidators(), backend.beaconInstances[1].NumValidators(), backend.beaconInstances[2].NumValidators())
 		validators, err = backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
 		require.Equal(t, 1, len(validators.Data))

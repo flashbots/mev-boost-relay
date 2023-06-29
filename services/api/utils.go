@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
@@ -41,33 +42,7 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *common.VersionedExecutionPayload) error {
-	if bb.Bellatrix != nil { // process Bellatrix beacon block
-		if payload.Bellatrix == nil {
-			return ErrPayloadMismatchBellatrix
-		}
-		bbHeaderHtr, err := bb.Bellatrix.Message.Body.ExecutionPayloadHeader.HashTreeRoot()
-		if err != nil {
-			return err
-		}
-
-		payloadHeader, err := boostTypes.PayloadToPayloadHeader(payload.Bellatrix.Data)
-		if err != nil {
-			return err
-		}
-		payloadHeaderHtr, err := payloadHeader.HashTreeRoot()
-		if err != nil {
-			return err
-		}
-
-		if bbHeaderHtr != payloadHeaderHtr {
-			return ErrHeaderHTRMismatch
-		}
-
-		// bellatrix block and payload are equal
-		return nil
-	}
-
+func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *api.VersionedExecutionPayload) error {
 	if bb.Capella != nil { // process Capella beacon block
 		if payload.Capella == nil {
 			return ErrPayloadMismatchCapella
@@ -78,7 +53,7 @@ func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *co
 			return err
 		}
 
-		payloadHeader, err := common.CapellaPayloadToPayloadHeader(payload.Capella.Capella)
+		payloadHeader, err := common.CapellaPayloadToPayloadHeader(payload.Capella)
 		if err != nil {
 			return err
 		}

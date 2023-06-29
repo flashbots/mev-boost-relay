@@ -40,20 +40,6 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 		return nil, ErrMissingSecretKey
 	}
 
-	if payload.Bellatrix != nil {
-		signedBuilderBid, err := BuilderSubmitBlockRequestToSignedBuilderBid(payload.Bellatrix, sk, pubkey, domain)
-		if err != nil {
-			return nil, err
-		}
-		return &GetHeaderResponse{
-			Bellatrix: &boostTypes.GetHeaderResponse{
-				Version: boostTypes.VersionString(ForkVersionStringBellatrix),
-				Data:    signedBuilderBid,
-			},
-			Capella: nil,
-		}, nil
-	}
-
 	if payload.Capella != nil {
 		signedBuilderBid, err := CapellaBuilderSubmitBlockRequestToSignedBuilderBid(payload.Capella, sk, (*phase0.BLSPubKey)(pubkey), domain)
 		if err != nil {
@@ -72,16 +58,6 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 }
 
 func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*GetPayloadResponse, error) {
-	if payload.Bellatrix != nil {
-		return &GetPayloadResponse{
-			Bellatrix: &boostTypes.GetPayloadResponse{
-				Version: boostTypes.VersionString(ForkVersionStringBellatrix),
-				Data:    payload.Bellatrix.ExecutionPayload,
-			},
-			Capella: nil,
-		}, nil
-	}
-
 	if payload.Capella != nil {
 		return &GetPayloadResponse{
 			Capella: &api.VersionedExecutionPayload{
@@ -178,10 +154,9 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *SignedBlindedBeaconBlock, executionPayload *VersionedExecutionPayload) *SignedBeaconBlock {
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *SignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *SignedBeaconBlock {
 	var signedBeaconBlock SignedBeaconBlock
 	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
-	bellatrixBlindedBlock := signedBlindedBeaconBlock.Bellatrix
 	if capellaBlindedBlock != nil {
 		signedBeaconBlock.Capella = &consensuscapella.SignedBeaconBlock{
 			Signature: capellaBlindedBlock.Signature,
@@ -201,29 +176,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *SignedBlind
 					Deposits:              capellaBlindedBlock.Message.Body.Deposits,
 					VoluntaryExits:        capellaBlindedBlock.Message.Body.VoluntaryExits,
 					SyncAggregate:         capellaBlindedBlock.Message.Body.SyncAggregate,
-					ExecutionPayload:      executionPayload.Capella.Capella,
-				},
-			},
-		}
-	} else if bellatrixBlindedBlock != nil {
-		signedBeaconBlock.Bellatrix = &boostTypes.SignedBeaconBlock{
-			Signature: bellatrixBlindedBlock.Signature,
-			Message: &boostTypes.BeaconBlock{
-				Slot:          bellatrixBlindedBlock.Message.Slot,
-				ProposerIndex: bellatrixBlindedBlock.Message.ProposerIndex,
-				ParentRoot:    bellatrixBlindedBlock.Message.ParentRoot,
-				StateRoot:     bellatrixBlindedBlock.Message.StateRoot,
-				Body: &boostTypes.BeaconBlockBody{
-					RandaoReveal:      bellatrixBlindedBlock.Message.Body.RandaoReveal,
-					Eth1Data:          bellatrixBlindedBlock.Message.Body.Eth1Data,
-					Graffiti:          bellatrixBlindedBlock.Message.Body.Graffiti,
-					ProposerSlashings: bellatrixBlindedBlock.Message.Body.ProposerSlashings,
-					AttesterSlashings: bellatrixBlindedBlock.Message.Body.AttesterSlashings,
-					Attestations:      bellatrixBlindedBlock.Message.Body.Attestations,
-					Deposits:          bellatrixBlindedBlock.Message.Body.Deposits,
-					VoluntaryExits:    bellatrixBlindedBlock.Message.Body.VoluntaryExits,
-					SyncAggregate:     bellatrixBlindedBlock.Message.Body.SyncAggregate,
-					ExecutionPayload:  executionPayload.Bellatrix.Data,
+					ExecutionPayload:      executionPayload.Capella,
 				},
 			},
 		}
