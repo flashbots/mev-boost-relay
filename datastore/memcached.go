@@ -8,7 +8,6 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/go-utils/cli"
-	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (
@@ -25,7 +24,7 @@ type Memcached struct {
 // SaveExecutionPayload attempts to insert execution engine payload to memcached using composite key of slot,
 // proposer public key, block hash, and cache prefix if specified. Note that writes to the same key value
 // (i.e. same slot, proposer public key, and block hash) will overwrite the existing entry.
-func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *common.GetPayloadResponse) error {
+func (m *Memcached) SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *api.VersionedExecutionPayload) error {
 	// TODO: standardize key format with redis cache and re-use the same function(s)
 	key := fmt.Sprintf("boost-relay/%s:cache-getpayload-response:%d_%s_%s", m.keyPrefix, slot, proposerPubKey, blockHash)
 
