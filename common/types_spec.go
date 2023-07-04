@@ -7,6 +7,7 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-builder-client/spec"
+	consensusapi "github.com/attestantio/go-eth2-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -154,7 +155,7 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *SignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *SignedBeaconBlock {
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *SignedBeaconBlock {
 	var signedBeaconBlock SignedBeaconBlock
 	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 	if capellaBlindedBlock != nil {
