@@ -1488,6 +1488,25 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
+func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) (uint64, bool) {
+	api.proposerDutiesLock.RLock()
+	slotDuty := api.proposerDutiesMap[payload.Slot()]
+	api.proposerDutiesLock.RUnlock()
+	if slotDuty == nil {
+		log.Warn("could not find slot duty")
+		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
+		return 0, false
+	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), payload.ProposerFeeRecipient()) {
+		log.WithFields(logrus.Fields{
+			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
+			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
+		}).Info("fee recipient does not match")
+		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
+		return 0, false
+	}
+	return slotDuty.Entry.Message.GasLimit, true
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit,maintidx
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -1649,20 +1668,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampAfterChecks1", time.Now().UTC().UnixMilli())
 
-	// ensure correct feeRecipient is used
-	api.proposerDutiesLock.RLock()
-	slotDuty := api.proposerDutiesMap[payload.Slot()]
-	api.proposerDutiesLock.RUnlock()
-	if slotDuty == nil {
-		log.Warn("could not find slot duty")
-		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
-		return
-	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), payload.ProposerFeeRecipient()) {
-		log.WithFields(logrus.Fields{
-			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
-			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
-		}).Info("fee recipient does not match")
-		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
+	gasLimit, cont := api.checkSubmissionFeeRecipient(w, log, payload)
+	if !cont {
 		return
 	}
 
@@ -1843,7 +1850,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		builder:    builderEntry,
 		req: &common.BuilderBlockValidationRequest{
 			BuilderSubmitBlockRequest: *payload,
-			RegisteredGasLimit:        slotDuty.Entry.Message.GasLimit,
+			RegisteredGasLimit:        gasLimit,
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
