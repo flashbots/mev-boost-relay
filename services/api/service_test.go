@@ -381,7 +381,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	req := new(common.BuilderSubmitBlockRequest)
+	req := new(spec.VersionedSubmitBlockRequest)
 	err := json.Unmarshal(requestPayloadJSONBytes, &req)
 	require.NoError(t, err)
 
@@ -435,7 +435,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 
 	// Prepare the request payload
-	req := new(common.BuilderSubmitBlockRequest)
+	req := new(spec.VersionedSubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
 	err = json.Unmarshal(requestPayloadJSONBytes, &req)

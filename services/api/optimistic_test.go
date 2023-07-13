@@ -189,7 +189,7 @@ func TestSimulateBlock(t *testing.T) {
 					},
 				},
 				req: &common.BuilderBlockValidationRequest{
-					BuilderSubmitBlockRequest: common.TestBuilderSubmitBlockRequest(
+					VersionedSubmitBlockRequest: common.TestBuilderSubmitBlockRequest(
 						secretkey, getTestBidTrace(*pubkey, collateral)),
 				},
 			})
@@ -239,7 +239,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 					},
 				},
 				req: &common.BuilderBlockValidationRequest{
-					BuilderSubmitBlockRequest: common.TestBuilderSubmitBlockRequest(
+					VersionedSubmitBlockRequest: common.TestBuilderSubmitBlockRequest(
 						secretkey, getTestBidTrace(*pubkey, collateral)),
 				},
 			}, simResultC)
