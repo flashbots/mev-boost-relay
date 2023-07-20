@@ -545,7 +545,7 @@ func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error 
 }
 
 func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error {
-	_submitBlockRequest, err := json.Marshal(submitBlockRequest)
+	_submitBlockRequest, err := json.Marshal(submitBlockRequest.Capella)
 	if err != nil {
 		return err
 	}
@@ -578,7 +578,7 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.Version
 }
 
 func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
-	_signedBeaconBlock, err := json.Marshal(signedBlock)
+	_signedBeaconBlock, err := json.Marshal(signedBlock.Capella)
 	if err != nil {
 		return err
 	}

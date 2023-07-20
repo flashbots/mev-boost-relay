@@ -382,7 +382,8 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
 	req := new(spec.VersionedSubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, &req)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
+	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	reqSSZ, err := req.Capella.MarshalSSZ()
@@ -436,9 +437,10 @@ func TestBuilderSubmitBlock(t *testing.T) {
 
 	// Prepare the request payload
 	req := new(spec.VersionedSubmitBlockRequest)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	err = json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	// Update

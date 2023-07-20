@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-builder-client/spec"
@@ -1590,18 +1590,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	payload := new(spec.VersionedSubmitBlockRequest)
+	payload := &spec.VersionedSubmitBlockRequest{
+		Version: consensusspec.DataVersionCapella,
+	}
+	payload.Capella = new(builderCapella.SubmitBlockRequest)
 
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
 		log = log.WithField("reqContentType", "ssz")
-		payload.Capella = new(builderCapella.SubmitBlockRequest)
 		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
 			log.WithError(err).Warn("could not decode payload - SSZ")
 
 			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
+			if err2 := json.Unmarshal(requestPayloadBytes, payload.Capella); err2 != nil {
 				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
@@ -1612,7 +1614,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	} else {
 		log = log.WithField("reqContentType", "json")
-		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
+		if err := json.Unmarshal(requestPayloadBytes, payload.Capella); err != nil {
 			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -1766,6 +1768,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Verify the signature
 	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
 	signature := submission.Signature
+	fmt.Println(submission.BidTrace.String())
 	ok, err = boostTypes.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
