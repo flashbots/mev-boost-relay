@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-builder-client/spec"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -182,7 +183,7 @@ type CreateTestBlockSubmissionOpts struct {
 	ProposerPubkey string
 }
 
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.Int, opts *CreateTestBlockSubmissionOpts) (payload *BuilderSubmitBlockRequest, getPayloadResponse *GetPayloadResponse, getHeaderResponse *GetHeaderResponse) {
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *BuilderSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
 	t.Helper()
 	var err error
 
@@ -217,7 +218,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.In
 		Capella: &capella.SubmitBlockRequest{
 			Message: &v1.BidTrace{ //nolint:exhaustruct
 				BuilderPubkey:  builderPk,
-				Value:          uint256.MustFromBig(value),
+				Value:          value,
 				Slot:           slot,
 				ParentHash:     parentHash,
 				ProposerPubkey: proposerPk,
