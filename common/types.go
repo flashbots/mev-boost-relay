@@ -425,15 +425,11 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 	return false
 }
 
-func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*GetPayloadResponse, error) {
+func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*api.VersionedExecutionPayload, error) {
 	if b.Capella != nil {
-		return &GetPayloadResponse{
-			Capella: &api.VersionedExecutionPayload{
-				Version:   consensusspec.DataVersionCapella,
-				Capella:   b.Capella.ExecutionPayload,
-				Bellatrix: nil,
-			},
-			Bellatrix: nil,
+		return &api.VersionedExecutionPayload{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: b.Capella.ExecutionPayload,
 		}, nil
 	}
 
@@ -557,37 +553,6 @@ func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
 		return b.Capella.Message
 	}
 	return nil
-}
-
-type GetPayloadResponse struct {
-	Bellatrix *boostTypes.GetPayloadResponse
-	Capella   *api.VersionedExecutionPayload
-}
-
-func (p *GetPayloadResponse) UnmarshalJSON(data []byte) error {
-	capella := new(api.VersionedExecutionPayload)
-	err := json.Unmarshal(data, capella)
-	if err == nil && capella.Capella != nil {
-		p.Capella = capella
-		return nil
-	}
-	bellatrix := new(boostTypes.GetPayloadResponse)
-	err = json.Unmarshal(data, bellatrix)
-	if err != nil {
-		return err
-	}
-	p.Bellatrix = bellatrix
-	return nil
-}
-
-func (p *GetPayloadResponse) MarshalJSON() ([]byte, error) {
-	if p.Bellatrix != nil {
-		return json.Marshal(p.Bellatrix)
-	}
-	if p.Capella != nil {
-		return json.Marshal(p.Capella)
-	}
-	return nil, ErrEmptyPayload
 }
 
 type GetHeaderResponse struct {
