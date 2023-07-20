@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -301,10 +301,10 @@ func TestGetHeader(t *testing.T) {
 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
-	bidValue := big.NewInt(99)
+	bidValue := uint256.NewInt(99)
 	trace := &common.BidTraceV2{
 		BidTrace: v1.BidTrace{
-			Value: uint256.MustFromBig(bidValue),
+			Value: bidValue,
 		},
 	}
 
@@ -324,10 +324,12 @@ func TestGetHeader(t *testing.T) {
 	// Check 1: regular request works and returns a bid
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	resp := common.GetHeaderResponse{}
+	resp := spec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, bidValue.String(), resp.Value().String())
+	value, err := resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, bidValue.String(), value.String())
 
 	// Check 2: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
