@@ -214,15 +214,15 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, len(prev.Capella.Transactions), tc.Input.NumTx())
 
-					payload.Bellatrix.Data.GasLimit++
-					require.NotEqual(t, prev.Bellatrix.GasLimit, payload.Bellatrix.Data.GasLimit)
+					payload.Bellatrix.GasLimit++
+					require.NotEqual(t, prev.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
 
 					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
 					require.NoError(t, err)
 
 					current, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
 					require.NoError(t, err)
-					require.Equal(t, current.Bellatrix.GasLimit, payload.Bellatrix.Data.GasLimit)
+					require.Equal(t, current.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
 					require.NotEqual(t, current.Bellatrix.GasLimit, prev.Bellatrix.GasLimit)
 				}
 			},

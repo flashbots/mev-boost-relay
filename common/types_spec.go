@@ -31,7 +31,7 @@ var NilResponse = struct{}{}
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*GetHeaderResponse, error) {
+func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*spec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -45,23 +45,20 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 		if err != nil {
 			return nil, err
 		}
-		return &GetHeaderResponse{ //nolint:exhaustruct
-			Capella: &spec.VersionedSignedBuilderBid{ //nolint:exhaustruct
-				Version: consensusspec.DataVersionCapella,
-				Capella: signedBuilderBid,
-			},
+		return &spec.VersionedSignedBuilderBid{
+			Version:   consensusspec.DataVersionCapella,
+			Capella:   signedBuilderBid,
+			Bellatrix: nil,
 		}, nil
 	}
 	return nil, ErrEmptyPayload
 }
 
-func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*GetPayloadResponse, error) {
+func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
 	if payload.Capella != nil {
-		return &GetPayloadResponse{ //nolint:exhaustruct
-			Capella: &api.VersionedExecutionPayload{ //nolint:exhaustruct
-				Version: consensusspec.DataVersionCapella,
-				Capella: payload.Capella.ExecutionPayload,
-			},
+		return &api.VersionedExecutionPayload{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: payload.Capella.ExecutionPayload,
 		}, nil
 	}
 
