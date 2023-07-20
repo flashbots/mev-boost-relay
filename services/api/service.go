@@ -35,6 +35,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
+	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/exp/slices"
@@ -1141,20 +1142,31 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if bid.Empty() {
+	if bid.IsEmpty() {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
+	value, err := bid.Value()
+	if err != nil {
+		log.WithError(err).Info("could not get bid value")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+	}
+	blockHash, err := bid.BlockHash()
+	if err != nil {
+		log.WithError(err).Info("could not get bid block hash")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+	}
+
 	// Error on bid without value
-	if bid.Value().Cmp(big.NewInt(0)) == 0 {
+	if value.Cmp(uint256.NewInt(0)) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	log.WithFields(logrus.Fields{
-		"value":     bid.Value().String(),
-		"blockHash": bid.BlockHash().String(),
+		"value":     value.String(),
+		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
 	api.RespondOK(w, bid)
 }
@@ -1264,7 +1276,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if !ok || err != nil {
 		if api.ffLogInvalidSignaturePayload {
 			txt, _ := json.Marshal(payload) //nolint:errchkjson
-			fmt.Println("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
+			log.Info("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
 		}
 		log.WithError(err).Warn("could not verify capella payload signature")
 		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
