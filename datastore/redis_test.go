@@ -218,7 +218,9 @@ func TestBuilderBids(t *testing.T) {
 	ensureBestBidValueEquals := func(expectedValue int64, builderPubkey string) {
 		bestBid, err := cache.GetBestBid(slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
-		require.Equal(t, big.NewInt(expectedValue), bestBid.Value())
+		value, err := bestBid.Value()
+		require.NoError(t, err)
+		require.Equal(t, big.NewInt(expectedValue), value.ToBig())
 
 		topBidValue, err := cache.GetTopBidValue(context.Background(), cache.client.Pipeline(), slot, parentHash, proposerPubkey)
 		require.NoError(t, err)
@@ -242,7 +244,7 @@ func TestBuilderBids(t *testing.T) {
 	require.NoError(t, err)
 
 	// submit ba1=10
-	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(10), &opts)
+	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(10), &opts)
 	resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved, resp)
@@ -261,7 +263,7 @@ func TestBuilderBids(t *testing.T) {
 	ensureBidFloor(10)
 
 	// submit ba2=5 (should not update, because floor is 10)
-	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(5), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.False(t, resp.WasBidSaved, resp)
@@ -272,7 +274,7 @@ func TestBuilderBids(t *testing.T) {
 	ensureBidFloor(10)
 
 	// submit ba3c=5 (should not update, because floor is 10)
-	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, big.NewInt(5), &opts)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(5), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
@@ -284,7 +286,7 @@ func TestBuilderBids(t *testing.T) {
 	ensureBidFloor(10)
 
 	// submit bb1=20
-	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(20), &opts)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(20), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
@@ -295,7 +297,7 @@ func TestBuilderBids(t *testing.T) {
 	ensureBidFloor(20)
 
 	// submit bb2c=22
-	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(22), &opts)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(22), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
@@ -306,7 +308,7 @@ func TestBuilderBids(t *testing.T) {
 	ensureBidFloor(20)
 
 	// submit bb3c=12 (should update top bid, using floor at 20)
-	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, big.NewInt(12), &opts)
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(12), &opts)
 	resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 	require.NoError(t, err)
 	require.True(t, resp.WasBidSaved)
@@ -475,18 +477,16 @@ func TestGetBuilderLatestValue(t *testing.T) {
 	// With no bids, should return "0".
 	v, err := cache.GetBuilderLatestValue(slot, parentHash, proposerPubkey, builderPubkey)
 	require.NoError(t, err)
-	require.Equal(t, v.Text(10), "0")
+	require.Equal(t, "0", v.String())
 
 	// Set a bid of 1 ETH.
 	newVal, err := uint256.FromDecimal("1000000000000000000")
 	require.NoError(t, err)
-	getHeaderResp := &common.GetHeaderResponse{
-		Capella: &spec.VersionedSignedBuilderBid{
-			Version: consensusspec.DataVersionCapella,
-			Capella: &capella.SignedBuilderBid{
-				Message: &capella.BuilderBid{
-					Value: newVal,
-				},
+	getHeaderResp := &spec.VersionedSignedBuilderBid{
+		Version: consensusspec.DataVersionCapella,
+		Capella: &capella.SignedBuilderBid{
+			Message: &capella.BuilderBid{
+				Value: newVal,
 			},
 		},
 	}
