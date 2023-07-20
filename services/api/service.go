@@ -19,12 +19,13 @@ import (
 	"strings"
 	"sync"
 	"time"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -1590,7 +1591,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	payload := &spec.VersionedSubmitBlockRequest{
+	payload := &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 		Version: consensusspec.DataVersionCapella,
 	}
 	payload.Capella = new(builderCapella.SubmitBlockRequest)
@@ -1768,7 +1769,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Verify the signature
 	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
 	signature := submission.Signature
-	fmt.Println(submission.BidTrace.String())
 	ok, err = boostTypes.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
