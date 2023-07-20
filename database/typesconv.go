@@ -85,10 +85,9 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		if err != nil {
 			return nil, err
 		}
-		return &api.VersionedExecutionPayload{
-			Version:   consensusspec.DataVersionCapella,
-			Capella:   executionPayload,
-			Bellatrix: nil,
+		return &api.VersionedExecutionPayload{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: executionPayload,
 		}, nil
 	} else {
 		return nil, ErrUnsupportedExecutionPayload
