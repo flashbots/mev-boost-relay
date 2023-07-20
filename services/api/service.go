@@ -1410,8 +1410,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		log.WithError(err).Info("failed to get block number")
 	}
+	txs, err := getPayloadResp.Transactions()
+	if err != nil {
+		log.WithError(err).Info("failed to get transactions")
+	}
 	log = log.WithFields(logrus.Fields{
-		"numTx":       getPayloadResp.Transactions(),
+		"numTx":       len(txs),
 		"blockNumber": blockNumber,
 	})
 	log.Info("execution payload delivered")

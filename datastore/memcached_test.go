@@ -68,7 +68,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 		}
 	case consensusspec.DataVersionDeneb:
 		fallthrough
-	case consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return common.BuilderSubmitBlockRequest{

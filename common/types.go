@@ -140,8 +140,8 @@ type BuilderGetValidatorsResponseEntry struct {
 
 type BidTraceV2 struct {
 	apiv1.BidTrace
-	BlockNumber uint64 `json:"block_number,string" db:"block_number"`
-	NumTx       uint64 `json:"num_tx,string" db:"num_tx"`
+	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
+	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
 }
 
 type BidTraceV2JSON struct {

@@ -3,6 +3,7 @@ linters:
   enable-all: true
   disable:
     - cyclop
+    - depguard
     - forbidigo
     - funlen
     - gochecknoglobals
@@ -88,6 +89,10 @@ linters-settings:
       # Because it's easier to read without the other fields.
       #
       - 'GetPayloadsFilters'
+      #
+      # Easier to read with only one of the versioned payloads.
+      #
+      - 'api.VersionedExecutionPayload'
 
       #
       # Structures outside our control that have a ton of settings. It doesn't
