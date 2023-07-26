@@ -462,19 +462,24 @@ type SaveBidAndUpdateTopBidResponse struct {
 	TimeUpdateFloor  time.Duration
 }
 
-func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *common.BidTraceV2, payload *common.BuilderSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
+func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *common.BidTraceV2, payload *spec.VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
 	var prevTime, nextTime time.Time
 	prevTime = time.Now()
 
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		return state, err
+	}
+
 	// Load latest bids for a given slot+parent+proposer
-	builderBids, err := NewBuilderBidsFromRedis(ctx, r, pipeliner, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	builderBids, err := NewBuilderBidsFromRedis(ctx, r, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String())
 	if err != nil {
 		return state, err
 	}
 
 	// Load floor value (if not passed in already)
 	if floorValue == nil {
-		floorValue, err = r.GetFloorBidValue(ctx, pipeliner, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+		floorValue, err = r.GetFloorBidValue(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String())
 		if err != nil {
 			return state, err
 		}
@@ -488,7 +493,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	state.PrevTopBidValue = state.TopBidValue
 
 	// Abort now if non-cancellation bid is lower than floor value
-	isBidAboveFloor := payload.Value().Cmp(floorValue) == 1
+	isBidAboveFloor := submission.Value.ToBig().Cmp(floorValue) == 1
 	if !isCancellationEnabled && !isBidAboveFloor {
 		return state, nil
 	}
@@ -502,7 +507,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	// Time to save things in Redis
 	//
 	// 1. Save the execution payload
-	err = r.SaveExecutionPayloadCapella(ctx, pipeliner, payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse.Capella)
+	err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Capella)
 	if err != nil {
 		return state, err
 	}
@@ -513,11 +518,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	prevTime = nextTime
 
 	// 2. Save latest bid for this builder
-	err = r.SaveBuilderBid(ctx, pipeliner, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String(), reqReceivedAt, getHeaderResponse)
+	err = r.SaveBuilderBid(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), submission.Builder.String(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
 		return state, err
 	}
-	builderBids.bidValues[payload.BuilderPubkey().String()] = payload.Value()
+	builderBids.bidValues[submission.Builder.String()] = submission.Value.ToBig()
 
 	// Record time needed to save bid
 	nextTime = time.Now().UTC()
@@ -541,11 +546,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 		return state, nil
 	}
 
-	state, err = r._updateTopBid(ctx, pipeliner, state, builderBids, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), floorValue)
+	state, err = r._updateTopBid(ctx, pipeliner, state, builderBids, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), floorValue)
 	if err != nil {
 		return state, err
 	}
-	state.IsNewTopBid = payload.Value().Cmp(state.TopBidValue) == 0
+	state.IsNewTopBid = submission.Value.ToBig().Cmp(state.TopBidValue) == 0
 	// An Exec happens in _updateTopBid.
 	state.WasBidSaved = true
 
@@ -559,8 +564,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	}
 
 	// Non-cancellable bid above floor should set new floor
-	keyBidSource := r.keyLatestBidByBuilder(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey(), payload.BuilderPubkey().String())
-	keyFloorBid := r.keyFloorBid(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	keyBidSource := r.keyLatestBidByBuilder(submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), submission.Builder.String())
+	keyFloorBid := r.keyFloorBid(submission.Slot, submission.ParentHash.String(), submission.Proposer.String())
 	c := pipeliner.Copy(ctx, keyBidSource, keyFloorBid, 0, true)
 	_, err = pipeliner.Exec(ctx)
 	if err != nil {
@@ -578,8 +583,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 		return state, err
 	}
 
-	keyFloorBidValue := r.keyFloorBidValue(payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
-	err = pipeliner.Set(ctx, keyFloorBidValue, payload.Value().String(), expiryBidCache).Err()
+	keyFloorBidValue := r.keyFloorBidValue(submission.Slot, submission.ParentHash.String(), submission.Proposer.String())
+	err = pipeliner.Set(ctx, keyFloorBidValue, submission.Value.Dec(), expiryBidCache).Err()
 	if err != nil {
 		return state, err
 	}

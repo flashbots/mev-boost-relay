@@ -22,8 +22,10 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -577,7 +579,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 	return nil, nil
 }
 
-func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlockRequest, simError error) {
+func (api *RelayAPI) demoteBuilder(pubkey string, req *spec.VersionedSubmitBlockRequest, simError error) {
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
@@ -594,10 +596,14 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlock
 	}
 	// Write to demotions table.
 	api.log.WithFields(logrus.Fields{"builder_pubkey": pubkey}).Info("demoting builder")
+	bidTrace, err := req.BidTrace()
+	if err != nil {
+		api.log.WithError(err).Warn("failed to get bid trace from submit block request")
+	}
 	if err := api.db.InsertBuilderDemotion(req, simError); err != nil {
 		api.log.WithError(err).WithFields(logrus.Fields{
 			"errorWritingDemotionToDB": true,
-			"bidTrace":                 req.Message,
+			"bidTrace":                 bidTrace,
 			"simError":                 simError,
 		}).Error("failed to save demotion to database")
 	}
@@ -612,14 +618,19 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 	defer api.optimisticBlocksWG.Done()
 
 	ctx := context.Background()
-	builderPubkey := opts.req.BuilderPubkey().String()
+	submission, err := common.GetBlockSubmissionInfo(&opts.req.VersionedSubmitBlockRequest)
+	if err != nil {
+		opts.log.WithError(err).Error("error getting block submission info")
+		return
+	}
+	builderPubkey := submission.Builder.String()
 	opts.log.WithFields(logrus.Fields{
 		"builderPubkey": builderPubkey,
 		// NOTE: this value is just an estimate because many goroutines could be
 		// updating api.optimisticBlocksInFlight concurrently. Since we just use
 		// it for logging, it is not atomic to avoid the performance impact.
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
-	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.BlockHash())
+	}).Infof("simulating optimistic block with hash: %v", submission.BlockHash.String())
 	reqErr, simErr := api.simulateBlock(ctx, opts)
 	simResultC <- &blockSimResult{reqErr == nil, true, reqErr, simErr}
 	if reqErr != nil || simErr != nil {
@@ -635,7 +646,7 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 		}
 
 		// Demote the builder.
-		api.demoteBuilder(builderPubkey, &opts.req.BuilderSubmitBlockRequest, demotionErr)
+		api.demoteBuilder(builderPubkey, &opts.req.VersionedSubmitBlockRequest, demotionErr)
 	}
 }
 
@@ -1520,18 +1531,18 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
-func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) (uint64, bool) {
+func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) (uint64, bool) {
 	api.proposerDutiesLock.RLock()
-	slotDuty := api.proposerDutiesMap[payload.Slot()]
+	slotDuty := api.proposerDutiesMap[submission.Slot]
 	api.proposerDutiesLock.RUnlock()
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
 		return 0, false
-	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), payload.ProposerFeeRecipient()) {
+	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), submission.ProposerFeeRecipient.String()) {
 		log.WithFields(logrus.Fields{
 			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
-			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
+			"actualFeeRecipient":   submission.ProposerFeeRecipient.String(),
 		}).Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
 		return 0, false
@@ -1539,25 +1550,25 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 	return slotDuty.Entry.Message.GasLimit, true
 }
 
-func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) bool {
+func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) bool {
 	api.payloadAttributesLock.RLock()
-	attrs, ok := api.payloadAttributes[payload.ParentHash()]
+	attrs, ok := api.payloadAttributes[submission.ParentHash.String()]
 	api.payloadAttributesLock.RUnlock()
-	if !ok || payload.Slot() != attrs.slot {
+	if !ok || submission.Slot != attrs.slot {
 		log.Warn("payload attributes not (yet) known")
 		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
 		return false
 	}
 
-	if payload.Random() != attrs.payloadAttributes.PrevRandao {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), attrs.payloadAttributes.PrevRandao)
+	if submission.PrevRandao.String() != attrs.payloadAttributes.PrevRandao {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", submission.PrevRandao.String(), attrs.payloadAttributes.PrevRandao)
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return false
 	}
 
-	if hasReachedFork(payload.Slot(), api.capellaEpoch) { // Capella requires correct withdrawals
-		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
+	if hasReachedFork(submission.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
+		withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
 			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
@@ -1575,25 +1586,18 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 	return true
 }
 
-func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.BuilderSubmitBlockRequest) bool {
-	// TODO: add deneb support.
-	if payload.Capella == nil {
-		log.Info("rejecting submission - non-capella payload for capella fork")
-		api.RespondError(w, http.StatusBadRequest, "non-capella payload")
-		return false
-	}
-
-	if payload.Slot() <= headSlot {
+func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, submission *common.BlockSubmissionInfo) bool {
+	if submission.Slot <= headSlot {
 		log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return false
 	}
 
 	// Timestamp check
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
-	if payload.Timestamp() != expectedTimestamp {
-		log.Warnf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp)
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.Slot * common.SecondsPerSlot)
+	if submission.Timestamp != expectedTimestamp {
+		log.Warnf("incorrect timestamp. got %d, expected %d", submission.Timestamp, expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", submission.Timestamp, expectedTimestamp))
 		return false
 	}
 
@@ -1785,18 +1789,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	payload := new(common.BuilderSubmitBlockRequest)
+	payload := &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+		Version: consensusspec.DataVersionCapella,
+	}
+	payload.Capella = new(builderCapella.SubmitBlockRequest)
 
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
 		log = log.WithField("reqContentType", "ssz")
-		payload.Capella = new(builderCapella.SubmitBlockRequest)
 		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
 			log.WithError(err).Warn("could not decode payload - SSZ")
 
 			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
+			if err2 := json.Unmarshal(requestPayloadBytes, payload.Capella); err2 != nil {
 				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
@@ -1807,7 +1813,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	} else {
 		log = log.WithField("reqContentType", "json")
-		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
+		if err := json.Unmarshal(requestPayloadBytes, payload.Capella); err != nil {
 			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -1819,30 +1825,32 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	prevTime = nextTime
 
 	isLargeRequest := len(requestPayloadBytes) > fastTrackPayloadSizeLimit
+	// getting block submission info also validates bid trace and execution submission are not empty
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		log.WithError(err).Warn("missing fields in submit block request")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	log = log.WithFields(logrus.Fields{
 		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
-		"slot":                   payload.Slot(),
-		"builderPubkey":          payload.BuilderPubkey().String(),
-		"blockHash":              payload.BlockHash(),
-		"proposerPubkey":         payload.ProposerPubkey(),
-		"parentHash":             payload.ParentHash(),
-		"value":                  payload.Value().String(),
-		"numTx":                  payload.NumTx(),
+		"slot":                   submission.Slot,
+		"builderPubkey":          submission.Builder.String(),
+		"blockHash":              submission.BlockHash.String(),
+		"proposerPubkey":         submission.Proposer.String(),
+		"parentHash":             submission.ParentHash.String(),
+		"value":                  submission.Value.Dec(),
+		"numTx":                  len(submission.Transactions),
 		"payloadBytes":           len(requestPayloadBytes),
 		"isLargeRequest":         isLargeRequest,
 	})
 
-	if payload.Message() == nil || !payload.HasExecutionPayload() {
-		api.RespondError(w, http.StatusBadRequest, "missing parts of the payload")
-		return
-	}
-
-	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload)
+	ok := api.checkSubmissionSlotDetails(w, log, headSlot, submission)
 	if !ok {
 		return
 	}
 
-	builderPubkey := payload.BuilderPubkey()
+	builderPubkey := submission.Builder
 	builderEntry, ok := api.checkBuilderEntry(w, log, builderPubkey)
 	if !ok {
 		return
@@ -1853,13 +1861,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
 	})
 
-	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, payload)
+	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, submission)
 	if !ok {
 		return
 	}
 
 	// Don't accept blocks with 0 value
-	if payload.Value().Cmp(ZeroU256.BigInt()) == 0 || payload.NumTx() == 0 {
+	if submission.Value.ToBig().Cmp(ZeroU256.BigInt()) == 0 || len(submission.Transactions) == 0 {
 		log.Info("submitNewBlock failed: block with 0 value or no txs")
 		w.WriteHeader(http.StatusOK)
 		return
@@ -1875,15 +1883,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
-	ok = api.checkSubmissionPayloadAttrs(w, log, payload)
+	ok = api.checkSubmissionPayloadAttrs(w, log, submission)
 	if !ok {
 		return
 	}
 
 	// Verify the signature
 	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
-	signature := payload.Signature()
-	ok, err = boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
+	signature := submission.Signature
+	ok, err = boostTypes.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
 		log.WithError(err).Warn("failed verifying builder signature")
@@ -1944,11 +1952,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	// Get the latest top bid value from Redis
 	bidIsTopBid := false
-	topBidValue, err := api.redis.GetTopBidValue(context.Background(), tx, payload.Slot(), payload.ParentHash(), payload.ProposerPubkey())
+	topBidValue, err := api.redis.GetTopBidValue(context.Background(), tx, submission.Slot, submission.ParentHash.String(), submission.Proposer.String())
 	if err != nil {
 		log.WithError(err).Error("failed to get top bid value from redis")
 	} else {
-		bidIsTopBid = payload.Value().Cmp(topBidValue) == 1
+		bidIsTopBid = submission.Value.ToBig().Cmp(topBidValue) == 1
 		log = log.WithFields(logrus.Fields{
 			"topBidValue":    topBidValue.String(),
 			"newBidIsTopBid": bidIsTopBid,
@@ -1975,14 +1983,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		log:        log,
 		builder:    builderEntry,
 		req: &common.BuilderBlockValidationRequest{
-			BuilderSubmitBlockRequest: *payload,
+			VersionedSubmitBlockRequest: *payload,
 			RegisteredGasLimit:        gasLimit,
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
 	if builderEntry.status.IsOptimistic &&
-		builderEntry.collateral.Cmp(payload.Value()) >= 0 &&
-		payload.Slot() == api.optimisticSlot.Load() {
+		builderEntry.collateral.Cmp(submission.Value.ToBig()) >= 0 &&
+		submission.Slot == api.optimisticSlot.Load() {
 		go api.processOptimisticBlock(opts, simResultC)
 	} else {
 		// Simulate block (synchronously).
@@ -2023,7 +2031,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// latency will make it impossible to predict which arrives first. Thus a high bid could unintentionally be overwritten by a low bid that happened
 		// to arrive a few microseconds later. If builders are submitting blocks at a frequency where they cannot reliably predict which bid will arrive at
 		// the relay first, they should instead use multiple pubkeys to avoid uninitentionally overwriting their own bids.
-		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(context.Background(), tx, payload.Slot(), payload.BuilderPubkey().String(), payload.ParentHash(), payload.ProposerPubkey())
+		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(context.Background(), tx, submission.Slot, submission.Builder.String(), submission.ParentHash.String(), submission.Proposer.String())
 		if err != nil {
 			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
 		} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
@@ -2067,7 +2075,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// Save to memcache in the background
 		if api.memcached != nil {
 			go func() {
-				err = api.memcached.SaveExecutionPayload(payload.Slot(), payload.ProposerPubkey(), payload.BlockHash(), getPayloadResponse)
+				err = api.memcached.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), getPayloadResponse)
 				if err != nil {
 					log.WithError(err).Error("failed saving execution payload in memcached")
 				}
