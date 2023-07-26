@@ -11,6 +11,7 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
@@ -31,10 +32,10 @@ var (
 	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
 
-func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) common.BuilderSubmitBlockRequest {
+func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) spec.VersionedSubmitBlockRequest {
 	switch version {
 	case consensusspec.DataVersionCapella:
-		return common.BuilderSubmitBlockRequest{
+		return spec.VersionedSubmitBlockRequest{
 			Capella: &capella.SubmitBlockRequest{
 				Signature: signature,
 				Message: &apiv1.BidTrace{
@@ -71,7 +72,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
 		fallthrough
 	default:
-		return common.BuilderSubmitBlockRequest{
+		return spec.VersionedSubmitBlockRequest{
 			Capella: nil,
 		}
 	}
@@ -108,7 +109,7 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 //	RUN_INTEGRATION_TESTS=1 MEMCACHED_URIS="localhost:11211" go test -v -run ".*Memcached.*" ./...
 func TestMemcached(t *testing.T) {
 	type test struct {
-		Input       common.BuilderSubmitBlockRequest
+		Input       spec.VersionedSubmitBlockRequest
 		Description string
 		TestSuite   func(tc *test) func(*testing.T)
 	}
@@ -135,7 +136,7 @@ func TestMemcached(t *testing.T) {
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
-					payload, err := tc.Input.ExecutionPayloadResponse()
+					payload, err := common.GetBlockSubmissionExecutionPayload(&tc.Input)
 					require.Error(t, err)
 					require.Equal(t, err, common.ErrEmptyPayload)
 					require.Nil(t, payload)
@@ -149,7 +150,7 @@ func TestMemcached(t *testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
 
-					payload, err := tc.Input.ExecutionPayloadResponse()
+					payload, err := common.GetBlockSubmissionExecutionPayload(&tc.Input)
 					require.NoError(
 						t,
 						err,
@@ -175,15 +176,20 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.True(t, bytes.Equal(inputBytes, outputBytes))
 
+					submission, err := common.GetBlockSubmissionInfo(&tc.Input)
+					require.NoError(t, err)
+
 					// key should not exist in cache yet
-					empty, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					empty, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
 					require.NoError(t, err)
 					require.Nil(t, empty)
 
-					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					submission, err = common.GetBlockSubmissionInfo(&tc.Input)
+					require.NoError(t, err)
+					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					get, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					get, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
 					require.NoError(t, err, "expected no error when fetching execution payload from memcached but found [%v]", err)
 
 					getBytes, err := get.MarshalJSON()
@@ -200,27 +206,30 @@ func TestMemcached(t *testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
 
-					payload, err := tc.Input.ExecutionPayloadResponse()
+					payload, err := common.GetBlockSubmissionExecutionPayload(&tc.Input)
 					require.NoError(
 						t,
 						err,
 						"expected valid execution payload response for builder's submit block request but found [%v]", err,
 					)
 
-					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					submission, err := common.GetBlockSubmissionInfo(&tc.Input)
 					require.NoError(t, err)
 
-					prev, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
 					require.NoError(t, err)
-					require.Equal(t, len(prev.Capella.Transactions), tc.Input.NumTx())
+
+					prev, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					require.NoError(t, err)
+					require.Equal(t, len(prev.Capella.Transactions), len(submission.Transactions))
 
 					payload.Bellatrix.GasLimit++
 					require.NotEqual(t, prev.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
 
-					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					current, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					current, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
 					require.NoError(t, err)
 					require.Equal(t, current.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
 					require.NotEqual(t, current.Bellatrix.GasLimit, prev.Bellatrix.GasLimit)
@@ -242,23 +251,27 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 
 					tc.Input.Capella.Message.ProposerPubkey = phase0.BLSPubKey(pk)
-					payload, err := tc.Input.ExecutionPayloadResponse()
+					payload, err := common.GetBlockSubmissionExecutionPayload(&tc.Input)
 					require.NoError(
 						t,
 						err,
 						"expected valid execution payload response for builder's submit block request but found [%v]", err,
 					)
-					require.Equal(t, tc.Input.ProposerPubkey(), pk.String())
 
-					err = mem.SaveExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash(), payload)
+					submission, err := common.GetBlockSubmissionInfo(&tc.Input)
 					require.NoError(t, err)
 
-					ret, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					require.Equal(t, submission.Proposer.String(), pk.String())
+
+					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
 					require.NoError(t, err)
-					require.Equal(t, len(ret.Capella.Transactions), tc.Input.NumTx())
+
+					ret, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					require.NoError(t, err)
+					require.Equal(t, len(ret.Capella.Transactions), len(submission.Transactions))
 
 					time.Sleep((time.Duration(defaultMemcachedExpirySeconds) + 2) * time.Second)
-					expired, err := mem.GetExecutionPayload(tc.Input.Slot(), tc.Input.ProposerPubkey(), tc.Input.BlockHash())
+					expired, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
 					require.NoError(t, err)
 					require.NotEqual(t, ret, expired)
 					require.Nil(t, expired)

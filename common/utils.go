@@ -19,6 +19,7 @@ import (
 	"github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -183,7 +184,7 @@ type CreateTestBlockSubmissionOpts struct {
 	ProposerPubkey string
 }
 
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *BuilderSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *spec.VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
 	t.Helper()
 	var err error
 
@@ -214,7 +215,8 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	builderPk, err := StrToPhase0Pubkey(builderPubkey)
 	require.NoError(t, err)
 
-	payload = &BuilderSubmitBlockRequest{
+	payload = &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+		Version: consensusspec.DataVersionCapella,
 		Capella: &capella.SubmitBlockRequest{
 			Message: &v1.BidTrace{ //nolint:exhaustruct
 				BuilderPubkey:  builderPk,
@@ -247,4 +249,109 @@ func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
 		}
 	}
 	return time.Duration(defaultValueSec) * time.Second
+}
+
+func GetBlockSubmissionInfo(submission *spec.VersionedSubmitBlockRequest) (*BlockSubmissionInfo, error) {
+	bidTrace, err := submission.BidTrace()
+	if err != nil {
+		return nil, err
+	}
+	signature, err := submission.Signature()
+	if err != nil {
+		return nil, err
+	}
+	slot, err := submission.Slot()
+	if err != nil {
+		return nil, err
+	}
+	blockHash, err := submission.BlockHash()
+	if err != nil {
+		return nil, err
+	}
+	parentHash, err := submission.ParentHash()
+	if err != nil {
+		return nil, err
+	}
+	executionPayloadBlockHash, err := submission.ExecutionPayloadBlockHash()
+	if err != nil {
+		return nil, err
+	}
+	executionPayloadParentHash, err := submission.ExecutionPayloadParentHash()
+	if err != nil {
+		return nil, err
+	}
+	builder, err := submission.Builder()
+	if err != nil {
+		return nil, err
+	}
+	proposerPubkey, err := submission.ProposerPubKey()
+	if err != nil {
+		return nil, err
+	}
+	proposerFeeRecipient, err := submission.ProposerFeeRecipient()
+	if err != nil {
+		return nil, err
+	}
+	gasUsed, err := submission.GasUsed()
+	if err != nil {
+		return nil, err
+	}
+	gasLimit, err := submission.GasLimit()
+	if err != nil {
+		return nil, err
+	}
+	timestamp, err := submission.Timestamp()
+	if err != nil {
+		return nil, err
+	}
+	txs, err := submission.Transactions()
+	if err != nil {
+		return nil, err
+	}
+	value, err := submission.Value()
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, err := submission.BlockNumber()
+	if err != nil {
+		return nil, err
+	}
+	prevRandao, err := submission.PrevRandao()
+	if err != nil {
+		return nil, err
+	}
+	withdrawals, err := submission.Withdrawals()
+	if err != nil {
+		return nil, err
+	}
+	return &BlockSubmissionInfo{
+		BidTrace:                   bidTrace,
+		Signature:                  signature,
+		Slot:                       slot,
+		BlockHash:                  blockHash,
+		ParentHash:                 parentHash,
+		ExecutionPayloadBlockHash:  executionPayloadBlockHash,
+		ExecutionPayloadParentHash: executionPayloadParentHash,
+		Builder:                    builder,
+		Proposer:                   proposerPubkey,
+		ProposerFeeRecipient:       proposerFeeRecipient,
+		GasUsed:                    gasUsed,
+		GasLimit:                   gasLimit,
+		Timestamp:                  timestamp,
+		Transactions:               txs,
+		Value:                      value,
+		PrevRandao:                 prevRandao,
+		BlockNumber:                blockNumber,
+		Withdrawals:                withdrawals,
+	}, nil
+}
+
+func GetBlockSubmissionExecutionPayload(submission *spec.VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
+	if submission.Capella != nil {
+		return &api.VersionedExecutionPayload{
+			Version: consensusspec.DataVersionCapella,
+			Capella: submission.Capella.ExecutionPayload,
+		}, nil
+	}
+	return nil, ErrEmptyPayload
 }

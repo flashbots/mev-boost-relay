@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
@@ -27,7 +28,7 @@ type IDatabaseService interface {
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
-	SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
+	SaveBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -49,8 +50,8 @@ type IDatabaseService interface {
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError bool) error
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
-	InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *spec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
+	InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
@@ -177,7 +178,7 @@ func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([
 	return registrations, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -202,6 +203,11 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.BuilderSubm
 		requestErrStr = requestError.Error()
 	}
 
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		return nil, err
+	}
+
 	blockSubmissionEntry := &BuilderBlockSubmissionEntry{
 		ReceivedAt:         NewNullTime(receivedAt),
 		EligibleAt:         NewNullTime(eligibleAt),
@@ -212,24 +218,24 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.BuilderSubm
 		SimError:     simErrStr,
 		SimReqError:  requestErrStr,
 
-		Signature: payload.Signature().String(),
+		Signature: submission.Signature.String(),
 
-		Slot:       payload.Slot(),
-		BlockHash:  payload.BlockHash(),
-		ParentHash: payload.ParentHash(),
+		Slot:       submission.Slot,
+		BlockHash:  submission.BlockHash.String(),
+		ParentHash: submission.ParentHash.String(),
 
-		BuilderPubkey:        payload.BuilderPubkey().String(),
-		ProposerPubkey:       payload.ProposerPubkey(),
-		ProposerFeeRecipient: payload.ProposerFeeRecipient(),
+		BuilderPubkey:        submission.Builder.String(),
+		ProposerPubkey:       submission.Proposer.String(),
+		ProposerFeeRecipient: submission.ProposerFeeRecipient.String(),
 
-		GasUsed:  payload.GasUsed(),
-		GasLimit: payload.GasLimit(),
+		GasUsed:  submission.GasUsed,
+		GasLimit: submission.GasLimit,
 
-		NumTx: uint64(payload.NumTx()),
-		Value: payload.Value().String(),
+		NumTx: uint64(len(submission.Transactions)),
+		Value: submission.Value.Dec(),
 
-		Epoch:       payload.Slot() / common.SlotsPerEpoch,
-		BlockNumber: payload.BlockNumber(),
+		Epoch:       submission.Slot / common.SlotsPerEpoch,
+		BlockNumber: submission.BlockNumber,
 
 		DecodeDuration:       profile.Decode,
 		PrechecksDuration:    profile.Prechecks,
@@ -538,24 +544,28 @@ func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error 
 	return err
 }
 
-func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error {
-	_submitBlockRequest, err := json.Marshal(submitBlockRequest)
+func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error {
+	_submitBlockRequest, err := json.Marshal(submitBlockRequest.Capella)
+	if err != nil {
+		return err
+	}
+	submission, err := common.GetBlockSubmissionInfo(submitBlockRequest)
 	if err != nil {
 		return err
 	}
 	builderDemotionEntry := BuilderDemotionEntry{
 		SubmitBlockRequest: NewNullString(string(_submitBlockRequest)),
 
-		Epoch: submitBlockRequest.Slot() / common.SlotsPerEpoch,
-		Slot:  submitBlockRequest.Slot(),
+		Epoch: submission.Slot / common.SlotsPerEpoch,
+		Slot:  submission.Slot,
 
-		BuilderPubkey:  submitBlockRequest.BuilderPubkey().String(),
-		ProposerPubkey: submitBlockRequest.ProposerPubkey(),
+		BuilderPubkey:  submission.Builder.String(),
+		ProposerPubkey: submission.Proposer.String(),
 
-		Value:        submitBlockRequest.Value().String(),
-		FeeRecipient: submitBlockRequest.ProposerFeeRecipient(),
+		Value:        submission.Value.Dec(),
+		FeeRecipient: submission.ProposerFeeRecipient.String(),
 
-		BlockHash: submitBlockRequest.BlockHash(),
+		BlockHash: submission.BlockHash.String(),
 		SimError:  simError.Error(),
 	}
 
@@ -567,8 +577,8 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Build
 	return err
 }
 
-func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *spec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
-	_signedBeaconBlock, err := json.Marshal(signedBlock)
+func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+	_signedBeaconBlock, err := json.Marshal(signedBlock.Capella)
 	if err != nil {
 		return err
 	}
