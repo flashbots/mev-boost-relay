@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -278,7 +279,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broad
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella) // optional in v1, required in v2
-	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers)
+	return fetchBeacon(http.MethodPost, uri, block.Capella, nil, nil, headers)
 }
 
 type GetGenesisResponse struct {

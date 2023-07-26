@@ -148,8 +148,8 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *SignedBeaconBlock {
-	var signedBeaconBlock SignedBeaconBlock
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *consensusspec.VersionedSignedBeaconBlock {
+	var signedBeaconBlock consensusspec.VersionedSignedBeaconBlock
 	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 	if capellaBlindedBlock != nil {
 		signedBeaconBlock.Capella = &consensuscapella.SignedBeaconBlock{
