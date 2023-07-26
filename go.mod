@@ -123,3 +123,5 @@ retract (
 )
 
 replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230720061256-82081347600e
+
+replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20230711071258-c1ca05d6e8b7

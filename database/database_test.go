@@ -90,7 +90,9 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
-	return req.BuilderPubkey().String()
+	builderPubkey, err := req.Builder()
+	require.NoError(t, err)
+	return builderPubkey.String()
 }
 
 func resetDatabase(t *testing.T) *DatabaseService {

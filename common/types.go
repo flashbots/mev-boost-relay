@@ -4,18 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -319,169 +316,25 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
-type BuilderSubmitBlockRequest struct {
-	Capella *capella.SubmitBlockRequest
-}
-
-func (b *BuilderSubmitBlockRequest) MarshalJSON() ([]byte, error) {
-	if b.Capella != nil {
-		return json.Marshal(b.Capella)
-	}
-	return nil, ErrEmptyPayload
-}
-
-func (b *BuilderSubmitBlockRequest) UnmarshalJSON(data []byte) error {
-	capella := new(capella.SubmitBlockRequest)
-	err := json.Unmarshal(data, capella)
-	if err != nil {
-		return err
-	}
-	b.Capella = capella
-	return nil
-}
-
-func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload != nil
-	}
-	return false
-}
-
-func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*api.VersionedExecutionPayload, error) {
-	if b.Capella != nil {
-		return &api.VersionedExecutionPayload{
-			Version: consensusspec.DataVersionCapella,
-			Capella: b.Capella.ExecutionPayload,
-		}, nil
-	}
-
-	return nil, ErrEmptyPayload
-}
-
-func (b *BuilderSubmitBlockRequest) Slot() uint64 {
-	if b.Capella != nil {
-		return b.Capella.Message.Slot
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) BlockHash() string {
-	if b.Capella != nil {
-		return b.Capella.Message.BlockHash.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) ExecutionPayloadBlockHash() string {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.BlockHash.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) BuilderPubkey() phase0.BLSPubKey {
-	if b.Capella != nil {
-		return b.Capella.Message.BuilderPubkey
-	}
-	return phase0.BLSPubKey{}
-}
-
-func (b *BuilderSubmitBlockRequest) ProposerFeeRecipient() string {
-	if b.Capella != nil {
-		return b.Capella.Message.ProposerFeeRecipient.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) Timestamp() uint64 {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.Timestamp
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) ProposerPubkey() string {
-	if b.Capella != nil {
-		return b.Capella.Message.ProposerPubkey.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) ParentHash() string {
-	if b.Capella != nil {
-		return b.Capella.Message.ParentHash.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) ExecutionPayloadParentHash() string {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.ParentHash.String()
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) Value() *big.Int {
-	if b.Capella != nil {
-		return b.Capella.Message.Value.ToBig()
-	}
-	return nil
-}
-
-func (b *BuilderSubmitBlockRequest) NumTx() int {
-	if b.Capella != nil {
-		return len(b.Capella.ExecutionPayload.Transactions)
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) BlockNumber() uint64 {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.BlockNumber
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) GasUsed() uint64 {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.GasUsed
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) GasLimit() uint64 {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.GasLimit
-	}
-	return 0
-}
-
-func (b *BuilderSubmitBlockRequest) Signature() phase0.BLSSignature {
-	if b.Capella != nil {
-		return b.Capella.Signature
-	}
-	return phase0.BLSSignature{}
-}
-
-func (b *BuilderSubmitBlockRequest) Random() string {
-	if b.Capella != nil {
-		return fmt.Sprintf("%#x", b.Capella.ExecutionPayload.PrevRandao)
-	}
-	return ""
-}
-
-func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
-	if b.Capella != nil {
-		return b.Capella.Message
-	}
-	return nil
-}
-
-func (b *BuilderSubmitBlockRequest) Withdrawals() []*consensuscapella.Withdrawal {
-	if b.Capella != nil {
-		return b.Capella.ExecutionPayload.Withdrawals
-	}
-	return nil
+type BlockSubmissionInfo struct {
+	BidTrace                   *apiv1.BidTrace
+	Slot                       uint64
+	BlockHash                  phase0.Hash32
+	ParentHash                 phase0.Hash32
+	ExecutionPayloadBlockHash  phase0.Hash32
+	ExecutionPayloadParentHash phase0.Hash32
+	Builder                    phase0.BLSPubKey
+	Proposer                   phase0.BLSPubKey
+	ProposerFeeRecipient       consensusbellatrix.ExecutionAddress
+	GasUsed                    uint64
+	GasLimit                   uint64
+	Timestamp                  uint64
+	BlockNumber                uint64
+	Value                      *uint256.Int
+	PrevRandao                 phase0.Hash32
+	Signature                  phase0.BLSSignature
+	Transactions               []consensusbellatrix.Transaction
+	Withdrawals                []*consensuscapella.Withdrawal
 }
 
 /*

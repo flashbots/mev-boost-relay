@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -24,12 +25,16 @@ var (
 	ErrHeaderHTRMismatch        = errors.New("beacon-block and payload header mismatch")
 )
 
-func SanityCheckBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest) error {
-	if payload.BlockHash() != payload.ExecutionPayloadBlockHash() {
+func SanityCheckBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest) error {
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		return err
+	}
+	if submission.BlockHash.String() != submission.ExecutionPayloadBlockHash.String() {
 		return ErrBlockHashMismatch
 	}
 
-	if payload.ParentHash() != payload.ExecutionPayloadParentHash() {
+	if submission.ParentHash.String() != submission.ExecutionPayloadParentHash.String() {
 		return ErrParentHashMismatch
 	}
 
