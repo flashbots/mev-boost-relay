@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -42,7 +42,7 @@ type IMultiBeaconClient interface {
 	// GetStateValidators returns all active and pending validators from the beacon node
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
-	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
+	PublishBlock(block *spec.VersionedSignedBeaconBlock) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
@@ -60,7 +60,7 @@ type IBeaconInstance interface {
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
-	PublishBlock(block *common.SignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error)
+	PublishBlock(block *spec.VersionedSignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
@@ -255,10 +255,20 @@ type publishResp struct {
 }
 
 // PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
-func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
+func (c *MultiBeaconClient) PublishBlock(block *spec.VersionedSignedBeaconBlock) (code int, err error) {
+	slot, err := block.Slot()
+	if err != nil {
+		c.log.WithError(err).Warn("failed to publish block as block slot is missing")
+		return 0, err
+	}
+	blockHash, err := block.BlockHash()
+	if err != nil {
+		c.log.WithError(err).Warn("failed to publish block as block hash is missing")
+		return 0, err
+	}
 	log := c.log.WithFields(logrus.Fields{
-		"slot":      block.Slot(),
-		"blockHash": block.BlockHash(),
+		"slot":      slot,
+		"blockHash": blockHash.String(),
 	})
 
 	clients := c.beaconInstancesByLastResponse()

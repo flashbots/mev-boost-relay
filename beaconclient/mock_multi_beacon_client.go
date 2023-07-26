@@ -1,8 +1,8 @@
 package beaconclient
 
 import (
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/flashbots/mev-boost-relay/common"
 )
 
 type MockMultiBeaconClient struct{}
@@ -32,7 +32,7 @@ func (*MockMultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRe
 	return nil, nil
 }
 
-func (*MockMultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
+func (*MockMultiBeaconClient) PublishBlock(block *spec.VersionedSignedBeaconBlock) (code int, err error) {
 	return 0, nil
 }
 
