@@ -11,7 +11,6 @@ import (
 	"github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
-	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -162,8 +161,8 @@ type BuilderGetValidatorsResponseEntry struct {
 
 type BidTraceV2 struct {
 	apiv1.BidTrace
-	BlockNumber uint64 `json:"block_number,string" db:"block_number"`
-	NumTx       uint64 `json:"num_tx,string" db:"num_tx"`
+	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
+	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
 }
 
 type BidTraceV2JSON struct {
@@ -294,82 +293,6 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
-type SignedBlindedBeaconBlock struct {
-	Bellatrix *boostTypes.SignedBlindedBeaconBlock
-	Capella   *apiv1capella.SignedBlindedBeaconBlock
-}
-
-func (s *SignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
-	if s.Capella != nil {
-		return json.Marshal(s.Capella)
-	}
-	if s.Bellatrix != nil {
-		return json.Marshal(s.Bellatrix)
-	}
-	return nil, ErrEmptyPayload
-}
-
-func (s *SignedBlindedBeaconBlock) Slot() uint64 {
-	if s.Capella != nil {
-		return uint64(s.Capella.Message.Slot)
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.Slot
-	}
-	return 0
-}
-
-func (s *SignedBlindedBeaconBlock) BlockHash() string {
-	if s.Capella != nil {
-		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockHash.String()
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.Body.ExecutionPayloadHeader.BlockHash.String()
-	}
-	return ""
-}
-
-func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
-	if s.Capella != nil {
-		return s.Capella.Message.Body.ExecutionPayloadHeader.BlockNumber
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.Body.ExecutionPayloadHeader.BlockNumber
-	}
-	return 0
-}
-
-func (s *SignedBlindedBeaconBlock) ProposerIndex() uint64 {
-	if s.Capella != nil {
-		return uint64(s.Capella.Message.ProposerIndex)
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message.ProposerIndex
-	}
-	return 0
-}
-
-func (s *SignedBlindedBeaconBlock) Signature() []byte {
-	if s.Capella != nil {
-		return s.Capella.Signature[:]
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Signature[:]
-	}
-	return nil
-}
-
-//nolint:nolintlint,ireturn
-func (s *SignedBlindedBeaconBlock) Message() boostTypes.HashTreeRoot {
-	if s.Capella != nil {
-		return s.Capella.Message
-	}
-	if s.Bellatrix != nil {
-		return s.Bellatrix.Message
-	}
-	return nil
-}
-
 type SignedBeaconBlock struct {
 	Capella *consensuscapella.SignedBeaconBlock
 }
@@ -425,7 +348,7 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 
 func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*api.VersionedExecutionPayload, error) {
 	if b.Capella != nil {
-		return &api.VersionedExecutionPayload{ //nolint:exhaustruct
+		return &api.VersionedExecutionPayload{
 			Version: consensusspec.DataVersionCapella,
 			Capella: b.Capella.ExecutionPayload,
 		}, nil
