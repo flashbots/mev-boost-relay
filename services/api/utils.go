@@ -4,9 +4,11 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
+	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
+	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -42,7 +44,7 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *api.VersionedExecutionPayload) error {
+func EqExecutionPayloadToHeader(bb *consensusapi.VersionedSignedBlindedBeaconBlock, payload *api.VersionedExecutionPayload) error {
 	if bb.Capella != nil { // process Capella beacon block
 		if payload.Capella == nil {
 			return ErrPayloadMismatchCapella
@@ -81,4 +83,22 @@ func checkBLSPublicKeyHex(pkHex string) error {
 func hasReachedFork(slot, forkEpoch uint64) bool {
 	currentEpoch := slot / common.SlotsPerEpoch
 	return currentEpoch >= forkEpoch
+}
+
+func checkProposerSignature(block *consensusapi.VersionedSignedBlindedBeaconBlock, domain boostTypes.Domain, pubKey []byte) (bool, error) {
+	root, err := block.Root()
+	if err != nil {
+		return false, err
+	}
+	sig, err := block.Signature()
+	if err != nil {
+		return false, err
+	}
+	signingData := boostTypes.SigningData{Root: boostTypes.Root(root), Domain: domain}
+	msg, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+
+	return bls.VerifySignatureBytes(msg[:], sig[:], pubKey[:])
 }
