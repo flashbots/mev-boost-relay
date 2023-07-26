@@ -33,11 +33,6 @@ func SanityCheckBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest
 	return nil
 }
 
-func checkBLSPublicKeyHex(pkHex string) error {
-	var proposerPubkey boostTypes.PublicKey
-	return proposerPubkey.UnmarshalText([]byte(pkHex))
-}
-
 func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	if w == nil {
 		return phase0.Root{}, ErrNoWithdrawals
@@ -101,4 +96,17 @@ func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *co
 	}
 
 	return ErrNoPayloads
+}
+
+func checkBLSPublicKeyHex(pkHex string) error {
+	var proposerPubkey boostTypes.PublicKey
+	return proposerPubkey.UnmarshalText([]byte(pkHex))
+}
+
+func hasReachedFork(slot, forkEpoch uint64) bool {
+	if forkEpoch == 0 {
+		return false
+	}
+	currentEpoch := slot / common.SlotsPerEpoch
+	return currentEpoch >= forkEpoch
 }

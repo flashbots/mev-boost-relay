@@ -183,6 +183,7 @@ type RelayAPI struct {
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
 	capellaEpoch uint64
+	denebEpoch   uint64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -375,14 +376,6 @@ func (api *RelayAPI) getRouter() http.Handler {
 	return withGz
 }
 
-func (api *RelayAPI) isCapella(slot uint64) bool {
-	if api.capellaEpoch == 0 { // CL didn't yet have it
-		return false
-	}
-	epoch := slot / common.SlotsPerEpoch
-	return epoch >= api.capellaEpoch
-}
-
 // StartServer starts up this API instance and HTTP server
 // - First it initializes the cache and updates local information
 // - Once that is done, the HTTP server is started
@@ -420,14 +413,16 @@ func (api *RelayAPI) StartServer() (err error) {
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
 			api.capellaEpoch = fork.Epoch
-			// TODO: add deneb support.
+		case api.opts.EthNetDetails.DenebForkVersionHex:
+			api.denebEpoch = fork.Epoch
 		}
 	}
 
 	// Print fork version information
-	// TODO: add deneb support.
-	if api.isCapella(currentSlot) {
+	if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
+	} else if hasReachedFork(currentSlot, api.denebEpoch) {
+		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else {
 		return ErrMismatchedForkVersions
 	}
@@ -667,7 +662,7 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 
 	var withdrawalsRoot phase0.Root
 	var err error
-	if api.isCapella(payloadAttrSlot) {
+	if hasReachedFork(payloadAttrSlot, api.capellaEpoch) {
 		withdrawalsRoot, err = ComputeWithdrawalsRoot(payloadAttributes.Data.PayloadAttributes.Withdrawals)
 		log = log.WithField("withdrawalsRoot", withdrawalsRoot.String())
 		if err != nil {
@@ -1699,7 +1694,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if api.isCapella(payload.Slot()) { // Capella requires correct withdrawals
+	if hasReachedFork(payload.Slot(), api.capellaEpoch) { // Capella requires correct withdrawals
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
