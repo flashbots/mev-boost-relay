@@ -10,6 +10,7 @@ import (
 	"time"
 
 	consensusapi "github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
@@ -49,7 +50,7 @@ type IDatabaseService interface {
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
 	InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *spec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
@@ -566,7 +567,7 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Build
 	return err
 }
 
-func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.SignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *spec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
 	_signedBeaconBlock, err := json.Marshal(signedBlock)
 	if err != nil {
 		return err

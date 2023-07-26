@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -256,7 +256,7 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
-func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
+func (c *ProdBeaconInstance) PublishBlock(block *spec.VersionedSignedBeaconBlock) (code int, err error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 	return fetchBeacon(http.MethodPost, uri, block, nil, nil)
 }
