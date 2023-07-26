@@ -10,7 +10,6 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
@@ -320,31 +319,6 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
-type SignedBeaconBlock struct {
-	Capella *consensuscapella.SignedBeaconBlock
-}
-
-func (s *SignedBeaconBlock) MarshalJSON() ([]byte, error) {
-	if s.Capella != nil {
-		return json.Marshal(s.Capella)
-	}
-	return nil, ErrEmptyPayload
-}
-
-func (s *SignedBeaconBlock) Slot() uint64 {
-	if s.Capella != nil {
-		return uint64(s.Capella.Message.Slot)
-	}
-	return 0
-}
-
-func (s *SignedBeaconBlock) BlockHash() string {
-	if s.Capella != nil {
-		return s.Capella.Message.Body.ExecutionPayload.BlockHash.String()
-	}
-	return ""
-}
-
 type BuilderSubmitBlockRequest struct {
 	Capella *capella.SubmitBlockRequest
 }
@@ -501,70 +475,6 @@ func (b *BuilderSubmitBlockRequest) Message() *apiv1.BidTrace {
 		return b.Capella.Message
 	}
 	return nil
-}
-
-type GetHeaderResponse struct {
-	Bellatrix *boostTypes.GetHeaderResponse
-	Capella   *spec.VersionedSignedBuilderBid
-}
-
-func (p *GetHeaderResponse) UnmarshalJSON(data []byte) error {
-	capella := new(spec.VersionedSignedBuilderBid)
-	err := json.Unmarshal(data, capella)
-	if err == nil && capella.Capella != nil {
-		p.Capella = capella
-		return nil
-	}
-	bellatrix := new(boostTypes.GetHeaderResponse)
-	err = json.Unmarshal(data, bellatrix)
-	if err != nil {
-		return err
-	}
-	p.Bellatrix = bellatrix
-	return nil
-}
-
-func (p *GetHeaderResponse) MarshalJSON() ([]byte, error) {
-	if p.Capella != nil {
-		return json.Marshal(p.Capella)
-	}
-	if p.Bellatrix != nil {
-		return json.Marshal(p.Bellatrix)
-	}
-	return nil, ErrEmptyPayload
-}
-
-func (p *GetHeaderResponse) Value() *big.Int {
-	if p.Capella != nil {
-		return p.Capella.Capella.Message.Value.ToBig()
-	}
-	if p.Bellatrix != nil {
-		return p.Bellatrix.Data.Message.Value.BigInt()
-	}
-	return nil
-}
-
-func (p *GetHeaderResponse) BlockHash() phase0.Hash32 {
-	if p.Capella != nil {
-		return p.Capella.Capella.Message.Header.BlockHash
-	}
-	if p.Bellatrix != nil {
-		return phase0.Hash32(p.Bellatrix.Data.Message.Header.BlockHash)
-	}
-	return phase0.Hash32{}
-}
-
-func (p *GetHeaderResponse) Empty() bool {
-	if p == nil {
-		return true
-	}
-	if p.Capella != nil {
-		return p.Capella.Capella == nil || p.Capella.Capella.Message == nil
-	}
-	if p.Bellatrix != nil {
-		return p.Bellatrix.Data == nil || p.Bellatrix.Data.Message == nil
-	}
-	return true
 }
 
 func (b *BuilderSubmitBlockRequest) Withdrawals() []*consensuscapella.Withdrawal {
