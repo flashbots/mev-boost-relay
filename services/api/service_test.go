@@ -14,10 +14,12 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -397,8 +399,9 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	req := new(common.BuilderSubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, &req)
+	req := new(spec.VersionedSubmitBlockRequest)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
+	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	reqSSZ, err := req.Capella.MarshalSSZ()
@@ -451,10 +454,11 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 
 	// Prepare the request payload
-	req := new(common.BuilderSubmitBlockRequest)
+	req := new(spec.VersionedSubmitBlockRequest)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	err = json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	// Update
@@ -509,7 +513,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
-		payload        *common.BuilderSubmitBlockRequest
+		payload        *spec.VersionedSubmitBlockRequest
 		expectOk       bool
 		expectGasLimit uint64
 	}{
@@ -523,7 +527,8 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionCapella,
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:                 testSlot,
@@ -537,7 +542,8 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionCapella,
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot: testSlot,
@@ -557,7 +563,8 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionCapella,
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:                 testSlot,
@@ -573,13 +580,17 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.proposerDutiesLock.RLock()
-			backend.relay.proposerDutiesMap[tc.payload.Slot()] = tc.slotDuty
+			slot, err := tc.payload.Slot()
+			require.NoError(t, err)
+			backend.relay.proposerDutiesMap[slot] = tc.slotDuty
 			backend.relay.proposerDutiesLock.RUnlock()
 
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, submission)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
 			require.Equal(t, tc.expectOk, ok)
 		})
@@ -597,7 +608,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	cases := []struct {
 		description string
 		attrs       payloadAttributesHelper
-		payload     *common.BuilderSubmitBlockRequest
+		payload     *spec.VersionedSubmitBlockRequest
 		expectOk    bool
 	}{
 		{
@@ -605,12 +616,13 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			attrs: payloadAttributesHelper{
 				slot:            testSlot,
 				parentHash:      testParentHash,
-				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+				withdrawalsRoot: withdrawalsRoot,
 				payloadAttributes: beaconclient.PayloadAttributes{
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionCapella,
 				Capella: &builderCapella.SubmitBlockRequest{
 					ExecutionPayload: &capella.ExecutionPayload{
 						PrevRandao: [32]byte(prevRandao),
@@ -633,7 +645,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			attrs: payloadAttributesHelper{
 				slot: testSlot,
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot: testSlot + 1, // submission for a future slot
@@ -650,7 +662,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:       testSlot,
@@ -671,7 +683,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:       testSlot,
@@ -695,7 +707,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					ExecutionPayload: &capella.ExecutionPayload{
 						PrevRandao: [32]byte(prevRandao),
@@ -725,7 +737,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -734,12 +748,12 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 func TestCheckSubmissionSlotDetails(t *testing.T) {
 	cases := []struct {
 		description string
-		payload     *common.BuilderSubmitBlockRequest
-		expectOk    bool
+		payload     *spec.VersionedSubmitBlockRequest
+		expectOk  bool
 	}{
 		{
 			description: "success",
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					ExecutionPayload: &capella.ExecutionPayload{
 						Timestamp: testSlot * common.SecondsPerSlot,
@@ -753,14 +767,14 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		},
 		{
 			description: "failure_nil_capella",
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: nil, // nil to cause error
 			},
 			expectOk: false,
 		},
 		{
 			description: "failure_past_slot",
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot: testSlot - 1, // use old slot to cause error
@@ -771,7 +785,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		},
 		{
 			description: "failure_wrong_timestamp",
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					ExecutionPayload: &capella.ExecutionPayload{
 						Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
@@ -792,7 +806,9 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
