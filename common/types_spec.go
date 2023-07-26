@@ -2,7 +2,7 @@ package common
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
@@ -15,12 +15,14 @@ import (
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/pkg/errors"
 )
 
 var (
 	ErrMissingRequest     = errors.New("req is nil")
 	ErrMissingSecretKey   = errors.New("secret key is nil")
 	ErrInvalidTransaction = errors.New("invalid transaction")
+	ErrInvalidVersion     = errors.New("invalid version")
 )
 
 type HTTPErrorResp struct {
@@ -32,7 +34,7 @@ var NilResponse = struct{}{}
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*spec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -55,7 +57,7 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 	return nil, ErrEmptyPayload
 }
 
-func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
+func BuildGetPayloadResponse(payload *spec.VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
 	if payload.Capella != nil {
 		return &api.VersionedExecutionPayload{
 			Version: consensusspec.DataVersionCapella,
@@ -179,12 +181,20 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusap
 }
 
 type BuilderBlockValidationRequest struct {
-	BuilderSubmitBlockRequest
+	spec.VersionedSubmitBlockRequest
 	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
 }
 
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
-	blockRequest, err := r.BuilderSubmitBlockRequest.MarshalJSON()
+	var blockRequest []byte
+	var err error
+
+	switch r.VersionedSubmitBlockRequest.Version { //nolint:exhaustive
+	case consensusspec.DataVersionCapella:
+		blockRequest, err = r.VersionedSubmitBlockRequest.Capella.MarshalJSON()
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.VersionedSubmitBlockRequest.Version))
+	}
 	if err != nil {
 		return nil, err
 	}

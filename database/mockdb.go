@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -38,7 +39,7 @@ func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*Validat
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }
 
@@ -155,13 +156,16 @@ func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 	return nil
 }
 
-func (db MockDB) InsertBuilderDemotion(submitBlockRequest *common.BuilderSubmitBlockRequest, simError error) error {
-	pubkey := submitBlockRequest.BuilderPubkey().String()
-	db.Demotions[pubkey] = true
+func (db MockDB) InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error {
+	pubkey, err := submitBlockRequest.Builder()
+	if err != nil {
+		return err
+	}
+	db.Demotions[pubkey.String()] = true
 	return nil
 }
 
-func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *spec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {
