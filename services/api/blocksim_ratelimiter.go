@@ -74,10 +74,14 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 		return ErrNoCapellaPayload, nil
 	}
 	// TODO: add deneb support.
+	submission, err := common.GetBlockSubmissionInfo(&payload.VersionedSubmitBlockRequest)
+	if err != nil {
+		return err, nil
+	}
 
 	// Prepare headers
 	headers := http.Header{}
-	headers.Add("X-Request-ID", fmt.Sprintf("%d/%s", payload.Slot(), payload.BlockHash()))
+	headers.Add("X-Request-ID", fmt.Sprintf("%d/%s", submission.Slot, submission.BlockHash.String()))
 	if isHighPrio {
 		headers.Add("X-High-Priority", "true")
 	}

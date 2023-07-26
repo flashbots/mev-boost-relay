@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -64,10 +66,11 @@ var ValidPayloadRegisterValidator = boostTypes.SignedValidatorRegistration{
 		"0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"),
 }
 
-func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) BuilderSubmitBlockRequest {
+func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) spec.VersionedSubmitBlockRequest {
 	signature, err := boostTypes.SignMessage(bid, boostTypes.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	return BuilderSubmitBlockRequest{
+	return spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+		Version: consensusspec.DataVersionCapella,
 		Capella: &capella.SubmitBlockRequest{
 			Message:   &bid.BidTrace,
 			Signature: [96]byte(signature),
