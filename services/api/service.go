@@ -22,6 +22,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
+	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
@@ -1213,7 +1214,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Decode payload
-	payload := new(common.SignedBlindedBeaconBlock)
+	payload := new(consensusapi.VersionedSignedBlindedBeaconBlock)
 	// TODO: add deneb support.
 	payload.Capella = new(capella.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
@@ -1224,27 +1225,42 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
-	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
+	slot, err := payload.Slot()
+	if err != nil {
+		log.WithError(err).Warn("failed to get payload slot")
+		api.RespondError(w, http.StatusBadRequest, "failed to get payload slot")
+	}
+	blockHash, err := payload.BlockHash()
+	if err != nil {
+		log.WithError(err).Warn("failed to get payload block hash")
+		api.RespondError(w, http.StatusBadRequest, "failed to get payload block hash")
+	}
+	proposerIndex, err := payload.ProposerIndex()
+	if err != nil {
+		log.WithError(err).Warn("failed to get payload proposer index")
+		api.RespondError(w, http.StatusBadRequest, "failed to get payload proposer index")
+	}
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (uint64(slot) * common.SecondsPerSlot)
 	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 	log = log.WithFields(logrus.Fields{
-		"slot":                 payload.Slot(),
-		"slotEpochPos":         (payload.Slot() % common.SlotsPerEpoch) + 1,
-		"blockHash":            payload.BlockHash(),
+		"slot":                 slot,
+		"slotEpochPos":         (uint64(slot) % common.SlotsPerEpoch) + 1,
+		"blockHash":            blockHash.String(),
 		"slotStartSec":         slotStartTimestamp,
 		"msIntoSlot":           msIntoSlot,
 		"timestampAfterDecode": decodeTime.UnixMilli(),
-		"proposerIndex":        payload.ProposerIndex(),
+		"proposerIndex":        proposerIndex,
 	})
 
 	// Ensure the proposer index is expected
 	api.proposerDutiesLock.RLock()
-	slotDuty := api.proposerDutiesMap[payload.Slot()]
+	slotDuty := api.proposerDutiesMap[uint64(slot)]
 	api.proposerDutiesLock.RUnlock()
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
 	} else {
 		log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient)
-		if slotDuty.ValidatorIndex != payload.ProposerIndex() {
+		if slotDuty.ValidatorIndex != uint64(proposerIndex) {
 			log.WithField("expectedProposerIndex", slotDuty.ValidatorIndex).Warn("not the expected proposer index")
 			api.RespondError(w, http.StatusBadRequest, "not the expected proposer index")
 			return
@@ -1252,9 +1268,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get the proposer pubkey based on the validator index from the payload
-	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(payload.ProposerIndex())
+	proposerPubkey, found := api.datastore.GetKnownValidatorPubkeyByIndex(uint64(proposerIndex))
 	if !found {
-		log.Errorf("could not find proposer pubkey for index %d", payload.ProposerIndex())
+		log.Errorf("could not find proposer pubkey for index %d", proposerIndex)
 		api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 		return
 	}
@@ -1270,9 +1286,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Validate proposer signature (first attempt verifying the Capella signature)
+	// Validate proposer signature
 	// TODO: add deneb support.
-	ok, err := boostTypes.VerifySignature(payload.Message(), api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:], payload.Signature())
+	ok, err := checkProposerSignature(payload, api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:])
 	if !ok || err != nil {
 		if api.ffLogInvalidSignaturePayload {
 			txt, _ := json.Marshal(payload) //nolint:errchkjson
@@ -1287,12 +1303,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterSignatureVerify", time.Now().UTC().UnixMilli())
 	log.Info("getPayload request received")
 
-	var getPayloadResp *common.VersionedExecutionPayload
+	var getPayloadResp builderApiV1.VersionedExecutionPayload
 	var msNeededForPublishing uint64
 
 	// Save information about delivered payload
 	defer func() {
-		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+		bidTrace, err := api.redis.GetBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
 		if err != nil {
 			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
 			return
@@ -1368,18 +1384,18 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Get the response - from Redis, Memcache or DB
 	// note that recent mev-boost versions only send getPayload to relays that provided the bid
-	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed getting execution payload (1/2)")
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
 
 		// Try again
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
 		if err != nil || getPayloadResp == nil {
 			// Still not found! Error out now.
 			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
 				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
-				_, err := api.db.GetBlockSubmissionEntry(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+				_, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
 				if errors.Is(err, sql.ErrNoRows) {
 					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
 					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
@@ -1400,7 +1416,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
 
 	// Check whether getPayload has already been called -- TODO: do we need to allow multiple submissions of one blinded block?
-	err = api.redis.CheckAndSetLastSlotAndHashDelivered(payload.Slot(), payload.BlockHash())
+	err = api.redis.CheckAndSetLastSlotAndHashDelivered(uint64(slot), blockHash.String())
 	log = log.WithField("timestampAfterAlreadyDeliveredCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
 		if errors.Is(err, datastore.ErrAnotherPayloadAlreadyDeliveredForSlot) {
@@ -1438,7 +1454,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 
 		go func() {
-			err := api.db.InsertTooLateGetPayload(payload.Slot(), proposerPubkey.String(), payload.BlockHash(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), uint64(msIntoSlot))
+			err := api.db.InsertTooLateGetPayload(uint64(slot), proposerPubkey.String(), blockHash.String(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), uint64(msIntoSlot))
 			if err != nil {
 				log.WithError(err).Error("failed to insert payload too late into db")
 			}
@@ -1474,10 +1490,17 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// respond to the HTTP request
 	api.RespondOK(w, getPayloadResp)
+	blockNumber, err := payload.BlockNumber()
+	if err != nil {
+		log.WithError(err).Info("failed to get block number")
+	}
+	txs, err := getPayloadResp.Transactions()
+	if err != nil {
+		log.WithError(err).Info("failed to get transactions")
+	}
 	log = log.WithFields(logrus.Fields{
-		// TODO: get tx field when https://github.com/attestantio/go-builder-client/pull/14 is merged
-		// "numTx":       getPayloadResp.NumTx(),
-		"blockNumber": payload.BlockNumber(),
+		"numTx":       len(txs),
+		"blockNumber": blockNumber,
 	})
 	log.Info("execution payload delivered")
 }
@@ -1672,7 +1695,7 @@ type redisUpdateBidOpts struct {
 	payload              *common.BuilderSubmitBlockRequest
 }
 
-func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *common.GetPayloadResponse, bool) {
+func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApiV1.VersionedExecutionPayload, bool) {
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
