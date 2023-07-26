@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -85,7 +86,7 @@ func (db MockDB) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries 
 	return nil, nil
 }
 
-func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.SignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
+func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
 	return nil
 }
 
