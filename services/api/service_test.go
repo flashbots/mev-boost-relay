@@ -392,8 +392,9 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	req := new(common.BuilderSubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, &req)
+	req := new(spec.VersionedSubmitBlockRequest)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
+	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	reqSSZ, err := req.Capella.MarshalSSZ()
@@ -446,10 +447,11 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 
 	// Prepare the request payload
-	req := new(common.BuilderSubmitBlockRequest)
+	req := new(spec.VersionedSubmitBlockRequest)
+	req.Capella = new(builderCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
+	err = json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
 	// Update
@@ -504,7 +506,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
-		payload        *common.BuilderSubmitBlockRequest
+		payload        *spec.VersionedSubmitBlockRequest
 		expectCont     bool
 		expectGasLimit uint64
 	}{
@@ -518,7 +520,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:                 testSlot,
@@ -532,7 +534,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot: testSlot,
@@ -552,7 +554,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
+			payload: &spec.VersionedSubmitBlockRequest{
 				Capella: &builderCapella.SubmitBlockRequest{
 					Message: &v1.BidTrace{
 						Slot:                 testSlot,
@@ -568,13 +570,16 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.proposerDutiesLock.RLock()
-			backend.relay.proposerDutiesMap[tc.payload.Slot()] = tc.slotDuty
+			slot, err := tc.payload.Slot()
+			require.NoError(t, err)
+			backend.relay.proposerDutiesMap[slot] = tc.slotDuty
 			backend.relay.proposerDutiesLock.RUnlock()
 
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, submission)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
 			require.Equal(t, tc.expectCont, cont)
 		})
