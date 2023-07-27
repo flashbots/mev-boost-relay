@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,10 +12,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -85,24 +81,6 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 		redis:     redisCache,
 	}
 	return &backend
-}
-
-func (be *testBackend) requestBytes(method, path string, payload []byte, headers map[string]string) *httptest.ResponseRecorder {
-	var req *http.Request
-	var err error
-
-	req, err = http.NewRequest(method, path, bytes.NewReader(payload))
-	require.NoError(be.t, err)
-
-	// Set headers
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	// lfg
-	rr := httptest.NewRecorder()
-	be.relay.getRouter().ServeHTTP(rr, req)
-	return rr
 }
 
 func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
@@ -378,122 +356,159 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 	})
 }
 
-func TestBuilderSubmitBlockSSZ(t *testing.T) {
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+func TestDataApiGetBuilderBlocksReceived(t *testing.T) {
+	path := "/relay/v1/data/bidtraces/builder_blocks_received"
 
-	req := new(common.BuilderSubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, &req)
-	require.NoError(t, err)
-
-	reqSSZ, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZ))
-
-	test := new(builderCapella.SubmitBlockRequest)
-	err = test.UnmarshalSSZ(reqSSZ)
-	require.NoError(t, err)
-}
-
-func TestBuilderSubmitBlock(t *testing.T) {
-	path := "/relay/v1/builder/blocks"
-	backend := newTestBackend(t, 1)
-
-	headSlot := uint64(32)
-	submissionSlot := headSlot + 1
-	submissionTimestamp := 1606824419
-
-	// Payload attributes
-	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json.gz"
-	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
-	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
-	require.NoError(t, err)
-	withdrawalsRoot, err := hexutil.Decode("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
-	require.NoError(t, err)
-	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-
-	// Setup the test relay backend
-	backend.relay.headSlot.Store(headSlot)
-	backend.relay.capellaEpoch = 1
-	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
-	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
-		Slot: headSlot,
-		Entry: &types.SignedValidatorRegistration{
-			Message: &types.RegisterValidatorRequestMessage{
-				FeeRecipient: feeRec,
-			},
-		},
-	}
-	backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
-	backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
-		slot:       submissionSlot,
-		parentHash: parentHash,
-		payloadAttributes: beaconclient.PayloadAttributes{
-			PrevRandao: prevRandao,
-		},
-		withdrawalsRoot: phase0.Root(withdrawalsRoot),
-	}
-
-	// Prepare the request payload
-	req := new(common.BuilderSubmitBlockRequest)
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
-	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
-	require.NoError(t, err)
-
-	// Update
-	req.Capella.Message.Slot = submissionSlot
-	req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
-
-	// Send JSON encoded request
-	reqJSONBytes, err := req.Capella.MarshalJSON()
-	require.NoError(t, err)
-	require.Equal(t, 704810, len(reqJSONBytes))
-	reqJSONBytes2, err := json.Marshal(req.Capella)
-	require.NoError(t, err)
-	require.Equal(t, reqJSONBytes, reqJSONBytes2)
-	rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send SSZ encoded request
-	reqSSZBytes, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZBytes))
-	rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
-		"Content-Type": "application/octet-stream",
+	t.Run("Reject requests with cursor", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		rr := backend.request(http.MethodGet, path+"?cursor=1", nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "cursor argument not supported")
 	})
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
 
-	// Send JSON+GZIP encoded request
-	headers := map[string]string{
-		"Content-Encoding": "gzip",
-	}
-	jsonGzip := gzipBytes(t, reqJSONBytes)
-	require.Equal(t, 207788, len(jsonGzip))
-	rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
+	t.Run("Accept valid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
 
-	// Send SSZ+GZIP encoded request
-	headers = map[string]string{
-		"Content-Type":     "application/octet-stream",
-		"Content-Encoding": "gzip",
-	}
+		validSlot := uint64(2)
+		validSlotPath := fmt.Sprintf("%s?slot=%d", path, validSlot)
+		rr := backend.request(http.MethodGet, validSlotPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
 
-	sszGzip := gzipBytes(t, reqSSZBytes)
-	require.Equal(t, 195923, len(sszGzip))
-	rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-}
+	t.Run("Accept valid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
 
-func gzipBytes(t *testing.T, b []byte) []byte {
-	t.Helper()
-	var buf bytes.Buffer
-	zw := gzip.NewWriter(&buf)
-	_, err := zw.Write(b)
-	require.NoError(t, err)
-	require.NoError(t, zw.Close())
-	return buf.Bytes()
+		validSlot := uint64(2)
+		validSlotPath := fmt.Sprintf("%s?slot=%d", path, validSlot)
+		rr := backend.request(http.MethodGet, validSlotPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid slot", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidSlots := []string{
+			"-1",
+			"1.1",
+		}
+
+		for _, invalidSlot := range invalidSlots {
+			invalidSlotPath := fmt.Sprintf("%s?slot=%s", path, invalidSlot)
+			rr := backend.request(http.MethodGet, invalidSlotPath, nil)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid slot argument")
+		}
+	})
+
+	t.Run("Accept valid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid block_hash", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBlockHashes := []string{
+			// One character too long.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+			// One character too short.
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Missing the 0x prefix.
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			// Has an invalid hex character ('z' at the end).
+			"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaz",
+		}
+
+		for _, invalidBlockHash := range invalidBlockHashes {
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			t.Log(invalidBlockHash)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+		}
+	})
+
+	t.Run("Accept valid block_number", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBlockNumber := uint64(2)
+		validBlockNumberPath := fmt.Sprintf("%s?block_number=%d", path, validBlockNumber)
+		rr := backend.request(http.MethodGet, validBlockNumberPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid block_number", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBlockNumbers := []string{
+			"-1",
+			"1.1",
+		}
+
+		for _, invalidBlockNumber := range invalidBlockNumbers {
+			invalidBlockNumberPath := fmt.Sprintf("%s?block_number=%s", path, invalidBlockNumber)
+			rr := backend.request(http.MethodGet, invalidBlockNumberPath, nil)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid block_number argument")
+		}
+	})
+
+	t.Run("Accept valid builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		validBuilderPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+		rr := backend.request(http.MethodGet, path+"?builder_pubkey="+validBuilderPubkey, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject invalid builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		invalidBuilderPubkeys := []string{
+			// One character too long.
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b908907921",
+			// One character too short.
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b9089079",
+			// Missing the 0x prefix.
+			"6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792",
+			// Has an invalid hex character ('z' at the end).
+			"0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b9089079z",
+		}
+
+		for _, invalidBuilderPubkey := range invalidBuilderPubkeys {
+			rr := backend.request(http.MethodGet, path+"?builder_pubkey="+invalidBuilderPubkey, nil)
+			t.Log(invalidBuilderPubkey)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), "invalid builder_pubkey argument")
+		}
+	})
+
+	t.Run("Reject no slot or block_hash or block_number or builder_pubkey", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		rr := backend.request(http.MethodGet, path, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "need to query for specific slot or block_hash or block_number or builder_pubkey")
+	})
+
+	t.Run("Accept valid limit", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		blockNumber := uint64(1)
+		limit := uint64(1)
+		limitPath := fmt.Sprintf("%s?block_number=%d&limit=%d", path, blockNumber, limit)
+		rr := backend.request(http.MethodGet, limitPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Reject above max limit", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+		blockNumber := uint64(1)
+		maximumLimit := uint64(500)
+		oneAboveMaxLimit := maximumLimit + 1
+		limitPath := fmt.Sprintf("%s?block_number=%d&limit=%d", path, blockNumber, oneAboveMaxLimit)
+		rr := backend.request(http.MethodGet, limitPath, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), fmt.Sprintf("maximum limit is %d", maximumLimit))
+	})
 }
