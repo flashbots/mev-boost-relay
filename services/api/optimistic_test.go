@@ -124,14 +124,6 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	backend.relay.redis = mockRedis
 	backend.relay.db = mockDB
 
-	// Prepare redis
-	// err = backend.relay.redis.SetKnownValidator(boostcommon.NewPubkeyHex(pubkey.String()), proposerInd)
-	// require.NoError(t, err)
-
-	// count, err := backend.relay.datastore.RefreshKnownValidators()
-	// require.NoError(t, err)
-	// require.Equal(t, count, 1)
-
 	backend.relay.headSlot.Store(40)
 	return &pubkey, sk, backend
 }

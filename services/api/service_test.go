@@ -140,40 +140,6 @@ func (be *testBackend) requestWithUA(method, path, userAgent string, payload any
 	return rr
 }
 
-// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient bellatrix.ExecutionAddress, timestamp uint64) (*apiv1.SignedValidatorRegistration, error) {
-// 	var err error
-// 	if sk == nil {
-// 		sk, _, err = bls.GenerateNewKeypair()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-
-// 	blsPubKey, _ := bls.PublicKeyFromSecretKey(sk)
-
-// 	var pubKey phase0.BLSPubKey
-// 	err = pubKey.FromSlice(bls.PublicKeyToBytes(blsPubKey))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	msg := &types.RegisterValidatorRequestMessage{
-// 		FeeRecipient: feeRecipient,
-// 		Timestamp:    timestamp,
-// 		Pubkey:       pubKey,
-// 		GasLimit:     278234191203,
-// 	}
-
-// 	sig, err := ssz.SignMessage(msg, builderSigningDomain, sk)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return &apiv1.SignedValidatorRegistration{
-// 		Message:   msg,
-// 		Signature: sig,
-// 	}, nil
-// }
-
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
