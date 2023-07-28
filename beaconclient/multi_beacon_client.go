@@ -234,7 +234,7 @@ func (c *MultiBeaconClient) PublishBlock(block *spec.VersionedSignedBeaconBlock)
 		c.log.WithError(err).Warn("failed to publish block as block slot is missing")
 		return 0, err
 	}
-	blockHash, err := block.BlockHash()
+	blockHash, err := block.ExecutionBlockHash()
 	if err != nil {
 		c.log.WithError(err).Warn("failed to publish block as block hash is missing")
 		return 0, err

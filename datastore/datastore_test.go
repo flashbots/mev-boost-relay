@@ -52,11 +52,11 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 // func TestProdProposerValidatorRegistration(t *testing.T) {
 // 	ds := setupTestDatastore(t)
 
-// 	var reg1 types.SignedValidatorRegistration
+// 	var reg1 apiv1.SignedValidatorRegistration
 // 	err := copier.Copy(&reg1, &common.ValidPayloadRegisterValidator)
 // 	require.NoError(t, err)
 
-// 	key := types.NewPubkeyHex(reg1.Message.Pubkey.String())
+// 	key := common.NewPubkeyHex(reg1.Message.Pubkey.String())
 
 // 	// Set known validator and save registration
 // 	err = ds.redis.SetKnownValidator(key, 1)
@@ -69,7 +69,7 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 // 	require.True(t, ds.IsKnownValidator(key))
 
 // 	// Copy the original registration
-// 	var reg2 types.SignedValidatorRegistration
+// 	var reg2 apiv1.SignedValidatorRegistration
 // 	err = copier.Copy(&reg2, &reg1)
 // 	require.NoError(t, err)
 // }

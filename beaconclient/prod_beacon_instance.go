@@ -8,7 +8,6 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -229,7 +228,7 @@ type GetBlockResponse struct {
 		Message struct {
 			Slot uint64 `json:"slot,string"`
 			Body struct {
-				ExecutionPayload types.ExecutionPayload `json:"execution_payload"`
+				ExecutionPayload capella.ExecutionPayload `json:"execution_payload"`
 			}
 		}
 	}

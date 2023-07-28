@@ -20,7 +20,7 @@ func (*MockMultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 func (*MockMultiBeaconClient) SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent) {
 }
 
-// func (*MockMultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
+// func (*MockMultiBeaconClient) FetchValidators(headSlot uint64) (map[common.PubkeyHex]ValidatorResponseEntry, error) {
 // 	return nil, nil
 // }
 

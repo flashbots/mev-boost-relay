@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
@@ -48,9 +50,9 @@ type EthNetworkDetails struct {
 	BellatrixForkVersionHex  string
 	CapellaForkVersionHex    string
 
-	DomainBuilder                 boostTypes.Domain
-	DomainBeaconProposerBellatrix boostTypes.Domain
-	DomainBeaconProposerCapella   boostTypes.Domain
+	DomainBuilder                 phase0.Domain
+	DomainBeaconProposerBellatrix phase0.Domain
+	DomainBeaconProposerCapella   phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -58,9 +60,9 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var genesisValidatorsRoot string
 	var bellatrixForkVersion string
 	var capellaForkVersion string
-	var domainBuilder boostTypes.Domain
-	var domainBeaconProposerBellatrix boostTypes.Domain
-	var domainBeaconProposerCapella boostTypes.Domain
+	var domainBuilder phase0.Domain
+	var domainBeaconProposerBellatrix phase0.Domain
+	var domainBeaconProposerCapella phase0.Domain
 
 	switch networkName {
 	case EthNetworkRopsten:
@@ -97,17 +99,17 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
 
-	domainBuilder, err = ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, boostTypes.Root{}.String())
+	domainBuilder, err = ComputeDomain(ssz.DomainTypeAppBuilder, genesisForkVersion, phase0.Root{}.String())
 	if err != nil {
 		return nil, err
 	}
 
-	domainBeaconProposerBellatrix, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerBellatrix, err = ComputeDomain(ssz.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	domainBeaconProposerCapella, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, capellaForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerCapella, err = ComputeDomain(ssz.DomainTypeBeaconProposer, capellaForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -129,10 +131,20 @@ func (e *EthNetworkDetails) String() string {
 		e.Name, e.GenesisForkVersionHex, e.GenesisValidatorsRootHex, e.BellatrixForkVersionHex, e.CapellaForkVersionHex, e.DomainBuilder, e.DomainBeaconProposerBellatrix, e.DomainBeaconProposerCapella)
 }
 
+type PubkeyHex string
+
+func NewPubkeyHex(pk string) PubkeyHex {
+	return PubkeyHex(strings.ToLower(pk))
+}
+
+func (p PubkeyHex) String() string {
+	return string(p)
+}
+
 type BuilderGetValidatorsResponseEntry struct {
-	Slot           uint64                                  `json:"slot,string"`
-	ValidatorIndex uint64                                  `json:"validator_index,string"`
-	Entry          *boostTypes.SignedValidatorRegistration `json:"entry"`
+	Slot           uint64                             `json:"slot,string"`
+	ValidatorIndex uint64                             `json:"validator_index,string"`
+	Entry          *apiv1.SignedValidatorRegistration `json:"entry"`
 }
 
 type BidTraceV2 struct {

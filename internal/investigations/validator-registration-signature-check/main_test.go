@@ -2,8 +2,11 @@ package main
 
 import (
 	"testing"
+	"time"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
 )
@@ -14,29 +17,29 @@ func TestValidatorRegistrationSignature(t *testing.T) {
 	pubkey := "0x84e975405f8691ad7118527ee9ee4ed2e4e8bae973f6e29aa9ca9ee4aea83605ae3536d22acc9aa1af0545064eacf82e"
 	gasLimit := 30000000
 	feeRecipient := "0xdb65fed33dc262fe09d9a2ba8f80b329ba25f941"
-	timestamp := 1606824043
+	timestamp := int64(1606824043)
 	signature := "0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"
 
 	// Constructing the object
-	payload := boostTypes.SignedValidatorRegistration{
-		Message: &boostTypes.RegisterValidatorRequestMessage{
+	payload := apiv1.SignedValidatorRegistration{
+		Message: &apiv1.ValidatorRegistration{
 			GasLimit:  uint64(gasLimit),
-			Timestamp: uint64(timestamp),
+			Timestamp: time.Unix(timestamp, 0),
 		},
 	}
 
 	var err error
-	payload.Message.Pubkey, err = boostTypes.HexToPubkey(pubkey)
+	payload.Message.Pubkey, err = utils.HexToPubkey(pubkey)
 	require.NoError(t, err)
-	payload.Signature, err = boostTypes.HexToSignature(signature)
+	payload.Signature, err = utils.HexToSignature(signature)
 	require.NoError(t, err)
-	payload.Message.FeeRecipient, err = boostTypes.HexToAddress(feeRecipient)
+	payload.Message.FeeRecipient, err = utils.HexToAddress(feeRecipient)
 	require.NoError(t, err)
 
 	mainnetDetails, err := common.NewEthNetworkDetails(common.EthNetworkMainnet)
 	require.NoError(t, err)
 
-	ok, err := boostTypes.VerifySignature(payload.Message, mainnetDetails.DomainBuilder, payload.Message.Pubkey[:], payload.Signature[:])
+	ok, err := ssz.VerifySignature(payload.Message, mainnetDetails.DomainBuilder, payload.Message.Pubkey[:], payload.Signature[:])
 	require.NoError(t, err)
 	require.True(t, ok)
 }

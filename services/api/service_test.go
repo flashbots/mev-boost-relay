@@ -13,11 +13,11 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var builderSigningDomain = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+// var builderSigningDomain = phase0.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
 
 type testBackend struct {
 	t         require.TestingT
@@ -142,7 +142,7 @@ func (be *testBackend) requestWithUA(method, path, userAgent string, payload any
 	return rr
 }
 
-// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
+// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient bellatrix.ExecutionAddress, timestamp uint64) (*apiv1.SignedValidatorRegistration, error) {
 // 	var err error
 // 	if sk == nil {
 // 		sk, _, err = bls.GenerateNewKeypair()
@@ -153,7 +153,7 @@ func (be *testBackend) requestWithUA(method, path, userAgent string, payload any
 
 // 	blsPubKey, _ := bls.PublicKeyFromSecretKey(sk)
 
-// 	var pubKey types.PublicKey
+// 	var pubKey phase0.BLSPubKey
 // 	err = pubKey.FromSlice(bls.PublicKeyToBytes(blsPubKey))
 // 	if err != nil {
 // 		return nil, err
@@ -165,12 +165,12 @@ func (be *testBackend) requestWithUA(method, path, userAgent string, payload any
 // 		GasLimit:     278234191203,
 // 	}
 
-// 	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
+// 	sig, err := ssz.SignMessage(msg, builderSigningDomain, sk)
 // 	if err != nil {
 // 		return nil, err
 // 	}
 
-// 	return &types.SignedValidatorRegistration{
+// 	return &apiv1.SignedValidatorRegistration{
 // 		Message:   msg,
 // 		Signature: sig,
 // 	}, nil
@@ -224,7 +224,7 @@ func TestRegisterValidator(t *testing.T) {
 	// 	require.True(t, ok)
 	// 	require.Equal(t, pubkeyHex, pkH)
 
-	// 	payload := []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
+	// 	payload := []apiv1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
 	// 	rr := backend.request(http.MethodPost, path, payload)
 	// 	require.Equal(t, http.StatusOK, rr.Code)
 	// 	time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
@@ -236,7 +236,7 @@ func TestRegisterValidator(t *testing.T) {
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
@@ -245,26 +245,26 @@ func TestRegisterValidator(t *testing.T) {
 
 	// 	// Allow +10 sec
 	// 	td := uint64(time.Now().Unix())
-	// 	payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
+	// 	payload, err := generateSignedValidatorRegistration(nil, bellatrix.ExecutionAddress{1}, td+10)
 	// 	require.NoError(t, err)
 	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 	// 	require.NoError(t, err)
 	// 	_, err = backend.datastore.RefreshKnownValidators()
 	// 	require.NoError(t, err)
 
-	// 	rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+	// 	rr := backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{*payload})
 	// 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 	// 	// Disallow +11 sec
 	// 	td = uint64(time.Now().Unix())
-	// 	payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
+	// 	payload, err = generateSignedValidatorRegistration(nil, bellatrix.ExecutionAddress{1}, td+12)
 	// 	require.NoError(t, err)
 	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
 	// 	require.NoError(t, err)
 	// 	_, err = backend.datastore.RefreshKnownValidators()
 	// 	require.NoError(t, err)
 
-	// 	rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
+	// 	rr = backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{*payload})
 	// 	require.Equal(t, http.StatusBadRequest, rr.Code)
 	// 	require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	// })
@@ -287,7 +287,7 @@ func TestGetHeader(t *testing.T) {
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 	bidValue := uint256.NewInt(99)
 	trace := &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
+		BidTrace: apiv1.BidTrace{
 			Value: bidValue,
 		},
 	}
@@ -406,10 +406,9 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	// Payload attributes
 	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json.gz"
 	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
-	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
+	feeRec, err := utils.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
 	require.NoError(t, err)
-	var withdrawalsRoot types.Hash
-	err = withdrawalsRoot.UnmarshalText([]byte("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8"))
+	withdrawalsRoot, err := utils.HexToHash("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
 	require.NoError(t, err)
 	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
 
@@ -419,8 +418,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 		Slot: headSlot,
-		Entry: &types.SignedValidatorRegistration{
-			Message: &types.RegisterValidatorRequestMessage{
+		Entry: &apiv1.SignedValidatorRegistration{
+			Message: &apiv1.ValidatorRegistration{
 				FeeRecipient: feeRec,
 			},
 		},
