@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
@@ -165,7 +165,7 @@ func (db MockDB) InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitB
 	return nil
 }
 
-func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *apiv1.SignedValidatorRegistration) error {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {

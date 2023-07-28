@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/flashbots/go-boost-utils/utils"
 )
 
 func NewNullInt64(i int64) sql.NullInt64 {
@@ -60,38 +61,38 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
-func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*types.SignedValidatorRegistration, error) {
-	pubkey, err := types.HexToPubkey(reg.Pubkey)
+func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*apiv1.SignedValidatorRegistration, error) {
+	pubkey, err := utils.HexToPubkey(reg.Pubkey)
 	if err != nil {
 		return nil, err
 	}
 
-	feeRec, err := types.HexToAddress(reg.FeeRecipient)
+	feeRec, err := utils.HexToAddress(reg.FeeRecipient)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := types.HexToSignature(reg.Signature)
+	sig, err := utils.HexToSignature(reg.Signature)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.SignedValidatorRegistration{
-		Message: &types.RegisterValidatorRequestMessage{
+	return &apiv1.SignedValidatorRegistration{
+		Message: &apiv1.ValidatorRegistration{
 			Pubkey:       pubkey,
 			FeeRecipient: feeRec,
-			Timestamp:    reg.Timestamp,
+			Timestamp:    time.Unix(int64(reg.Timestamp), 0),
 			GasLimit:     reg.GasLimit,
 		},
 		Signature: sig,
 	}, nil
 }
 
-func SignedValidatorRegistrationToEntry(valReg types.SignedValidatorRegistration) ValidatorRegistrationEntry {
+func SignedValidatorRegistrationToEntry(valReg apiv1.SignedValidatorRegistration) ValidatorRegistrationEntry {
 	return ValidatorRegistrationEntry{
 		Pubkey:       valReg.Message.Pubkey.String(),
 		FeeRecipient: valReg.Message.FeeRecipient.String(),
-		Timestamp:    valReg.Message.Timestamp,
+		Timestamp:    uint64(valReg.Message.Timestamp.Unix()),
 		GasLimit:     valReg.Message.GasLimit,
 		Signature:    valReg.Signature.String(),
 	}

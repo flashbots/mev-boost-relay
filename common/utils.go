@@ -17,7 +17,7 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
@@ -25,6 +25,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -77,15 +78,15 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 }
 
 // ComputeDomain computes the signing domain
-func ComputeDomain(domainType types.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain types.Domain, err error) {
-	genesisValidatorsRoot := types.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
+func ComputeDomain(domainType phase0.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain phase0.Domain, err error) {
+	genesisValidatorsRoot := phase0.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
 	if err != nil || len(forkVersionBytes) != 4 {
 		return domain, ErrInvalidForkVersion
 	}
 	var forkVersion [4]byte
 	copy(forkVersion[:], forkVersionBytes[:4])
-	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
+	return ssz.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
 func GetEnv(key, defaultValue string) string {
@@ -176,8 +177,8 @@ func StrToPhase0Hash(s string) (ret phase0.Hash32, err error) {
 
 type CreateTestBlockSubmissionOpts struct {
 	relaySk bls.SecretKey
-	relayPk types.PublicKey
-	domain  types.Domain
+	relayPk phase0.BLSPubKey
+	domain  phase0.Domain
 
 	Slot           uint64
 	ParentHash     string
@@ -190,8 +191,8 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 
 	slot := uint64(0)
 	relaySk := bls.SecretKey{}
-	relayPk := types.PublicKey{}
-	domain := types.Domain{}
+	relayPk := phase0.BLSPubKey{}
+	domain := phase0.Domain{}
 	proposerPk := phase0.BLSPubKey{}
 	parentHash := phase0.Hash32{}
 
@@ -218,7 +219,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	payload = &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 		Version: consensusspec.DataVersionCapella,
 		Capella: &capella.SubmitBlockRequest{
-			Message: &v1.BidTrace{ //nolint:exhaustruct
+			Message: &apiv1.BidTrace{ //nolint:exhaustruct
 				BuilderPubkey:  builderPk,
 				Value:          value,
 				Slot:           slot,
