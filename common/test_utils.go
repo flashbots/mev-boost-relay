@@ -8,14 +8,18 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/attestantio/go-builder-client/api/capella"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -31,33 +35,37 @@ func check(err error, args ...interface{}) {
 }
 
 // _HexToAddress converts a hexadecimal string to an Ethereum address
-func _HexToAddress(s string) (ret boostTypes.Address) {
-	check(ret.UnmarshalText([]byte(s)), " _HexToAddress: ", s)
+func _HexToAddress(s string) (ret bellatrix.ExecutionAddress) {
+	ret, err := utils.HexToAddress(s)
+	check(err, " _HexToAddress: ", s)
 	return ret
 }
 
 // _HexToPubkey converts a hexadecimal string to a BLS Public Key
-func _HexToPubkey(s string) (ret boostTypes.PublicKey) {
-	check(ret.UnmarshalText([]byte(s)), " _HexToPubkey: ", s)
-	return
+func _HexToPubkey(s string) (ret phase0.BLSPubKey) {
+	ret, err := utils.HexToPubkey(s)
+	check(err, " _HexToPubkey: ", s)
+	return ret
 }
 
 // _HexToSignature converts a hexadecimal string to a BLS Signature
-func _HexToSignature(s string) (ret boostTypes.Signature) {
-	check(ret.UnmarshalText([]byte(s)), " _HexToSignature: ", s)
-	return
+func _HexToSignature(s string) (ret phase0.BLSSignature) {
+	ret, err := utils.HexToSignature(s)
+	check(err, " _HexToSignature: ", s)
+	return ret
 }
 
 // _HexToHash converts a hexadecimal string to a Hash
-func _HexToHash(s string) (ret boostTypes.Hash) {
-	check(ret.FromSlice([]byte(s)), " _HexToHash: ", s)
-	return
+func _HexToHash(s string) (ret phase0.Hash32) {
+	ret, err := utils.HexToHash(s)
+	check(err, " _HexToHash: ", s)
+	return ret
 }
 
-var ValidPayloadRegisterValidator = boostTypes.SignedValidatorRegistration{
-	Message: &boostTypes.RegisterValidatorRequestMessage{
+var ValidPayloadRegisterValidator = apiv1.SignedValidatorRegistration{
+	Message: &apiv1.ValidatorRegistration{
 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
-		Timestamp:    1606824043,
+		Timestamp:    time.Unix(1606824043, 0),
 		GasLimit:     30000000,
 		Pubkey: _HexToPubkey(
 			"0x84e975405f8691ad7118527ee9ee4ed2e4e8bae973f6e29aa9ca9ee4aea83605ae3536d22acc9aa1af0545064eacf82e"),
@@ -67,7 +75,7 @@ var ValidPayloadRegisterValidator = boostTypes.SignedValidatorRegistration{
 }
 
 func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) spec.VersionedSubmitBlockRequest {
-	signature, err := boostTypes.SignMessage(bid, boostTypes.DomainBuilder, sk)
+	signature, err := ssz.SignMessage(bid, ssz.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
 	return spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 		Version: consensusspec.DataVersionCapella,
@@ -77,7 +85,7 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) spec.Vers
 			ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
 				Transactions: []bellatrix.Transaction{[]byte{0x03}},
 				Timestamp:    bid.Slot * 12, // 12 seconds per slot.
-				PrevRandao:   _HexToHash("01234567890123456789012345678901"),
+				PrevRandao:   _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
 				Withdrawals:  []*consensuscapella.Withdrawal{},
 			},
 		},
