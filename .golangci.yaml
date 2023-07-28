@@ -93,7 +93,8 @@ linters-settings:
       #
       # Easier to read with only one of the versioned payloads.
       #
-      - 'api.VersionedExecutionPayload'
+      - 'VersionedExecutionPayload'
+      - 'VersionedSignedBuilderBid'
 
       #
       # Structures outside our control that have a ton of settings. It doesn't

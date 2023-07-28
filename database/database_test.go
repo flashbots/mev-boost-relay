@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/attestantio/go-builder-client/api/v1"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
@@ -28,7 +27,7 @@ const (
 	collateral           = 1000
 	collateralStr        = "1000"
 	builderID            = "builder0x69"
-	randao               = "01234567890123456789012345678901"
+	randao               = "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
 	optimisticSubmission = true
 )
 
@@ -77,7 +76,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	req := common.TestBuilderSubmitBlockRequest(sk, &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
+		BidTrace: apiv1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -299,7 +298,7 @@ func TestInsertBuilderDemotion(t *testing.T) {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	trace := &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
+		BidTrace: apiv1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -328,7 +327,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	bt := &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
+		BidTrace: apiv1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -360,7 +359,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	bb := &spec.VersionedSignedBeaconBlock{
 		Capella: &consensuscapella.SignedBeaconBlock{},
 	}
-	err = db.UpdateBuilderDemotion(bt, bb, &types.SignedValidatorRegistration{})
+	err = db.UpdateBuilderDemotion(bt, bb, &apiv1.SignedValidatorRegistration{})
 	require.NoError(t, err)
 
 	// Signed block and validation should now be valid and non-empty.

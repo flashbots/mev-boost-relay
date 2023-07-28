@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
@@ -194,7 +193,7 @@ func TestFetchValidators(t *testing.T) {
 
 		// only beacon 2 should have a validator, and should be used by default
 		backend.beaconInstances[0].MockFetchValidatorsErr = nil
-		backend.beaconInstances[1].SetValidators(make(map[types.PubkeyHex]ValidatorResponseEntry))
+		backend.beaconInstances[1].SetValidators(make(map[common.PubkeyHex]ValidatorResponseEntry))
 		backend.beaconInstances[2].MockFetchValidatorsErr = nil
 		backend.beaconInstances[2].AddValidator(entry)
 
