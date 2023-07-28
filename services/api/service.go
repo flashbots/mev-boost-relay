@@ -22,6 +22,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
@@ -29,7 +30,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -170,7 +172,7 @@ type RelayAPI struct {
 	log  *logrus.Entry
 
 	blsSk     *bls.SecretKey
-	publicKey *boostTypes.PublicKey
+	publicKey *phase0.BLSPubKey
 
 	srv         *http.Server
 	srvStarted  uberatomic.Bool
@@ -195,7 +197,7 @@ type RelayAPI struct {
 
 	blockSimRateLimiter IBlockSimRateLimiter
 
-	validatorRegC chan boostTypes.SignedValidatorRegistration
+	validatorRegC chan apiv1.SignedValidatorRegistration
 
 	// used to wait on any active getPayload calls on shutdown
 	getPayloadCallsInFlight sync.WaitGroup
@@ -237,7 +239,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	}
 
 	// If block-builder API is enabled, then ensure secret key is all set
-	var publicKey boostTypes.PublicKey
+	var publicKey phase0.BLSPubKey
 	if opts.BlockBuilderAPI {
 		if opts.SecretKey == nil {
 			return nil, ErrBuilderAPIWithoutSecretKey
@@ -248,7 +250,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		if err != nil {
 			return nil, err
 		}
-		publicKey, err = boostTypes.BlsPublicKeyToPublicKey(blsPubkey)
+		publicKey, err = utils.BlsPublicKeyToPublicKey(blsPubkey)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +286,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		proposerDutiesResponse: &[]byte{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
-		validatorRegC: make(chan boostTypes.SignedValidatorRegistration, 450_000),
+		validatorRegC: make(chan apiv1.SignedValidatorRegistration, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -910,14 +912,14 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
-	parseRegistration := func(value []byte) (reg *boostTypes.SignedValidatorRegistration, err error) {
+	parseRegistration := func(value []byte) (reg *apiv1.SignedValidatorRegistration, err error) {
 		// Pubkey
 		_pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
 			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
 		}
 
-		pubkey, err := boostTypes.HexToPubkey(_pubkey)
+		pubkey, err := utils.HexToPubkey(_pubkey)
 		if err != nil {
 			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
 		}
@@ -928,9 +930,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return nil, fmt.Errorf("registration message error (timestamp): %w", err)
 		}
 
-		timestamp, err := strconv.ParseUint(_timestamp, 10, 64)
+		timestamp, err := strconv.ParseInt(_timestamp, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid timestamp: %w", err)
+		}
+		if timestamp < 0 {
+			return nil, ErrNegativeTimestamp
 		}
 
 		// GasLimit
@@ -950,7 +955,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
 		}
 
-		feeRecipient, err := boostTypes.HexToAddress(_feeRecipient)
+		feeRecipient, err := utils.HexToAddress(_feeRecipient)
 		if err != nil {
 			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
 		}
@@ -961,17 +966,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			return nil, fmt.Errorf("registration message error (signature): %w", err)
 		}
 
-		signature, err := boostTypes.HexToSignature(_signature)
+		signature, err := utils.HexToSignature(_signature)
 		if err != nil {
 			return nil, fmt.Errorf("registration message error (signature): %w", err)
 		}
 
 		// Construct and return full registration object
-		reg = &boostTypes.SignedValidatorRegistration{
-			Message: &boostTypes.RegisterValidatorRequestMessage{
+		reg = &apiv1.SignedValidatorRegistration{
+			Message: &apiv1.ValidatorRegistration{
 				FeeRecipient: feeRecipient,
 				GasLimit:     gasLimit,
-				Timestamp:    timestamp,
+				Timestamp:    time.Unix(timestamp, 0),
 				Pubkey:       pubkey,
 			},
 			Signature: signature,
@@ -1000,7 +1005,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Add validator pubkey to logs
-		pkHex := signedValidatorRegistration.Message.Pubkey.PubkeyHex()
+		pkHex := common.PubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
 		regLog = regLog.WithFields(logrus.Fields{
 			"pubkey":       pkHex,
 			"signature":    signedValidatorRegistration.Signature.String(),
@@ -1010,7 +1015,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		})
 
 		// Ensure a valid timestamp (not too early, and not too far in the future)
-		registrationTimestamp := int64(signedValidatorRegistration.Message.Timestamp)
+		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
 		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) {
 			handleError(regLog, http.StatusBadRequest, "timestamp too early")
 			return
@@ -1022,7 +1027,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Check if a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
-			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex.String()))
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex))
 			return
 		}
 
@@ -1030,13 +1035,13 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
 		if err != nil {
 			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if prevTimestamp >= signedValidatorRegistration.Message.Timestamp {
+		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) {
 			// abort if the current registration timestamp is older or equal to the last known one
 			return
 		}
 
 		// Verify the signature
-		ok, err := boostTypes.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
+		ok, err := ssz.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
 			regLog.WithError(err).Error("error verifying registerValidator signature")
 			return
@@ -1241,7 +1246,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		log.WithError(err).Warn("failed to get payload slot")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload slot")
 	}
-	blockHash, err := payload.BlockHash()
+	blockHash, err := payload.ExecutionBlockHash()
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload block hash")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload block hash")
@@ -1290,10 +1295,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("proposerPubkey", proposerPubkey.String())
 
 	// Create a BLS pubkey from the hex pubkey
-	pk, err := boostTypes.HexToPubkey(proposerPubkey.String())
+	pk, err := utils.HexToPubkey(proposerPubkey.String())
 	if err != nil {
-		log.WithError(err).Warn("could not convert pubkey to types.PublicKey")
-		api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to types.PublicKey")
+		log.WithError(err).Warn("could not convert pubkey to phase0.BLSPubKey")
+		api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to phase0.BLSPubKey")
 		return
 	}
 
@@ -1501,7 +1506,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// respond to the HTTP request
 	api.RespondOK(w, getPayloadResp)
-	blockNumber, err := payload.BlockNumber()
+	blockNumber, err := payload.ExecutionBlockNumber()
 	if err != nil {
 		log.WithError(err).Info("failed to get block number")
 	}
@@ -1891,7 +1896,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// Verify the signature
 	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
 	signature := submission.Signature
-	ok, err = boostTypes.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
+	ok, err = ssz.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], signature[:])
 	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
 	if err != nil {
 		log.WithError(err).Warn("failed verifying builder signature")
@@ -1984,7 +1989,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		builder:    builderEntry,
 		req: &common.BuilderBlockValidationRequest{
 			VersionedSubmitBlockRequest: *payload,
-			RegisteredGasLimit:        gasLimit,
+			RegisteredGasLimit:          gasLimit,
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
@@ -2207,8 +2212,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	}
 
 	if args.Get("block_hash") != "" {
-		var hash boostTypes.Hash
-		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
+		_, err := utils.HexToHash(args.Get("block_hash"))
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
 			return
@@ -2300,8 +2304,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("block_hash") != "" {
-		var hash boostTypes.Hash
-		err = hash.UnmarshalText([]byte(args.Get("block_hash")))
+		_, err := utils.HexToHash(args.Get("block_hash"))
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_hash argument")
 			return
@@ -2366,8 +2369,7 @@ func (api *RelayAPI) handleDataValidatorRegistration(w http.ResponseWriter, req 
 		return
 	}
 
-	var pk boostTypes.PublicKey
-	err := pk.UnmarshalText([]byte(pkStr))
+	_, err := utils.HexToPubkey(pkStr)
 	if err != nil {
 		api.RespondError(w, http.StatusBadRequest, "invalid pubkey")
 		return

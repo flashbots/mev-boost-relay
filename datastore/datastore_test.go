@@ -48,28 +48,3 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", payload.Capella.BlockHash.String())
 }
-
-// func TestProdProposerValidatorRegistration(t *testing.T) {
-// 	ds := setupTestDatastore(t)
-
-// 	var reg1 types.SignedValidatorRegistration
-// 	err := copier.Copy(&reg1, &common.ValidPayloadRegisterValidator)
-// 	require.NoError(t, err)
-
-// 	key := types.NewPubkeyHex(reg1.Message.Pubkey.String())
-
-// 	// Set known validator and save registration
-// 	err = ds.redis.SetKnownValidator(key, 1)
-// 	require.NoError(t, err)
-
-// 	// Check if validator is known
-// 	cnt, err := ds.RefreshKnownValidators()
-// 	require.NoError(t, err)
-// 	require.Equal(t, 1, cnt)
-// 	require.True(t, ds.IsKnownValidator(key))
-
-// 	// Copy the original registration
-// 	var reg2 types.SignedValidatorRegistration
-// 	err = copier.Copy(&reg2, &reg1)
-// 	require.NoError(t, err)
-// }

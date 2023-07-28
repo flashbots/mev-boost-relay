@@ -10,7 +10,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/bls"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
@@ -81,8 +81,8 @@ func EqExecutionPayloadToHeader(bb *consensusapi.VersionedSignedBlindedBeaconBlo
 }
 
 func checkBLSPublicKeyHex(pkHex string) error {
-	var proposerPubkey boostTypes.PublicKey
-	return proposerPubkey.UnmarshalText([]byte(pkHex))
+	_, err := utils.HexToPubkey(pkHex)
+	return err
 }
 
 func hasReachedFork(slot, forkEpoch uint64) bool {
@@ -90,7 +90,7 @@ func hasReachedFork(slot, forkEpoch uint64) bool {
 	return currentEpoch >= forkEpoch
 }
 
-func checkProposerSignature(block *consensusapi.VersionedSignedBlindedBeaconBlock, domain boostTypes.Domain, pubKey []byte) (bool, error) {
+func checkProposerSignature(block *consensusapi.VersionedSignedBlindedBeaconBlock, domain phase0.Domain, pubKey []byte) (bool, error) {
 	root, err := block.Root()
 	if err != nil {
 		return false, err
@@ -99,7 +99,7 @@ func checkProposerSignature(block *consensusapi.VersionedSignedBlindedBeaconBloc
 	if err != nil {
 		return false, err
 	}
-	signingData := boostTypes.SigningData{Root: boostTypes.Root(root), Domain: domain}
+	signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
 	msg, err := signingData.HashTreeRoot()
 	if err != nil {
 		return false, err
