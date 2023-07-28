@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/attestantio/go-builder-client/api"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -40,8 +40,8 @@ type Datastore struct {
 	memcached *Memcached
 	db        database.IDatabaseService
 
-	knownValidatorsByPubkey   map[types.PubkeyHex]uint64
-	knownValidatorsByIndex    map[uint64]types.PubkeyHex
+	knownValidatorsByPubkey   map[common.PubkeyHex]uint64
+	knownValidatorsByIndex    map[uint64]common.PubkeyHex
 	knownValidatorsLock       sync.RWMutex
 	knownValidatorsIsUpdating uberatomic.Bool
 	knownValidatorsLastSlot   uberatomic.Uint64
@@ -55,8 +55,8 @@ func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDat
 		db:                      db,
 		memcached:               memcached,
 		redis:                   redisCache,
-		knownValidatorsByPubkey: make(map[types.PubkeyHex]uint64),
-		knownValidatorsByIndex:  make(map[uint64]types.PubkeyHex),
+		knownValidatorsByPubkey: make(map[common.PubkeyHex]uint64),
+		knownValidatorsByIndex:  make(map[uint64]common.PubkeyHex),
 	}
 
 	return ds, err
@@ -130,11 +130,11 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 	// At this point, consider the update successful
 	ds.knownValidatorsLastSlot.Store(slot)
 
-	knownValidatorsByPubkey := make(map[types.PubkeyHex]uint64)
-	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
+	knownValidatorsByPubkey := make(map[common.PubkeyHex]uint64)
+	knownValidatorsByIndex := make(map[uint64]common.PubkeyHex)
 
 	for _, valEntry := range validators.Data {
-		pk := types.NewPubkeyHex(valEntry.Validator.Pubkey)
+		pk := common.NewPubkeyHex(valEntry.Validator.Pubkey)
 		knownValidatorsByPubkey[pk] = valEntry.Index
 		knownValidatorsByIndex[valEntry.Index] = pk
 	}
@@ -148,14 +148,14 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 	log.Infof("known validators updated")
 }
 
-func (ds *Datastore) IsKnownValidator(pubkeyHex types.PubkeyHex) bool {
+func (ds *Datastore) IsKnownValidator(pubkeyHex common.PubkeyHex) bool {
 	ds.knownValidatorsLock.RLock()
 	defer ds.knownValidatorsLock.RUnlock()
 	_, found := ds.knownValidatorsByPubkey[pubkeyHex]
 	return found
 }
 
-func (ds *Datastore) GetKnownValidatorPubkeyByIndex(index uint64) (types.PubkeyHex, bool) {
+func (ds *Datastore) GetKnownValidatorPubkeyByIndex(index uint64) (common.PubkeyHex, bool) {
 	ds.knownValidatorsLock.RLock()
 	defer ds.knownValidatorsLock.RUnlock()
 	pk, found := ds.knownValidatorsByIndex[index]
@@ -173,7 +173,7 @@ func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
 }
 
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
-func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegistration) error {
+func (ds *Datastore) SaveValidatorRegistration(entry apiv1.SignedValidatorRegistration) error {
 	// First save in the database
 	err := ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
 	if err != nil {
@@ -181,8 +181,8 @@ func (ds *Datastore) SaveValidatorRegistration(entry types.SignedValidatorRegist
 	}
 
 	// then save in redis
-	pk := types.NewPubkeyHex(entry.Message.Pubkey.String())
-	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, entry.Message.Timestamp)
+	pk := common.NewPubkeyHex(entry.Message.Pubkey.String())
+	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, uint64(entry.Message.Timestamp.Unix()))
 	if err != nil {
 		return errors.Wrap(err, "failed saving validator registration to redis")
 	}

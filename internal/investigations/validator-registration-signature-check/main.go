@@ -6,16 +6,19 @@ package main
 
 import (
 	"fmt"
+	"time"
 
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/go-boost-utils/bls"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (
 	gasLimit     = 30000000
 	feeRecipient = "0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"
-	timestamp    = 1606824043
+	timestamp    = int64(1606824043)
 )
 
 func Perr(err error) {
@@ -31,21 +34,21 @@ func main() {
 	sk, pubkey, err := bls.GenerateNewKeypair()
 	Perr(err)
 
-	pk, err := boostTypes.BlsPublicKeyToPublicKey(pubkey)
+	pk, err := utils.BlsPublicKeyToPublicKey(pubkey)
 	Perr(err)
 
 	// Fill in validator registration details
-	validatorRegistration := boostTypes.RegisterValidatorRequestMessage{ //nolint:exhaustruct
+	validatorRegistration := apiv1.ValidatorRegistration{ //nolint:exhaustruct
 		GasLimit:  uint64(gasLimit),
-		Timestamp: uint64(timestamp),
+		Timestamp: time.Unix(timestamp, 0),
 	}
 
-	validatorRegistration.Pubkey, err = boostTypes.HexToPubkey(pk.String())
+	validatorRegistration.Pubkey, err = utils.HexToPubkey(pk.String())
 	Perr(err)
-	validatorRegistration.FeeRecipient, err = boostTypes.HexToAddress(feeRecipient)
+	validatorRegistration.FeeRecipient, err = utils.HexToAddress(feeRecipient)
 	Perr(err)
 
-	sig, err := boostTypes.SignMessage(&validatorRegistration, mainnetDetails.DomainBuilder, sk)
+	sig, err := ssz.SignMessage(&validatorRegistration, mainnetDetails.DomainBuilder, sk)
 	Perr(err)
 	fmt.Println("privkey:", sk.String())
 	fmt.Println("pubkey: ", pk.String())

@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -30,7 +30,7 @@ const (
 	slot        = uint64(41)
 	collateral  = 1000
 	builderID   = "builder0x69"
-	randao      = "01234567890123456789012345678901"
+	randao      = "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
 	emptyHash   = "0x0000000000000000000000000000000000000000000000000000000000000000"
 	proposerInd = uint64(987)
 	genesis     = 1606824023
@@ -43,7 +43,7 @@ var (
 
 func getTestBidTrace(pubkey phase0.BLSPubKey, value uint64) *common.BidTraceV2 {
 	return &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
+		BidTrace: apiv1.BidTrace{
 			Slot:                 slot,
 			BuilderPubkey:        pubkey,
 			ProposerFeeRecipient: feeRecipient,
@@ -56,7 +56,7 @@ type blockRequestOpts struct {
 	pubkey     phase0.BLSPubKey
 	secretkey  *bls.SecretKey
 	blockValue uint64
-	domain     boostTypes.Domain
+	domain     phase0.Domain
 }
 
 func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBackend) {
@@ -66,9 +66,8 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	require.NoError(t, err)
 	blsPubkey, err := bls.PublicKeyFromSecretKey(sk)
 	require.NoError(t, err)
-	pkBytes := blsPubkey.Bytes()
-	var pubkey phase0.BLSPubKey
-	copy(pubkey[:], pkBytes[:])
+	pubkey, err := utils.BlsPublicKeyToPublicKey(blsPubkey)
+	require.NoError(t, err)
 	pkStr := pubkey.String()
 
 	// Setup test backend.
@@ -77,11 +76,11 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	backend.relay.genesisInfo.Data.GenesisTime = 0
 	backend.relay.proposerDutiesMap = map[uint64]*common.BuilderGetValidatorsResponseEntry{
 		slot: {
-			Entry: &boostTypes.SignedValidatorRegistration{
-				Message: &boostTypes.RegisterValidatorRequestMessage{
+			Entry: &apiv1.SignedValidatorRegistration{
+				Message: &apiv1.ValidatorRegistration{
 					FeeRecipient: [20]byte(feeRecipient),
 					GasLimit:     5000,
-					Timestamp:    0xffffffff,
+					Timestamp:    time.Unix(0xffffffff, 0),
 					Pubkey:       [48]byte(phase0.BLSPubKey{}),
 				},
 			},
@@ -124,14 +123,6 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	backend.relay.datastore = mockDS
 	backend.relay.redis = mockRedis
 	backend.relay.db = mockDB
-
-	// Prepare redis
-	// err = backend.relay.redis.SetKnownValidator(boostTypes.NewPubkeyHex(pubkey.String()), proposerInd)
-	// require.NoError(t, err)
-
-	// count, err := backend.relay.datastore.RefreshKnownValidators()
-	// require.NoError(t, err)
-	// require.Equal(t, count, 1)
 
 	backend.relay.headSlot.Store(40)
 	return &pubkey, sk, backend
@@ -353,8 +344,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			pubkey, secretkey, backend := startTestBackend(t)
 			backend.relay.optimisticSlot.Store(slot)
 			backend.relay.capellaEpoch = 1
-			var randaoHash boostTypes.Hash
-			err := randaoHash.FromSlice([]byte(randao))
+
+			randaoHash, err := utils.HexToHash(randao)
 			require.NoError(t, err)
 			withRoot, err := ComputeWithdrawalsRoot([]*consensuscapella.Withdrawal{})
 			require.NoError(t, err)

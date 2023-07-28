@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
@@ -51,7 +51,7 @@ type IDatabaseService interface {
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
 	InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *apiv1.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
@@ -577,7 +577,7 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.Version
 	return err
 }
 
-func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *types.SignedValidatorRegistration) error {
+func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *apiv1.SignedValidatorRegistration) error {
 	_signedBeaconBlock, err := json.Marshal(signedBlock.Capella)
 	if err != nil {
 		return err

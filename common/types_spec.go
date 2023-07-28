@@ -14,7 +14,9 @@ import (
 	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/pkg/errors"
 )
 
@@ -34,7 +36,7 @@ var NilResponse = struct{}{}
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -44,7 +46,7 @@ func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.S
 	}
 
 	if payload.Capella != nil {
-		signedBuilderBid, err := CapellaBuilderSubmitBlockRequestToSignedBuilderBid(payload.Capella, sk, (*phase0.BLSPubKey)(pubkey), domain)
+		signedBuilderBid, err := CapellaBuilderSubmitBlockRequestToSignedBuilderBid(payload.Capella, sk, pubkey, domain)
 		if err != nil {
 			return nil, err
 		}
@@ -68,30 +70,45 @@ func BuildGetPayloadResponse(payload *spec.VersionedSubmitBlockRequest) (*api.Ve
 	return nil, ErrEmptyPayload
 }
 
-func BuilderSubmitBlockRequestToSignedBuilderBid(req *boostTypes.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*boostTypes.SignedBuilderBid, error) {
-	header, err := boostTypes.PayloadToPayloadHeader(req.ExecutionPayload)
+func BuilderSubmitBlockRequestToSignedBuilderBid(req *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+	value, err := req.Value()
 	if err != nil {
 		return nil, err
 	}
 
-	builderBid := boostTypes.BuilderBid{
-		Value:  req.Message.Value,
-		Header: header,
-		Pubkey: *pubkey,
-	}
+	switch req.Version {
+	case consensusspec.DataVersionCapella:
+		header, err := utils.PayloadToPayloadHeader(&api.VersionedExecutionPayload{Version: req.Version, Capella: req.Capella.ExecutionPayload})
+		if err != nil {
+			return nil, err
+		}
 
-	sig, err := boostTypes.SignMessage(&builderBid, domain, sk)
-	if err != nil {
-		return nil, err
-	}
+		builderBid := capella.BuilderBid{
+			Value:  value,
+			Header: header.Capella,
+			Pubkey: *pubkey,
+		}
 
-	return &boostTypes.SignedBuilderBid{
-		Message:   &builderBid,
-		Signature: sig,
-	}, nil
+		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		if err != nil {
+			return nil, err
+		}
+
+		return &spec.VersionedSignedBuilderBid{
+			Version: consensusspec.DataVersionCapella,
+			Capella: &capella.SignedBuilderBid{
+				Message:   &builderBid,
+				Signature: sig,
+			},
+		}, nil
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix, consensusspec.DataVersionDeneb:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", req.Version.String()))
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", req.Version.String()))
+	}
 }
 
-func CapellaBuilderSubmitBlockRequestToSignedBuilderBid(req *capella.SubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain boostTypes.Domain) (*capella.SignedBuilderBid, error) {
+func CapellaBuilderSubmitBlockRequestToSignedBuilderBid(req *capella.SubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*capella.SignedBuilderBid, error) {
 	header, err := CapellaPayloadToPayloadHeader(req.ExecutionPayload)
 	if err != nil {
 		return nil, err
@@ -103,14 +120,14 @@ func CapellaBuilderSubmitBlockRequestToSignedBuilderBid(req *capella.SubmitBlock
 		Pubkey: *pubkey,
 	}
 
-	sig, err := boostTypes.SignMessage(&builderBid, domain, sk)
+	sig, err := ssz.SignMessage(&builderBid, domain, sk)
 	if err != nil {
 		return nil, err
 	}
 
 	return &capella.SignedBuilderBid{
 		Message:   &builderBid,
-		Signature: phase0.BLSSignature(sig),
+		Signature: sig,
 	}, nil
 }
 

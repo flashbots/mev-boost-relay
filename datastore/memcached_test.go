@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -54,7 +55,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 					FeeRecipient:  bellatrix.ExecutionAddress{0x02},
 					StateRoot:     phase0.Root{0x03},
 					ReceiptsRoot:  phase0.Root{0x04},
-					LogsBloom:     types.Bloom{0x05},
+					LogsBloom:     [256]byte{0x05},
 					PrevRandao:    phase0.Hash32{0x06},
 					BlockNumber:   5001,
 					GasLimit:      5002,
@@ -123,16 +124,16 @@ func TestMemcached(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, mem)
 
-	builderPk, err := types.HexToPubkey("0xf9716c94aab536227804e859d15207aa7eaaacd839f39dcbdb5adc942842a8d2fb730f9f49fc719fdb86f1873e0ed1c2")
+	builderPk, err := utils.HexToPubkey("0xf9716c94aab536227804e859d15207aa7eaaacd839f39dcbdb5adc942842a8d2fb730f9f49fc719fdb86f1873e0ed1c2")
 	require.NoError(t, err)
 
-	builderSk, err := types.HexToSignature("0x8209b5391cd69f392b1f02dbc03bab61f574bb6bb54bf87b59e2a85bdc0756f7db6a71ce1b41b727a1f46ccc77b213bf0df1426177b5b29926b39956114421eaa36ec4602969f6f6370a44de44a6bce6dae2136e5fb594cce2a476354264d1ea")
+	builderSk, err := utils.HexToSignature("0x8209b5391cd69f392b1f02dbc03bab61f574bb6bb54bf87b59e2a85bdc0756f7db6a71ce1b41b727a1f46ccc77b213bf0df1426177b5b29926b39956114421eaa36ec4602969f6f6370a44de44a6bce6dae2136e5fb594cce2a476354264d1ea")
 	require.NoError(t, err)
 
 	testCases := []test{
 		{
 			Description: "Given an invalid execution payload, we expect an invalid payload error when attempting to create a payload response",
-			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), math.MaxUint64),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, math.MaxUint64),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -145,7 +146,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
-			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -201,7 +202,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
-			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -238,7 +239,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: fmt.Sprintf("Given a valid builder submit block request, memcached entry should expire after %d seconds", defaultMemcachedExpirySeconds),
-			Input:       testBuilderSubmitBlockRequest(phase0.BLSPubKey(builderPk), phase0.BLSSignature(builderSk), consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -247,10 +248,10 @@ func TestMemcached(t *testing.T) {
 					_, pubkey, err := bls.GenerateNewKeypair()
 					require.NoError(t, err)
 
-					pk, err := types.BlsPublicKeyToPublicKey(pubkey)
+					pk, err := utils.BlsPublicKeyToPublicKey(pubkey)
 					require.NoError(t, err)
 
-					tc.Input.Capella.Message.ProposerPubkey = phase0.BLSPubKey(pk)
+					tc.Input.Capella.Message.ProposerPubkey = pk
 					payload, err := common.GetBlockSubmissionExecutionPayload(&tc.Input)
 					require.NoError(
 						t,
