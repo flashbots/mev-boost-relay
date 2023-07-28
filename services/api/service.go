@@ -61,6 +61,7 @@ var (
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
 	ErrMissingForkVersions        = errors.New("invalid fork version from beacon node")
+	ErrNegativeTimestamp          = errors.New("timestamp cannot be negative")
 )
 
 var (
@@ -938,6 +939,9 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		timestamp, err := strconv.ParseInt(_timestamp, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid timestamp: %w", err)
+		}
+		if timestamp < 0 {
+			return nil, ErrNegativeTimestamp
 		}
 
 		// GasLimit

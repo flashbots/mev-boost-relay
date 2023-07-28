@@ -26,8 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// var builderSigningDomain = phase0.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
-
 type testBackend struct {
 	t         require.TestingT
 	relay     *RelayAPI
@@ -209,65 +207,12 @@ func TestLivez(t *testing.T) {
 func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
-	// t.Run("Normal function", func(t *testing.T) {
-	// 	backend := newTestBackend(t, 1)
-	// 	pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
-	// 	index := uint64(17)
-	// 	err := backend.redis.SetKnownValidator(pubkeyHex, index)
-	// 	require.NoError(t, err)
-
-	// 	// Update datastore
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-	// 	require.True(t, backend.datastore.IsKnownValidator(pubkeyHex))
-	// 	pkH, ok := backend.datastore.GetKnownValidatorPubkeyByIndex(index)
-	// 	require.True(t, ok)
-	// 	require.Equal(t, pubkeyHex, pkH)
-
-	// 	payload := []apiv1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
-	// 	rr := backend.request(http.MethodPost, path, payload)
-	// 	require.Equal(t, http.StatusOK, rr.Code)
-	// 	time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
-
-	// 	isKnown := backend.datastore.IsKnownValidator(pubkeyHex)
-	// 	require.True(t, isKnown)
-	// })
-
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		rr := backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
-
-	// t.Run("Reject registration for >10sec into the future", func(t *testing.T) {
-	// 	backend := newTestBackend(t, 1)
-
-	// 	// Allow +10 sec
-	// 	td := uint64(time.Now().Unix())
-	// 	payload, err := generateSignedValidatorRegistration(nil, bellatrix.ExecutionAddress{1}, td+10)
-	// 	require.NoError(t, err)
-	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-	// 	require.NoError(t, err)
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-
-	// 	rr := backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{*payload})
-	// 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-
-	// 	// Disallow +11 sec
-	// 	td = uint64(time.Now().Unix())
-	// 	payload, err = generateSignedValidatorRegistration(nil, bellatrix.ExecutionAddress{1}, td+12)
-	// 	require.NoError(t, err)
-	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-	// 	require.NoError(t, err)
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-
-	// 	rr = backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{*payload})
-	// 	require.Equal(t, http.StatusBadRequest, rr.Code)
-	// 	require.Contains(t, rr.Body.String(), "timestamp too far in the future")
-	// })
 }
 
 func TestGetHeader(t *testing.T) {
