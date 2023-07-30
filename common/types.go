@@ -130,11 +130,29 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 }
 
 func (e *EthNetworkDetails) String() string {
-	return fmt.Sprintf("EthNetworkDetails{Name: %s, GenesisForkVersionHex: %s, GenesisValidatorsRootHex: %s, "+
-		"BellatrixForkVersionHex: %s, CapellaForkVersionHex: %s, DenebForkVersionHex: %s, "+
-		"DomainBuilder: %x, DomainBeaconProposerBellatrix: %x, DomainBeaconProposerCapella: %x, DomainBeaconProposerDeneb: %x}",
-		e.Name, e.GenesisForkVersionHex, e.GenesisValidatorsRootHex, e.BellatrixForkVersionHex, e.CapellaForkVersionHex, e.DenebForkVersionHex,
-		e.DomainBuilder, e.DomainBeaconProposerBellatrix, e.DomainBeaconProposerCapella, e.DomainBeaconProposerDeneb)
+	return fmt.Sprintf(
+		`EthNetworkDetails{
+	Name: %s, 
+	GenesisForkVersionHex: %s, 
+	GenesisValidatorsRootHex: %s,
+	BellatrixForkVersionHex: %s, 
+	CapellaForkVersionHex: %s, 
+	DenebForkVersionHex: %s,
+	DomainBuilder: %x, 
+	DomainBeaconProposerBellatrix: %x, 
+	DomainBeaconProposerCapella: %x, 
+	DomainBeaconProposerDeneb: %x
+}`,
+		e.Name,
+		e.GenesisForkVersionHex,
+		e.GenesisValidatorsRootHex,
+		e.BellatrixForkVersionHex,
+		e.CapellaForkVersionHex,
+		e.DenebForkVersionHex,
+		e.DomainBuilder,
+		e.DomainBeaconProposerBellatrix,
+		e.DomainBeaconProposerCapella,
+		e.DomainBeaconProposerDeneb)
 }
 
 type BuilderGetValidatorsResponseEntry struct {
