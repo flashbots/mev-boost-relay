@@ -23,23 +23,18 @@ var (
 	ErrUnknownNetwork = errors.New("unknown network")
 	ErrEmptyPayload   = errors.New("empty payload")
 
-	EthNetworkRopsten  = "ropsten"
-	EthNetworkSepolia  = "sepolia"
-	EthNetworkGoerli   = "goerli"
-	EthNetworkMainnet  = "mainnet"
-	EthNetworkZhejiang = "zhejiang"
-	EthNetworkCustom   = "custom"
+	EthNetworkSepolia = "sepolia"
+	EthNetworkGoerli  = "goerli"
+	EthNetworkMainnet = "mainnet"
+	EthNetworkCustom  = "custom"
 
-	CapellaForkVersionRopsten = "0x03001020"
 	CapellaForkVersionSepolia = "0x90000072"
 	CapellaForkVersionGoerli  = "0x03001020"
 	CapellaForkVersionMainnet = "0x03000000"
 
-	// Zhejiang details
-	GenesisForkVersionZhejiang    = "0x00000069"
-	GenesisValidatorsRootZhejiang = "0x53a92d8f2bb1d85f62d16a156e6ebcd1bcaba652d0900b2c2f387826f3481f6f"
-	BellatrixForkVersionZhejiang  = "0x00000071"
-	CapellaForkVersionZhejiang    = "0x00000072"
+	DenebForkVersionSepolia = "0x90000073"
+	DenebForkVersionGoerli  = "0x04001020"
+	DenebForkVersionMainnet = "0x04000000"
 
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
@@ -52,10 +47,12 @@ type EthNetworkDetails struct {
 	GenesisValidatorsRootHex string
 	BellatrixForkVersionHex  string
 	CapellaForkVersionHex    string
+	DenebForkVersionHex      string
 
 	DomainBuilder                 boostTypes.Domain
 	DomainBeaconProposerBellatrix boostTypes.Domain
 	DomainBeaconProposerCapella   boostTypes.Domain
+	DomainBeaconProposerDeneb     boostTypes.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -63,41 +60,37 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var genesisValidatorsRoot string
 	var bellatrixForkVersion string
 	var capellaForkVersion string
+	var denebForkVersion string
 	var domainBuilder boostTypes.Domain
 	var domainBeaconProposerBellatrix boostTypes.Domain
 	var domainBeaconProposerCapella boostTypes.Domain
+	var domainBeaconProposerDeneb boostTypes.Domain
 
 	switch networkName {
-	case EthNetworkRopsten:
-		genesisForkVersion = boostTypes.GenesisForkVersionRopsten
-		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootRopsten
-		bellatrixForkVersion = boostTypes.BellatrixForkVersionRopsten
-		capellaForkVersion = CapellaForkVersionRopsten
 	case EthNetworkSepolia:
 		genesisForkVersion = boostTypes.GenesisForkVersionSepolia
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootSepolia
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionSepolia
 		capellaForkVersion = CapellaForkVersionSepolia
+		denebForkVersion = DenebForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = boostTypes.GenesisForkVersionGoerli
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootGoerli
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionGoerli
 		capellaForkVersion = CapellaForkVersionGoerli
+		denebForkVersion = DenebForkVersionGoerli
 	case EthNetworkMainnet:
 		genesisForkVersion = boostTypes.GenesisForkVersionMainnet
 		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootMainnet
 		bellatrixForkVersion = boostTypes.BellatrixForkVersionMainnet
 		capellaForkVersion = CapellaForkVersionMainnet
-	case EthNetworkZhejiang:
-		genesisForkVersion = GenesisForkVersionZhejiang
-		genesisValidatorsRoot = GenesisValidatorsRootZhejiang
-		bellatrixForkVersion = BellatrixForkVersionZhejiang
-		capellaForkVersion = CapellaForkVersionZhejiang
+		denebForkVersion = DenebForkVersionMainnet
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
 		bellatrixForkVersion = os.Getenv("BELLATRIX_FORK_VERSION")
 		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
+		denebForkVersion = os.Getenv("DENEB_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
@@ -117,21 +110,49 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBeaconProposerDeneb, err = ComputeDomain(boostTypes.DomainTypeBeaconProposer, denebForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
 		GenesisValidatorsRootHex:      genesisValidatorsRoot,
 		BellatrixForkVersionHex:       bellatrixForkVersion,
 		CapellaForkVersionHex:         capellaForkVersion,
+		DenebForkVersionHex:           denebForkVersion,
 		DomainBuilder:                 domainBuilder,
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
+		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
 	}, nil
 }
 
 func (e *EthNetworkDetails) String() string {
-	return fmt.Sprintf("EthNetworkDetails{Name: %s, GenesisForkVersionHex: %s, GenesisValidatorsRootHex: %s, BellatrixForkVersionHex: %s, CapellaForkVersionHex: %s, DomainBuilder: %x, DomainBeaconProposerBellatrix: %x, DomainBeaconProposerCapella: %x}",
-		e.Name, e.GenesisForkVersionHex, e.GenesisValidatorsRootHex, e.BellatrixForkVersionHex, e.CapellaForkVersionHex, e.DomainBuilder, e.DomainBeaconProposerBellatrix, e.DomainBeaconProposerCapella)
+	return fmt.Sprintf(
+		`EthNetworkDetails{
+	Name: %s, 
+	GenesisForkVersionHex: %s, 
+	GenesisValidatorsRootHex: %s,
+	BellatrixForkVersionHex: %s, 
+	CapellaForkVersionHex: %s, 
+	DenebForkVersionHex: %s,
+	DomainBuilder: %x, 
+	DomainBeaconProposerBellatrix: %x, 
+	DomainBeaconProposerCapella: %x, 
+	DomainBeaconProposerDeneb: %x
+}`,
+		e.Name,
+		e.GenesisForkVersionHex,
+		e.GenesisValidatorsRootHex,
+		e.BellatrixForkVersionHex,
+		e.CapellaForkVersionHex,
+		e.DenebForkVersionHex,
+		e.DomainBuilder,
+		e.DomainBeaconProposerBellatrix,
+		e.DomainBeaconProposerCapella,
+		e.DomainBeaconProposerDeneb)
 }
 
 type BuilderGetValidatorsResponseEntry struct {
