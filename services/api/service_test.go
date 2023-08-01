@@ -15,6 +15,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -24,10 +25,20 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/holiman/uint256"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-var builderSigningDomain = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+const (
+	testGasLimit = uint64(30000000)
+	testSlot     = uint64(42)
+)
+
+var (
+	builderSigningDomain = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
+	testAddress          = types.Address([20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+	testAddress2         = types.Address([20]byte{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+)
 
 type testBackend struct {
 	t         require.TestingT
@@ -486,6 +497,87 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
 	require.Contains(t, rr.Body.String(), "invalid signature")
 	require.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestCheckSubmissionFeeRecipient(t *testing.T) {
+	cases := []struct {
+		description    string
+		slotDuty       *common.BuilderGetValidatorsResponseEntry
+		payload        *common.BuilderSubmitBlockRequest
+		expectCont     bool
+		expectGasLimit uint64
+	}{
+		{
+			description: "success",
+			slotDuty: &common.BuilderGetValidatorsResponseEntry{
+				Entry: &types.SignedValidatorRegistration{
+					Message: &types.RegisterValidatorRequestMessage{
+						FeeRecipient: testAddress,
+						GasLimit:     testGasLimit,
+					},
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:                 testSlot,
+						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress),
+					},
+				},
+			},
+			expectCont:     true,
+			expectGasLimit: testGasLimit,
+		},
+		{
+			description: "failure_nil_slot_duty",
+			slotDuty:    nil,
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot: testSlot,
+					},
+				},
+			},
+			expectCont:     false,
+			expectGasLimit: 0,
+		},
+		{
+			description: "failure_diff_fee_recipient",
+			slotDuty: &common.BuilderGetValidatorsResponseEntry{
+				Entry: &types.SignedValidatorRegistration{
+					Message: &types.RegisterValidatorRequestMessage{
+						FeeRecipient: testAddress,
+						GasLimit:     testGasLimit,
+					},
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:                 testSlot,
+						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress2),
+					},
+				},
+			},
+			expectCont:     false,
+			expectGasLimit: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			backend.relay.proposerDutiesLock.RLock()
+			backend.relay.proposerDutiesMap[tc.payload.Slot()] = tc.slotDuty
+			backend.relay.proposerDutiesLock.RUnlock()
+
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
+			require.Equal(t, tc.expectGasLimit, gasLimit)
+			require.Equal(t, tc.expectCont, cont)
+		})
+	}
 }
 
 func gzipBytes(t *testing.T, b []byte) []byte {
