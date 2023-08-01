@@ -1502,6 +1502,42 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 	return slotDuty.Entry.Message.GasLimit, true
 }
 
+func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) bool {
+	api.payloadAttributesLock.RLock()
+	attrs, ok := api.payloadAttributes[payload.ParentHash()]
+	api.payloadAttributesLock.RUnlock()
+	if !ok || payload.Slot() != attrs.slot {
+		log.Warn("payload attributes not (yet) known")
+		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
+		return false
+	}
+
+	if payload.Random() != attrs.payloadAttributes.PrevRandao {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), attrs.payloadAttributes.PrevRandao)
+		log.Info(msg)
+		api.RespondError(w, http.StatusBadRequest, msg)
+		return false
+	}
+
+	if hasReachedFork(payload.Slot(), api.capellaEpoch) { // Capella requires correct withdrawals
+		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
+		if err != nil {
+			log.WithError(err).Warn("could not compute withdrawals root from payload")
+			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
+			return false
+		}
+
+		if withdrawalsRoot != attrs.withdrawalsRoot {
+			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
+			log.Info(msg)
+			api.RespondError(w, http.StatusBadRequest, msg)
+			return false
+		}
+	}
+
+	return true
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit,maintidx
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -1685,36 +1721,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
-	api.payloadAttributesLock.RLock()
-	attrs, ok := api.payloadAttributes[payload.ParentHash()]
-	api.payloadAttributesLock.RUnlock()
-	if !ok || payload.Slot() != attrs.slot {
-		log.Warn("payload attributes not (yet) known")
-		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
+	cont = api.checkSubmissionPayloadAttrs(w, log, payload)
+	if !cont {
 		return
-	}
-
-	if payload.Random() != attrs.payloadAttributes.PrevRandao {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", payload.Random(), attrs.payloadAttributes.PrevRandao)
-		log.Info(msg)
-		api.RespondError(w, http.StatusBadRequest, msg)
-		return
-	}
-
-	if hasReachedFork(payload.Slot(), api.capellaEpoch) { // Capella requires correct withdrawals
-		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
-		if err != nil {
-			log.WithError(err).Warn("could not compute withdrawals root from payload")
-			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
-			return
-		}
-
-		if withdrawalsRoot != attrs.withdrawalsRoot {
-			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
-			log.Info(msg)
-			api.RespondError(w, http.StatusBadRequest, msg)
-			return
-		}
 	}
 
 	// Verify the signature
