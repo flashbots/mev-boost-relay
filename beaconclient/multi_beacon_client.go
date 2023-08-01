@@ -20,6 +20,18 @@ var (
 	ErrBeaconBlock202           = errors.New("beacon block failed validation but was still broadcast (202)")
 )
 
+type BroadcastValidation int
+
+const (
+	Gossip                   BroadcastValidation = iota // lightweight gossip checks only
+	Consensus                                           // full consensus checks, including validation of all signatures and blocks fields
+	ConsensusAndEquivocation                            // the same as `consensus`, with an extra equivocation check
+)
+
+func (b BroadcastValidation) String() string {
+	return [...]string{"gossip", "consensus", "consensus_and_equivocation"}[b]
+}
+
 // IMultiBeaconClient is the interface for the MultiBeaconClient, which can manage several beacon client instances under the hood
 type IMultiBeaconClient interface {
 	BestSyncStatus() (*SyncStatusPayloadData, error)
@@ -48,7 +60,7 @@ type IBeaconInstance interface {
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
-	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
+	PublishBlock(block *common.SignedBeaconBlock, broadcastValidation BroadcastValidation) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
@@ -64,6 +76,7 @@ type MultiBeaconClient struct {
 
 	// feature flags
 	ffAllowSyncingBeaconNode bool
+	ffBroadcastValidation    BroadcastValidation
 }
 
 func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *MultiBeaconClient {
@@ -72,12 +85,25 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 		beaconInstances:          beaconInstances,
 		bestBeaconIndex:          *uberatomic.NewInt64(0),
 		ffAllowSyncingBeaconNode: false,
+		ffBroadcastValidation:    ConsensusAndEquivocation,
 	}
 
 	// feature flags
 	if os.Getenv("ALLOW_SYNCING_BEACON_NODE") != "" {
 		client.log.Warn("env: ALLOW_SYNCING_BEACON_NODE: allow syncing beacon node")
 		client.ffAllowSyncingBeaconNode = true
+	}
+
+	if os.Getenv("BROADCAST_VALIDATION") != "" {
+		broadcastValidationStr := os.Getenv("BROADCAST_VALIDATION")
+		broadcastValidation, ok := parseBroadcastValidationString(broadcastValidationStr)
+		if !ok {
+			msg := fmt.Sprintf("env: BROADCAST_VALIDATION: invalid value %s, leaving to default value %s", broadcastValidationStr, client.ffBroadcastValidation.String())
+			client.log.Warn(msg)
+		} else {
+			client.log.Info(fmt.Sprintf("env: BROADCAST_VALIDATION: setting validation to %s", broadcastValidation.String()))
+			client.ffBroadcastValidation = broadcastValidation
+		}
 	}
 
 	return client
@@ -243,7 +269,7 @@ func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code 
 		log := log.WithField("uri", client.GetURI())
 		log.Debug("publishing block")
 		go func(index int, client IBeaconInstance) {
-			code, err := client.PublishBlock(block)
+			code, err := client.PublishBlock(block, c.ffBroadcastValidation)
 			resChans <- publishResp{
 				index: index,
 				code:  code,

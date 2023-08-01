@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -19,7 +20,17 @@ var (
 	StateIDJustified = "justified"
 )
 
-func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration) (code int, err error) {
+func parseBroadcastValidationString(s string) (BroadcastValidation, bool) {
+	broadcastValidationMap := map[string]BroadcastValidation{
+		"gossip":                     Gossip,
+		"consensus":                  Consensus,
+		"consensus_and_equivocation": ConsensusAndEquivocation,
+	}
+	b, ok := broadcastValidationMap[strings.ToLower(s)]
+	return b, ok
+}
+
+func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration, headers http.Header) (code int, err error) {
 	var req *http.Request
 
 	if payload == nil {
@@ -33,6 +44,9 @@ func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration) (
 
 		// Set content-type
 		req.Header.Add("Content-Type", "application/json")
+		for k, v := range headers {
+			req.Header.Add(k, v[0])
+		}
 	}
 
 	if err != nil {
