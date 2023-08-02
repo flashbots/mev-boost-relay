@@ -1541,8 +1541,8 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.BuilderSubmitBlockRequest) bool {
 	// TODO: add deneb support.
 	if payload.Capella == nil {
-		log.Info("rejecting submission - non capella payload for capella fork")
-		api.RespondError(w, http.StatusBadRequest, "not capella payload")
+		log.Info("rejecting submission - non-capella payload for capella fork")
+		api.RespondError(w, http.StatusBadRequest, "non-capella payload")
 		return false
 	}
 
