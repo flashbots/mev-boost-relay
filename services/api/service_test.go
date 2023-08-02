@@ -14,11 +14,13 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -704,6 +706,40 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			expectOk: true,
 		},
 		{
+			description: "non_capella_slot",
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &apiv1.BidTrace{
+							Slot: testSlot + 32,
+						},
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
+			description: "non_deneb_slot",
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionDeneb,
+					Deneb: &builderDeneb.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &apiv1.BidTrace{
+							Slot: testSlot,
+						},
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
 			description: "failure_past_slot",
 			payload: &common.VersionedSubmitBlockRequest{
 				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
@@ -739,7 +775,8 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
-
+			backend.relay.capellaEpoch = 1
+			backend.relay.denebEpoch = 2
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()

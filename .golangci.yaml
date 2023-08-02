@@ -93,6 +93,7 @@ linters-settings:
       #
       # Easier to read with only one of the versioned payloads.
       #
+      - 'VersionedSubmitBlindedBlockResponse'
       - 'VersionedExecutionPayload'
       - 'VersionedSignedBuilderBid'
 

@@ -166,7 +166,7 @@ func TestMemcached(t *testing.T) {
 						"expected no error when marshalling execution payload response but found [%v]", err,
 					)
 
-					out := new(api.VersionedExecutionPayload)
+					out := new(api.VersionedSubmitBlindedBlockResponse)
 					err = out.UnmarshalJSON(inputBytes)
 					require.NoError(
 						t,
