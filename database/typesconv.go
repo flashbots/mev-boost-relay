@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -13,7 +12,7 @@ import (
 
 var ErrUnsupportedExecutionPayload = errors.New("unsupported execution payload version")
 
-func PayloadToExecPayloadEntry(payload *spec.VersionedSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
+func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
 	var _payload []byte
 	var version string
 	var err error
