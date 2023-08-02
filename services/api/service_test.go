@@ -729,6 +729,73 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	}
 }
 
+func TestCheckSubmissionSlotDetails(t *testing.T) {
+	cases := []struct {
+		description string
+		payload     *common.BuilderSubmitBlockRequest
+		expectCont  bool
+	}{
+		{
+			description: "success",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					ExecutionPayload: &capella.ExecutionPayload{
+						Timestamp: testSlot * common.SecondsPerSlot,
+					},
+					Message: &v1.BidTrace{
+						Slot: testSlot,
+					},
+				},
+			},
+			expectCont: true,
+		},
+		{
+			description: "failure_nil_capella",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: nil, // nil to cause error
+			},
+			expectCont: false,
+		},
+		{
+			description: "failure_past_slot",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot: testSlot - 1, // use old slot to cause error
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
+			description: "failure_wrong_timestamp",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					ExecutionPayload: &capella.ExecutionPayload{
+						Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
+					},
+					Message: &v1.BidTrace{
+						Slot: testSlot,
+					},
+				},
+			},
+			expectCont: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+
+			headSlot := testSlot - 1
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			cont := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
+			require.Equal(t, tc.expectCont, cont)
+		})
+	}
+}
+
 func gzipBytes(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
