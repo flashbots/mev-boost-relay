@@ -227,17 +227,18 @@ func TestGetHeader(t *testing.T) {
 	// request path
 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
 
-	// Create a bid
+	// Create a capella bid
 	opts := common.CreateTestBlockSubmissionOpts{
 		Slot:           slot,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
+		Version:        consensusspec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
 	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 1: regular request works and returns a bid
+	// Check 1: regular capella request works and returns a bid
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := spec.VersionedSignedBuilderBid{}
@@ -245,9 +246,33 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 	value, err := resp.Value()
 	require.NoError(t, err)
+	require.Equal(t, consensusspec.DataVersionCapella, resp.Version)
 	require.Equal(t, bidValue.String(), value.String())
 
-	// Check 2: Request returns 204 if sending a filtered user agent
+	// Create a deneb bid
+	path = fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot+1, parentHash, proposerPubkey)
+	opts = common.CreateTestBlockSubmissionOpts{
+		Slot:           slot + 1,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPubkey,
+		Version:        consensusspec.DataVersionDeneb,
+	}
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	require.NoError(t, err)
+
+	// Check 2: regular deneb request works and returns a bid
+	rr = backend.request(http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	resp = spec.VersionedSignedBuilderBid{}
+	err = json.Unmarshal(rr.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, consensusspec.DataVersionDeneb, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check 3: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
 	require.Equal(t, http.StatusNoContent, rr.Code)
 }
