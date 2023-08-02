@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -181,6 +182,7 @@ type CreateTestBlockSubmissionOpts struct {
 	relayPk phase0.BLSPubKey
 	domain  phase0.Domain
 
+	Version        consensusspec.DataVersion
 	Slot           uint64
 	ParentHash     string
 	ProposerPubkey string
@@ -196,6 +198,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	domain := phase0.Domain{}
 	proposerPk := phase0.BLSPubKey{}
 	parentHash := phase0.Hash32{}
+	version := consensusspec.DataVersionCapella
 
 	if opts != nil {
 		relaySk = opts.relaySk
@@ -212,26 +215,48 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 			parentHash, err = StrToPhase0Hash(opts.ParentHash)
 			require.NoError(t, err)
 		}
+
+		if opts.Version != consensusspec.DataVersionUnknown {
+			version = opts.Version
+		}
 	}
 
 	builderPk, err := StrToPhase0Pubkey(builderPubkey)
 	require.NoError(t, err)
 
-	payload = &VersionedSubmitBlockRequest{
-		VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-			Version: consensusspec.DataVersionCapella,
-			Capella: &capella.SubmitBlockRequest{
-				Message: &apiv1.BidTrace{ //nolint:exhaustruct
-					BuilderPubkey:  builderPk,
-					Value:          value,
-					Slot:           slot,
-					ParentHash:     parentHash,
-					ProposerPubkey: proposerPk,
+	bidTrace := &apiv1.BidTrace{ //nolint:exhaustruct
+		BuilderPubkey:  builderPk,
+		Value:          value,
+		Slot:           slot,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPk,
+	}
+
+	if version == consensusspec.DataVersionDeneb {
+		payload = &VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: version,
+				Deneb: &deneb.SubmitBlockRequest{
+					Message: bidTrace,
+					ExecutionPayload: &denebspec.ExecutionPayload{ //nolint:exhaustruct
+						BaseFeePerGas: uint256.NewInt(0),
+					},
+					BlobsBundle: &deneb.BlobsBundle{}, //nolint:exhaustruct
+					Signature:   phase0.BLSSignature{},
 				},
-				ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
-				Signature:        phase0.BLSSignature{},
 			},
-		},
+		}
+	} else {
+		payload = &VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: version,
+				Capella: &capella.SubmitBlockRequest{
+					Message:          bidTrace,
+					ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+					Signature:        phase0.BLSSignature{},
+				},
+			},
+		}
 	}
 
 	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)

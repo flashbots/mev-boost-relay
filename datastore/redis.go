@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -82,6 +83,7 @@ type RedisCache struct {
 	// prefixes (keys generated with a function)
 	prefixGetHeaderResponse           string
 	prefixExecPayloadCapella          string
+	prefixPayloadContentsDeneb        string
 	prefixBidTrace                    string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
@@ -119,9 +121,10 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		client:         client,
 		readonlyClient: roClient,
 
-		prefixGetHeaderResponse:  fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
-		prefixExecPayloadCapella: fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
-		prefixBidTrace:           fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
+		prefixGetHeaderResponse:    fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
+		prefixExecPayloadCapella:   fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
+		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontenst-deneb", redisPrefix, prefix),
+		prefixBidTrace:             fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
 		prefixBlockBuilderLatestBidsValue: fmt.Sprintf("%s/%s:block-builder-latest-bid-value", redisPrefix, prefix), // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -147,6 +150,10 @@ func (r *RedisCache) keyCacheGetHeaderResponse(slot uint64, parentHash, proposer
 
 func (r *RedisCache) keyExecPayloadCapella(slot uint64, proposerPubkey, blockHash string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixExecPayloadCapella, slot, proposerPubkey, blockHash)
+}
+
+func (r *RedisCache) keyPayloadContentsDeneb(slot uint64, proposerPubkey, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixPayloadContentsDeneb, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash string) string {
@@ -354,6 +361,44 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 	return resp, err
 }
 
+func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+	resp, err := r.GetPayloadContentsDeneb(slot, proposerPubkey, blockHash)
+	if errors.Is(err, redis.Nil) {
+		// can't find deneb payload, try find capella payload
+		return r.GetExecutionPayloadCapella(slot, proposerPubkey, blockHash)
+	}
+	return resp, err
+}
+
+func (r *RedisCache) SavePayloadContentsDeneb(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *deneb.ExecutionPayloadAndBlobsBundle) (err error) {
+	key := r.keyPayloadContentsDeneb(slot, proposerPubkey, blockHash)
+	b, err := execPayload.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	return tx.Set(ctx, key, b, expiryBidCache).Err()
+}
+
+func (r *RedisCache) GetPayloadContentsDeneb(slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+	denebPayloadContents := new(deneb.ExecutionPayloadAndBlobsBundle)
+
+	key := r.keyPayloadContentsDeneb(slot, proposerPubkey, blockHash)
+	val, err := r.client.Get(context.Background(), key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	err = denebPayloadContents.UnmarshalSSZ([]byte(val))
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.VersionedSubmitBlindedBlockResponse{
+		Version: consensusspec.DataVersionDeneb,
+		Deneb:   denebPayloadContents,
+	}, nil
+}
+
 func (r *RedisCache) SaveExecutionPayloadCapella(ctx context.Context, pipeliner redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *capella.ExecutionPayload) (err error) {
 	key := r.keyExecPayloadCapella(slot, proposerPubkey, blockHash)
 	b, err := execPayload.MarshalSSZ()
@@ -502,9 +547,19 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	// Time to save things in Redis
 	//
 	// 1. Save the execution payload
-	err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Capella)
-	if err != nil {
-		return state, err
+	switch payload.Version {
+	case consensusspec.DataVersionCapella:
+		err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Capella)
+		if err != nil {
+			return state, err
+		}
+	case consensusspec.DataVersionDeneb:
+		err = r.SavePayloadContentsDeneb(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Deneb)
+		if err != nil {
+			return state, err
+		}
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		return state, fmt.Errorf("unsupported payload version: %d", payload.Version) //nolint:goerr113
 	}
 
 	// Record time needed to save payload

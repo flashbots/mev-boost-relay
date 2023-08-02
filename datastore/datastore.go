@@ -197,7 +197,7 @@ func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, propo
 	_blockHash := strings.ToLower(blockHash)
 
 	// 1. try to get from Redis
-	resp, err := ds.redis.GetExecutionPayloadCapella(slot, _proposerPubkey, _blockHash)
+	resp, err := ds.redis.GetPayloadContents(slot, _proposerPubkey, _blockHash)
 	if errors.Is(err, redis.Nil) {
 		log.WithError(err).Warn("execution payload not found in redis")
 	} else if err != nil {
