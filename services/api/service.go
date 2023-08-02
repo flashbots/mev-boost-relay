@@ -21,12 +21,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusapi "github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/api/v1/capella"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -581,7 +576,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 	return nil, nil
 }
 
-func (api *RelayAPI) demoteBuilder(pubkey string, req *spec.VersionedSubmitBlockRequest, simError error) {
+func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlockRequest, simError error) {
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
@@ -1230,10 +1225,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Decode payload
-	payload := new(consensusapi.VersionedSignedBlindedBeaconBlock)
-	// TODO: add deneb support.
-	payload.Capella = new(capella.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload.Capella); err != nil {
+	payload := new(common.VersionedSignedBlindedBlockRequest)
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
 		log.WithError(err).Warn("failed to decode capella getPayload request")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode capella payload")
 		return
@@ -1591,7 +1584,17 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 	return true
 }
 
-func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, submission *common.BlockSubmissionInfo) bool {
+func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
+	if hasReachedFork(submission.Slot, api.denebEpoch) && payload.Deneb == nil {
+		log.Info("rejecting submission - non deneb payload for deneb fork")
+		api.RespondError(w, http.StatusBadRequest, "not deneb payload")
+		return false
+	} else if hasReachedFork(submission.Slot, api.capellaEpoch) && payload.Capella == nil {
+		log.Info("rejecting submission - non capella payload for capella fork")
+		api.RespondError(w, http.StatusBadRequest, "not capella payload")
+		return false
+	}
+
 	if submission.Slot <= headSlot {
 		log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
@@ -1794,20 +1797,17 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	payload := &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-		Version: consensusspec.DataVersionCapella,
-	}
-	payload.Capella = new(builderCapella.SubmitBlockRequest)
+	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
 		log = log.WithField("reqContentType", "ssz")
-		if err = payload.Capella.UnmarshalSSZ(requestPayloadBytes); err != nil {
+		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
 			log.WithError(err).Warn("could not decode payload - SSZ")
 
 			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-			if err2 := json.Unmarshal(requestPayloadBytes, payload.Capella); err2 != nil {
+			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
 				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
@@ -1818,7 +1818,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	} else {
 		log = log.WithField("reqContentType", "json")
-		if err := json.Unmarshal(requestPayloadBytes, payload.Capella); err != nil {
+		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
 			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -1850,7 +1850,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"isLargeRequest":         isLargeRequest,
 	})
 
-	ok := api.checkSubmissionSlotDetails(w, log, headSlot, submission)
+	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
 	if !ok {
 		return
 	}

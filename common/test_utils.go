@@ -74,19 +74,21 @@ var ValidPayloadRegisterValidator = apiv1.SignedValidatorRegistration{
 		"0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"),
 }
 
-func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) spec.VersionedSubmitBlockRequest {
+func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) VersionedSubmitBlockRequest {
 	signature, err := ssz.SignMessage(bid, ssz.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	return spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-		Version: consensusspec.DataVersionCapella,
-		Capella: &capella.SubmitBlockRequest{
-			Message:   &bid.BidTrace,
-			Signature: [96]byte(signature),
-			ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
-				Transactions: []bellatrix.Transaction{[]byte{0x03}},
-				Timestamp:    bid.Slot * 12, // 12 seconds per slot.
-				PrevRandao:   _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
-				Withdrawals:  []*consensuscapella.Withdrawal{},
+	return VersionedSubmitBlockRequest{
+		VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: &capella.SubmitBlockRequest{
+				Message:   &bid.BidTrace,
+				Signature: [96]byte(signature),
+				ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
+					Transactions: []bellatrix.Transaction{[]byte{0x03}},
+					Timestamp:    bid.Slot * 12, // 12 seconds per slot.
+					PrevRandao:   _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
+					Withdrawals:  []*consensuscapella.Withdrawal{},
+				},
 			},
 		},
 	}

@@ -33,38 +33,41 @@ var (
 	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
 
-func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) spec.VersionedSubmitBlockRequest {
+func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) common.VersionedSubmitBlockRequest {
 	switch version {
 	case consensusspec.DataVersionCapella:
-		return spec.VersionedSubmitBlockRequest{
-			Capella: &capella.SubmitBlockRequest{
-				Signature: signature,
-				Message: &apiv1.BidTrace{
-					Slot:                 1,
-					ParentHash:           phase0.Hash32{0x01},
-					BlockHash:            phase0.Hash32{0x09},
-					BuilderPubkey:        pubkey,
-					ProposerPubkey:       phase0.BLSPubKey{0x03},
-					ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
-					Value:                uint256.NewInt(123),
-					GasLimit:             5002,
-					GasUsed:              5003,
-				},
-				ExecutionPayload: &capellaspec.ExecutionPayload{
-					ParentHash:    phase0.Hash32{0x01},
-					FeeRecipient:  bellatrix.ExecutionAddress{0x02},
-					StateRoot:     phase0.Root{0x03},
-					ReceiptsRoot:  phase0.Root{0x04},
-					LogsBloom:     [256]byte{0x05},
-					PrevRandao:    phase0.Hash32{0x06},
-					BlockNumber:   5001,
-					GasLimit:      5002,
-					GasUsed:       5003,
-					Timestamp:     5004,
-					ExtraData:     []byte{0x07},
-					BaseFeePerGas: types.IntToU256(123),
-					BlockHash:     phase0.Hash32{0x09},
-					Transactions:  []bellatrix.Transaction{},
+		return common.VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionCapella,
+				Capella: &capella.SubmitBlockRequest{
+					Signature: signature,
+					Message: &apiv1.BidTrace{
+						Slot:                 1,
+						ParentHash:           phase0.Hash32{0x01},
+						BlockHash:            phase0.Hash32{0x09},
+						BuilderPubkey:        pubkey,
+						ProposerPubkey:       phase0.BLSPubKey{0x03},
+						ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+						Value:                uint256.NewInt(123),
+						GasLimit:             5002,
+						GasUsed:              5003,
+					},
+					ExecutionPayload: &capellaspec.ExecutionPayload{
+						ParentHash:    phase0.Hash32{0x01},
+						FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+						StateRoot:     phase0.Root{0x03},
+						ReceiptsRoot:  phase0.Root{0x04},
+						LogsBloom:     [256]byte{0x05},
+						PrevRandao:    phase0.Hash32{0x06},
+						BlockNumber:   5001,
+						GasLimit:      5002,
+						GasUsed:       5003,
+						Timestamp:     5004,
+						ExtraData:     []byte{0x07},
+						BaseFeePerGas: types.IntToU256(123),
+						BlockHash:     phase0.Hash32{0x09},
+						Transactions:  []bellatrix.Transaction{},
+					},
 				},
 			},
 		}
@@ -73,9 +76,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
 		fallthrough
 	default:
-		return spec.VersionedSubmitBlockRequest{
-			Capella: nil,
-		}
+		return common.VersionedSubmitBlockRequest{}
 	}
 }
 
@@ -110,7 +111,7 @@ func initMemcached(t *testing.T) (mem *Memcached, err error) {
 //	RUN_INTEGRATION_TESTS=1 MEMCACHED_URIS="localhost:11211" go test -v -run ".*Memcached.*" ./...
 func TestMemcached(t *testing.T) {
 	type test struct {
-		Input       spec.VersionedSubmitBlockRequest
+		Input       common.VersionedSubmitBlockRequest
 		Description string
 		TestSuite   func(tc *test) func(*testing.T)
 	}
