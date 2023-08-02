@@ -813,6 +813,60 @@ func TestCheckBuilderEntry(t *testing.T) {
 	}
 }
 
+func TestCheckProposerSignature(t *testing.T) {
+	t.Run("Unsupported version", func(t *testing.T) {
+		_, _, backend := startTestBackend(t)
+		payload := new(common.VersionedSignedBlindedBlockRequest)
+		payload.Version = consensusspec.DataVersionBellatrix
+		ok, err := backend.relay.checkProposerSignature(payload, []byte{})
+		require.Error(t, err, "unsupported consensus data version")
+		require.False(t, ok)
+	})
+
+	t.Run("Valid Capella Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBlockRequest)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0xa8afcb5313602f936864b30600f568e04069e596ceed9b55e2a1c872c959ddcb90589636469c15d97e7565344d9ed4ad")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	t.Run("Invalid Capella Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBlockRequest)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// change signature
+		signature, err := utils.HexToSignature(
+			"0x942d85822e86a182b0a535361b379015a03e5ce4416863d3baa46b42eef06f070462742b79fbc77c0802699ba6d2ab00" +
+				"11740dad6bfcf05b1f15c5a11687ae2aa6a08c03ad1ff749d7a48e953d13b5d7c2bd1da4cfcf30ba6d918b587d6525f0",
+		)
+		require.NoError(t, err)
+		payload.Capella.Signature = signature
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0xa8afcb5313602f936864b30600f568e04069e596ceed9b55e2a1c872c959ddcb90589636469c15d97e7565344d9ed4ad")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+}
+
 func gzipBytes(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
