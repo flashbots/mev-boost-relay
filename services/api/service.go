@@ -1431,8 +1431,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Check that ExecutionPayloadHeader fields (sent by the proposer) match our known ExecutionPayload
-	err = EqExecutionPayloadToHeader(payload, getPayloadResp)
+	// Check that BlindedBlockContent fields (sent by the proposer) match our known BlockContents
+	err = EqBlindedBlockContentsToBlockContents(payload, getPayloadResp)
 	if err != nil {
 		log.WithError(err).Warn("ExecutionPayloadHeader not matching known ExecutionPayload")
 		api.RespondError(w, http.StatusBadRequest, "invalid execution payload header")
@@ -1442,7 +1442,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Publish the signed beacon block via beacon-node
 	timeBeforePublish := time.Now().UTC().UnixMilli()
 	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
-	signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+	signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+	if err != nil {
+		log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
+		api.RespondError(w, http.StatusInternalServerError, "failed to convert signed blinded beacon block to beacon block")
+		return
+	}
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	if err != nil || code != http.StatusOK {
 		log.WithError(err).WithField("code", code).Error("failed to publish block")
@@ -1519,7 +1524,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		log.Warn("demotion found in getPayload, inserting refund justification")
 
 		// Prepare refund data.
-		signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+		signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+		if err != nil {
+			log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
+			return
+		}
 
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
