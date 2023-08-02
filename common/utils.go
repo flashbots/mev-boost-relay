@@ -17,6 +17,7 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
@@ -185,7 +186,7 @@ type CreateTestBlockSubmissionOpts struct {
 	ProposerPubkey string
 }
 
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedSubmitBlindedBlockResponse, getHeaderResponse *spec.VersionedSignedBuilderBid) {
 	t.Helper()
 	var err error
 
@@ -349,12 +350,23 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	}, nil
 }
 
-func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
-	if submission.Capella != nil {
-		return &api.VersionedExecutionPayload{
+func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*api.VersionedSubmitBlindedBlockResponse, error) {
+	switch submission.Version {
+	case consensusspec.DataVersionCapella:
+		return &api.VersionedSubmitBlindedBlockResponse{
 			Version: consensusspec.DataVersionCapella,
 			Capella: submission.Capella.ExecutionPayload,
 		}, nil
+	case consensusspec.DataVersionDeneb:
+		return &api.VersionedSubmitBlindedBlockResponse{
+			Version: consensusspec.DataVersionDeneb,
+			Deneb: &deneb.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: submission.Deneb.ExecutionPayload,
+				BlobsBundle:      submission.Deneb.BlobsBundle,
+			},
+		}, nil
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		return nil, ErrInvalidForkVersion
 	}
 	return nil, ErrEmptyPayload
 }

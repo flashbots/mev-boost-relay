@@ -1,26 +1,29 @@
 package api
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
+	utildeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/pkg/errors"
 )
 
 var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
-	ErrNoPayloads               = errors.New("no payloads")
-	ErrNoWithdrawals            = errors.New("no withdrawals")
-	ErrPayloadMismatchBellatrix = errors.New("bellatrix beacon-block but no bellatrix payload")
-	ErrPayloadMismatchCapella   = errors.New("capella beacon-block but no capella payload")
-	ErrHeaderHTRMismatch        = errors.New("beacon-block and payload header mismatch")
+	ErrUnsupportedPayload = errors.New("unsupported payload version")
+	ErrNoWithdrawals      = errors.New("no withdrawals")
+	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
+	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
+	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
 )
 
 func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
@@ -47,22 +50,49 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func EqExecutionPayloadToHeader(bb *common.VersionedSignedBlindedBlockRequest, payload *api.VersionedExecutionPayload) error {
-	if bb.Capella != nil { // process Capella beacon block
-		if payload.Capella == nil {
-			return ErrPayloadMismatchCapella
-		}
+func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBlockRequest, payload *api.VersionedSubmitBlindedBlockResponse) error {
+	if bb.Version != payload.Version {
+		return errors.Wrap(ErrPayloadMismatch, fmt.Sprintf("beacon block version %d does not match payload version %d", bb.Version, payload.Version))
+	}
 
+	versionedPayload := &api.VersionedExecutionPayload{ //nolint:exhaustivestruct
+		Version: payload.Version,
+	}
+	switch bb.Version {
+	case spec.DataVersionCapella:
 		bbHeaderHtr, err := bb.Capella.Message.Body.ExecutionPayloadHeader.HashTreeRoot()
 		if err != nil {
 			return err
 		}
 
-		payloadHeader, err := common.CapellaPayloadToPayloadHeader(payload.Capella)
+		versionedPayload.Capella = payload.Capella
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
 		if err != nil {
 			return err
 		}
-		payloadHeaderHtr, err := payloadHeader.HashTreeRoot()
+
+		payloadHeaderHtr, err := payloadHeader.Capella.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+	case spec.DataVersionDeneb:
+		block := bb.Deneb.SignedBlindedBlock.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Deneb = payload.Deneb.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Deneb.HashTreeRoot()
 		if err != nil {
 			return err
 		}
@@ -71,11 +101,39 @@ func EqExecutionPayloadToHeader(bb *common.VersionedSignedBlindedBlockRequest, p
 			return ErrHeaderHTRMismatch
 		}
 
-		// capella block and payload are equal
-		return nil
-	}
+		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
+		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Proofs) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG proofs length")
+		}
+		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Blobs) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of blobs")
+		}
 
-	return ErrNoPayloads
+		for i, blindedSidecar := range bb.Deneb.SignedBlindedBlobSidecars {
+			if blindedSidecar.Message.KzgCommitment != payload.Deneb.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+			if blindedSidecar.Message.KzgProof != payload.Deneb.BlobsBundle.Proofs[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG proof at index %d", i))
+			}
+			blobRootHelper := utildeneb.BeaconBlockBlob{Blob: payload.Deneb.BlobsBundle.Blobs[i]}
+			blobRoot, err := blobRootHelper.HashTreeRoot()
+			if err != nil {
+				return errors.New(fmt.Sprintf("failed to compute blob root at index %d", i))
+			}
+			if blindedSidecar.Message.BlobRoot != blobRoot {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched blob root at index %d", i))
+			}
+		}
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return ErrUnsupportedPayload
+	}
+	// block and payload are equal
+	return nil
 }
 
 func checkBLSPublicKeyHex(pkHex string) error {
