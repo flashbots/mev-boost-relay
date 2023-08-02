@@ -15,7 +15,9 @@ import (
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -34,8 +36,8 @@ const (
 )
 
 var (
-	testAddress          = bellatrix.ExecutionAddress([20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
-	testAddress2         = bellatrix.ExecutionAddress([20]byte{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+	testAddress  = bellatrix.ExecutionAddress([20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+	testAddress2 = bellatrix.ExecutionAddress([20]byte{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
 )
 
 type testBackend struct {
@@ -304,7 +306,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	req := new(spec.VersionedSubmitBlockRequest)
+	req := new(common.VersionedSubmitBlockRequest)
 	req.Capella = new(builderCapella.SubmitBlockRequest)
 	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
@@ -358,7 +360,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 
 	// Prepare the request payload
-	req := new(spec.VersionedSubmitBlockRequest)
+	req := new(common.VersionedSubmitBlockRequest)
 	req.Capella = new(builderCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
@@ -417,7 +419,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
-		payload        *spec.VersionedSubmitBlockRequest
+		payload        *common.VersionedSubmitBlockRequest
 		expectCont     bool
 		expectGasLimit uint64
 	}{
@@ -431,11 +433,15 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -445,10 +451,14 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
-			payload: &spec.VersionedSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot: testSlot,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -465,11 +475,15 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress2),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress2,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
