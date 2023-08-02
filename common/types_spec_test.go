@@ -5,6 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/attestantio/go-builder-client/api/deneb"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	spec "github.com/attestantio/go-builder-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,4 +65,44 @@ func TestSignedBlindedBlockJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedJSONBytes, bytes.ToLower(marshalledJSONBytes))
+}
+
+func TestBuildGetPayloadResponse(t *testing.T) {
+	t.Run("Capella", func(t *testing.T) {
+		jsonBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+
+		submitBlockData := new(VersionedSubmitBlockRequest)
+		err := json.Unmarshal(jsonBytes, &submitBlockData)
+		require.NoError(t, err)
+
+		resp, err := BuildGetPayloadResponse(submitBlockData)
+		require.NoError(t, err)
+
+		require.Equal(t, consensusspec.DataVersionCapella, resp.Version)
+		require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", resp.Capella.BlockHash.String())
+	})
+
+	t.Run("Deneb", func(t *testing.T) {
+		// TODO: (deneb) add block request from goerli / devnet
+		submitBlockData := &VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionDeneb,
+				Deneb: &deneb.SubmitBlockRequest{
+					ExecutionPayload: &denebspec.ExecutionPayload{
+						BaseFeePerGas: uint256.NewInt(123),
+						BlockHash:     phase0.Hash32{0x09},
+						Transactions:  []bellatrix.Transaction{},
+					},
+					BlobsBundle: &deneb.BlobsBundle{},
+					Message:     &apiv1.BidTrace{},
+				},
+			},
+		}
+
+		resp, err := BuildGetPayloadResponse(submitBlockData)
+		require.NoError(t, err)
+
+		require.Equal(t, consensusspec.DataVersionDeneb, resp.Version)
+		require.Equal(t, "0x0900000000000000000000000000000000000000000000000000000000000000", resp.Deneb.ExecutionPayload.BlockHash.String())
+	})
 }

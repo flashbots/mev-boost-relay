@@ -121,6 +121,7 @@ func TestBuilderBids(t *testing.T) {
 		Slot:           2,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
+		Version:        consensusspec.DataVersionCapella,
 	}
 
 	trace := &common.BidTraceV2{

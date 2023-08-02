@@ -10,11 +10,13 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -35,6 +37,47 @@ var (
 
 func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) common.VersionedSubmitBlockRequest {
 	switch version {
+	case consensusspec.DataVersionDeneb:
+		return common.VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+				Version: consensusspec.DataVersionDeneb,
+				Deneb: &deneb.SubmitBlockRequest{
+					Signature: signature,
+					Message: &apiv1.BidTrace{
+						Slot:                 1,
+						ParentHash:           phase0.Hash32{0x01},
+						BlockHash:            phase0.Hash32{0x09},
+						BuilderPubkey:        pubkey,
+						ProposerPubkey:       phase0.BLSPubKey{0x03},
+						ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+						Value:                uint256.NewInt(123),
+						GasLimit:             5002,
+						GasUsed:              5003,
+					},
+					ExecutionPayload: &denebspec.ExecutionPayload{
+						ParentHash:    phase0.Hash32{0x01},
+						FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+						StateRoot:     phase0.Root{0x03},
+						ReceiptsRoot:  phase0.Root{0x04},
+						LogsBloom:     [256]byte{0x05},
+						PrevRandao:    phase0.Hash32{0x06},
+						BlockNumber:   5001,
+						GasLimit:      5002,
+						GasUsed:       5003,
+						Timestamp:     5004,
+						ExtraData:     []byte{0x07},
+						BaseFeePerGas: uint256.NewInt(123),
+						BlockHash:     phase0.Hash32{0x09},
+						Transactions:  []bellatrix.Transaction{},
+					},
+					BlobsBundle: &deneb.BlobsBundle{
+						Commitments: []denebspec.KzgCommitment{},
+						Proofs:      []denebspec.KzgProof{},
+						Blobs:       []denebspec.Blob{},
+					},
+				},
+			},
+		}
 	case consensusspec.DataVersionCapella:
 		return common.VersionedSubmitBlockRequest{
 			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
@@ -71,8 +114,6 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 				},
 			},
 		}
-	case consensusspec.DataVersionDeneb:
-		fallthrough
 	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
 		fallthrough
 	default:
@@ -147,7 +188,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionCapella),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -203,7 +244,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionDeneb),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -225,22 +266,22 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 					require.Equal(t, len(prev.Capella.Transactions), len(submission.Transactions))
 
-					payload.Bellatrix.GasLimit++
-					require.NotEqual(t, prev.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
+					payload.Capella.GasLimit++
+					require.NotEqual(t, prev.Capella.GasLimit, payload.Capella.GasLimit)
 
 					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
 					require.NoError(t, err)
 
 					current, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
 					require.NoError(t, err)
-					require.Equal(t, current.Bellatrix.GasLimit, payload.Bellatrix.GasLimit)
-					require.NotEqual(t, current.Bellatrix.GasLimit, prev.Bellatrix.GasLimit)
+					require.Equal(t, current.Capella.GasLimit, payload.Capella.GasLimit)
+					require.NotEqual(t, current.Capella.GasLimit, prev.Capella.GasLimit)
 				}
 			},
 		},
 		{
 			Description: fmt.Sprintf("Given a valid builder submit block request, memcached entry should expire after %d seconds", defaultMemcachedExpirySeconds),
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionBellatrix),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionCapella),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
