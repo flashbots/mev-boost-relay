@@ -4,8 +4,6 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
@@ -25,7 +23,7 @@ var (
 	ErrHeaderHTRMismatch        = errors.New("beacon-block and payload header mismatch")
 )
 
-func SanityCheckBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest) error {
+func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
 	submission, err := common.GetBlockSubmissionInfo(payload)
 	if err != nil {
 		return err
@@ -49,7 +47,7 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func EqExecutionPayloadToHeader(bb *consensusapi.VersionedSignedBlindedBeaconBlock, payload *api.VersionedExecutionPayload) error {
+func EqExecutionPayloadToHeader(bb *common.VersionedSignedBlindedBlockRequest, payload *api.VersionedExecutionPayload) error {
 	if bb.Capella != nil { // process Capella beacon block
 		if payload.Capella == nil {
 			return ErrPayloadMismatchCapella
@@ -90,12 +88,12 @@ func hasReachedFork(slot, forkEpoch uint64) bool {
 	return currentEpoch >= forkEpoch
 }
 
-func checkProposerSignature(block *consensusapi.VersionedSignedBlindedBeaconBlock, domain phase0.Domain, pubKey []byte) (bool, error) {
+func checkProposerSignature(block *common.VersionedSignedBlindedBlockRequest, domain phase0.Domain, pubKey []byte) (bool, error) {
 	root, err := block.Root()
 	if err != nil {
 		return false, err
 	}
-	sig, err := block.Signature()
+	sig, err := block.BeaconBlockSignature()
 	if err != nil {
 		return false, err
 	}

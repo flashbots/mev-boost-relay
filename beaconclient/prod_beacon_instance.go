@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/r3labs/sse/v2"
@@ -269,7 +268,7 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
-func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error) {
+func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedBlockRequest, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	if c.ffUseV2PublishBlockEndpoint {
 		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
@@ -277,8 +276,8 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broad
 		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 	}
 	headers := http.Header{}
-	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella) // optional in v1, required in v2
-	return fetchBeacon(http.MethodPost, uri, block.Capella, nil, nil, headers)
+	headers.Add("Eth-Consensus-Version", block.Version.String()) // optional in v1, required in v2
+	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers)
 }
 
 type GetGenesisResponse struct {

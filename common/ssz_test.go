@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"testing"
@@ -12,21 +13,35 @@ import (
 )
 
 func TestSSZBuilderSubmission(t *testing.T) {
-	byteValue := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+	// json matches marshalled SSZ
+	jsonBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	depositData := new(capella.SubmitBlockRequest)
-	err := json.Unmarshal(byteValue, &depositData)
+	submitBlockData := new(VersionedSubmitBlockRequest)
+	err := json.Unmarshal(jsonBytes, &submitBlockData)
 	require.NoError(t, err)
 
-	ssz, err := depositData.MarshalSSZ()
+	require.NotNil(t, submitBlockData.Capella)
+	marshalledSszBytes, err := submitBlockData.Capella.MarshalSSZ()
 	require.NoError(t, err)
 
-	sszExpectedBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.ssz.gz")
-	require.Equal(t, sszExpectedBytes, ssz)
+	sszBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.ssz.gz")
+	require.Equal(t, sszBytes, marshalledSszBytes)
 
-	htr, err := depositData.HashTreeRoot()
+	htr, err := submitBlockData.Capella.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, "0x014c218ba41c2ed5388e7f0ed055e109b83692c772de5c2800140a95a4b66d13", hexutil.Encode(htr[:]))
+
+	// marshalled json matches ssz
+	submitBlockSSZ := new(VersionedSubmitBlockRequest)
+	err = submitBlockSSZ.UnmarshalSSZ(sszBytes)
+	require.NoError(t, err)
+	marshalledJSONBytes, err := json.Marshal(submitBlockSSZ)
+	require.NoError(t, err)
+	// trim white space from expected json
+	buffer := new(bytes.Buffer)
+	err = json.Compact(buffer, jsonBytes)
+	require.NoError(t, err)
+	require.Equal(t, buffer.Bytes(), bytes.ToLower(marshalledJSONBytes))
 }
 
 func TestSSZGetHeaderResponse(t *testing.T) {
