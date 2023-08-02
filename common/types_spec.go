@@ -13,9 +13,9 @@ import (
 	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
-	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
+	utildeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -48,23 +48,46 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		return nil, ErrMissingSecretKey
 	}
 
-	if payload.Capella != nil {
-		signedBuilderBid, err := CapellaBuilderSubmitBlockRequestToSignedBuilderBid(payload.Capella, sk, pubkey, domain)
+	versionedPayload := &api.VersionedExecutionPayload{Version: payload.Version}
+	switch payload.Version {
+	case consensusspec.DataVersionCapella:
+		versionedPayload.Capella = payload.Capella.ExecutionPayload
+		header, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return nil, err
+		}
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
 		if err != nil {
 			return nil, err
 		}
 		return &spec.VersionedSignedBuilderBid{
-			Version:   consensusspec.DataVersionCapella,
-			Capella:   signedBuilderBid,
-			Bellatrix: nil,
+			Version: consensusspec.DataVersionCapella,
+			Capella: signedBuilderBid.Capella,
 		}, nil
+	case consensusspec.DataVersionDeneb:
+		versionedPayload.Deneb = payload.Deneb.ExecutionPayload
+		header, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return nil, err
+		}
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		if err != nil {
+			return nil, err
+		}
+		return &spec.VersionedSignedBuilderBid{
+			Version: consensusspec.DataVersionDeneb,
+			Deneb:   signedBuilderBid.Deneb,
+		}, nil
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		return nil, ErrInvalidVersion
+	default:
+		return nil, ErrEmptyPayload
 	}
-	return nil, ErrEmptyPayload
 }
 
-func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
+func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.VersionedSubmitBlindedBlockResponse, error) {
 	if payload.Capella != nil {
-		return &api.VersionedExecutionPayload{
+		return &api.VersionedSubmitBlindedBlockResponse{
 			Version: consensusspec.DataVersionCapella,
 			Capella: payload.Capella.ExecutionPayload,
 		}, nil
@@ -73,19 +96,14 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.Version
 	return nil, ErrEmptyPayload
 }
 
-func BuilderSubmitBlockRequestToSignedBuilderBid(req *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
-	value, err := req.Value()
+func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *api.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+	value, err := payload.Value()
 	if err != nil {
 		return nil, err
 	}
 
-	switch req.Version {
+	switch payload.Version {
 	case consensusspec.DataVersionCapella:
-		header, err := utils.PayloadToPayloadHeader(&api.VersionedExecutionPayload{Version: req.Version, Capella: req.Capella.ExecutionPayload})
-		if err != nil {
-			return nil, err
-		}
-
 		builderBid := capella.BuilderBid{
 			Value:  value,
 			Header: header.Capella,
@@ -104,100 +122,137 @@ func BuilderSubmitBlockRequestToSignedBuilderBid(req *VersionedSubmitBlockReques
 				Signature: sig,
 			},
 		}, nil
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix, consensusspec.DataVersionDeneb:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", req.Version.String()))
-	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", req.Version.String()))
-	}
-}
+	case consensusspec.DataVersionDeneb:
+		var blobRoots []phase0.Root
+		for i, blob := range payload.Deneb.BlobsBundle.Blobs {
+			blobRootHelper := utildeneb.BeaconBlockBlob{Blob: blob}
+			root, err := blobRootHelper.HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to calculate blob root at blob index %d", i))
+			}
+			blobRoots = append(blobRoots, root)
+		}
+		blindedBlobRoots := deneb.BlindedBlobsBundle{
+			Commitments: payload.Deneb.BlobsBundle.Commitments,
+			Proofs:      payload.Deneb.BlobsBundle.Proofs,
+			BlobRoots:   blobRoots,
+		}
 
-func CapellaBuilderSubmitBlockRequestToSignedBuilderBid(req *capella.SubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*capella.SignedBuilderBid, error) {
-	header, err := CapellaPayloadToPayloadHeader(req.ExecutionPayload)
-	if err != nil {
-		return nil, err
-	}
+		builderBid := deneb.BuilderBid{
+			Value:              value,
+			Header:             header.Deneb,
+			BlindedBlobsBundle: &blindedBlobRoots,
+			Pubkey:             *pubkey,
+		}
 
-	builderBid := capella.BuilderBid{
-		Value:  req.Message.Value,
-		Header: header,
-		Pubkey: *pubkey,
-	}
+		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		if err != nil {
+			return nil, err
+		}
 
-	sig, err := ssz.SignMessage(&builderBid, domain, sk)
-	if err != nil {
-		return nil, err
-	}
-
-	return &capella.SignedBuilderBid{
-		Message:   &builderBid,
-		Signature: sig,
-	}, nil
-}
-
-func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*consensuscapella.ExecutionPayloadHeader, error) {
-	if p == nil {
-		return nil, ErrEmptyPayload
-	}
-
-	transactions := utilbellatrix.ExecutionPayloadTransactions{Transactions: p.Transactions}
-	transactionsRoot, err := transactions.HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-
-	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: p.Withdrawals}
-	withdrawalsRoot, err := withdrawals.HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-
-	return &consensuscapella.ExecutionPayloadHeader{
-		ParentHash:       p.ParentHash,
-		FeeRecipient:     p.FeeRecipient,
-		StateRoot:        p.StateRoot,
-		ReceiptsRoot:     p.ReceiptsRoot,
-		LogsBloom:        p.LogsBloom,
-		PrevRandao:       p.PrevRandao,
-		BlockNumber:      p.BlockNumber,
-		GasLimit:         p.GasLimit,
-		GasUsed:          p.GasUsed,
-		Timestamp:        p.Timestamp,
-		ExtraData:        p.ExtraData,
-		BaseFeePerGas:    p.BaseFeePerGas,
-		BlockHash:        p.BlockHash,
-		TransactionsRoot: transactionsRoot,
-		WithdrawalsRoot:  withdrawalsRoot,
-	}, nil
-}
-
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, executionPayload *api.VersionedExecutionPayload) *VersionedSignedBlockRequest {
-	var signedBeaconBlock VersionedSignedBlockRequest
-	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
-	if capellaBlindedBlock != nil {
-		signedBeaconBlock.Capella = &consensuscapella.SignedBeaconBlock{
-			Signature: capellaBlindedBlock.Signature,
-			Message: &consensuscapella.BeaconBlock{
-				Slot:          capellaBlindedBlock.Message.Slot,
-				ProposerIndex: capellaBlindedBlock.Message.ProposerIndex,
-				ParentRoot:    capellaBlindedBlock.Message.ParentRoot,
-				StateRoot:     capellaBlindedBlock.Message.StateRoot,
-				Body: &consensuscapella.BeaconBlockBody{
-					BLSToExecutionChanges: capellaBlindedBlock.Message.Body.BLSToExecutionChanges,
-					RANDAOReveal:          capellaBlindedBlock.Message.Body.RANDAOReveal,
-					ETH1Data:              capellaBlindedBlock.Message.Body.ETH1Data,
-					Graffiti:              capellaBlindedBlock.Message.Body.Graffiti,
-					ProposerSlashings:     capellaBlindedBlock.Message.Body.ProposerSlashings,
-					AttesterSlashings:     capellaBlindedBlock.Message.Body.AttesterSlashings,
-					Attestations:          capellaBlindedBlock.Message.Body.Attestations,
-					Deposits:              capellaBlindedBlock.Message.Body.Deposits,
-					VoluntaryExits:        capellaBlindedBlock.Message.Body.VoluntaryExits,
-					SyncAggregate:         capellaBlindedBlock.Message.Body.SyncAggregate,
-					ExecutionPayload:      executionPayload.Capella,
-				},
+		return &spec.VersionedSignedBuilderBid{
+			Version: consensusspec.DataVersionDeneb,
+			Deneb: &deneb.SignedBuilderBid{
+				Message:   &builderBid,
+				Signature: sig,
 			},
+		}, nil
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version.String()))
+	}
+}
+
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, blockPayload *api.VersionedSubmitBlindedBlockResponse) (*VersionedSignedBlockRequest, error) {
+	signedBeaconBlock := VersionedSignedBlockRequest{
+		consensusapi.VersionedBlockRequest{ //nolint:exhaustruct
+			Version: signedBlindedBeaconBlock.Version,
+		},
+	}
+	switch signedBlindedBeaconBlock.Version {
+	case consensusspec.DataVersionCapella:
+		capellaBlindedBlock := signedBlindedBeaconBlock.Capella
+		signedBeaconBlock.Capella = CapellaUnblindSignedBlock(capellaBlindedBlock, blockPayload.Capella)
+	case consensusspec.DataVersionDeneb:
+		denebBlindedBlock := signedBlindedBeaconBlock.Deneb.SignedBlindedBlock
+		blockRoot, err := denebBlindedBlock.Message.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb, blockRoot)
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version.String()))
+	}
+	return &signedBeaconBlock, nil
+}
+
+func CapellaUnblindSignedBlock(blindedBlock *apiv1capella.SignedBlindedBeaconBlock, executionPayload *consensuscapella.ExecutionPayload) *consensuscapella.SignedBeaconBlock {
+	return &consensuscapella.SignedBeaconBlock{
+		Signature: blindedBlock.Signature,
+		Message: &consensuscapella.BeaconBlock{
+			Slot:          blindedBlock.Message.Slot,
+			ProposerIndex: blindedBlock.Message.ProposerIndex,
+			ParentRoot:    blindedBlock.Message.ParentRoot,
+			StateRoot:     blindedBlock.Message.StateRoot,
+			Body: &consensuscapella.BeaconBlockBody{
+				BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
+				RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
+				ETH1Data:              blindedBlock.Message.Body.ETH1Data,
+				Graffiti:              blindedBlock.Message.Body.Graffiti,
+				ProposerSlashings:     blindedBlock.Message.Body.ProposerSlashings,
+				AttesterSlashings:     blindedBlock.Message.Body.AttesterSlashings,
+				Attestations:          blindedBlock.Message.Body.Attestations,
+				Deposits:              blindedBlock.Message.Body.Deposits,
+				VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
+				SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
+				ExecutionPayload:      executionPayload,
+			},
+		},
+	}
+}
+
+func DenebUnblindSignedBlock(blindedBlock *apiv1deneb.SignedBlindedBeaconBlock, blockPayload *deneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *apiv1deneb.SignedBlockContents {
+	denebBlobSidecars := make([]*consensusdeneb.BlobSidecar, len(blockPayload.BlobsBundle.Blobs))
+
+	for i := range denebBlobSidecars {
+		denebBlobSidecars[i] = &consensusdeneb.BlobSidecar{
+			BlockRoot:       blockRoot,
+			Index:           consensusdeneb.BlobIndex(i),
+			Slot:            blindedBlock.Message.Slot,
+			BlockParentRoot: blindedBlock.Message.ParentRoot,
+			ProposerIndex:   blindedBlock.Message.ProposerIndex,
+			Blob:            blockPayload.BlobsBundle.Blobs[i],
+			KzgCommitment:   blockPayload.BlobsBundle.Commitments[i],
+			KzgProof:        blockPayload.BlobsBundle.Proofs[i],
 		}
 	}
-	return &signedBeaconBlock
+	return &apiv1deneb.SignedBlockContents{
+		Message: &apiv1deneb.BlockContents{
+			Block: &consensusdeneb.BeaconBlock{
+				Slot:          blindedBlock.Message.Slot,
+				ProposerIndex: blindedBlock.Message.ProposerIndex,
+				ParentRoot:    blindedBlock.Message.ParentRoot,
+				StateRoot:     blindedBlock.Message.StateRoot,
+				Body: &consensusdeneb.BeaconBlockBody{
+					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
+					RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
+					ETH1Data:              blindedBlock.Message.Body.ETH1Data,
+					Graffiti:              blindedBlock.Message.Body.Graffiti,
+					ProposerSlashings:     blindedBlock.Message.Body.ProposerSlashings,
+					AttesterSlashings:     blindedBlock.Message.Body.AttesterSlashings,
+					Attestations:          blindedBlock.Message.Body.Attestations,
+					Deposits:              blindedBlock.Message.Body.Deposits,
+					VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
+					SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
+					ExecutionPayload:      blockPayload.ExecutionPayload,
+					BlobKzgCommitments:    blockPayload.BlobsBundle.Commitments,
+				},
+			},
+			BlobSidecars: denebBlobSidecars,
+		},
+		Signature: blindedBlock.Signature,
+	}
 }
 
 type BuilderBlockValidationRequest struct {
