@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -36,6 +36,7 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/exp/slices"
@@ -54,6 +55,7 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
+	ErrNegativeTimestamp          = errors.New("timestamp cannot be negative")
 )
 
 var (
@@ -1183,6 +1185,42 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	api.RespondOK(w, bid)
 }
 
+func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBlockRequest, pubKey []byte) (bool, error) {
+	switch block.Version {
+	case spec.DataVersionCapella:
+		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
+	case spec.DataVersionDeneb:
+		domain := api.opts.EthNetDetails.DomainBeaconProposerDeneb
+		if ok, err := verifyBlockSignature(block, domain, pubKey); !ok || err != nil {
+			return false, errors.Wrap(err, "failed to verify block signature for deneb")
+		}
+		// verify sidecar signatures
+		for i, sidecar := range block.Deneb.SignedBlindedBlobSidecars {
+			if sidecar == nil || sidecar.Message == nil {
+				return false, errors.New("nil sidecar or message")
+			}
+			root, err := sidecar.Message.HashTreeRoot()
+			if err != nil {
+				return false, errors.Wrap(err, fmt.Sprintf("failed to calculate hash tree root for sidecar index %d", i))
+			}
+			signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
+			msg, err := signingData.HashTreeRoot()
+			if err != nil {
+				return false, err
+			}
+
+			if ok, err := bls.VerifySignatureBytes(msg[:], sidecar.Signature[:], pubKey[:]); !ok || err != nil {
+				return false, errors.Wrap(err, fmt.Sprintf("failed to verify signature for sidecar index %d ", i))
+			}
+		}
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return false, errors.New("unsupported consensus data version")
+	}
+	return true, nil
+}
+
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
@@ -1227,8 +1265,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Decode payload
 	payload := new(common.VersionedSignedBlindedBlockRequest)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
-		log.WithError(err).Warn("failed to decode capella getPayload request")
-		api.RespondError(w, http.StatusBadRequest, "failed to decode capella payload")
+		log.WithError(err).Warn("failed to decode getPayload request")
+		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
 		return
 	}
 
@@ -1296,14 +1334,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Validate proposer signature
-	// TODO: add deneb support.
-	ok, err := checkProposerSignature(payload, api.opts.EthNetDetails.DomainBeaconProposerCapella, pk[:])
+	ok, err := api.checkProposerSignature(payload, pk[:])
 	if !ok || err != nil {
 		if api.ffLogInvalidSignaturePayload {
 			txt, _ := json.Marshal(payload) //nolint:errchkjson
-			log.Info("payload_invalid_sig_capella: ", string(txt), "pubkey:", proposerPubkey.String())
+			log.Info("payload_invalid_sig: ", string(txt), "pubkey:", proposerPubkey.String())
 		}
-		log.WithError(err).Warn("could not verify capella payload signature")
+		log.WithError(err).Warn("could not verify payload signature")
 		api.RespondError(w, http.StatusBadRequest, "could not verify payload signature")
 		return
 	}
@@ -1372,7 +1409,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 				log.WithError(err).Error("error reading validator registration")
 			}
 		}
-		var signedRegistration *boostTypes.SignedValidatorRegistration
+		var signedRegistration *apiv1.SignedValidatorRegistration
 		if registrationEntry != nil {
 			signedRegistration, err = registrationEntry.ToSignedValidatorRegistration()
 			if err != nil {

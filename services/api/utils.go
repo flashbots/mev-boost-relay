@@ -88,7 +88,7 @@ func hasReachedFork(slot, forkEpoch uint64) bool {
 	return currentEpoch >= forkEpoch
 }
 
-func checkProposerSignature(block *common.VersionedSignedBlindedBlockRequest, domain phase0.Domain, pubKey []byte) (bool, error) {
+func verifyBlockSignature(block *common.VersionedSignedBlindedBlockRequest, domain phase0.Domain, pubKey []byte) (bool, error) {
 	root, err := block.Root()
 	if err != nil {
 		return false, err
