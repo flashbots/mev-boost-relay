@@ -10,9 +10,6 @@ import (
 	"time"
 
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusapi "github.com/attestantio/go-eth2-client/api"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
@@ -28,7 +25,7 @@ type IDatabaseService interface {
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
-	SaveBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
+	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -37,7 +34,7 @@ type IDatabaseService interface {
 	GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error)
 	DeleteExecutionPayloads(idFirst, idLast uint64) error
 
-	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error
+	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBlockRequest, signedAt time.Time, publishMs uint64) error
 	GetNumDeliveredPayloads() (uint64, error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error)
@@ -50,8 +47,8 @@ type IDatabaseService interface {
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError bool) error
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
-	InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *apiv1.SignedValidatorRegistration) error
+	InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedBlockRequest, signedRegistration *apiv1.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
@@ -178,7 +175,7 @@ func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([
 	return registrations, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *spec.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -275,7 +272,7 @@ func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, prop
 	return entry, err
 }
 
-func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
+func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBlockRequest, signedAt time.Time, publishMs uint64) error {
 	_signedBlindedBeaconBlock, err := json.Marshal(signedBlindedBeaconBlock)
 	if err != nil {
 		return err
@@ -544,7 +541,7 @@ func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error 
 	return err
 }
 
-func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.VersionedSubmitBlockRequest, simError error) error {
+func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error {
 	_submitBlockRequest, err := json.Marshal(submitBlockRequest.Capella)
 	if err != nil {
 		return err
@@ -577,8 +574,8 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *spec.Version
 	return err
 }
 
-func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *consensusspec.VersionedSignedBeaconBlock, signedRegistration *apiv1.SignedValidatorRegistration) error {
-	_signedBeaconBlock, err := json.Marshal(signedBlock.Capella)
+func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedBlockRequest, signedRegistration *apiv1.SignedValidatorRegistration) error {
+	_signedBeaconBlock, err := json.Marshal(signedBlock)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
@@ -107,7 +106,7 @@ func (c *MockBeaconInstance) addDelay() {
 	}
 }
 
-func (c *MockBeaconInstance) PublishBlock(block *spec.VersionedSignedBeaconBlock, broadcaseMode BroadcastMode) (code int, err error) {
+func (c *MockBeaconInstance) PublishBlock(block *common.VersionedSignedBlockRequest, broadcaseMode BroadcastMode) (code int, err error) {
 	return 0, nil
 }
 

@@ -310,7 +310,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
-	req := new(spec.VersionedSubmitBlockRequest)
+	req := new(common.VersionedSubmitBlockRequest)
 	req.Capella = new(builderCapella.SubmitBlockRequest)
 	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
@@ -365,7 +365,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 
 	// Prepare the request payload
-	req := new(spec.VersionedSubmitBlockRequest)
+	req := new(common.VersionedSubmitBlockRequest)
 	req.Capella = new(builderCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
-		payload        *spec.VersionedSubmitBlockRequest
+		payload        *common.VersionedSubmitBlockRequest
 		expectOk       bool
 		expectGasLimit uint64
 	}{
@@ -438,14 +438,16 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: testAddress,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk:       true,
@@ -454,13 +456,15 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot: testSlot,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk:       false,
@@ -476,14 +480,16 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: testAddress2,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress2,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk:       false,
@@ -522,7 +528,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	cases := []struct {
 		description string
 		attrs       payloadAttributesHelper
-		payload     *spec.VersionedSubmitBlockRequest
+		payload     *common.VersionedSubmitBlockRequest
 		expectOk    bool
 	}{
 		{
@@ -535,20 +541,22 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: prevRandao,
-						Withdrawals: []*capella.Withdrawal{
-							{
-								Index: 989694,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: prevRandao,
+							Withdrawals: []*capella.Withdrawal{
+								{
+									Index: 989694,
+								},
 							},
 						},
-					},
-					Message: &apiv1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: parentHash,
+						Message: &apiv1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
 					},
 				},
 			},
@@ -559,13 +567,15 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			attrs: payloadAttributesHelper{
 				slot: testSlot,
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot: testSlot + 1, // submission for a future slot
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot: testSlot + 1, // submission for a future slot
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk: false,
@@ -578,15 +588,17 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: parentHash,
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
+						},
 					},
 				},
 			},
@@ -600,16 +612,18 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: parentHash,
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao:  [32]byte(prevRandao),
-						Withdrawals: nil, // set to nil to cause an error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao:  [32]byte(prevRandao),
+							Withdrawals: nil, // set to nil to cause an error
+						},
 					},
 				},
 			},
@@ -625,20 +639,22 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: [32]byte(prevRandao),
-						Withdrawals: []*capella.Withdrawal{
-							{
-								Index: 989694,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: [32]byte(prevRandao),
+							Withdrawals: []*capella.Withdrawal{
+								{
+									Index: 989694,
+								},
 							},
 						},
-					},
-					Message: &apiv1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: parentHash,
+						Message: &apiv1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
 					},
 				},
 			},
@@ -666,19 +682,21 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 func TestCheckSubmissionSlotDetails(t *testing.T) {
 	cases := []struct {
 		description string
-		payload     *spec.VersionedSubmitBlockRequest
+		payload     *common.VersionedSubmitBlockRequest
 		expectOk    bool
 	}{
 		{
 			description: "success",
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						Timestamp: testSlot * common.SecondsPerSlot,
-					},
-					Message: &apiv1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &apiv1.BidTrace{
+							Slot: testSlot,
+						},
 					},
 				},
 			},
@@ -686,27 +704,31 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		},
 		{
 			description: "failure_past_slot",
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &apiv1.BidTrace{
-						Slot: testSlot - 1, // use old slot to cause error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						Message: &apiv1.BidTrace{
+							Slot: testSlot - 1, // use old slot to cause error
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk: false,
 		},
 		{
 			description: "failure_wrong_timestamp",
-			payload: &spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
-					},
-					Message: &apiv1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &builderCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
+						},
+						Message: &apiv1.BidTrace{
+							Slot: testSlot,
+						},
 					},
 				},
 			},
@@ -723,7 +745,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, submission)
+			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
