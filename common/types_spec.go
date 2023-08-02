@@ -86,13 +86,23 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 }
 
 func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.VersionedSubmitBlindedBlockResponse, error) {
-	if payload.Capella != nil {
+	switch payload.Version {
+	case consensusspec.DataVersionCapella:
 		return &api.VersionedSubmitBlindedBlockResponse{
 			Version: consensusspec.DataVersionCapella,
 			Capella: payload.Capella.ExecutionPayload,
 		}, nil
+	case consensusspec.DataVersionDeneb:
+		return &api.VersionedSubmitBlindedBlockResponse{
+			Version: consensusspec.DataVersionDeneb,
+			Deneb: &deneb.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: payload.Deneb.ExecutionPayload,
+				BlobsBundle:      payload.Deneb.BlobsBundle,
+			},
+		}, nil
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		return nil, ErrInvalidVersion
 	}
-
 	return nil, ErrEmptyPayload
 }
 
