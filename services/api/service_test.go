@@ -16,6 +16,7 @@ import (
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -30,8 +31,11 @@ import (
 )
 
 const (
-	testGasLimit = uint64(30000000)
-	testSlot     = uint64(42)
+	testGasLimit        = uint64(30000000)
+	testSlot            = uint64(42)
+	testParentHash      = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
+	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
+	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
 )
 
 var (
@@ -575,6 +579,151 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
+			require.Equal(t, tc.expectCont, cont)
+		})
+	}
+}
+
+func TestCheckSubmissionPayloadAttrs(t *testing.T) {
+	withdrawalsRoot, err := hexutil.Decode(testWithdrawalsRoot)
+	require.NoError(t, err)
+	prevRandao, err := hexutil.Decode(testPrevRandao)
+	require.NoError(t, err)
+	parentHash, err := hexutil.Decode(testParentHash)
+	require.NoError(t, err)
+
+	cases := []struct {
+		description string
+		attrs       payloadAttributesHelper
+		payload     *common.BuilderSubmitBlockRequest
+		expectCont  bool
+	}{
+		{
+			description: "success",
+			attrs: payloadAttributesHelper{
+				slot:            testSlot,
+				parentHash:      testParentHash,
+				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: testPrevRandao,
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					ExecutionPayload: &capella.ExecutionPayload{
+						PrevRandao: [32]byte(prevRandao),
+						Withdrawals: []*capella.Withdrawal{
+							{
+								Index: 989694,
+							},
+						},
+					},
+					Message: &v1.BidTrace{
+						Slot:       testSlot,
+						ParentHash: phase0.Hash32(parentHash),
+					},
+				},
+			},
+			expectCont: true,
+		},
+		{
+			description: "failure_attrs_not_known",
+			attrs: payloadAttributesHelper{
+				slot: testSlot,
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot: testSlot + 1, // submission for a future slot
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
+			description: "failure_wrong_prev_randao",
+			attrs: payloadAttributesHelper{
+				slot: testSlot,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: testPrevRandao,
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:       testSlot,
+						ParentHash: phase0.Hash32(parentHash),
+					},
+					ExecutionPayload: &capella.ExecutionPayload{
+						PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
+			description: "failure_nil_withdrawals",
+			attrs: payloadAttributesHelper{
+				slot: testSlot,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: testPrevRandao,
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:       testSlot,
+						ParentHash: phase0.Hash32(parentHash),
+					},
+					ExecutionPayload: &capella.ExecutionPayload{
+						PrevRandao:  [32]byte(prevRandao),
+						Withdrawals: nil, // set to nil to cause an error
+					},
+				},
+			},
+			expectCont: false,
+		},
+		{
+			description: "failure_wrong_withdrawal_root",
+			attrs: payloadAttributesHelper{
+				slot:            testSlot,
+				parentHash:      testParentHash,
+				withdrawalsRoot: phase0.Root(prevRandao), // use different root to cause an error
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: testPrevRandao,
+				},
+			},
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					ExecutionPayload: &capella.ExecutionPayload{
+						PrevRandao: [32]byte(prevRandao),
+						Withdrawals: []*capella.Withdrawal{
+							{
+								Index: 989694,
+							},
+						},
+					},
+					Message: &v1.BidTrace{
+						Slot:       testSlot,
+						ParentHash: phase0.Hash32(parentHash),
+					},
+				},
+			},
+			expectCont: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			backend.relay.payloadAttributesLock.RLock()
+			backend.relay.payloadAttributes[testParentHash] = tc.attrs
+			backend.relay.payloadAttributesLock.RUnlock()
+			backend.relay.capellaEpoch = 1
+
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			cont := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
 			require.Equal(t, tc.expectCont, cont)
 		})
 	}
