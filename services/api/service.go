@@ -1538,7 +1538,32 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 	return true
 }
 
-func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) { //nolint:gocognit,maintidx
+func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.BuilderSubmitBlockRequest) bool {
+	// TODO: add deneb support.
+	if payload.Capella == nil {
+		log.Info("rejecting submission - non capella payload for capella fork")
+		api.RespondError(w, http.StatusBadRequest, "not capella payload")
+		return false
+	}
+
+	if payload.Slot() <= headSlot {
+		log.Info("submitNewBlock failed: submission for past slot")
+		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
+		return false
+	}
+
+	// Timestamp check
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
+	if payload.Timestamp() != expectedTimestamp {
+		log.Warnf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
+		return false
+	}
+
+	return true
+}
+
+func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
 
@@ -1646,16 +1671,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// TODO: add deneb support.
-	if payload.Capella == nil {
-		log.Info("rejecting submission - non capella payload for capella fork")
-		api.RespondError(w, http.StatusBadRequest, "not capella payload")
-		return
-	}
-
-	if payload.Slot() <= headSlot {
-		log.Info("submitNewBlock failed: submission for past slot")
-		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
+	cont := api.checkSubmissionSlotDetails(w, log, headSlot, payload)
+	if !cont {
 		return
 	}
 
@@ -1673,14 +1690,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
-
-	// Timestamp check
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (payload.Slot() * common.SecondsPerSlot)
-	if payload.Timestamp() != expectedTimestamp {
-		log.Warnf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp)
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payload.Timestamp(), expectedTimestamp))
-		return
-	}
 
 	if builderEntry.status.IsBlacklisted {
 		log.Info("builder is blacklisted")
