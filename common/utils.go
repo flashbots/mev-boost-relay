@@ -185,7 +185,7 @@ type CreateTestBlockSubmissionOpts struct {
 	ProposerPubkey string
 }
 
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *spec.VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedExecutionPayload, getHeaderResponse *spec.VersionedSignedBuilderBid) {
 	t.Helper()
 	var err error
 
@@ -216,18 +216,20 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	builderPk, err := StrToPhase0Pubkey(builderPubkey)
 	require.NoError(t, err)
 
-	payload = &spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-		Version: consensusspec.DataVersionCapella,
-		Capella: &capella.SubmitBlockRequest{
-			Message: &apiv1.BidTrace{ //nolint:exhaustruct
-				BuilderPubkey:  builderPk,
-				Value:          value,
-				Slot:           slot,
-				ParentHash:     parentHash,
-				ProposerPubkey: proposerPk,
+	payload = &VersionedSubmitBlockRequest{
+		VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: &capella.SubmitBlockRequest{
+				Message: &apiv1.BidTrace{ //nolint:exhaustruct
+					BuilderPubkey:  builderPk,
+					Value:          value,
+					Slot:           slot,
+					ParentHash:     parentHash,
+					ProposerPubkey: proposerPk,
+				},
+				ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+				Signature:        phase0.BLSSignature{},
 			},
-			ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
-			Signature:        phase0.BLSSignature{},
 		},
 	}
 
@@ -252,7 +254,7 @@ func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
 	return time.Duration(defaultValueSec) * time.Second
 }
 
-func GetBlockSubmissionInfo(submission *spec.VersionedSubmitBlockRequest) (*BlockSubmissionInfo, error) {
+func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubmissionInfo, error) {
 	bidTrace, err := submission.BidTrace()
 	if err != nil {
 		return nil, err
@@ -347,7 +349,7 @@ func GetBlockSubmissionInfo(submission *spec.VersionedSubmitBlockRequest) (*Bloc
 	}, nil
 }
 
-func GetBlockSubmissionExecutionPayload(submission *spec.VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
+func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
 	if submission.Capella != nil {
 		return &api.VersionedExecutionPayload{
 			Version: consensusspec.DataVersionCapella,

@@ -6,8 +6,11 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
+	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -36,7 +39,7 @@ var NilResponse = struct{}{}
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -59,7 +62,7 @@ func BuildGetHeaderResponse(payload *spec.VersionedSubmitBlockRequest, sk *bls.S
 	return nil, ErrEmptyPayload
 }
 
-func BuildGetPayloadResponse(payload *spec.VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
+func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.VersionedExecutionPayload, error) {
 	if payload.Capella != nil {
 		return &api.VersionedExecutionPayload{
 			Version: consensusspec.DataVersionCapella,
@@ -70,7 +73,7 @@ func BuildGetPayloadResponse(payload *spec.VersionedSubmitBlockRequest) (*api.Ve
 	return nil, ErrEmptyPayload
 }
 
-func BuilderSubmitBlockRequestToSignedBuilderBid(req *spec.VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuilderSubmitBlockRequestToSignedBuilderBid(req *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
 	value, err := req.Value()
 	if err != nil {
 		return nil, err
@@ -167,8 +170,8 @@ func CapellaPayloadToPayloadHeader(p *consensuscapella.ExecutionPayload) (*conse
 	}, nil
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusapi.VersionedSignedBlindedBeaconBlock, executionPayload *api.VersionedExecutionPayload) *consensusspec.VersionedSignedBeaconBlock {
-	var signedBeaconBlock consensusspec.VersionedSignedBeaconBlock
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, executionPayload *api.VersionedExecutionPayload) *VersionedSignedBlockRequest {
+	var signedBeaconBlock VersionedSignedBlockRequest
 	capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 	if capellaBlindedBlock != nil {
 		signedBeaconBlock.Capella = &consensuscapella.SignedBeaconBlock{
@@ -198,20 +201,12 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *consensusap
 }
 
 type BuilderBlockValidationRequest struct {
-	spec.VersionedSubmitBlockRequest
+	VersionedSubmitBlockRequest
 	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
 }
 
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
-	var blockRequest []byte
-	var err error
-
-	switch r.VersionedSubmitBlockRequest.Version { //nolint:exhaustive
-	case consensusspec.DataVersionCapella:
-		blockRequest, err = r.VersionedSubmitBlockRequest.Capella.MarshalJSON()
-	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.VersionedSubmitBlockRequest.Version))
-	}
+	blockRequest, err := json.Marshal(r.VersionedSubmitBlockRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -225,4 +220,130 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	}
 	gasLimit[0] = ','
 	return append(blockRequest[:len(blockRequest)-1], gasLimit...), nil
+}
+
+type VersionedSubmitBlockRequest struct {
+	spec.VersionedSubmitBlockRequest
+}
+
+func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
+	var err error
+
+	deneb := new(deneb.SubmitBlockRequest)
+	if err = deneb.UnmarshalSSZ(input); err == nil {
+		r.Version = consensusspec.DataVersionDeneb
+		r.Deneb = deneb
+		return nil
+	}
+
+	capella := new(capella.SubmitBlockRequest)
+	if err = capella.UnmarshalSSZ(input); err == nil {
+		r.Version = consensusspec.DataVersionCapella
+		r.Capella = capella
+		return nil
+	}
+	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
+}
+
+func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
+	switch r.Version {
+	case consensusspec.DataVersionCapella:
+		return json.Marshal(r.Capella)
+	case consensusspec.DataVersionDeneb:
+		return json.Marshal(r.Deneb)
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
+func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
+	var err error
+
+	deneb := new(deneb.SubmitBlockRequest)
+	if err = json.Unmarshal(input, deneb); err == nil {
+		r.Version = consensusspec.DataVersionDeneb
+		r.Deneb = deneb
+		return nil
+	}
+	capella := new(capella.SubmitBlockRequest)
+	if err = json.Unmarshal(input, capella); err == nil {
+		r.Version = consensusspec.DataVersionCapella
+		r.Capella = capella
+		return nil
+	}
+	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest")
+}
+
+type VersionedSignedBlockRequest struct {
+	consensusapi.VersionedBlockRequest
+}
+
+func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
+	switch r.Version {
+	case consensusspec.DataVersionCapella:
+		return json.Marshal(r.Capella)
+	case consensusspec.DataVersionDeneb:
+		return json.Marshal(r.Deneb)
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
+func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
+	var err error
+
+	deneb := new(apiv1deneb.SignedBlockContents)
+	if err = json.Unmarshal(input, deneb); err == nil {
+		r.Version = consensusspec.DataVersionDeneb
+		r.Deneb = deneb
+		return nil
+	}
+
+	capella := new(consensuscapella.SignedBeaconBlock)
+	if err = json.Unmarshal(input, capella); err == nil {
+		r.Version = consensusspec.DataVersionCapella
+		r.Capella = capella
+		return nil
+	}
+	return errors.Wrap(err, "failed to unmarshal SignedBeaconBlockRequest")
+}
+
+type VersionedSignedBlindedBlockRequest struct {
+	consensusapi.VersionedBlindedBlockRequest
+}
+
+func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
+	switch r.Version {
+	case consensusspec.DataVersionCapella:
+		return json.Marshal(r.Capella)
+	case consensusspec.DataVersionDeneb:
+		return json.Marshal(r.Deneb)
+	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
+func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
+	var err error
+
+	deneb := new(apiv1deneb.SignedBlindedBlockContents)
+	if err = json.Unmarshal(input, deneb); err == nil {
+		r.Version = consensusspec.DataVersionDeneb
+		r.Deneb = deneb
+		return nil
+	}
+
+	capella := new(apiv1capella.SignedBlindedBeaconBlock)
+	if err = json.Unmarshal(input, capella); err == nil {
+		r.Version = consensusspec.DataVersionCapella
+		r.Capella = capella
+		return nil
+	}
+	return errors.Wrap(err, "failed to unmarshal SignedBlindedBeaconBlock")
 }

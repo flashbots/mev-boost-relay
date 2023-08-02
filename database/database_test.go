@@ -8,7 +8,8 @@ import (
 	"time"
 
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec"
+	consensusapi "github.com/attestantio/go-eth2-client/api"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -356,8 +357,11 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	require.Empty(t, demotion.SignedValidatorRegistration.String)
 
 	// Update demotion with the signedBlock and signedRegistration.
-	bb := &spec.VersionedSignedBeaconBlock{
-		Capella: &consensuscapella.SignedBeaconBlock{},
+	bb := &common.VersionedSignedBlockRequest{
+		VersionedBlockRequest: consensusapi.VersionedBlockRequest{
+			Version: consensusspec.DataVersionCapella,
+			Capella: &consensuscapella.SignedBeaconBlock{},
+		},
 	}
 	err = db.UpdateBuilderDemotion(bt, bb, &apiv1.SignedValidatorRegistration{})
 	require.NoError(t, err)
