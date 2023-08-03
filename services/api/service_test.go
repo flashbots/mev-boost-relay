@@ -508,7 +508,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
 		payload        *common.BuilderSubmitBlockRequest
-		expectCont     bool
+		expectOk       bool
 		expectGasLimit uint64
 	}{
 		{
@@ -529,7 +529,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			expectCont:     true,
+			expectOk:       true,
 			expectGasLimit: testGasLimit,
 		},
 		{
@@ -542,7 +542,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			expectCont:     false,
+			expectOk:       false,
 			expectGasLimit: 0,
 		},
 		{
@@ -563,7 +563,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 					},
 				},
 			},
-			expectCont:     false,
+			expectOk:       false,
 			expectGasLimit: 0,
 		},
 	}
@@ -579,7 +579,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
-			require.Equal(t, tc.expectCont, cont)
+			require.Equal(t, tc.expectOk, cont)
 		})
 	}
 }
@@ -596,7 +596,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 		description string
 		attrs       payloadAttributesHelper
 		payload     *common.BuilderSubmitBlockRequest
-		expectCont  bool
+		expectOk    bool
 	}{
 		{
 			description: "success",
@@ -624,7 +624,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 				},
 			},
-			expectCont: true,
+			expectOk: true,
 		},
 		{
 			description: "failure_attrs_not_known",
@@ -638,7 +638,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_wrong_prev_randao",
@@ -659,7 +659,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_nil_withdrawals",
@@ -681,7 +681,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_wrong_withdrawal_root",
@@ -709,7 +709,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 	}
 	for _, tc := range cases {
@@ -724,7 +724,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
 			cont := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
-			require.Equal(t, tc.expectCont, cont)
+			require.Equal(t, tc.expectOk, cont)
 		})
 	}
 }
@@ -733,7 +733,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	cases := []struct {
 		description string
 		payload     *common.BuilderSubmitBlockRequest
-		expectCont  bool
+		expectOk    bool
 	}{
 		{
 			description: "success",
@@ -747,14 +747,14 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 					},
 				},
 			},
-			expectCont: true,
+			expectOk: true,
 		},
 		{
 			description: "failure_nil_capella",
 			payload: &common.BuilderSubmitBlockRequest{
 				Capella: nil, // nil to cause error
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_past_slot",
@@ -765,7 +765,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_wrong_timestamp",
@@ -779,7 +779,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 	}
 	for _, tc := range cases {
@@ -791,7 +791,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
 			cont := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
-			require.Equal(t, tc.expectCont, cont)
+			require.Equal(t, tc.expectOk, cont)
 		})
 	}
 }
