@@ -9,6 +9,7 @@ import (
 
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/api/v1/deneb"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
@@ -85,7 +86,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			ProposerFeeRecipient: feeRecipient,
 			Value:                uint256.NewInt(collateral),
 		},
-	})
+	}, consensusspec.DataVersionDeneb)
 	entry, err := db.SaveBuilderBlockSubmission(&req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
@@ -292,7 +293,6 @@ func TestSetBlockBuilderCollateral(t *testing.T) {
 }
 
 func TestInsertBuilderDemotion(t *testing.T) {
-	db := resetDatabase(t)
 	pk, sk := getTestKeyPair(t)
 	var testBlockHash phase0.Hash32
 	hashSlice, err := hexutil.Decode(blockHashStr)
@@ -308,20 +308,37 @@ func TestInsertBuilderDemotion(t *testing.T) {
 			Value:                uint256.NewInt(collateral),
 		},
 	}
-	req := common.TestBuilderSubmitBlockRequest(sk, trace)
-	err = db.InsertBuilderDemotion(&req, errFoo)
-	require.NoError(t, err)
 
-	entry, err := db.GetBuilderDemotion(trace)
-	require.NoError(t, err)
-	require.Equal(t, slot, entry.Slot)
-	require.Equal(t, pk.String(), entry.BuilderPubkey)
-	require.Equal(t, blockHashStr, entry.BlockHash)
+	cases := []struct {
+		name string
+		req  common.VersionedSubmitBlockRequest
+	}{
+		{
+			name: "Capella",
+			req:  common.TestBuilderSubmitBlockRequest(sk, trace, consensusspec.DataVersionCapella),
+		}, {
+			name: "Deneb",
+			req:  common.TestBuilderSubmitBlockRequest(sk, trace, consensusspec.DataVersionDeneb),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db := resetDatabase(t)
+
+			err = db.InsertBuilderDemotion(&c.req, errFoo)
+			require.NoError(t, err)
+
+			entry, err := db.GetBuilderDemotion(trace)
+			require.NoError(t, err)
+			require.Equal(t, slot, entry.Slot)
+			require.Equal(t, pk.String(), entry.BuilderPubkey)
+			require.Equal(t, blockHashStr, entry.BlockHash)
+		})
+	}
 }
 
 func TestUpdateBuilderDemotion(t *testing.T) {
-	db := resetDatabase(t)
-
 	pk, sk := getTestKeyPair(t)
 	var testBlockHash phase0.Hash32
 	hashSlice, err := hexutil.Decode(blockHashStr)
@@ -336,43 +353,68 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			Value:                uint256.NewInt(collateral),
 		},
 	}
-	req := common.TestBuilderSubmitBlockRequest(sk, bt)
-	// Should return ErrNoRows because there is no demotion yet.
-	demotion, err := db.GetBuilderDemotion(bt)
-	require.Equal(t, sql.ErrNoRows, err)
-	require.Nil(t, demotion)
 
-	// Insert demotion
-	err = db.InsertBuilderDemotion(&req, errFoo)
-	require.NoError(t, err)
-
-	// Now demotion should show up.
-	demotion, err = db.GetBuilderDemotion(bt)
-	require.NoError(t, err)
-
-	// Signed block and validation should be invalid and empty.
-	require.False(t, demotion.SignedBeaconBlock.Valid)
-	require.Empty(t, demotion.SignedBeaconBlock.String)
-	require.False(t, demotion.SignedValidatorRegistration.Valid)
-	require.Empty(t, demotion.SignedValidatorRegistration.String)
-
-	// Update demotion with the signedBlock and signedRegistration.
-	bb := &common.VersionedSignedBlockRequest{
-		VersionedBlockRequest: consensusapi.VersionedBlockRequest{
-			Version: consensusspec.DataVersionCapella,
-			Capella: &consensuscapella.SignedBeaconBlock{},
+	cases := []struct {
+		name        string
+		req         common.VersionedSubmitBlockRequest
+		beaconBlock common.VersionedSignedBlockRequest
+	}{
+		{
+			name: "Capella",
+			req:  common.TestBuilderSubmitBlockRequest(sk, bt, consensusspec.DataVersionCapella),
+			beaconBlock: common.VersionedSignedBlockRequest{
+				VersionedBlockRequest: consensusapi.VersionedBlockRequest{
+					Version: consensusspec.DataVersionCapella,
+					Capella: &consensuscapella.SignedBeaconBlock{},
+				},
+			},
+		}, {
+			name: "Deneb",
+			req:  common.TestBuilderSubmitBlockRequest(sk, bt, consensusspec.DataVersionDeneb),
+			beaconBlock: common.VersionedSignedBlockRequest{
+				VersionedBlockRequest: consensusapi.VersionedBlockRequest{
+					Version: consensusspec.DataVersionDeneb,
+					Deneb:   &deneb.SignedBlockContents{},
+				},
+			},
 		},
 	}
-	err = db.UpdateBuilderDemotion(bt, bb, &apiv1.SignedValidatorRegistration{})
-	require.NoError(t, err)
 
-	// Signed block and validation should now be valid and non-empty.
-	demotion, err = db.GetBuilderDemotion(bt)
-	require.NoError(t, err)
-	require.True(t, demotion.SignedBeaconBlock.Valid)
-	require.NotEmpty(t, demotion.SignedBeaconBlock.String)
-	require.True(t, demotion.SignedValidatorRegistration.Valid)
-	require.NotEmpty(t, demotion.SignedValidatorRegistration.String)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db := resetDatabase(t)
+			// Should return ErrNoRows because there is no demotion yet.
+			demotion, err := db.GetBuilderDemotion(bt)
+			require.Equal(t, sql.ErrNoRows, err)
+			require.Nil(t, demotion)
+
+			// Insert demotion
+			err = db.InsertBuilderDemotion(&c.req, errFoo)
+			require.NoError(t, err)
+
+			// Now demotion should show up.
+			demotion, err = db.GetBuilderDemotion(bt)
+			require.NoError(t, err)
+
+			// Signed block and validation should be invalid and empty.
+			require.False(t, demotion.SignedBeaconBlock.Valid)
+			require.Empty(t, demotion.SignedBeaconBlock.String)
+			require.False(t, demotion.SignedValidatorRegistration.Valid)
+			require.Empty(t, demotion.SignedValidatorRegistration.String)
+
+			// Update demotion with the signedBlock and signedRegistration.
+			err = db.UpdateBuilderDemotion(bt, &c.beaconBlock, &apiv1.SignedValidatorRegistration{})
+			require.NoError(t, err)
+
+			// Signed block and validation should now be valid and non-empty.
+			demotion, err = db.GetBuilderDemotion(bt)
+			require.NoError(t, err)
+			require.True(t, demotion.SignedBeaconBlock.Valid)
+			require.NotEmpty(t, demotion.SignedBeaconBlock.String)
+			require.True(t, demotion.SignedValidatorRegistration.Valid)
+			require.NotEmpty(t, demotion.SignedValidatorRegistration.String)
+		})
+	}
 }
 
 func TestGetBlockSubmissionEntry(t *testing.T) {
