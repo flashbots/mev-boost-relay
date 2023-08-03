@@ -536,6 +536,14 @@ func (api *RelayAPI) StopServer() (err error) {
 	return api.srv.Shutdown(context.Background())
 }
 
+func (api *RelayAPI) isCapella(slot uint64) bool {
+	return hasReachedFork(slot, api.capellaEpoch) && !hasReachedFork(slot, api.denebEpoch)
+}
+
+func (api *RelayAPI) isDeneb(slot uint64) bool {
+	return hasReachedFork(slot, api.denebEpoch)
+}
+
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	for valReg := range api.validatorRegC {
 		err := api.datastore.SaveValidatorRegistration(valReg)
@@ -1627,11 +1635,13 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
-	if hasReachedFork(submission.Slot, api.denebEpoch) && payload.Deneb == nil {
+	if api.isDeneb(submission.Slot) && payload.Deneb == nil {
 		log.Info("rejecting submission - non deneb payload for deneb fork")
 		api.RespondError(w, http.StatusBadRequest, "not deneb payload")
 		return false
-	} else if hasReachedFork(submission.Slot, api.capellaEpoch) && payload.Capella == nil {
+	}
+
+	if api.isCapella(submission.Slot) && payload.Capella == nil {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
 		return false

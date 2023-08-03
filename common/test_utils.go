@@ -10,16 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-builder-client/api/capella"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
+	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
+	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -74,9 +80,32 @@ var ValidPayloadRegisterValidator = apiv1.SignedValidatorRegistration{
 		"0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"),
 }
 
-func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) VersionedSubmitBlockRequest {
+func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version consensusspec.DataVersion) VersionedSubmitBlockRequest {
 	signature, err := ssz.SignMessage(bid, ssz.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
+	if version == consensusspec.DataVersionDeneb {
+		return VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: consensusspec.DataVersionDeneb,
+				Deneb: &deneb.SubmitBlockRequest{
+					Message:   &bid.BidTrace,
+					Signature: [96]byte(signature),
+					ExecutionPayload: &consensusdeneb.ExecutionPayload{ //nolint:exhaustruct
+						Transactions:  []bellatrix.Transaction{[]byte{0x03}},
+						Timestamp:     bid.Slot * 12, // 12 seconds per slot.
+						PrevRandao:    _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
+						Withdrawals:   []*consensuscapella.Withdrawal{},
+						BaseFeePerGas: uint256.NewInt(0),
+					},
+					BlobsBundle: &deneb.BlobsBundle{
+						Commitments: []consensusdeneb.KzgCommitment{},
+						Proofs:      []consensusdeneb.KzgProof{},
+						Blobs:       []consensusdeneb.Blob{},
+					},
+				},
+			},
+		}
+	}
 	return VersionedSubmitBlockRequest{
 		VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 			Version: consensusspec.DataVersionCapella,
@@ -92,6 +121,97 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2) Versioned
 			},
 		},
 	}
+}
+
+type CreateTestBlockSubmissionOpts struct {
+	relaySk bls.SecretKey
+	relayPk phase0.BLSPubKey
+	domain  phase0.Domain
+
+	Version        consensusspec.DataVersion
+	Slot           uint64
+	ParentHash     string
+	ProposerPubkey string
+}
+
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedSubmitBlindedBlockResponse, getHeaderResponse *spec.VersionedSignedBuilderBid) {
+	t.Helper()
+	var err error
+
+	slot := uint64(0)
+	relaySk := bls.SecretKey{}
+	relayPk := phase0.BLSPubKey{}
+	domain := phase0.Domain{}
+	proposerPk := phase0.BLSPubKey{}
+	parentHash := phase0.Hash32{}
+	version := consensusspec.DataVersionCapella
+
+	if opts != nil {
+		relaySk = opts.relaySk
+		relayPk = opts.relayPk
+		domain = opts.domain
+		slot = opts.Slot
+
+		if opts.ProposerPubkey != "" {
+			proposerPk, err = StrToPhase0Pubkey(opts.ProposerPubkey)
+			require.NoError(t, err)
+		}
+
+		if opts.ParentHash != "" {
+			parentHash, err = StrToPhase0Hash(opts.ParentHash)
+			require.NoError(t, err)
+		}
+
+		if opts.Version != consensusspec.DataVersionUnknown {
+			version = opts.Version
+		}
+	}
+
+	builderPk, err := StrToPhase0Pubkey(builderPubkey)
+	require.NoError(t, err)
+
+	bidTrace := &apiv1.BidTrace{ //nolint:exhaustruct
+		BuilderPubkey:  builderPk,
+		Value:          value,
+		Slot:           slot,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPk,
+	}
+
+	if version == consensusspec.DataVersionDeneb {
+		payload = &VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: version,
+				Deneb: &deneb.SubmitBlockRequest{
+					Message: bidTrace,
+					ExecutionPayload: &denebspec.ExecutionPayload{ //nolint:exhaustruct
+						BaseFeePerGas: uint256.NewInt(0),
+					},
+					BlobsBundle: &deneb.BlobsBundle{}, //nolint:exhaustruct
+					Signature:   phase0.BLSSignature{},
+				},
+			},
+		}
+	} else {
+		payload = &VersionedSubmitBlockRequest{
+			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: version,
+				Capella: &capella.SubmitBlockRequest{
+					Message:          bidTrace,
+					ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+					Signature:        phase0.BLSSignature{},
+				},
+			},
+		}
+	}
+
+	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
+	require.NoError(t, err)
+
+	getPayloadResponse, err = BuildGetPayloadResponse(payload)
+	require.NoError(t, err)
+
+	return payload, getPayloadResponse, getHeaderResponse
 }
 
 func LoadGzippedBytes(t *testing.T, filename string) []byte {

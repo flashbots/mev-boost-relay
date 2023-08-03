@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/jsonrpc"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -73,7 +74,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	if payload.Capella == nil {
 		return ErrNoCapellaPayload, nil
 	}
-	// TODO: add deneb support.
+
 	submission, err := common.GetBlockSubmissionInfo(&payload.VersionedSubmitBlockRequest)
 	if err != nil {
 		return err, nil
@@ -90,7 +91,12 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}
 
 	// Create and fire off JSON-RPC request
-	simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+	switch payload.Version {
+	case spec.DataVersionCapella:
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+	case spec.DataVersionDeneb:
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
+	}
 	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
 	return requestErr, validationErr
 }
