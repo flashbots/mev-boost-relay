@@ -12,25 +12,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-builder-client/api/deneb"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
-	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -175,97 +167,6 @@ func StrToPhase0Hash(s string) (ret phase0.Hash32, err error) {
 	}
 	copy(ret[:], hashBytes)
 	return ret, nil
-}
-
-type CreateTestBlockSubmissionOpts struct {
-	relaySk bls.SecretKey
-	relayPk phase0.BLSPubKey
-	domain  phase0.Domain
-
-	Version        consensusspec.DataVersion
-	Slot           uint64
-	ParentHash     string
-	ProposerPubkey string
-}
-
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedSubmitBlindedBlockResponse, getHeaderResponse *spec.VersionedSignedBuilderBid) {
-	t.Helper()
-	var err error
-
-	slot := uint64(0)
-	relaySk := bls.SecretKey{}
-	relayPk := phase0.BLSPubKey{}
-	domain := phase0.Domain{}
-	proposerPk := phase0.BLSPubKey{}
-	parentHash := phase0.Hash32{}
-	version := consensusspec.DataVersionCapella
-
-	if opts != nil {
-		relaySk = opts.relaySk
-		relayPk = opts.relayPk
-		domain = opts.domain
-		slot = opts.Slot
-
-		if opts.ProposerPubkey != "" {
-			proposerPk, err = StrToPhase0Pubkey(opts.ProposerPubkey)
-			require.NoError(t, err)
-		}
-
-		if opts.ParentHash != "" {
-			parentHash, err = StrToPhase0Hash(opts.ParentHash)
-			require.NoError(t, err)
-		}
-
-		if opts.Version != consensusspec.DataVersionUnknown {
-			version = opts.Version
-		}
-	}
-
-	builderPk, err := StrToPhase0Pubkey(builderPubkey)
-	require.NoError(t, err)
-
-	bidTrace := &apiv1.BidTrace{ //nolint:exhaustruct
-		BuilderPubkey:  builderPk,
-		Value:          value,
-		Slot:           slot,
-		ParentHash:     parentHash,
-		ProposerPubkey: proposerPk,
-	}
-
-	if version == consensusspec.DataVersionDeneb {
-		payload = &VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-				Version: version,
-				Deneb: &deneb.SubmitBlockRequest{
-					Message: bidTrace,
-					ExecutionPayload: &denebspec.ExecutionPayload{ //nolint:exhaustruct
-						BaseFeePerGas: uint256.NewInt(0),
-					},
-					BlobsBundle: &deneb.BlobsBundle{}, //nolint:exhaustruct
-					Signature:   phase0.BLSSignature{},
-				},
-			},
-		}
-	} else {
-		payload = &VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-				Version: version,
-				Capella: &capella.SubmitBlockRequest{
-					Message:          bidTrace,
-					ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
-					Signature:        phase0.BLSSignature{},
-				},
-			},
-		}
-	}
-
-	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
-	require.NoError(t, err)
-
-	getPayloadResponse, err = BuildGetPayloadResponse(payload)
-	require.NoError(t, err)
-
-	return payload, getPayloadResponse, getHeaderResponse
 }
 
 // GetEnvDurationSec returns the value of the environment variable as duration in seconds,
