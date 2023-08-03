@@ -1563,6 +1563,38 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	return true
 }
 
+func (api *RelayAPI) checkBuilderEntry(w http.ResponseWriter, log *logrus.Entry, builderPubkey phase0.BLSPubKey) (*blockBuilderCacheEntry, bool) {
+	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
+	if !ok {
+		log.Warnf("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
+		builderEntry = &blockBuilderCacheEntry{
+			status: common.BuilderStatus{
+				IsHighPrio:    false,
+				IsOptimistic:  false,
+				IsBlacklisted: false,
+			},
+			collateral: big.NewInt(0),
+		}
+	}
+
+	if builderEntry.status.IsBlacklisted {
+		log.Info("builder is blacklisted")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return builderEntry, false
+	}
+
+	// In case only high-prio requests are accepted, fail others
+	if api.ffDisableLowPrioBuilders && !builderEntry.status.IsHighPrio {
+		log.Info("rejecting low-prio builder (ff-disable-low-prio-builders)")
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		return builderEntry, false
+	}
+
+	return builderEntry, true
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -1677,36 +1709,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	builderPubkey := payload.BuilderPubkey()
-	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
+	builderEntry, ok := api.checkBuilderEntry(w, log, builderPubkey)
 	if !ok {
-		log.Warnf("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
-		builderEntry = &blockBuilderCacheEntry{
-			status: common.BuilderStatus{
-				IsHighPrio:    false,
-				IsOptimistic:  false,
-				IsBlacklisted: false,
-			},
-			collateral: big.NewInt(0),
-		}
-	}
-	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
-
-	if builderEntry.status.IsBlacklisted {
-		log.Info("builder is blacklisted")
-		time.Sleep(200 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// In case only high-prio requests are accepted, fail others
-	if api.ffDisableLowPrioBuilders && !builderEntry.status.IsHighPrio {
-		log.Info("rejecting low-prio builder (ff-disable-low-prio-builders)")
-		time.Sleep(200 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	log = log.WithField("timestampAfterChecks1", time.Now().UTC().UnixMilli())
+	log = log.WithFields(logrus.Fields{
+		"builderIsHighPrio":     builderEntry.status.IsHighPrio,
+		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
+	})
 
 	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, payload)
 	if !ok {

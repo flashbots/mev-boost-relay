@@ -36,6 +36,7 @@ const (
 	testParentHash      = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
 	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
+	testBuilderPubkey   = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 )
 
 var (
@@ -577,9 +578,9 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			gasLimit, cont := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
+			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
-			require.Equal(t, tc.expectOk, cont)
+			require.Equal(t, tc.expectOk, ok)
 		})
 	}
 }
@@ -723,8 +724,8 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			cont := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
-			require.Equal(t, tc.expectOk, cont)
+			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
+			require.Equal(t, tc.expectOk, ok)
 		})
 	}
 }
@@ -790,8 +791,71 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			cont := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
-			require.Equal(t, tc.expectOk, cont)
+			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
+			require.Equal(t, tc.expectOk, ok)
+		})
+	}
+}
+
+func TestCheckBuilderEntry(t *testing.T) {
+	builderPubkeyByte, err := hexutil.Decode(testBuilderPubkey)
+	require.NoError(t, err)
+	builderPubkey := phase0.BLSPubKey(builderPubkeyByte)
+	diffPubkey := builderPubkey
+	diffPubkey[0] = 0xff
+	cases := []struct {
+		description string
+		entry       *blockBuilderCacheEntry
+		pk          phase0.BLSPubKey
+		expectOk    bool
+	}{
+		{
+			description: "success",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsHighPrio: true,
+				},
+			},
+			pk:       builderPubkey,
+			expectOk: true,
+		},
+		{
+			description: "failure_blacklisted",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsBlacklisted: true, // set blacklisted to true to cause failure
+				},
+			},
+			pk:       builderPubkey,
+			expectOk: false,
+		},
+		{
+			description: "failure_low_prio",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsHighPrio: false, // set low-prio to cause failure
+				},
+			},
+			pk:       builderPubkey,
+			expectOk: false,
+		},
+		{
+			description: "failure_nil_entry_low_prio",
+			entry:       nil,
+			pk:          diffPubkey, // set to different pubkey, so no entry is found
+			expectOk:    false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			backend.relay.blockBuildersCache[tc.pk.String()] = tc.entry
+			backend.relay.ffDisableLowPrioBuilders = true
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			_, ok := backend.relay.checkBuilderEntry(w, log, builderPubkey)
+			require.Equal(t, tc.expectOk, ok)
 		})
 	}
 }
