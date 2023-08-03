@@ -1671,8 +1671,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	cont := api.checkSubmissionSlotDetails(w, log, headSlot, payload)
-	if !cont {
+	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload)
+	if !ok {
 		return
 	}
 
@@ -1708,8 +1708,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampAfterChecks1", time.Now().UTC().UnixMilli())
 
-	gasLimit, cont := api.checkSubmissionFeeRecipient(w, log, payload)
-	if !cont {
+	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, payload)
+	if !ok {
 		return
 	}
 
@@ -1730,8 +1730,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
-	cont = api.checkSubmissionPayloadAttrs(w, log, payload)
-	if !cont {
+	ok = api.checkSubmissionPayloadAttrs(w, log, payload)
+	if !ok {
 		return
 	}
 
