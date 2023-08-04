@@ -491,8 +491,8 @@ func TestGetBuilderLatestValue(t *testing.T) {
 		},
 	}
 
-	_, err = cache.client.TxPipelined(context.Background(), func(tx redis.Pipeliner) error {
-		return cache.SaveBuilderBid(context.Background(), tx, slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
+	_, err = cache.client.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
+		return cache.SaveBuilderBid(context.Background(), pipeliner, slot, parentHash, proposerPubkey, builderPubkey, time.Now().UTC(), getHeaderResp)
 	})
 	require.NoError(t, err)
 
@@ -518,7 +518,7 @@ func TestPipelineNilCheck(t *testing.T) {
 // 	err := cache.client.Set(context.Background(), key1, val, 0).Err()
 // 	require.NoError(t, err)
 
-// 	_, err = cache.client.TxPipelined(context.Background(), func(tx redis.Pipeliner) error {
+// 	_, err = cache.client.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
 // 		c := tx.Get(context.Background(), key1)
 // 		_, err := tx.Exec(context.Background())
 // 		require.NoError(t, err)
