@@ -107,7 +107,7 @@ func (c *MockBeaconInstance) addDelay() {
 	}
 }
 
-func (c *MockBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcastValidation BroadcastValidation) (code int, err error) {
+func (c *MockBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcaseMode BroadcastMode) (code int, err error) {
 	return 0, nil
 }
 

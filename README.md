@@ -43,10 +43,11 @@ The relay consists of three main components, which are designed to run and scale
 
 - The relay services need access to one or more beacon node for event subscriptions (in particular the `head` and `payload_attributes` topics).
 - You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
-- The beacon nodes need to support the []`payload_attributes` SSE event](https://github.com/ethereum/beacon-APIs/pull/305).
+- The beacon nodes need to support the [`payload_attributes` SSE event](https://github.com/ethereum/beacon-APIs/pull/305).
+- Support the [v2 publish block endpoint](https://github.com/ethereum/beacon-APIs/pull/317)
 - As of now, this is either:
-  - **Lighthouse+** (with `--always-prepare-payload` and `--prepare-payload-lookahead 12000` flags, and some junk feeRecipeint), with the [validate-before-broadcast patch](https://github.com/sigp/lighthouse/pull/4168). Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
-  - **Prysm** with the [validate-before-broadcast patch](https://github.com/prysmaticlabs/prysm/pull/12335)
+  - **Lighthouse+** [v4.3.0](https://github.com/sigp/lighthouse/releases) or later. Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
+  - **Prysm** [v4.0.6](https://github.com/prysmaticlabs/prysm/releases) or later.
 
 **Relays are strongly advised to run multiple beacon nodes!**
 * The reason is that on getPayload, the block has to be validated and broadcast by a local beacon node before it is returned to the proposer.
@@ -129,6 +130,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_SHUTDOWN_STOP_SENDING_BIDS` - whether API should stop sending bids during shutdown (nly useful in single-instance/testnet setups, default: `false`)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum, default: `4`)
 * `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: `3000`)
+* `BROADCAST_MODE` - which broadcast mode to use for block publishing (default: `consensus_and_equivocation`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: `100`)
