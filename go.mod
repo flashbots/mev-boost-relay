@@ -124,4 +124,6 @@ retract (
 
 replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20230802220600-85be1e39d33b
 
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230801235812-ab38c7f8cba1
+replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230810012152-c934f6ee3bee
+
+replace github.com/ethereum/go-ethereum => github.com/MariusVanDerWijden/go-ethereum v1.8.22-0.20230807121326-6861f29a109a
