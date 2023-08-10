@@ -6,12 +6,12 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.30.4
 	github.com/attestantio/go-builder-client v0.3.2-0.20230701110827-d0ecfee1ab62
-	github.com/attestantio/go-eth2-client v0.18.1-0.20230728160410-bc2888aaf7d7
+	github.com/attestantio/go-eth2-client v0.18.1
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
-	github.com/ethereum/go-ethereum v1.12.0
-	github.com/flashbots/go-boost-utils v1.7.1-0.20230625230411-8c44018f4777
+	github.com/ethereum/go-ethereum v1.12.1-0.20230714171903-34d507215951
+	github.com/flashbots/go-boost-utils v1.7.1-0.20230810161007-0f8601a1a222
 	github.com/flashbots/go-utils v0.4.8
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0
@@ -25,8 +25,8 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify v2.3.6+incompatible
 	go.uber.org/atomic v1.11.0
-	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
-	golang.org/x/text v0.12.0
+	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
+	golang.org/x/text v0.11.0
 )
 
 require (
@@ -41,6 +41,8 @@ require (
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.11.0 // indirect
+	github.com/crate-crypto/go-kzg-4844 v0.3.0 // indirect
+	github.com/ethereum/c-kzg-4844 v0.3.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
@@ -66,9 +68,11 @@ require (
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
+	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
+	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
@@ -117,4 +121,6 @@ retract (
 
 replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20230802220600-85be1e39d33b
 
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230801235812-ab38c7f8cba1
+replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230810012152-c934f6ee3bee
+
+replace github.com/ethereum/go-ethereum => github.com/MariusVanDerWijden/go-ethereum v1.8.22-0.20230807121326-6861f29a109a
