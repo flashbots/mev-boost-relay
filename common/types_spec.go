@@ -223,23 +223,26 @@ func CapellaUnblindSignedBlock(blindedBlock *apiv1capella.SignedBlindedBeaconBlo
 }
 
 func DenebUnblindSignedBlock(blindedBlock *apiv1deneb.SignedBlindedBeaconBlock, blockPayload *deneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *apiv1deneb.SignedBlockContents {
-	denebBlobSidecars := make([]*consensusdeneb.BlobSidecar, len(blockPayload.BlobsBundle.Blobs))
+	denebBlobSidecars := make([]*consensusdeneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
 
 	for i := range denebBlobSidecars {
-		denebBlobSidecars[i] = &consensusdeneb.BlobSidecar{
-			BlockRoot:       blockRoot,
-			Index:           consensusdeneb.BlobIndex(i),
-			Slot:            blindedBlock.Message.Slot,
-			BlockParentRoot: blindedBlock.Message.ParentRoot,
-			ProposerIndex:   blindedBlock.Message.ProposerIndex,
-			Blob:            blockPayload.BlobsBundle.Blobs[i],
-			KzgCommitment:   blockPayload.BlobsBundle.Commitments[i],
-			KzgProof:        blockPayload.BlobsBundle.Proofs[i],
+		denebBlobSidecars[i] = &consensusdeneb.SignedBlobSidecar{
+			Message: &consensusdeneb.BlobSidecar{
+				BlockRoot:       blockRoot,
+				Index:           consensusdeneb.BlobIndex(i),
+				Slot:            blindedBlock.Message.Slot,
+				BlockParentRoot: blindedBlock.Message.ParentRoot,
+				ProposerIndex:   blindedBlock.Message.ProposerIndex,
+				Blob:            blockPayload.BlobsBundle.Blobs[i],
+				KzgCommitment:   blockPayload.BlobsBundle.Commitments[i],
+				KzgProof:        blockPayload.BlobsBundle.Proofs[i],
+			},
+			Signature: denebBlobSidecars[i].Signature,
 		}
 	}
 	return &apiv1deneb.SignedBlockContents{
-		Message: &apiv1deneb.BlockContents{
-			Block: &consensusdeneb.BeaconBlock{
+		SignedBlock: &consensusdeneb.SignedBeaconBlock{
+			Message: &consensusdeneb.BeaconBlock{
 				Slot:          blindedBlock.Message.Slot,
 				ProposerIndex: blindedBlock.Message.ProposerIndex,
 				ParentRoot:    blindedBlock.Message.ParentRoot,
@@ -259,9 +262,9 @@ func DenebUnblindSignedBlock(blindedBlock *apiv1deneb.SignedBlindedBeaconBlock, 
 					BlobKzgCommitments:    blockPayload.BlobsBundle.Commitments,
 				},
 			},
-			BlobSidecars: denebBlobSidecars,
+			Signature: blindedBlock.Signature,
 		},
-		Signature: blindedBlock.Signature,
+		SignedBlobSidecars: denebBlobSidecars,
 	}
 }
 

@@ -17,10 +17,8 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
-	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -184,7 +182,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 				Version: version,
 				Deneb: &deneb.SubmitBlockRequest{
 					Message: bidTrace,
-					ExecutionPayload: &denebspec.ExecutionPayload{ //nolint:exhaustruct
+					ExecutionPayload: &consensusdeneb.ExecutionPayload{ //nolint:exhaustruct
 						BaseFeePerGas: uint256.NewInt(0),
 					},
 					BlobsBundle: &deneb.BlobsBundle{}, //nolint:exhaustruct
@@ -198,7 +196,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 				Version: version,
 				Capella: &capella.SubmitBlockRequest{
 					Message:          bidTrace,
-					ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
+					ExecutionPayload: &consensuscapella.ExecutionPayload{}, //nolint:exhaustruct
 					Signature:        phase0.BLSSignature{},
 				},
 			},
