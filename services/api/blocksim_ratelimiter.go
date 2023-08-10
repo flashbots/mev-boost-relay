@@ -91,10 +91,9 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}
 
 	// Create and fire off JSON-RPC request
-	switch payload.Version {
-	case spec.DataVersionCapella:
+	if payload.Version == spec.DataVersionDeneb {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
-	case spec.DataVersionDeneb:
+	} else {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
 	}
 	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
