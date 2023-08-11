@@ -102,7 +102,7 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 			msg := fmt.Sprintf("env: BROADCAST_MODE: invalid value %s, leaving to default value %s", broadcastModeStr, client.broadcastMode.String())
 			client.log.Warn(msg)
 		} else {
-			client.log.Info(fmt.Sprintf("env: BROADCAST_MODE: setting validation to %s", broadcastMode.String()))
+			client.log.Info(fmt.Sprintf("env: BROADCAST_MODE: setting mode to %s", broadcastMode.String()))
 			client.broadcastMode = broadcastMode
 		}
 	}
