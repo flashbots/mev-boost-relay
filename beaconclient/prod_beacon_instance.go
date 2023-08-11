@@ -256,8 +256,8 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
-func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcastValidation BroadcastValidation) (code int, err error) {
-	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastValidation.String())
+func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error) {
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella)
 	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers)

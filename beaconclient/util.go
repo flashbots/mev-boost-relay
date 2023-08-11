@@ -20,13 +20,13 @@ var (
 	StateIDJustified = "justified"
 )
 
-func parseBroadcastValidationString(s string) (BroadcastValidation, bool) {
-	broadcastValidationMap := map[string]BroadcastValidation{
+func parseBroadcastModeString(s string) (BroadcastMode, bool) {
+	broadcastModeMap := map[string]BroadcastMode{
 		"gossip":                     Gossip,
 		"consensus":                  Consensus,
 		"consensus_and_equivocation": ConsensusAndEquivocation,
 	}
-	b, ok := broadcastValidationMap[strings.ToLower(s)]
+	b, ok := broadcastModeMap[strings.ToLower(s)]
 	return b, ok
 }
 
