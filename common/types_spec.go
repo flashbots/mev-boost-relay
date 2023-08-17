@@ -297,17 +297,17 @@ type VersionedSubmitBlockRequest struct {
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
 
-	builderApiDeneb := new(builderApiDeneb.SubmitBlockRequest)
-	if err = builderApiDeneb.UnmarshalSSZ(input); err == nil {
+	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
+	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
-		r.Deneb = builderApiDeneb
+		r.Deneb = denebRequest
 		return nil
 	}
 
-	builderApiCapella := new(builderApiCapella.SubmitBlockRequest)
-	if err = builderApiCapella.UnmarshalSSZ(input); err == nil {
+	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
+	if err = capellaRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionCapella
-		r.Capella = builderApiCapella
+		r.Capella = capellaRequest
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
@@ -329,16 +329,17 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	builderApiDeneb := new(builderApiDeneb.SubmitBlockRequest)
-	if err = json.Unmarshal(input, builderApiDeneb); err == nil {
+	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
+	if err = json.Unmarshal(input, denebRequest); err == nil {
 		r.Version = spec.DataVersionDeneb
-		r.Deneb = builderApiDeneb
+		r.Deneb = denebRequest
 		return nil
 	}
-	builderApiCapella := new(builderApiCapella.SubmitBlockRequest)
-	if err = json.Unmarshal(input, builderApiCapella); err == nil {
+
+	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
+	if err = json.Unmarshal(input, capellaRequest); err == nil {
 		r.Version = spec.DataVersionCapella
-		r.Capella = builderApiCapella
+		r.Capella = capellaRequest
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest")
@@ -364,17 +365,17 @@ func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	builderApiDeneb := new(eth2ApiV1Deneb.SignedBlockContents)
-	if err = json.Unmarshal(input, builderApiDeneb); err == nil {
+	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
+	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
-		r.Deneb = builderApiDeneb
+		r.Deneb = denebContents
 		return nil
 	}
 
-	builderApiCapella := new(capella.SignedBeaconBlock)
-	if err = json.Unmarshal(input, builderApiCapella); err == nil {
+	capellaBlock := new(capella.SignedBeaconBlock)
+	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
-		r.Capella = builderApiCapella
+		r.Capella = capellaBlock
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SignedBeaconBlockRequest")
@@ -400,17 +401,17 @@ func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	builderApiDeneb := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
-	if err = json.Unmarshal(input, builderApiDeneb); err == nil {
+	denebContents := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
+	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
-		r.Deneb = builderApiDeneb
+		r.Deneb = denebContents
 		return nil
 	}
 
-	builderApiCapella := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
-	if err = json.Unmarshal(input, builderApiCapella); err == nil {
+	capellaBlock := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
-		r.Capella = builderApiCapella
+		r.Capella = capellaBlock
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SignedBlindedBeaconBlock")

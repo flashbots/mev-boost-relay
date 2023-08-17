@@ -54,7 +54,7 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 }
 
 func TestGetPayloadDatabaseDeneb(t *testing.T) {
-	// TODO: (builderApiDeneb) add execution payload and blobs bundle from goerli / devnet
+	// TODO: (deneb) add execution payload and blobs bundle from goerli / devnet
 	payloadBytes, err := json.Marshal(&builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 		ExecutionPayload: &deneb.ExecutionPayload{
 			BaseFeePerGas: uint256.NewInt(5),

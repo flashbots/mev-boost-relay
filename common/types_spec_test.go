@@ -83,7 +83,7 @@ func TestBuildGetPayloadResponse(t *testing.T) {
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		// TODO: (builderApiDeneb) add block request from goerli / devnet
+		// TODO: (deneb) add block request from goerli / devnet
 		submitBlockData := &VersionedSubmitBlockRequest{
 			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
 				Version: spec.DataVersionDeneb,
