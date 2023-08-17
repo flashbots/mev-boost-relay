@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -173,7 +173,7 @@ func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
 }
 
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
-func (ds *Datastore) SaveValidatorRegistration(entry apiv1.SignedValidatorRegistration) error {
+func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidatorRegistration) error {
 	// First save in the database
 	err := ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
 	if err != nil {
@@ -191,7 +191,7 @@ func (ds *Datastore) SaveValidatorRegistration(entry apiv1.SignedValidatorRegist
 }
 
 // GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
-func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	log = log.WithField("datastoreMethod", "GetGetPayloadResponse")
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
