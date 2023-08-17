@@ -745,7 +745,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "non_deneb_slot",
@@ -762,7 +762,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 					},
 				},
 			},
-			expectCont: false,
+			expectOk: false,
 		},
 		{
 			description: "failure_past_slot",
