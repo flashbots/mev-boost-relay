@@ -44,10 +44,11 @@ The relay consists of three main components, which are designed to run and scale
 - The relay services need access to one or more beacon node for event subscriptions (in particular the `head` and `payload_attributes` topics).
 - You can specify multiple beacon nodes by providing a comma separated list of beacon node URIs.
 - The beacon nodes need to support the [`payload_attributes` SSE event](https://github.com/ethereum/beacon-APIs/pull/305).
-- Support the [v2 publish block endpoint](https://github.com/ethereum/beacon-APIs/pull/317)
-- As of now, this is either:
+- Support the [v2 CL publish block endpoint](https://github.com/ethereum/beacon-APIs/pull/317) in the current main branch, since August 2. This is still
+  experimental and may or may not fully work. It requires at least one of these CL clients
   - **Lighthouse+** [v4.3.0](https://github.com/sigp/lighthouse/releases) or later. Here's a [quick guide](https://gist.github.com/metachris/bcae9ae42e2fc834804241f991351c4e) for setting up Lighthouse.
   - **Prysm** [v4.0.6](https://github.com/prysmaticlabs/prysm/releases) or later.
+- The latest release (v0.26) still uses the old V1 broadcast endpoint using CL clients with custom validate-before-broadcast patches (see [README of the release for more details](https://github.com/flashbots/mev-boost-relay/tree/v0.26#beacon-nodes--cl-clients))
 
 **Relays are strongly advised to run multiple beacon nodes!**
 * The reason is that on getPayload, the block has to be validated and broadcast by a local beacon node before it is returned to the proposer.
