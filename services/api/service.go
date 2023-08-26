@@ -409,7 +409,6 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
-
 	var foundCapellaEpoch, foundDenebEpoch bool
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
@@ -421,6 +420,10 @@ func (api *RelayAPI) StartServer() (err error) {
 			foundDenebEpoch = true
 			api.denebEpoch = fork.Epoch
 		}
+	}
+
+	if !foundCapellaEpoch || !foundDenebEpoch {
+		return ErrMissingForkVersions
 	}
 
 	// Print fork version information
