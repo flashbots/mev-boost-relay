@@ -142,9 +142,6 @@ func checkBLSPublicKeyHex(pkHex string) error {
 }
 
 func hasReachedFork(slot, forkEpoch uint64) bool {
-	if forkEpoch == 0 {
-		return false
-	}
 	currentEpoch := slot / common.SlotsPerEpoch
 	return currentEpoch >= forkEpoch
 }

@@ -371,6 +371,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	// Setup the test relay backend
 	backend.relay.headSlot.Store(headSlot)
 	backend.relay.capellaEpoch = 1
+	backend.relay.denebEpoch = 2
 	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 		Slot: headSlot,
