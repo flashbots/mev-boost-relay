@@ -727,6 +727,13 @@ func (r *RedisCache) GetFloorBidValue(ctx context.Context, tx redis.Pipeliner, s
 	return floorValue, nil
 }
 
+// SetFloorBidValue is used only for testing.
+func (r *RedisCache) SetFloorBidValue(slot uint64, parentHash, proposerPubkey, value string) error {
+	keyFloorBidValue := r.keyFloorBidValue(slot, parentHash, proposerPubkey)
+	err := r.client.Set(context.Background(), keyFloorBidValue, value, 0).Err()
+	return err
+}
+
 func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.Pipeline()
 }
