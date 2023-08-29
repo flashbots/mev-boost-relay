@@ -1275,11 +1275,88 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterSignatureVerify", time.Now().UTC().UnixMilli())
 	log.Info("getPayload request received")
 
-	// TODO: store signed blinded block in database (always)
+	var getPayloadResp *common.VersionedExecutionPayload
+	var msNeededForPublishing uint64
+
+	// Save information about delivered payload
+	defer func() {
+		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+		if err != nil {
+			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
+			return
+		}
+
+		err = api.db.SaveDeliveredPayload(bidTrace, payload, decodeTime, msNeededForPublishing)
+		if err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"bidTrace": bidTrace,
+				"payload":  payload,
+			}).Error("failed to save delivered payload")
+		}
+
+		// Increment builder stats
+		err = api.db.IncBlockBuilderStatsAfterGetPayload(bidTrace.BuilderPubkey.String())
+		if err != nil {
+			log.WithError(err).Error("failed to increment builder-stats after getPayload")
+		}
+
+		// Wait until optimistic blocks are complete.
+		api.optimisticBlocksWG.Wait()
+
+		// Check if there is a demotion for the winning block.
+		_, err = api.db.GetBuilderDemotion(bidTrace)
+		// If demotion not found, we are done!
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Info("no demotion in getPayload, successful block proposal")
+			return
+		}
+		if err != nil {
+			log.WithError(err).Error("failed to read demotion table in getPayload")
+			return
+		}
+		// Demotion found, update the demotion table with refund data.
+		builderPubkey := bidTrace.BuilderPubkey.String()
+		log = log.WithFields(logrus.Fields{
+			"builderPubkey": builderPubkey,
+			"slot":          bidTrace.Slot,
+			"blockHash":     bidTrace.BlockHash,
+		})
+		log.Warn("demotion found in getPayload, inserting refund justification")
+
+		// Prepare refund data.
+		signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+
+		// Get registration entry from the DB.
+		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				log.WithError(err).Error("no registration found for validator " + proposerPubkey.String())
+			} else {
+				log.WithError(err).Error("error reading validator registration")
+			}
+		}
+		var signedRegistration *boostTypes.SignedValidatorRegistration
+		if registrationEntry != nil {
+			signedRegistration, err = registrationEntry.ToSignedValidatorRegistration()
+			if err != nil {
+				log.WithError(err).Error("error converting registration to signed registration")
+			}
+		}
+
+		err = api.db.UpdateBuilderDemotion(bidTrace, signedBeaconBlock, signedRegistration)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"errorWritingRefundToDB": true,
+				"bidTrace":               bidTrace,
+				"signedBeaconBlock":      signedBeaconBlock,
+				"signedRegistration":     signedRegistration,
+			}).WithError(err).Error("unable to update builder demotion with refund justification")
+		}
+	}()
 
 	// Get the response - from Redis, Memcache or DB
 	// note that recent mev-boost versions only send getPayload to relays that provided the bid
-	getPayloadResp, err := api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
+	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed getting execution payload (1/2)")
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
@@ -1376,7 +1453,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	timeAfterPublish := time.Now().UTC().UnixMilli()
-	msNeededForPublishing := uint64(timeAfterPublish - timeBeforePublish)
+	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish)
 	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
 	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
 
@@ -1390,82 +1467,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"blockNumber": payload.BlockNumber(),
 	})
 	log.Info("execution payload delivered")
-
-	// Save information about delivered payload
-	go func() {
-		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
-		if err != nil {
-			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
-			return
-		}
-
-		err = api.db.SaveDeliveredPayload(bidTrace, payload, decodeTime, msNeededForPublishing)
-		if err != nil {
-			log.WithError(err).WithFields(logrus.Fields{
-				"bidTrace": bidTrace,
-				"payload":  payload,
-			}).Error("failed to save delivered payload")
-		}
-
-		// Increment builder stats
-		err = api.db.IncBlockBuilderStatsAfterGetPayload(bidTrace.BuilderPubkey.String())
-		if err != nil {
-			log.WithError(err).Error("failed to increment builder-stats after getPayload")
-		}
-
-		// Wait until optimistic blocks are complete.
-		api.optimisticBlocksWG.Wait()
-
-		// Check if there is a demotion for the winning block.
-		_, err = api.db.GetBuilderDemotion(bidTrace)
-		// If demotion not found, we are done!
-		if errors.Is(err, sql.ErrNoRows) {
-			log.Info("no demotion in getPayload, successful block proposal")
-			return
-		}
-		if err != nil {
-			log.WithError(err).Error("failed to read demotion table in getPayload")
-			return
-		}
-		// Demotion found, update the demotion table with refund data.
-		builderPubkey := bidTrace.BuilderPubkey.String()
-		log = log.WithFields(logrus.Fields{
-			"builderPubkey": builderPubkey,
-			"slot":          bidTrace.Slot,
-			"blockHash":     bidTrace.BlockHash,
-		})
-		log.Warn("demotion found in getPayload, inserting refund justification")
-
-		// Prepare refund data.
-		signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
-
-		// Get registration entry from the DB.
-		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				log.WithError(err).Error("no registration found for validator " + proposerPubkey.String())
-			} else {
-				log.WithError(err).Error("error reading validator registration")
-			}
-		}
-		var signedRegistration *boostTypes.SignedValidatorRegistration
-		if registrationEntry != nil {
-			signedRegistration, err = registrationEntry.ToSignedValidatorRegistration()
-			if err != nil {
-				log.WithError(err).Error("error converting registration to signed registration")
-			}
-		}
-
-		err = api.db.UpdateBuilderDemotion(bidTrace, signedBeaconBlock, signedRegistration)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"errorWritingRefundToDB": true,
-				"bidTrace":               bidTrace,
-				"signedBeaconBlock":      signedBeaconBlock,
-				"signedRegistration":     signedRegistration,
-			}).WithError(err).Error("unable to update builder demotion with refund justification")
-		}
-	}()
 }
 
 // --------------------
