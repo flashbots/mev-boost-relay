@@ -860,6 +860,93 @@ func TestCheckBuilderEntry(t *testing.T) {
 	}
 }
 
+func TestCheckFloorBidValue(t *testing.T) {
+	cases := []struct {
+		description          string
+		payload              *common.BuilderSubmitBlockRequest
+		cancellationsEnabled bool
+		floorValue           string
+		expectOk             bool
+	}{
+		{
+			description: "success",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(1),
+					},
+				},
+			},
+			expectOk: true,
+		},
+		{
+			description: "failure_slot_already_delivered",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot: 0,
+					},
+				},
+			},
+			expectOk: false,
+		},
+		{
+			description: "failure_cancellations_below_floor",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(1),
+					},
+				},
+			},
+			expectOk:             false,
+			cancellationsEnabled: true,
+			floorValue:           "2",
+		},
+		{
+			description: "failure_no_cancellations_at_floor",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(0),
+					},
+				},
+			},
+			expectOk: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			err := backend.redis.SetFloorBidValue(tc.payload.Slot(), tc.payload.ParentHash(), tc.payload.ProposerPubkey(), tc.floorValue)
+			require.Nil(t, err)
+
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			tx := backend.redis.NewTxPipeline()
+			simResultC := make(chan *blockSimResult, 1)
+			bfOpts := bidFloorOpts{
+				w:                    w,
+				tx:                   tx,
+				log:                  log,
+				cancellationsEnabled: tc.cancellationsEnabled,
+				simResultC:           simResultC,
+				payload:              tc.payload,
+			}
+			floor, log, ok := backend.relay.checkFloorBidValue(bfOpts)
+			require.Equal(t, tc.expectOk, ok)
+			if ok {
+				require.NotNil(t, floor)
+				require.NotNil(t, log)
+			}
+		})
+	}
+}
+
 func gzipBytes(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
