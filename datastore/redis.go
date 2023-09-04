@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -123,7 +123,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 
 		prefixGetHeaderResponse:    fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixExecPayloadCapella:   fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
-		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontenst-deneb", redisPrefix, prefix),
+		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontenst-builderApiDeneb", redisPrefix, prefix),
 		prefixBidTrace:             fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -351,9 +351,9 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 	return res, err
 }
 
-func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*spec.VersionedSignedBuilderBid, error) {
+func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*builderSpec.VersionedSignedBuilderBid, error) {
 	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
-	resp := new(spec.VersionedSignedBuilderBid)
+	resp := new(builderSpec.VersionedSignedBuilderBid)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
@@ -361,16 +361,16 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 	return resp, err
 }
 
-func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	resp, err := r.GetPayloadContentsDeneb(slot, proposerPubkey, blockHash)
 	if errors.Is(err, redis.Nil) {
-		// can't find deneb payload, try find capella payload
+		// can't find builderApiDeneb payload, try find capella payload
 		return r.GetExecutionPayloadCapella(slot, proposerPubkey, blockHash)
 	}
 	return resp, err
 }
 
-func (r *RedisCache) SavePayloadContentsDeneb(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *deneb.ExecutionPayloadAndBlobsBundle) (err error) {
+func (r *RedisCache) SavePayloadContentsDeneb(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) (err error) {
 	key := r.keyPayloadContentsDeneb(slot, proposerPubkey, blockHash)
 	b, err := execPayload.MarshalSSZ()
 	if err != nil {
@@ -379,8 +379,8 @@ func (r *RedisCache) SavePayloadContentsDeneb(ctx context.Context, tx redis.Pipe
 	return tx.Set(ctx, key, b, expiryBidCache).Err()
 }
 
-func (r *RedisCache) GetPayloadContentsDeneb(slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
-	denebPayloadContents := new(deneb.ExecutionPayloadAndBlobsBundle)
+func (r *RedisCache) GetPayloadContentsDeneb(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
+	denebPayloadContents := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 
 	key := r.keyPayloadContentsDeneb(slot, proposerPubkey, blockHash)
 	val, err := r.client.Get(context.Background(), key).Result()
@@ -393,8 +393,8 @@ func (r *RedisCache) GetPayloadContentsDeneb(slot uint64, proposerPubkey, blockH
 		return nil, err
 	}
 
-	return &api.VersionedSubmitBlindedBlockResponse{
-		Version: consensusspec.DataVersionDeneb,
+	return &builderApi.VersionedSubmitBlindedBlockResponse{
+		Version: spec.DataVersionDeneb,
 		Deneb:   denebPayloadContents,
 	}, nil
 }
@@ -408,7 +408,7 @@ func (r *RedisCache) SaveExecutionPayloadCapella(ctx context.Context, pipeliner 
 	return pipeliner.Set(ctx, key, b, expiryBidCache).Err()
 }
 
-func (r *RedisCache) GetExecutionPayloadCapella(slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func (r *RedisCache) GetExecutionPayloadCapella(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	capellaPayload := new(capella.ExecutionPayload)
 
 	key := r.keyExecPayloadCapella(slot, proposerPubkey, blockHash)
@@ -422,8 +422,8 @@ func (r *RedisCache) GetExecutionPayloadCapella(slot uint64, proposerPubkey, blo
 		return nil, err
 	}
 
-	return &api.VersionedSubmitBlindedBlockResponse{
-		Version: consensusspec.DataVersionCapella,
+	return &builderApi.VersionedSubmitBlindedBlockResponse{
+		Version: spec.DataVersionCapella,
 		Capella: capellaPayload,
 	}, nil
 }
@@ -454,7 +454,7 @@ func (r *RedisCache) GetBuilderLatestPayloadReceivedAt(ctx context.Context, pipe
 }
 
 // SaveBuilderBid saves the latest bid by a specific builder. TODO: use transaction to make these writes atomic
-func (r *RedisCache) SaveBuilderBid(ctx context.Context, pipeliner redis.Pipeliner, slot uint64, parentHash, proposerPubkey, builderPubkey string, receivedAt time.Time, headerResp *spec.VersionedSignedBuilderBid) (err error) {
+func (r *RedisCache) SaveBuilderBid(ctx context.Context, pipeliner redis.Pipeliner, slot uint64, parentHash, proposerPubkey, builderPubkey string, receivedAt time.Time, headerResp *builderSpec.VersionedSignedBuilderBid) (err error) {
 	// save the actual bid
 	keyLatestBid := r.keyLatestBidByBuilder(slot, parentHash, proposerPubkey, builderPubkey)
 	err = r.SetObjPipelined(ctx, pipeliner, keyLatestBid, headerResp, expiryBidCache)
@@ -502,7 +502,7 @@ type SaveBidAndUpdateTopBidResponse struct {
 	TimeUpdateFloor  time.Duration
 }
 
-func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *common.BidTraceV2, payload *common.VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedSubmitBlindedBlockResponse, getHeaderResponse *spec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
+func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *common.BidTraceV2, payload *common.VersionedSubmitBlockRequest, getPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse, getHeaderResponse *builderSpec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
 	var prevTime, nextTime time.Time
 	prevTime = time.Now()
 
@@ -548,17 +548,17 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	//
 	// 1. Save the execution payload
 	switch payload.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Capella)
 		if err != nil {
 			return state, err
 		}
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		err = r.SavePayloadContentsDeneb(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Deneb)
 		if err != nil {
 			return state, err
 		}
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return state, fmt.Errorf("unsupported payload version: %d", payload.Version) //nolint:goerr113
 	}
 

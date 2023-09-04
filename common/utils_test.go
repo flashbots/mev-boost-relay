@@ -7,13 +7,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attestantio/go-builder-client/api/bellatrix"
-	"github.com/attestantio/go-builder-client/api/capella"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/ethereum/go-ethereum/common"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
@@ -114,28 +114,28 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 		err      string
 	}{
 		{
-			name: "valid capella",
+			name: "valid builderApiCapella",
 			payload: &VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &capella.SubmitBlockRequest{
-						Message:          &apiv1.BidTrace{},
-						ExecutionPayload: &consensuscapella.ExecutionPayload{},
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message:          &builderApiV1.BidTrace{},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
 			expected: &BlockSubmissionInfo{
-				BidTrace: &apiv1.BidTrace{},
+				BidTrace: &builderApiV1.BidTrace{},
 			},
 		},
 		{
 			name: "unsupported version",
 			payload: &VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionBellatrix,
-					Bellatrix: &bellatrix.SubmitBlockRequest{
-						Message:          &apiv1.BidTrace{},
-						ExecutionPayload: &consensusbellatrix.ExecutionPayload{},
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionBellatrix,
+					Bellatrix: &builderApiBellatrix.SubmitBlockRequest{
+						Message:          &builderApiV1.BidTrace{},
+						ExecutionPayload: &bellatrix.ExecutionPayload{},
 					},
 				},
 			},
@@ -145,8 +145,8 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 		{
 			name: "missing data",
 			payload: &VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
 				},
 			},
 			expected: nil,
@@ -155,10 +155,10 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 		{
 			name: "missing message",
 			payload: &VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &capella.SubmitBlockRequest{
-						ExecutionPayload: &consensuscapella.ExecutionPayload{},
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -168,10 +168,10 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 		{
 			name: "missing execution payload",
 			payload: &VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &capella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{},
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{},
 					},
 				},
 			},

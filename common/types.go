@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -188,13 +188,13 @@ func (p PubkeyHex) String() string {
 }
 
 type BuilderGetValidatorsResponseEntry struct {
-	Slot           uint64                             `json:"slot,string"`
-	ValidatorIndex uint64                             `json:"validator_index,string"`
-	Entry          *apiv1.SignedValidatorRegistration `json:"entry"`
+	Slot           uint64                                    `json:"slot,string"`
+	ValidatorIndex uint64                                    `json:"validator_index,string"`
+	Entry          *builderApiV1.SignedValidatorRegistration `json:"entry"`
 }
 
 type BidTraceV2 struct {
-	apiv1.BidTrace
+	builderApiV1.BidTrace
 	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
 	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
 }
@@ -241,7 +241,7 @@ func (b *BidTraceV2) UnmarshalJSON(data []byte) error {
 	b.NumTx = params.NumTx
 	b.BlockNumber = params.BlockNumber
 
-	bidTrace := new(apiv1.BidTrace)
+	bidTrace := new(builderApiV1.BidTrace)
 	err = json.Unmarshal(data, bidTrace)
 	if err != nil {
 		return err
@@ -328,7 +328,7 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 }
 
 type BlockSubmissionInfo struct {
-	BidTrace                   *apiv1.BidTrace
+	BidTrace                   *builderApiV1.BidTrace
 	Slot                       uint64
 	BlockHash                  phase0.Hash32
 	ParentHash                 phase0.Hash32
@@ -336,7 +336,7 @@ type BlockSubmissionInfo struct {
 	ExecutionPayloadParentHash phase0.Hash32
 	Builder                    phase0.BLSPubKey
 	Proposer                   phase0.BLSPubKey
-	ProposerFeeRecipient       consensusbellatrix.ExecutionAddress
+	ProposerFeeRecipient       bellatrix.ExecutionAddress
 	GasUsed                    uint64
 	GasLimit                   uint64
 	Timestamp                  uint64
@@ -344,8 +344,8 @@ type BlockSubmissionInfo struct {
 	Value                      *uint256.Int
 	PrevRandao                 phase0.Hash32
 	Signature                  phase0.BLSSignature
-	Transactions               []consensusbellatrix.Transaction
-	Withdrawals                []*consensuscapella.Withdrawal
+	Transactions               []bellatrix.Transaction
+	Withdrawals                []*capella.Withdrawal
 }
 
 /*

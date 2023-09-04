@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/spec"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +45,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 }
 
 func TestSSZGetHeaderResponse(t *testing.T) {
-	payload := new(spec.VersionedSignedBuilderBid)
+	payload := new(builderSpec.VersionedSignedBuilderBid)
 
 	byteValue, err := os.ReadFile("../testdata/getHeaderResponseCapella_Mainnet.json")
 	require.NoError(t, err)
@@ -72,14 +72,14 @@ func BenchmarkDecoding(b *testing.B) {
 	sszBytes, err := os.ReadFile("../testdata/getHeaderResponseCapella_Mainnet.ssz")
 	require.NoError(b, err)
 
-	payload := new(spec.VersionedSignedBuilderBid)
+	payload := new(builderSpec.VersionedSignedBuilderBid)
 	b.Run("json", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			err = json.Unmarshal(jsonBytes, &payload)
 			require.NoError(b, err)
 		}
 	})
-	payload.Capella = new(capella.SignedBuilderBid)
+	payload.Capella = new(builderApiCapella.SignedBuilderBid)
 	b.Run("ssz", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			err = payload.Capella.UnmarshalSSZ(sszBytes)
