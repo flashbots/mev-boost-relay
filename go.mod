@@ -26,7 +26,7 @@ require (
 	github.com/tdewolff/minify v2.3.6+incompatible
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
-	golang.org/x/text v0.12.0
+	golang.org/x/text v0.13.0
 )
 
 require (
