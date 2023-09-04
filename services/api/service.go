@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
@@ -194,7 +194,7 @@ type RelayAPI struct {
 
 	blockSimRateLimiter IBlockSimRateLimiter
 
-	validatorRegC chan apiv1.SignedValidatorRegistration
+	validatorRegC chan builderApiV1.SignedValidatorRegistration
 
 	// used to wait on any active getPayload calls on shutdown
 	getPayloadCallsInFlight sync.WaitGroup
@@ -283,7 +283,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		proposerDutiesResponse: &[]byte{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
-		validatorRegC: make(chan apiv1.SignedValidatorRegistration, 450_000),
+		validatorRegC: make(chan builderApiV1.SignedValidatorRegistration, 450_000),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -920,7 +920,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
-	parseRegistration := func(value []byte) (reg *apiv1.SignedValidatorRegistration, err error) {
+	parseRegistration := func(value []byte) (reg *builderApiV1.SignedValidatorRegistration, err error) {
 		// Pubkey
 		_pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
 		if err != nil {
@@ -980,8 +980,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Construct and return full registration object
-		reg = &apiv1.SignedValidatorRegistration{
-			Message: &apiv1.ValidatorRegistration{
+		reg = &builderApiV1.SignedValidatorRegistration{
+			Message: &builderApiV1.ValidatorRegistration{
 				FeeRecipient: feeRecipient,
 				GasLimit:     gasLimit,
 				Timestamp:    time.Unix(timestamp, 0),

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -204,7 +204,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	// Convert db entries to signed validator registration type
-	signedValidatorRegistrations := make(map[string]*apiv1.SignedValidatorRegistration)
+	signedValidatorRegistrations := make(map[string]*builderApiV1.SignedValidatorRegistration)
 	for _, regEntry := range validatorRegistrationEntries {
 		signedEntry, err := regEntry.ToSignedValidatorRegistration()
 		if err != nil {

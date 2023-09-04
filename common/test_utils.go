@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
-	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -66,8 +66,8 @@ func _HexToHash(s string) (ret phase0.Hash32) {
 	return ret
 }
 
-var ValidPayloadRegisterValidator = apiv1.SignedValidatorRegistration{
-	Message: &apiv1.ValidatorRegistration{
+var ValidPayloadRegisterValidator = builderApiV1.SignedValidatorRegistration{
+	Message: &builderApiV1.ValidatorRegistration{
 		FeeRecipient: _HexToAddress("0xdb65fEd33dc262Fe09D9a2Ba8F80b329BA25f941"),
 		Timestamp:    time.Unix(1606824043, 0),
 		GasLimit:     30000000,
@@ -78,43 +78,43 @@ var ValidPayloadRegisterValidator = apiv1.SignedValidatorRegistration{
 		"0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"),
 }
 
-func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version consensusspec.DataVersion) VersionedSubmitBlockRequest {
+func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version spec.DataVersion) VersionedSubmitBlockRequest {
 	signature, err := ssz.SignMessage(bid, ssz.DomainBuilder, sk)
 	check(err, " SignMessage: ", bid, sk)
-	if version == consensusspec.DataVersionDeneb {
+	if version == spec.DataVersionDeneb {
 		return VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-				Version: consensusspec.DataVersionDeneb,
-				Deneb: &deneb.SubmitBlockRequest{
+			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+				Version: spec.DataVersionDeneb,
+				Deneb: &builderApiDeneb.SubmitBlockRequest{
 					Message:   &bid.BidTrace,
 					Signature: [96]byte(signature),
-					ExecutionPayload: &consensusdeneb.ExecutionPayload{ //nolint:exhaustruct
+					ExecutionPayload: &deneb.ExecutionPayload{ //nolint:exhaustruct
 						Transactions:  []bellatrix.Transaction{[]byte{0x03}},
 						Timestamp:     bid.Slot * 12, // 12 seconds per slot.
 						PrevRandao:    _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
-						Withdrawals:   []*consensuscapella.Withdrawal{},
+						Withdrawals:   []*capella.Withdrawal{},
 						BaseFeePerGas: uint256.NewInt(0),
 					},
-					BlobsBundle: &deneb.BlobsBundle{
-						Commitments: []consensusdeneb.KzgCommitment{},
-						Proofs:      []consensusdeneb.KzgProof{},
-						Blobs:       []consensusdeneb.Blob{},
+					BlobsBundle: &builderApiDeneb.BlobsBundle{
+						Commitments: []deneb.KzgCommitment{},
+						Proofs:      []deneb.KzgProof{},
+						Blobs:       []deneb.Blob{},
 					},
 				},
 			},
 		}
 	}
 	return VersionedSubmitBlockRequest{
-		VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
-			Version: consensusspec.DataVersionCapella,
-			Capella: &capella.SubmitBlockRequest{
+		VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+			Version: spec.DataVersionCapella,
+			Capella: &builderApiCapella.SubmitBlockRequest{
 				Message:   &bid.BidTrace,
 				Signature: [96]byte(signature),
-				ExecutionPayload: &consensuscapella.ExecutionPayload{ //nolint:exhaustruct
+				ExecutionPayload: &capella.ExecutionPayload{ //nolint:exhaustruct
 					Transactions: []bellatrix.Transaction{[]byte{0x03}},
 					Timestamp:    bid.Slot * 12, // 12 seconds per slot.
 					PrevRandao:   _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
-					Withdrawals:  []*consensuscapella.Withdrawal{},
+					Withdrawals:  []*capella.Withdrawal{},
 				},
 			},
 		},
@@ -126,13 +126,13 @@ type CreateTestBlockSubmissionOpts struct {
 	relayPk phase0.BLSPubKey
 	domain  phase0.Domain
 
-	Version        consensusspec.DataVersion
+	Version        spec.DataVersion
 	Slot           uint64
 	ParentHash     string
 	ProposerPubkey string
 }
 
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *api.VersionedSubmitBlindedBlockResponse, getHeaderResponse *spec.VersionedSignedBuilderBid) {
+func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint256.Int, opts *CreateTestBlockSubmissionOpts) (payload *VersionedSubmitBlockRequest, getPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse, getHeaderResponse *builderSpec.VersionedSignedBuilderBid) {
 	t.Helper()
 	var err error
 
@@ -142,7 +142,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	domain := phase0.Domain{}
 	proposerPk := phase0.BLSPubKey{}
 	parentHash := phase0.Hash32{}
-	version := consensusspec.DataVersionCapella
+	version := spec.DataVersionCapella
 
 	if opts != nil {
 		relaySk = opts.relaySk
@@ -160,7 +160,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 			require.NoError(t, err)
 		}
 
-		if opts.Version != consensusspec.DataVersionUnknown {
+		if opts.Version != spec.DataVersionUnknown {
 			version = opts.Version
 		}
 	}
@@ -168,7 +168,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 	builderPk, err := StrToPhase0Pubkey(builderPubkey)
 	require.NoError(t, err)
 
-	bidTrace := &apiv1.BidTrace{ //nolint:exhaustruct
+	bidTrace := &builderApiV1.BidTrace{ //nolint:exhaustruct
 		BuilderPubkey:  builderPk,
 		Value:          value,
 		Slot:           slot,
@@ -176,27 +176,27 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 		ProposerPubkey: proposerPk,
 	}
 
-	if version == consensusspec.DataVersionDeneb {
+	if version == spec.DataVersionDeneb {
 		payload = &VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 				Version: version,
-				Deneb: &deneb.SubmitBlockRequest{
+				Deneb: &builderApiDeneb.SubmitBlockRequest{
 					Message: bidTrace,
-					ExecutionPayload: &consensusdeneb.ExecutionPayload{ //nolint:exhaustruct
+					ExecutionPayload: &deneb.ExecutionPayload{ //nolint:exhaustruct
 						BaseFeePerGas: uint256.NewInt(0),
 					},
-					BlobsBundle: &deneb.BlobsBundle{}, //nolint:exhaustruct
+					BlobsBundle: &builderApiDeneb.BlobsBundle{}, //nolint:exhaustruct
 					Signature:   phase0.BLSSignature{},
 				},
 			},
 		}
 	} else {
 		payload = &VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
+			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{ //nolint:exhaustruct
 				Version: version,
-				Capella: &capella.SubmitBlockRequest{
+				Capella: &builderApiCapella.SubmitBlockRequest{
 					Message:          bidTrace,
-					ExecutionPayload: &consensuscapella.ExecutionPayload{}, //nolint:exhaustruct
+					ExecutionPayload: &capella.ExecutionPayload{}, //nolint:exhaustruct
 					Signature:        phase0.BLSSignature{},
 				},
 			},

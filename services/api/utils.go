@@ -3,12 +3,12 @@ package api
 import (
 	"fmt"
 
-	"github.com/attestantio/go-builder-client/api"
+	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
-	utildeneb "github.com/attestantio/go-eth2-client/util/deneb"
+	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
+	eth2UtilDeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -46,16 +46,16 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	if w == nil {
 		return phase0.Root{}, ErrNoWithdrawals
 	}
-	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: w}
+	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
 }
 
-func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBlockRequest, payload *api.VersionedSubmitBlindedBlockResponse) error {
+func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBlockRequest, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
 	if bb.Version != payload.Version {
 		return errors.Wrap(ErrPayloadMismatch, fmt.Sprintf("beacon block version %d does not match payload version %d", bb.Version, payload.Version))
 	}
 
-	versionedPayload := &api.VersionedExecutionPayload{ //nolint:exhaustivestruct
+	versionedPayload := &builderApi.VersionedExecutionPayload{ //nolint:exhaustivestruct
 		Version: payload.Version,
 	}
 	switch bb.Version {
@@ -118,7 +118,7 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBloc
 			if blindedSidecar.Message.KzgProof != payload.Deneb.BlobsBundle.Proofs[i] {
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG proof at index %d", i))
 			}
-			blobRootHelper := utildeneb.BeaconBlockBlob{Blob: payload.Deneb.BlobsBundle.Blobs[i]}
+			blobRootHelper := eth2UtilDeneb.BeaconBlockBlob{Blob: payload.Deneb.BlobsBundle.Blobs[i]}
 			blobRoot, err := blobRootHelper.HashTreeRoot()
 			if err != nil {
 				return errors.New(fmt.Sprintf("failed to compute blob root at index %d", i))

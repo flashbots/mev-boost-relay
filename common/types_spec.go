@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusapi "github.com/attestantio/go-eth2-client/api"
-	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
-	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
-	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	eth2Api "github.com/attestantio/go-eth2-client/api"
+	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utildeneb "github.com/attestantio/go-eth2-client/util/deneb"
+	eth2UtilDeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -39,7 +39,7 @@ var NilResponse = struct{}{}
 
 var ZeroU256 = boostTypes.IntToU256(0)
 
-func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -48,9 +48,9 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		return nil, ErrMissingSecretKey
 	}
 
-	versionedPayload := &api.VersionedExecutionPayload{Version: payload.Version}
+	versionedPayload := &builderApi.VersionedExecutionPayload{Version: payload.Version}
 	switch payload.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		versionedPayload.Capella = payload.Capella.ExecutionPayload
 		header, err := utils.PayloadToPayloadHeader(versionedPayload)
 		if err != nil {
@@ -60,11 +60,11 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		return &spec.VersionedSignedBuilderBid{
-			Version: consensusspec.DataVersionCapella,
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionCapella,
 			Capella: signedBuilderBid.Capella,
 		}, nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		versionedPayload.Deneb = payload.Deneb.ExecutionPayload
 		header, err := utils.PayloadToPayloadHeader(versionedPayload)
 		if err != nil {
@@ -74,47 +74,47 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		return &spec.VersionedSignedBuilderBid{
-			Version: consensusspec.DataVersionDeneb,
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionDeneb,
 			Deneb:   signedBuilderBid.Deneb,
 		}, nil
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrInvalidVersion
 	default:
 		return nil, ErrEmptyPayload
 	}
 }
 
-func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	switch payload.Version {
-	case consensusspec.DataVersionCapella:
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionCapella,
+	case spec.DataVersionCapella:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
 			Capella: payload.Capella.ExecutionPayload,
 		}, nil
-	case consensusspec.DataVersionDeneb:
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionDeneb,
-			Deneb: &deneb.ExecutionPayloadAndBlobsBundle{
+	case spec.DataVersionDeneb:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
+			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: payload.Deneb.ExecutionPayload,
 				BlobsBundle:      payload.Deneb.BlobsBundle,
 			},
 		}, nil
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrInvalidVersion
 	}
 	return nil, ErrEmptyPayload
 }
 
-func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *api.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*spec.VersionedSignedBuilderBid, error) {
+func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	value, err := payload.Value()
 	if err != nil {
 		return nil, err
 	}
 
 	switch payload.Version {
-	case consensusspec.DataVersionCapella:
-		builderBid := capella.BuilderBid{
+	case spec.DataVersionCapella:
+		builderBid := builderApiCapella.BuilderBid{
 			Value:  value,
 			Header: header.Capella,
 			Pubkey: *pubkey,
@@ -125,30 +125,30 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			return nil, err
 		}
 
-		return &spec.VersionedSignedBuilderBid{
-			Version: consensusspec.DataVersionCapella,
-			Capella: &capella.SignedBuilderBid{
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionCapella,
+			Capella: &builderApiCapella.SignedBuilderBid{
 				Message:   &builderBid,
 				Signature: sig,
 			},
 		}, nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		var blobRoots []phase0.Root
 		for i, blob := range payload.Deneb.BlobsBundle.Blobs {
-			blobRootHelper := utildeneb.BeaconBlockBlob{Blob: blob}
+			blobRootHelper := eth2UtilDeneb.BeaconBlockBlob{Blob: blob}
 			root, err := blobRootHelper.HashTreeRoot()
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to calculate blob root at blob index %d", i))
 			}
 			blobRoots = append(blobRoots, root)
 		}
-		blindedBlobRoots := deneb.BlindedBlobsBundle{
+		blindedBlobRoots := builderApiDeneb.BlindedBlobsBundle{
 			Commitments: payload.Deneb.BlobsBundle.Commitments,
 			Proofs:      payload.Deneb.BlobsBundle.Proofs,
 			BlobRoots:   blobRoots,
 		}
 
-		builderBid := deneb.BuilderBid{
+		builderBid := builderApiDeneb.BuilderBid{
 			Value:              value,
 			Header:             header.Deneb,
 			BlindedBlobsBundle: &blindedBlobRoots,
@@ -160,52 +160,52 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			return nil, err
 		}
 
-		return &spec.VersionedSignedBuilderBid{
-			Version: consensusspec.DataVersionDeneb,
-			Deneb: &deneb.SignedBuilderBid{
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionDeneb,
+			Deneb: &builderApiDeneb.SignedBuilderBid{
 				Message:   &builderBid,
 				Signature: sig,
 			},
 		}, nil
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version.String()))
 	}
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, blockPayload *api.VersionedSubmitBlindedBlockResponse) (*VersionedSignedBlockRequest, error) {
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, blockPayload *builderApi.VersionedSubmitBlindedBlockResponse) (*VersionedSignedBlockRequest, error) {
 	signedBeaconBlock := VersionedSignedBlockRequest{
-		consensusapi.VersionedBlockRequest{ //nolint:exhaustruct
+		eth2Api.VersionedBlockRequest{ //nolint:exhaustruct
 			Version: signedBlindedBeaconBlock.Version,
 		},
 	}
 	switch signedBlindedBeaconBlock.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 		signedBeaconBlock.Capella = CapellaUnblindSignedBlock(capellaBlindedBlock, blockPayload.Capella)
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		denebBlindedBlock := signedBlindedBeaconBlock.Deneb.SignedBlindedBlock
 		blockRoot, err := denebBlindedBlock.Message.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb, blockRoot)
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version.String()))
 	}
 	return &signedBeaconBlock, nil
 }
 
-func CapellaUnblindSignedBlock(blindedBlock *apiv1capella.SignedBlindedBeaconBlock, executionPayload *consensuscapella.ExecutionPayload) *consensuscapella.SignedBeaconBlock {
-	return &consensuscapella.SignedBeaconBlock{
+func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaconBlock, executionPayload *capella.ExecutionPayload) *capella.SignedBeaconBlock {
+	return &capella.SignedBeaconBlock{
 		Signature: blindedBlock.Signature,
-		Message: &consensuscapella.BeaconBlock{
+		Message: &capella.BeaconBlock{
 			Slot:          blindedBlock.Message.Slot,
 			ProposerIndex: blindedBlock.Message.ProposerIndex,
 			ParentRoot:    blindedBlock.Message.ParentRoot,
 			StateRoot:     blindedBlock.Message.StateRoot,
-			Body: &consensuscapella.BeaconBlockBody{
+			Body: &capella.BeaconBlockBody{
 				BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 				RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
 				ETH1Data:              blindedBlock.Message.Body.ETH1Data,
@@ -222,14 +222,14 @@ func CapellaUnblindSignedBlock(blindedBlock *apiv1capella.SignedBlindedBeaconBlo
 	}
 }
 
-func DenebUnblindSignedBlock(blindedBlock *apiv1deneb.SignedBlindedBeaconBlock, blockPayload *deneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *apiv1deneb.SignedBlockContents {
-	denebBlobSidecars := make([]*consensusdeneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
+func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
+	denebBlobSidecars := make([]*deneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
 
 	for i := range denebBlobSidecars {
-		denebBlobSidecars[i] = &consensusdeneb.SignedBlobSidecar{
-			Message: &consensusdeneb.BlobSidecar{
+		denebBlobSidecars[i] = &deneb.SignedBlobSidecar{
+			Message: &deneb.BlobSidecar{
 				BlockRoot:       blockRoot,
-				Index:           consensusdeneb.BlobIndex(i),
+				Index:           deneb.BlobIndex(i),
 				Slot:            blindedBlock.Message.Slot,
 				BlockParentRoot: blindedBlock.Message.ParentRoot,
 				ProposerIndex:   blindedBlock.Message.ProposerIndex,
@@ -240,14 +240,14 @@ func DenebUnblindSignedBlock(blindedBlock *apiv1deneb.SignedBlindedBeaconBlock, 
 			Signature: denebBlobSidecars[i].Signature,
 		}
 	}
-	return &apiv1deneb.SignedBlockContents{
-		SignedBlock: &consensusdeneb.SignedBeaconBlock{
-			Message: &consensusdeneb.BeaconBlock{
+	return &eth2ApiV1Deneb.SignedBlockContents{
+		SignedBlock: &deneb.SignedBeaconBlock{
+			Message: &deneb.BeaconBlock{
 				Slot:          blindedBlock.Message.Slot,
 				ProposerIndex: blindedBlock.Message.ProposerIndex,
 				ParentRoot:    blindedBlock.Message.ParentRoot,
 				StateRoot:     blindedBlock.Message.StateRoot,
-				Body: &consensusdeneb.BeaconBlockBody{
+				Body: &deneb.BeaconBlockBody{
 					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 					RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
 					ETH1Data:              blindedBlock.Message.Body.ETH1Data,
@@ -291,23 +291,23 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 }
 
 type VersionedSubmitBlockRequest struct {
-	spec.VersionedSubmitBlockRequest
+	builderSpec.VersionedSubmitBlockRequest
 }
 
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
 
-	deneb := new(deneb.SubmitBlockRequest)
-	if err = deneb.UnmarshalSSZ(input); err == nil {
-		r.Version = consensusspec.DataVersionDeneb
-		r.Deneb = deneb
+	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
+	if err = denebRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = denebRequest
 		return nil
 	}
 
-	capella := new(capella.SubmitBlockRequest)
-	if err = capella.UnmarshalSSZ(input); err == nil {
-		r.Version = consensusspec.DataVersionCapella
-		r.Capella = capella
+	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
+	if err = capellaRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionCapella
+		r.Capella = capellaRequest
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
@@ -315,11 +315,11 @@ func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 
 func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
@@ -329,32 +329,33 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	deneb := new(deneb.SubmitBlockRequest)
-	if err = json.Unmarshal(input, deneb); err == nil {
-		r.Version = consensusspec.DataVersionDeneb
-		r.Deneb = deneb
+	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
+	if err = json.Unmarshal(input, denebRequest); err == nil {
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = denebRequest
 		return nil
 	}
-	capella := new(capella.SubmitBlockRequest)
-	if err = json.Unmarshal(input, capella); err == nil {
-		r.Version = consensusspec.DataVersionCapella
-		r.Capella = capella
+
+	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
+	if err = json.Unmarshal(input, capellaRequest); err == nil {
+		r.Version = spec.DataVersionCapella
+		r.Capella = capellaRequest
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest")
 }
 
 type VersionedSignedBlockRequest struct {
-	consensusapi.VersionedBlockRequest
+	eth2Api.VersionedBlockRequest
 }
 
 func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
@@ -364,33 +365,33 @@ func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	deneb := new(apiv1deneb.SignedBlockContents)
-	if err = json.Unmarshal(input, deneb); err == nil {
-		r.Version = consensusspec.DataVersionDeneb
-		r.Deneb = deneb
+	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
+	if err = json.Unmarshal(input, denebContents); err == nil {
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = denebContents
 		return nil
 	}
 
-	capella := new(consensuscapella.SignedBeaconBlock)
-	if err = json.Unmarshal(input, capella); err == nil {
-		r.Version = consensusspec.DataVersionCapella
-		r.Capella = capella
+	capellaBlock := new(capella.SignedBeaconBlock)
+	if err = json.Unmarshal(input, capellaBlock); err == nil {
+		r.Version = spec.DataVersionCapella
+		r.Capella = capellaBlock
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SignedBeaconBlockRequest")
 }
 
 type VersionedSignedBlindedBlockRequest struct {
-	consensusapi.VersionedBlindedBlockRequest
+	eth2Api.VersionedBlindedBlockRequest
 }
 
 func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
@@ -400,17 +401,17 @@ func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	deneb := new(apiv1deneb.SignedBlindedBlockContents)
-	if err = json.Unmarshal(input, deneb); err == nil {
-		r.Version = consensusspec.DataVersionDeneb
-		r.Deneb = deneb
+	denebContents := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
+	if err = json.Unmarshal(input, denebContents); err == nil {
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = denebContents
 		return nil
 	}
 
-	capella := new(apiv1capella.SignedBlindedBeaconBlock)
-	if err = json.Unmarshal(input, capella); err == nil {
-		r.Version = consensusspec.DataVersionCapella
-		r.Capella = capella
+	capellaBlock := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+	if err = json.Unmarshal(input, capellaBlock); err == nil {
+		r.Version = spec.DataVersionCapella
+		r.Capella = capellaBlock
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SignedBlindedBeaconBlock")

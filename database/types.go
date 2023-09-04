@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/go-boost-utils/utils"
 )
 
@@ -61,7 +61,7 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
-func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*apiv1.SignedValidatorRegistration, error) {
+func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*builderApiV1.SignedValidatorRegistration, error) {
 	pubkey, err := utils.HexToPubkey(reg.Pubkey)
 	if err != nil {
 		return nil, err
@@ -77,8 +77,8 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*apiv1.Si
 		return nil, err
 	}
 
-	return &apiv1.SignedValidatorRegistration{
-		Message: &apiv1.ValidatorRegistration{
+	return &builderApiV1.SignedValidatorRegistration{
+		Message: &builderApiV1.ValidatorRegistration{
 			Pubkey:       pubkey,
 			FeeRecipient: feeRec,
 			Timestamp:    time.Unix(int64(reg.Timestamp), 0),
@@ -88,7 +88,7 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*apiv1.Si
 	}, nil
 }
 
-func SignedValidatorRegistrationToEntry(valReg apiv1.SignedValidatorRegistration) ValidatorRegistrationEntry {
+func SignedValidatorRegistrationToEntry(valReg builderApiV1.SignedValidatorRegistration) ValidatorRegistrationEntry {
 	return ValidatorRegistrationEntry{
 		Pubkey:       valReg.Message.Pubkey.String(),
 		FeeRecipient: valReg.Message.FeeRecipient.String(),

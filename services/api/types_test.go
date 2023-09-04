@@ -3,14 +3,14 @@ package api
 import (
 	"testing"
 
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
-	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -35,10 +35,10 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 		{
 			name: "Capella",
 			reqPayload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &capella.SubmitBlockRequest{
-						ExecutionPayload: &capellaspec.ExecutionPayload{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
 							ParentHash:    phase0.Hash32{0x01},
 							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
 							StateRoot:     phase0.Root{0x03},
@@ -54,7 +54,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							BlockHash:     phase0.Hash32{0x09},
 							Transactions:  []bellatrix.Transaction{},
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot:                 1,
 							ParentHash:           phase0.Hash32{0x01},
 							BlockHash:            phase0.Hash32{0x09},
@@ -73,10 +73,10 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 		{
 			name: "Deneb",
 			reqPayload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionDeneb,
-					Deneb: &deneb.SubmitBlockRequest{
-						ExecutionPayload: &denebspec.ExecutionPayload{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionDeneb,
+					Deneb: &builderApiDeneb.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
 							ParentHash:    phase0.Hash32{0x01},
 							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
 							StateRoot:     phase0.Root{0x03},
@@ -92,12 +92,12 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							BlockHash:     phase0.Hash32{0x09},
 							Transactions:  []bellatrix.Transaction{},
 						},
-						BlobsBundle: &deneb.BlobsBundle{
-							Commitments: []denebspec.KzgCommitment{},
-							Proofs:      []denebspec.KzgProof{},
-							Blobs:       []denebspec.Blob{},
+						BlobsBundle: &builderApiDeneb.BlobsBundle{
+							Commitments: []deneb.KzgCommitment{},
+							Proofs:      []deneb.KzgProof{},
+							Blobs:       []deneb.Blob{},
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot:                 1,
 							ParentHash:           phase0.Hash32{0x01},
 							BlockHash:            phase0.Hash32{0x09},
