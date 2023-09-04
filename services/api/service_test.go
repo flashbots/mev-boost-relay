@@ -985,7 +985,7 @@ func TestUpdateRedis(t *testing.T) {
 						Value: uint256.NewInt(1),
 					},
 					ExecutionPayload: &capella.ExecutionPayload{
-						ExtraData: make([]byte, 32), // Max extra data length is 32.
+						ExtraData: make([]byte, 33), // Max extra data length is 32.
 					},
 				},
 			},
@@ -995,9 +995,6 @@ func TestUpdateRedis(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
-			// err := backend.redis.SetFloorBidValue(tc.payload.Slot(), tc.payload.ParentHash(), tc.payload.ProposerPubkey(), tc.floorValue)
-			// require.Nil(t, err)
-
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
