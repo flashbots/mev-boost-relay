@@ -1649,6 +1649,50 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 	return floorBidValue, opts.log, true
 }
 
+type redisUpdateOpts struct {
+	w                    http.ResponseWriter
+	tx                   redis.Pipeliner
+	log                  *logrus.Entry
+	cancellationsEnabled bool
+	receivedAt           time.Time
+	floorBidValue        *big.Int
+	payload              *common.BuilderSubmitBlockRequest
+}
+
+func (api *RelayAPI) updateRedisBid(opts redisUpdateOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *common.GetPayloadResponse, bool) {
+	// Prepare the response data
+	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	if err != nil {
+		opts.log.WithError(err).Error("could not sign builder bid")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
+	getPayloadResponse, err := common.BuildGetPayloadResponse(opts.payload)
+	if err != nil {
+		opts.log.WithError(err).Error("could not build getPayload response")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
+	bidTrace := common.BidTraceV2{
+		BidTrace:    *opts.payload.Message(),
+		BlockNumber: opts.payload.BlockNumber(),
+		NumTx:       uint64(opts.payload.NumTx()),
+	}
+
+	//
+	// Save to Redis
+	//
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), opts.tx, &bidTrace, opts.payload, getPayloadResponse, getHeaderResponse, opts.receivedAt, opts.cancellationsEnabled, opts.floorBidValue)
+	if err != nil {
+		opts.log.WithError(err).Error("could not save bid and update top bids")
+		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
+		return nil, nil, false
+	}
+	return &updateBidResult, getPayloadResponse, true
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -1953,34 +1997,17 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	// Prepare the response data
-	getHeaderResponse, err := common.BuildGetHeaderResponse(payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
-	if err != nil {
-		log.WithError(err).Error("could not sign builder bid")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
+	redisOpts := redisUpdateOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		receivedAt:           receivedAt,
+		floorBidValue:        floorBidValue,
+		payload:              payload,
 	}
-
-	getPayloadResponse, err := common.BuildGetPayloadResponse(payload)
-	if err != nil {
-		log.WithError(err).Error("could not build getPayload response")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	bidTrace := common.BidTraceV2{
-		BidTrace:    *payload.Message(),
-		BlockNumber: payload.BlockNumber(),
-		NumTx:       uint64(payload.NumTx()),
-	}
-
-	//
-	// Save to Redis
-	//
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), tx, &bidTrace, payload, getPayloadResponse, getHeaderResponse, receivedAt, isCancellationEnabled, floorBidValue)
-	if err != nil {
-		log.WithError(err).Error("could not save bid and update top bids")
-		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
+	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts)
+	if !ok {
 		return
 	}
 
