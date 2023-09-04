@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
-	denebspec "github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -35,15 +35,15 @@ var (
 	ErrNoMemcachedServers = errors.New("no memcached servers specified")
 )
 
-func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version consensusspec.DataVersion) common.VersionedSubmitBlockRequest {
+func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version spec.DataVersion) common.VersionedSubmitBlockRequest {
 	switch version {
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		return common.VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionDeneb,
-				Deneb: &deneb.SubmitBlockRequest{
+			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+				Version: spec.DataVersionDeneb,
+				Deneb: &builderApiDeneb.SubmitBlockRequest{
 					Signature: signature,
-					Message: &apiv1.BidTrace{
+					Message: &builderApiV1.BidTrace{
 						Slot:                 1,
 						ParentHash:           phase0.Hash32{0x01},
 						BlockHash:            phase0.Hash32{0x09},
@@ -54,7 +54,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 						GasLimit:             5002,
 						GasUsed:              5003,
 					},
-					ExecutionPayload: &denebspec.ExecutionPayload{
+					ExecutionPayload: &deneb.ExecutionPayload{
 						ParentHash:    phase0.Hash32{0x01},
 						FeeRecipient:  bellatrix.ExecutionAddress{0x02},
 						StateRoot:     phase0.Root{0x03},
@@ -70,21 +70,21 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 						BlockHash:     phase0.Hash32{0x09},
 						Transactions:  []bellatrix.Transaction{},
 					},
-					BlobsBundle: &deneb.BlobsBundle{
-						Commitments: []denebspec.KzgCommitment{},
-						Proofs:      []denebspec.KzgProof{},
-						Blobs:       []denebspec.Blob{},
+					BlobsBundle: &builderApiDeneb.BlobsBundle{
+						Commitments: []deneb.KzgCommitment{},
+						Proofs:      []deneb.KzgProof{},
+						Blobs:       []deneb.Blob{},
 					},
 				},
 			},
 		}
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		return common.VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-				Version: consensusspec.DataVersionCapella,
-				Capella: &capella.SubmitBlockRequest{
+			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+				Version: spec.DataVersionCapella,
+				Capella: &builderApiCapella.SubmitBlockRequest{
 					Signature: signature,
-					Message: &apiv1.BidTrace{
+					Message: &builderApiV1.BidTrace{
 						Slot:                 1,
 						ParentHash:           phase0.Hash32{0x01},
 						BlockHash:            phase0.Hash32{0x09},
@@ -95,7 +95,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 						GasLimit:             5002,
 						GasUsed:              5003,
 					},
-					ExecutionPayload: &capellaspec.ExecutionPayload{
+					ExecutionPayload: &capella.ExecutionPayload{
 						ParentHash:    phase0.Hash32{0x01},
 						FeeRecipient:  bellatrix.ExecutionAddress{0x02},
 						StateRoot:     phase0.Root{0x03},
@@ -114,7 +114,7 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 				},
 			},
 		}
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
 		return common.VersionedSubmitBlockRequest{}
@@ -188,7 +188,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, we expect to successfully store and retrieve the value from memcached",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionCapella),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, spec.DataVersionCapella),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -207,7 +207,7 @@ func TestMemcached(t *testing.T) {
 						"expected no error when marshalling execution payload response but found [%v]", err,
 					)
 
-					out := new(api.VersionedSubmitBlindedBlockResponse)
+					out := new(builderApi.VersionedSubmitBlindedBlockResponse)
 					err = out.UnmarshalJSON(inputBytes)
 					require.NoError(
 						t,
@@ -244,7 +244,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: "Given a valid builder submit block request, updates to the same key should overwrite existing entry and return the last written value",
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionDeneb),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, spec.DataVersionDeneb),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()
@@ -281,7 +281,7 @@ func TestMemcached(t *testing.T) {
 		},
 		{
 			Description: fmt.Sprintf("Given a valid builder submit block request, memcached entry should expire after %d seconds", defaultMemcachedExpirySeconds),
-			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, consensusspec.DataVersionCapella),
+			Input:       testBuilderSubmitBlockRequest(builderPk, builderSk, spec.DataVersionCapella),
 			TestSuite: func(tc *test) func(*testing.T) {
 				return func(t *testing.T) {
 					t.Helper()

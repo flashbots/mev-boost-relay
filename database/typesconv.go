@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
 )
@@ -19,14 +19,14 @@ func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*Ex
 	var err error
 
 	switch payload.Version {
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		_payload, err = json.Marshal(payload.Capella.ExecutionPayload)
 		if err != nil {
 			return nil, err
 		}
 		version = common.ForkVersionStringCapella
-	case consensusspec.DataVersionDeneb:
-		_payload, err = json.Marshal(deneb.ExecutionPayloadAndBlobsBundle{
+	case spec.DataVersionDeneb:
+		_payload, err = json.Marshal(builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 			ExecutionPayload: payload.Deneb.ExecutionPayload,
 			BlobsBundle:      payload.Deneb.BlobsBundle,
 		})
@@ -34,7 +34,7 @@ func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*Ex
 			return nil, err
 		}
 		version = common.ForkVersionStringDeneb
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrUnsupportedExecutionPayload
 	}
 
@@ -95,16 +95,16 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 	}
 }
 
-func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *api.VersionedSubmitBlindedBlockResponse, err error) {
+func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *builderApi.VersionedSubmitBlindedBlockResponse, err error) {
 	payloadVersion := executionPayloadEntry.Version
 	if payloadVersion == common.ForkVersionStringDeneb {
-		executionPayload := new(deneb.ExecutionPayloadAndBlobsBundle)
+		executionPayload := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionDeneb,
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
 			Deneb:   executionPayload,
 		}, nil
 	} else if payloadVersion == common.ForkVersionStringCapella {
@@ -113,8 +113,8 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		if err != nil {
 			return nil, err
 		}
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionCapella,
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
 			Capella: executionPayload,
 		}, nil
 	} else {
