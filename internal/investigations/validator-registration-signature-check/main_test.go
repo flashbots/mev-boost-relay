@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -21,8 +21,8 @@ func TestValidatorRegistrationSignature(t *testing.T) {
 	signature := "0xaf12df007a0c78abb5575067e5f8b089cfcc6227e4a91db7dd8cf517fe86fb944ead859f0781277d9b78c672e4a18c5d06368b603374673cf2007966cece9540f3a1b3f6f9e1bf421d779c4e8010368e6aac134649c7a009210780d401a778a5"
 
 	// Constructing the object
-	payload := apiv1.SignedValidatorRegistration{
-		Message: &apiv1.ValidatorRegistration{
+	payload := builderApiV1.SignedValidatorRegistration{
+		Message: &builderApiV1.ValidatorRegistration{
 			GasLimit:  uint64(gasLimit),
 			Timestamp: time.Unix(timestamp, 0),
 		},

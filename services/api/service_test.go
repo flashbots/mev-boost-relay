@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	builderCapella "github.com/attestantio/go-builder-client/api/capella"
-	builderDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -197,7 +197,7 @@ func TestRegisterValidator(t *testing.T) {
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
-		rr := backend.request(http.MethodPost, path, []apiv1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }
@@ -219,7 +219,7 @@ func TestGetHeader(t *testing.T) {
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 	bidValue := uint256.NewInt(99)
 	trace := &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			Value: bidValue,
 		},
 	}
@@ -232,7 +232,7 @@ func TestGetHeader(t *testing.T) {
 		Slot:           slot,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
-		Version:        consensusspec.DataVersionCapella,
+		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
 	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
@@ -241,12 +241,12 @@ func TestGetHeader(t *testing.T) {
 	// Check 1: regular capella request works and returns a bid
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	resp := spec.VersionedSignedBuilderBid{}
+	resp := builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	value, err := resp.Value()
 	require.NoError(t, err)
-	require.Equal(t, consensusspec.DataVersionCapella, resp.Version)
+	require.Equal(t, spec.DataVersionCapella, resp.Version)
 	require.Equal(t, bidValue.String(), value.String())
 
 	// Create a deneb bid
@@ -255,7 +255,7 @@ func TestGetHeader(t *testing.T) {
 		Slot:           slot + 1,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
-		Version:        consensusspec.DataVersionDeneb,
+		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
 	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
@@ -264,12 +264,12 @@ func TestGetHeader(t *testing.T) {
 	// Check 2: regular deneb request works and returns a bid
 	rr = backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	resp = spec.VersionedSignedBuilderBid{}
+	resp = builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	value, err = resp.Value()
 	require.NoError(t, err)
-	require.Equal(t, consensusspec.DataVersionDeneb, resp.Version)
+	require.Equal(t, spec.DataVersionDeneb, resp.Version)
 	require.Equal(t, bidValue.String(), value.String())
 
 	// Check 3: Request returns 204 if sending a filtered user agent
@@ -339,7 +339,7 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
 
 	req := new(common.VersionedSubmitBlockRequest)
-	req.Capella = new(builderCapella.SubmitBlockRequest)
+	req.Capella = new(builderApiCapella.SubmitBlockRequest)
 	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
 	require.NoError(t, err)
 
@@ -347,7 +347,7 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 352239, len(reqSSZ))
 
-	test := new(builderCapella.SubmitBlockRequest)
+	test := new(builderApiCapella.SubmitBlockRequest)
 	err = test.UnmarshalSSZ(reqSSZ)
 	require.NoError(t, err)
 }
@@ -376,8 +376,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 		Slot: headSlot,
-		Entry: &apiv1.SignedValidatorRegistration{
-			Message: &apiv1.ValidatorRegistration{
+		Entry: &builderApiV1.SignedValidatorRegistration{
+			Message: &builderApiV1.ValidatorRegistration{
 				FeeRecipient: feeRec,
 			},
 		},
@@ -394,7 +394,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 
 	// Prepare the request payload
 	req := new(common.VersionedSubmitBlockRequest)
-	req.Capella = new(builderCapella.SubmitBlockRequest)
+	req.Capella = new(builderApiCapella.SubmitBlockRequest)
 	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
 	require.NoError(t, err)
 	err = json.Unmarshal(requestPayloadJSONBytes, req.Capella)
@@ -459,18 +459,18 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "success",
 			slotDuty: &common.BuilderGetValidatorsResponseEntry{
-				Entry: &apiv1.SignedValidatorRegistration{
-					Message: &apiv1.ValidatorRegistration{
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
 						FeeRecipient: testAddress,
 						GasLimit:     testGasLimit,
 					},
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:                 testSlot,
 							ProposerFeeRecipient: testAddress,
 						},
@@ -485,10 +485,10 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot,
 						},
 						ExecutionPayload: &capella.ExecutionPayload{},
@@ -501,18 +501,18 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_diff_fee_recipient",
 			slotDuty: &common.BuilderGetValidatorsResponseEntry{
-				Entry: &apiv1.SignedValidatorRegistration{
-					Message: &apiv1.ValidatorRegistration{
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
 						FeeRecipient: testAddress,
 						GasLimit:     testGasLimit,
 					},
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:                 testSlot,
 							ProposerFeeRecipient: testAddress2,
 						},
@@ -570,9 +570,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
 						ExecutionPayload: &capella.ExecutionPayload{
 							PrevRandao: prevRandao,
 							Withdrawals: []*capella.Withdrawal{
@@ -581,7 +581,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 								},
 							},
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot:       testSlot,
 							ParentHash: parentHash,
 						},
@@ -596,10 +596,10 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 				slot: testSlot,
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot + 1, // submission for a future slot
 						},
 						ExecutionPayload: &capella.ExecutionPayload{},
@@ -617,10 +617,10 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:       testSlot,
 							ParentHash: parentHash,
 						},
@@ -641,10 +641,10 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:       testSlot,
 							ParentHash: parentHash,
 						},
@@ -668,9 +668,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 				},
 			},
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
 						ExecutionPayload: &capella.ExecutionPayload{
 							PrevRandao: [32]byte(prevRandao),
 							Withdrawals: []*capella.Withdrawal{
@@ -679,7 +679,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 								},
 							},
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot:       testSlot,
 							ParentHash: parentHash,
 						},
@@ -716,13 +716,13 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		{
 			description: "success",
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
 						ExecutionPayload: &capella.ExecutionPayload{
 							Timestamp: testSlot * common.SecondsPerSlot,
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot,
 						},
 					},
@@ -733,13 +733,13 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		{
 			description: "non_capella_slot",
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
 						ExecutionPayload: &capella.ExecutionPayload{
 							Timestamp: testSlot * common.SecondsPerSlot,
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot + 32,
 						},
 					},
@@ -750,13 +750,13 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		{
 			description: "non_deneb_slot",
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionDeneb,
-					Deneb: &builderDeneb.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionDeneb,
+					Deneb: &builderApiDeneb.SubmitBlockRequest{
 						ExecutionPayload: &deneb.ExecutionPayload{
 							Timestamp: testSlot * common.SecondsPerSlot,
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot,
 						},
 					},
@@ -767,10 +767,10 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		{
 			description: "failure_past_slot",
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot - 1, // use old slot to cause error
 						},
 						ExecutionPayload: &capella.ExecutionPayload{},
@@ -782,13 +782,13 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		{
 			description: "failure_wrong_timestamp",
 			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
 						ExecutionPayload: &capella.ExecutionPayload{
 							Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
 						},
-						Message: &apiv1.BidTrace{
+						Message: &builderApiV1.BidTrace{
 							Slot: testSlot,
 						},
 					},
@@ -1061,7 +1061,7 @@ func TestCheckProposerSignature(t *testing.T) {
 	t.Run("Unsupported version", func(t *testing.T) {
 		_, _, backend := startTestBackend(t)
 		payload := new(common.VersionedSignedBlindedBlockRequest)
-		payload.Version = consensusspec.DataVersionBellatrix
+		payload.Version = spec.DataVersionBellatrix
 		ok, err := backend.relay.checkProposerSignature(payload, []byte{})
 		require.Error(t, err, "unsupported consensus data version")
 		require.False(t, ok)

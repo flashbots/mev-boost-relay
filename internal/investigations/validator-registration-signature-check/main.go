@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -38,7 +38,7 @@ func main() {
 	Perr(err)
 
 	// Fill in validator registration details
-	validatorRegistration := apiv1.ValidatorRegistration{ //nolint:exhaustruct
+	validatorRegistration := builderApiV1.ValidatorRegistration{ //nolint:exhaustruct
 		GasLimit:  uint64(gasLimit),
 		Timestamp: time.Unix(timestamp, 0),
 	}

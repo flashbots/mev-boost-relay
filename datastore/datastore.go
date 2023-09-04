@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
+	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
@@ -191,7 +191,7 @@ func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidato
 }
 
 // GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
-func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	log = log.WithField("datastoreMethod", "GetGetPayloadResponse")
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
