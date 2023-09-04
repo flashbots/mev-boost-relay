@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	consensusdeneb "github.com/attestantio/go-eth2-client/spec/deneb"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/holiman/uint256"
@@ -55,11 +55,11 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 
 func TestGetPayloadDatabaseDeneb(t *testing.T) {
 	// TODO: (deneb) add execution payload and blobs bundle from goerli / devnet
-	payloadBytes, err := json.Marshal(&deneb.ExecutionPayloadAndBlobsBundle{
-		ExecutionPayload: &consensusdeneb.ExecutionPayload{
+	payloadBytes, err := json.Marshal(&builderApiDeneb.ExecutionPayloadAndBlobsBundle{
+		ExecutionPayload: &deneb.ExecutionPayload{
 			BaseFeePerGas: uint256.NewInt(5),
 		},
-		BlobsBundle: &deneb.BlobsBundle{},
+		BlobsBundle: &builderApiDeneb.BlobsBundle{},
 	})
 	require.NoError(t, err)
 

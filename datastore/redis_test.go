@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/attestantio/go-builder-client/api/capella"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -92,9 +92,9 @@ func TestRedisProposerDuties(t *testing.T) {
 	duties := []common.BuilderGetValidatorsResponseEntry{
 		{
 			Slot: 1,
-			Entry: &apiv1.SignedValidatorRegistration{
+			Entry: &builderApiV1.SignedValidatorRegistration{
 				Signature: phase0.BLSSignature{},
-				Message: &apiv1.ValidatorRegistration{
+				Message: &builderApiV1.ValidatorRegistration{
 					FeeRecipient: bellatrix.ExecutionAddress{0x02},
 					GasLimit:     5000,
 					Timestamp:    time.Unix(0xffffffff, 0),
@@ -121,11 +121,11 @@ func TestBuilderBids(t *testing.T) {
 		Slot:           2,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
-		Version:        consensusspec.DataVersionCapella,
+		Version:        spec.DataVersionCapella,
 	}
 
 	trace := &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			Value: uint256.NewInt(123),
 		},
 	}
@@ -410,10 +410,10 @@ func TestGetBuilderLatestValue(t *testing.T) {
 	// Set a bid of 1 ETH.
 	newVal, err := uint256.FromDecimal("1000000000000000000")
 	require.NoError(t, err)
-	getHeaderResp := &spec.VersionedSignedBuilderBid{
-		Version: consensusspec.DataVersionCapella,
-		Capella: &capella.SignedBuilderBid{
-			Message: &capella.BuilderBid{
+	getHeaderResp := &builderSpec.VersionedSignedBuilderBid{
+		Version: spec.DataVersionCapella,
+		Capella: &builderApiCapella.SignedBuilderBid{
+			Message: &builderApiCapella.BuilderBid{
 				Value: newVal,
 			},
 		},

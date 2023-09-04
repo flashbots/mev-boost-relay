@@ -108,9 +108,9 @@ func TestBoostBidToBidTrace(t *testing.T) {
 }
 
 func TestDataVersion(t *testing.T) {
-	require.Equal(t, ForkVersionStringBellatrix, consensusspec.DataVersionBellatrix.String())
-	require.Equal(t, ForkVersionStringCapella, consensusspec.DataVersionCapella.String())
-	require.Equal(t, ForkVersionStringDeneb, consensusspec.DataVersionDeneb.String())
+	require.Equal(t, ForkVersionStringBellatrix, spec.DataVersionBellatrix.String())
+	require.Equal(t, ForkVersionStringCapella, spec.DataVersionCapella.String())
+	require.Equal(t, ForkVersionStringDeneb, spec.DataVersionDeneb.String())
 }
 
 func compareV2RequestEquality(t *testing.T, src, targ *SubmitBlockRequestV2Optimistic) {

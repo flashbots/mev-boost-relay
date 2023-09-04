@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api"
-	"github.com/attestantio/go-builder-client/api/deneb"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -276,22 +276,22 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	}, nil
 }
 
-func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*api.VersionedSubmitBlindedBlockResponse, error) {
+func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	switch submission.Version {
-	case consensusspec.DataVersionCapella:
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionCapella,
+	case spec.DataVersionCapella:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
 			Capella: submission.Capella.ExecutionPayload,
 		}, nil
-	case consensusspec.DataVersionDeneb:
-		return &api.VersionedSubmitBlindedBlockResponse{
-			Version: consensusspec.DataVersionDeneb,
-			Deneb: &deneb.ExecutionPayloadAndBlobsBundle{
+	case spec.DataVersionDeneb:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
+			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: submission.Deneb.ExecutionPayload,
 				BlobsBundle:      submission.Deneb.BlobsBundle,
 			},
 		}, nil
-	case consensusspec.DataVersionUnknown, consensusspec.DataVersionPhase0, consensusspec.DataVersionAltair, consensusspec.DataVersionBellatrix:
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrInvalidForkVersion
 	}
 	return nil, ErrEmptyPayload

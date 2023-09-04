@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -44,7 +44,7 @@ var (
 
 func getTestBidTrace(pubkey phase0.BLSPubKey, value, slot uint64) *common.BidTraceV2 {
 	return &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			Slot:                 slot,
 			BuilderPubkey:        pubkey,
 			ProposerFeeRecipient: feeRecipient,
@@ -79,8 +79,8 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	backend.relay.genesisInfo.Data.GenesisTime = 0
 	backend.relay.proposerDutiesMap = map[uint64]*common.BuilderGetValidatorsResponseEntry{
 		slot: {
-			Entry: &apiv1.SignedValidatorRegistration{
-				Message: &apiv1.ValidatorRegistration{
+			Entry: &builderApiV1.SignedValidatorRegistration{
+				Message: &builderApiV1.ValidatorRegistration{
 					FeeRecipient: [20]byte(feeRecipient),
 					GasLimit:     5000,
 					Timestamp:    time.Unix(0xffffffff, 0),
@@ -468,7 +468,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 
 			randaoHash, err := utils.HexToHash(randao)
 			require.NoError(t, err)
-			withRoot, err := ComputeWithdrawalsRoot([]*consensuscapella.Withdrawal{})
+			withRoot, err := ComputeWithdrawalsRoot([]*capella.Withdrawal{})
 			require.NoError(t, err)
 			backend.relay.payloadAttributes[emptyHash] = payloadAttributesHelper{
 				slot:            tc.slot,

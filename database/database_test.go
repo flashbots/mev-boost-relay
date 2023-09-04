@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	consensusapi "github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/api/v1/deneb"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	eth2Api "github.com/attestantio/go-eth2-client/api"
+	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -78,7 +78,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	req := common.TestBuilderSubmitBlockRequest(sk, &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -86,7 +86,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			ProposerFeeRecipient: feeRecipient,
 			Value:                uint256.NewInt(collateral),
 		},
-	}, consensusspec.DataVersionDeneb)
+	}, spec.DataVersionDeneb)
 	entry, err := db.SaveBuilderBlockSubmission(&req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
@@ -299,7 +299,7 @@ func TestInsertBuilderDemotion(t *testing.T) {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	trace := &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -315,10 +315,10 @@ func TestInsertBuilderDemotion(t *testing.T) {
 	}{
 		{
 			name: "Capella",
-			req:  common.TestBuilderSubmitBlockRequest(sk, trace, consensusspec.DataVersionCapella),
+			req:  common.TestBuilderSubmitBlockRequest(sk, trace, spec.DataVersionCapella),
 		}, {
 			name: "Deneb",
-			req:  common.TestBuilderSubmitBlockRequest(sk, trace, consensusspec.DataVersionDeneb),
+			req:  common.TestBuilderSubmitBlockRequest(sk, trace, spec.DataVersionDeneb),
 		},
 	}
 
@@ -345,7 +345,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
 	bt := &common.BidTraceV2{
-		BidTrace: apiv1.BidTrace{
+		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
 			BuilderPubkey:        *pk,
@@ -361,20 +361,20 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	}{
 		{
 			name: "Capella",
-			req:  common.TestBuilderSubmitBlockRequest(sk, bt, consensusspec.DataVersionCapella),
+			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionCapella),
 			beaconBlock: common.VersionedSignedBlockRequest{
-				VersionedBlockRequest: consensusapi.VersionedBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &consensuscapella.SignedBeaconBlock{},
+				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &capella.SignedBeaconBlock{},
 				},
 			},
 		}, {
 			name: "Deneb",
-			req:  common.TestBuilderSubmitBlockRequest(sk, bt, consensusspec.DataVersionDeneb),
+			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionDeneb),
 			beaconBlock: common.VersionedSignedBlockRequest{
-				VersionedBlockRequest: consensusapi.VersionedBlockRequest{
-					Version: consensusspec.DataVersionDeneb,
-					Deneb:   &deneb.SignedBlockContents{},
+				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
+					Version: spec.DataVersionDeneb,
+					Deneb:   &eth2ApiV1Deneb.SignedBlockContents{},
 				},
 			},
 		},
@@ -403,7 +403,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			require.Empty(t, demotion.SignedValidatorRegistration.String)
 
 			// Update demotion with the signedBlock and signedRegistration.
-			err = db.UpdateBuilderDemotion(bt, &c.beaconBlock, &apiv1.SignedValidatorRegistration{})
+			err = db.UpdateBuilderDemotion(bt, &c.beaconBlock, &builderApiV1.SignedValidatorRegistration{})
 			require.NoError(t, err)
 
 			// Signed block and validation should now be valid and non-empty.
