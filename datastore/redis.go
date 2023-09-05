@@ -123,7 +123,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 
 		prefixGetHeaderResponse:    fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
 		prefixExecPayloadCapella:   fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
-		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontenst-builderApiDeneb", redisPrefix, prefix),
+		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontents-deneb", redisPrefix, prefix),
 		prefixBidTrace:             fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
