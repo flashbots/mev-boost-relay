@@ -1649,7 +1649,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 	return floorBidValue, opts.log, true
 }
 
-type redisUpdateOpts struct {
+type redisUpdateBidOpts struct {
 	w                    http.ResponseWriter
 	tx                   redis.Pipeliner
 	log                  *logrus.Entry
@@ -1659,7 +1659,7 @@ type redisUpdateOpts struct {
 	payload              *common.BuilderSubmitBlockRequest
 }
 
-func (api *RelayAPI) updateRedisBid(opts redisUpdateOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *common.GetPayloadResponse, bool) {
+func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *common.GetPayloadResponse, bool) {
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
@@ -1997,7 +1997,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	redisOpts := redisUpdateOpts{
+	redisOpts := redisUpdateBidOpts{
 		w:                    w,
 		tx:                   tx,
 		log:                  log,
