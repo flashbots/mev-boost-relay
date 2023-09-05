@@ -114,6 +114,7 @@ func TestDataVersion(t *testing.T) {
 }
 
 func compareV2RequestEquality(t *testing.T, src, targ *SubmitBlockRequestV2Optimistic) {
+	t.Helper()
 	require.Equal(t, src.Message.String(), targ.Message.String())
 	require.Equal(t, src.ExecutionPayloadHeader.String(), targ.ExecutionPayloadHeader.String())
 	require.Equal(t, src.Signature, targ.Signature)
@@ -146,7 +147,8 @@ func TestSubmitBlockRequestV2Optimistic(t *testing.T) {
 
 	// Unmarshal just the header.
 	unmarshalHeader := new(SubmitBlockRequestV2Optimistic)
-	unmarshalHeader.UnmarshalSSZHeaderOnly(sszObj)
+	err = unmarshalHeader.UnmarshalSSZHeaderOnly(sszObj)
+	require.Nil(t, err)
 
 	compareV2RequestEquality(t, obj, unmarshalHeader)
 
