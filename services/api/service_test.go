@@ -947,6 +947,80 @@ func TestCheckFloorBidValue(t *testing.T) {
 	}
 }
 
+func TestUpdateRedis(t *testing.T) {
+	cases := []struct {
+		description          string
+		cancellationsEnabled bool
+		floorValue           string
+		payload              *common.BuilderSubmitBlockRequest
+		expectOk             bool
+	}{
+		{
+			description: "success",
+			floorValue:  "10",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(1),
+					},
+					ExecutionPayload: &capella.ExecutionPayload{},
+				},
+			},
+			expectOk: true,
+		},
+		{
+			description: "failure_no_payload",
+			floorValue:  "10",
+			payload:     nil,
+			expectOk:    false,
+		},
+		{
+			description: "failure_encode_failure_too_long_extra_data",
+			floorValue:  "10",
+			payload: &common.BuilderSubmitBlockRequest{
+				Capella: &builderCapella.SubmitBlockRequest{
+					Message: &v1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(1),
+					},
+					ExecutionPayload: &capella.ExecutionPayload{
+						ExtraData: make([]byte, 33), // Max extra data length is 32.
+					},
+				},
+			},
+			expectOk: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			tx := backend.redis.NewTxPipeline()
+
+			floorValue := new(big.Int)
+			floorValue, ok := floorValue.SetString(tc.floorValue, 10)
+			require.True(t, ok)
+			rOpts := redisUpdateBidOpts{
+				w:                    w,
+				tx:                   tx,
+				log:                  log,
+				cancellationsEnabled: tc.cancellationsEnabled,
+				floorBidValue:        floorValue,
+				payload:              tc.payload,
+			}
+			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts)
+			require.Equal(t, tc.expectOk, ok)
+			if ok {
+				require.NotNil(t, updateResp)
+				require.NotNil(t, getPayloadResp)
+			}
+		})
+	}
+}
+
 func gzipBytes(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
