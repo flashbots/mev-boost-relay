@@ -133,23 +133,23 @@ func TestSubmitBlockRequestV2Optimistic(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, obj.SizeSSZ(), len(sszObj))
 
-	// Unmarshall the full object.
-	unmarshalled := new(SubmitBlockRequestV2Optimistic)
-	err = unmarshalled.UnmarshalSSZ(sszObj)
+	// Unmarshal the full object.
+	unmarshal := new(SubmitBlockRequestV2Optimistic)
+	err = unmarshal.UnmarshalSSZ(sszObj)
 	require.Nil(t, err)
 
-	compareV2RequestEquality(t, obj, unmarshalled)
+	compareV2RequestEquality(t, obj, unmarshal)
 
 	// Clear out non-header data.
 	obj.Transactions = []bellatrix.Transaction{}
 	obj.Withdrawals = []*capella.Withdrawal{}
 
-	// Unmarshall just the header.
-	unmarshalledHeader := new(SubmitBlockRequestV2Optimistic)
-	unmarshalledHeader.UnmarshalSSZHeaderOnly(sszObj)
+	// Unmarshal just the header.
+	unmarshalHeader := new(SubmitBlockRequestV2Optimistic)
+	unmarshalHeader.UnmarshalSSZHeaderOnly(sszObj)
 
-	compareV2RequestEquality(t, obj, unmarshalledHeader)
+	compareV2RequestEquality(t, obj, unmarshalHeader)
 
 	// Make sure size is correct (must have 32 bytes of ExtraData).
-	require.Equal(t, unmarshalledHeader.SizeSSZ(), 944)
+	require.Equal(t, unmarshalHeader.SizeSSZ(), 944)
 }
