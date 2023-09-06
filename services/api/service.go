@@ -1905,10 +1905,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			simResult = &blockSimResult{false, false, nil, nil, nil}
 		}
 
-		if simResult.overrides != nil {
-			// override the gas values with the ones from the simulation
-			overrideGasValues(payload, simResult.overrides)
-		}
+		// override the gas values with the ones from the simulation
+		overrideGasValues(payload, simResult.overrides)
 
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission)
 		if err != nil {
@@ -2392,7 +2390,7 @@ func overrideGasValues(
 	req *common.BuilderSubmitBlockRequest,
 	overrides *common.BuilderBlockValidationResponseV2,
 ) {
-	if overrides != nil {
+	if overrides != nil && req != nil {
 		req.Capella.ExecutionPayload.BlockHash = overrides.NewBlockHash
 		req.Capella.ExecutionPayload.GasLimit = overrides.NewGasLimit
 	}
