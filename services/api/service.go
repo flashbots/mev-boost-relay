@@ -42,7 +42,7 @@ import (
 
 const (
 	RelayActualGasLimit     = 30_000_000
-	RelayFictitiousGasLimit = 1_000_000_000
+	RelayFictitiousGasLimit = 100_000_000
 	ErrBlockAlreadyKnown    = "simulation failed: block already known"
 	ErrBlockRequiresReorg   = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode      = "missing trie node"
