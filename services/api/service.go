@@ -41,9 +41,11 @@ import (
 )
 
 const (
-	ErrBlockAlreadyKnown  = "simulation failed: block already known"
-	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
-	ErrMissingTrieNode    = "missing trie node"
+	RelayActualGasLimit     = 30_000_000
+	RelayFictitiousGasLimit = 1_000_000_000
+	ErrBlockAlreadyKnown    = "simulation failed: block already known"
+	ErrBlockRequiresReorg   = "simulation failed: block requires a reorg"
+	ErrMissingTrieNode      = "missing trie node"
 )
 
 var (
@@ -750,6 +752,11 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	if err != nil {
 		api.log.WithError(err).Error("failed getting proposer duties from redis")
 		return
+	}
+
+	// Instruct builders treat 30mm as the gas limit
+	for _, duty := range duties {
+		duty.Entry.Message.GasLimit = RelayActualGasLimit
 	}
 
 	// Prepare raw bytes for HTTP response
@@ -1484,23 +1491,23 @@ func (api *RelayAPI) handleBuilderGetValidators(w http.ResponseWriter, req *http
 	}
 }
 
-func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) (uint64, bool) {
+func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) bool {
 	api.proposerDutiesLock.RLock()
 	slotDuty := api.proposerDutiesMap[payload.Slot()]
 	api.proposerDutiesLock.RUnlock()
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
 		api.RespondError(w, http.StatusBadRequest, "could not find slot duty")
-		return 0, false
+		return false
 	} else if !strings.EqualFold(slotDuty.Entry.Message.FeeRecipient.String(), payload.ProposerFeeRecipient()) {
 		log.WithFields(logrus.Fields{
 			"expectedFeeRecipient": slotDuty.Entry.Message.FeeRecipient.String(),
 			"actualFeeRecipient":   payload.ProposerFeeRecipient(),
 		}).Info("fee recipient does not match")
 		api.RespondError(w, http.StatusBadRequest, "fee recipient does not match")
-		return 0, false
+		return false
 	}
-	return slotDuty.Entry.Message.GasLimit, true
+	return true
 }
 
 func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) bool {
@@ -1778,6 +1785,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	// Overwrite the builder's gasLimit with the relay-set fictitious limit
+	payload.Capella.ExecutionPayload.GasLimit = RelayFictitiousGasLimit
+
 	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
@@ -1817,7 +1827,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
 	})
 
-	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, payload)
+	ok = api.checkSubmissionFeeRecipient(w, log, payload)
 	if !ok {
 		return
 	}
@@ -1940,7 +1950,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		builder:    builderEntry,
 		req: &common.BuilderBlockValidationRequest{
 			BuilderSubmitBlockRequest: *payload,
-			RegisteredGasLimit:        gasLimit,
+			RegisteredGasLimit:        RelayFictitiousGasLimit,
 		},
 	}
 	// With sufficient collateral, process the block optimistically.

@@ -578,8 +578,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
-			require.Equal(t, tc.expectGasLimit, gasLimit)
+			ok := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
