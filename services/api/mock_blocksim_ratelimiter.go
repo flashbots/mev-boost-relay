@@ -7,11 +7,14 @@ import (
 )
 
 type MockBlockSimulationRateLimiter struct {
+	overrides       common.BuilderBlockValidationResponseV2
 	simulationError error
 }
 
-func (m *MockBlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (error, error) {
-	return nil, m.simulationError
+func (m *MockBlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (
+	*common.BuilderBlockValidationResponseV2, error, error,
+) {
+	return &m.overrides, nil, m.simulationError
 }
 
 func (m *MockBlockSimulationRateLimiter) CurrentCounter() int64 {

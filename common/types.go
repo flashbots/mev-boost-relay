@@ -133,15 +133,15 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 func (e *EthNetworkDetails) String() string {
 	return fmt.Sprintf(
 		`EthNetworkDetails{
-	Name: %s, 
-	GenesisForkVersionHex: %s, 
+	Name: %s,
+	GenesisForkVersionHex: %s,
 	GenesisValidatorsRootHex: %s,
-	BellatrixForkVersionHex: %s, 
-	CapellaForkVersionHex: %s, 
+	BellatrixForkVersionHex: %s,
+	CapellaForkVersionHex: %s,
 	DenebForkVersionHex: %s,
-	DomainBuilder: %x, 
-	DomainBeaconProposerBellatrix: %x, 
-	DomainBeaconProposerCapella: %x, 
+	DomainBuilder: %x,
+	DomainBeaconProposerBellatrix: %x,
+	DomainBeaconProposerCapella: %x,
 	DomainBeaconProposerDeneb: %x
 }`,
 		e.Name,
@@ -1069,4 +1069,9 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 	size += len(s.Withdrawals) * 44
 
 	return
+}
+
+type BuilderBlockValidationResponseV2 struct {
+	NewGasLimit  uint64        `json:"new_gas_limit,string"`
+	NewBlockHash phase0.Hash32 `json:"new_block_hash"`
 }

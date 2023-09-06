@@ -28,7 +28,7 @@ var (
 )
 
 type IBlockSimRateLimiter interface {
-	Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (error, error)
+	Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (*common.BuilderBlockValidationResponseV2, error, error)
 	CurrentCounter() int64
 }
 
@@ -50,7 +50,7 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 	}
 }
 
-func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (requestErr, validationErr error) {
+func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (resp *common.BuilderBlockValidationResponseV2, requestErr, validationErr error) {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
 	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
@@ -66,12 +66,12 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}()
 
 	if err := context.Err(); err != nil {
-		return fmt.Errorf("%w, %w", ErrRequestClosed, err), nil
+		return nil, fmt.Errorf("%w, %w", ErrRequestClosed, err), nil
 	}
 
 	var simReq *jsonrpc.JSONRPCRequest
 	if payload.Capella == nil {
-		return ErrNoCapellaPayload, nil
+		return nil, ErrNoCapellaPayload, nil
 	}
 	// TODO: add deneb support.
 
@@ -87,8 +87,11 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 
 	// Create and fire off JSON-RPC request
 	simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
-	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
-	return requestErr, validationErr
+	rawResp, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
+
+	json.Unmarshal(rawResp.Result, resp)
+
+	return resp, requestErr, validationErr
 }
 
 // CurrentCounter returns the number of waiting and active requests

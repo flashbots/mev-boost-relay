@@ -180,7 +180,7 @@ func TestSimulateBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
-			_, simErr := backend.relay.simulateBlock(context.Background(), blockSimOptions{
+			_, _, simErr := backend.relay.simulateBlock(context.Background(), blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				builder: &blockBuilderCacheEntry{

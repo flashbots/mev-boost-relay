@@ -550,9 +550,10 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
-func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (requestErr, validationErr error) {
+func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (overrides *common.BuilderBlockValidationResponseV2, requestErr, validationErr error) {
 	t := time.Now()
-	requestErr, validationErr = api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
+	overrides, requestErr, validationErr = api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
+
 	log := opts.log.WithFields(logrus.Fields{
 		"durationMs": time.Since(t).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
@@ -563,18 +564,18 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 			ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
 			if ignoreError {
 				log.WithError(validationErr).Warn("block validation failed with ignorable error")
-				return nil, nil
+				return nil, nil, nil
 			}
 		}
 		log.WithError(validationErr).Warn("block validation failed")
-		return nil, validationErr
+		return nil, nil, validationErr
 	}
 	if requestErr != nil {
 		log.WithError(requestErr).Warn("block validation failed: request error")
-		return requestErr, nil
+		return nil, requestErr, nil
 	}
 	log.Info("block validation successful")
-	return nil, nil
+	return overrides, nil, nil
 }
 
 func (api *RelayAPI) demoteBuilder(pubkey string, req *common.BuilderSubmitBlockRequest, simError error) {
@@ -620,7 +621,13 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 		// it for logging, it is not atomic to avoid the performance impact.
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
 	}).Infof("simulating optimistic block with hash: %v", opts.req.BuilderSubmitBlockRequest.BlockHash())
-	reqErr, simErr := api.simulateBlock(ctx, opts)
+	overrides, reqErr, simErr := api.simulateBlock(ctx, opts)
+
+	overrideGasValues(
+		opts.req,
+		overrides,
+	)
+
 	simResultC <- &blockSimResult{reqErr == nil, true, reqErr, simErr}
 	if reqErr != nil || simErr != nil {
 		// Mark builder as non-optimistic.
@@ -1785,13 +1792,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	// Refuse blocks outside the specified gas limit
-	if payload.Capella.ExecutionPayload.GasLimit > RelayActualGasLimit {
-		return
-	}
-	// Overwrite the builder's gasLimit with the relay-set fictitious limit
-	payload.Capella.ExecutionPayload.GasLimit = RelayFictitiousGasLimit
-
 	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
@@ -1964,7 +1964,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		go api.processOptimisticBlock(opts, simResultC)
 	} else {
 		// Simulate block (synchronously).
-		requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
+		overrides, requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
+
+		overrideGasValues(
+			opts.req,
+			overrides,
+		)
+
 		simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr}
 		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 		log = log.WithFields(logrus.Fields{
@@ -2373,5 +2379,15 @@ func (api *RelayAPI) handleReadyz(w http.ResponseWriter, req *http.Request) {
 		api.RespondMsg(w, http.StatusOK, "ready")
 	} else {
 		api.RespondMsg(w, http.StatusServiceUnavailable, "not ready")
+	}
+}
+
+func overrideGasValues(
+	req *common.BuilderBlockValidationRequest,
+	overrides *common.BuilderBlockValidationResponseV2,
+) {
+	if overrides != nil {
+		req.Capella.ExecutionPayload.BlockHash = overrides.NewBlockHash
+		req.Capella.ExecutionPayload.GasLimit = overrides.NewGasLimit
 	}
 }
