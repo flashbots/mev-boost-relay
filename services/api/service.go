@@ -1785,6 +1785,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	// Refuse blocks outside the specified gas limit
+	if payload.Capella.ExecutionPayload.GasLimit > RelayActualGasLimit {
+		return
+	}
 	// Overwrite the builder's gasLimit with the relay-set fictitious limit
 	payload.Capella.ExecutionPayload.GasLimit = RelayFictitiousGasLimit
 
