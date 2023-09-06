@@ -13,9 +13,10 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	consensusbellatrix "github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	ssz "github.com/ferranbt/fastssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
@@ -692,7 +693,7 @@ func BoostBidToBidTrace(bidTrace *boostTypes.BidTrace) *apiv1.BidTrace {
 		BuilderPubkey:        phase0.BLSPubKey(bidTrace.BuilderPubkey),
 		Slot:                 bidTrace.Slot,
 		ProposerPubkey:       phase0.BLSPubKey(bidTrace.ProposerPubkey),
-		ProposerFeeRecipient: bellatrix.ExecutionAddress(bidTrace.ProposerFeeRecipient),
+		ProposerFeeRecipient: consensusbellatrix.ExecutionAddress(bidTrace.ProposerFeeRecipient),
 		BlockHash:            phase0.Hash32(bidTrace.BlockHash),
 		Value:                U256StrToUint256(bidTrace.Value),
 		ParentHash:           phase0.Hash32(bidTrace.ParentHash),
@@ -801,4 +802,271 @@ func (b *BuilderSubmitBlockRequest) Withdrawals() []*consensuscapella.Withdrawal
 		return b.Capella.ExecutionPayload.Withdrawals
 	}
 	return nil
+}
+
+/*
+SubmitBlockRequestV2Optimistic is the v2 request from the builder to submit
+a block. The message must be SSZ encoded. The first three fields are at most
+944 bytes, which fit into a single 1500 MTU ethernet packet. The
+`UnmarshalSSZHeaderOnly` function just parses the first three fields,
+which is sufficient data to set the bid of the builder. The `Transactions`
+and `Withdrawals` fields are required to construct the full SignedBeaconBlock
+and are parsed asynchronously.
+
+Header only layout:
+[000-236) = Message   (236 bytes)
+[236-240) = offset1   (  4 bytes)
+[240-336) = Signature ( 96 bytes)
+[336-340) = offset2   (  4 bytes)
+[340-344) = offset3   (  4 bytes)
+[344-944) = EPH       (600 bytes)
+*/
+type SubmitBlockRequestV2Optimistic struct {
+	Message                *apiv1.BidTrace
+	ExecutionPayloadHeader *consensuscapella.ExecutionPayloadHeader
+	Signature              phase0.BLSSignature              `ssz-size:"96"`
+	Transactions           []consensusbellatrix.Transaction `ssz-max:"1048576,1073741824" ssz-size:"?,?"`
+	Withdrawals            []*consensuscapella.Withdrawal   `ssz-max:"16"`
+}
+
+// MarshalSSZ ssz marshals the SubmitBlockRequestV2Optimistic object
+func (s *SubmitBlockRequestV2Optimistic) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// UnmarshalSSZ ssz unmarshals the SubmitBlockRequestV2Optimistic object
+func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 344 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1, o3, o4 uint64
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(apiv1.BidTrace)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
+		return err
+	}
+
+	// Offset (1) 'ExecutionPayloadHeader'
+	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 < 344 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'Signature'
+	copy(s.Signature[:], buf[240:336])
+
+	// Offset (3) 'Transactions'
+	if o3 = ssz.ReadOffset(buf[336:340]); o3 > size || o1 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (4) 'Withdrawals'
+	if o4 = ssz.ReadOffset(buf[340:344]); o4 > size || o3 > o4 {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'ExecutionPayloadHeader'
+	{
+		buf = tail[o1:o3]
+		if s.ExecutionPayloadHeader == nil {
+			s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+		}
+		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (3) 'Transactions'
+	{
+		buf = tail[o3:o4]
+		num, err := ssz.DecodeDynamicLength(buf, 1073741824)
+		if err != nil {
+			return err
+		}
+		s.Transactions = make([]consensusbellatrix.Transaction, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1073741824 {
+				return ssz.ErrBytesLength
+			}
+			if cap(s.Transactions[indx]) == 0 {
+				s.Transactions[indx] = consensusbellatrix.Transaction(make([]byte, 0, len(buf)))
+			}
+			s.Transactions[indx] = append(s.Transactions[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (4) 'Withdrawals'
+	{
+		buf = tail[o4:]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		s.Withdrawals = make([]*consensuscapella.Withdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if s.Withdrawals[ii] == nil {
+				s.Withdrawals[ii] = new(consensuscapella.Withdrawal)
+			}
+			if err = s.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// UnmarshalSSZHeaderOnly ssz unmarshals the first 3 fields of the SubmitBlockRequestV2Optimistic object
+func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZHeaderOnly(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 344 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1, o3 uint64
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(apiv1.BidTrace)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
+		return err
+	}
+
+	// Offset (1) 'ExecutionPayloadHeader'
+	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 < 344 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'Signature'
+	copy(s.Signature[:], buf[240:336])
+
+	// Offset (3) 'Transactions'
+	if o3 = ssz.ReadOffset(buf[336:340]); o3 > size || o1 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'ExecutionPayloadHeader'
+	{
+		buf = tail[o1:o3]
+		if s.ExecutionPayloadHeader == nil {
+			s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+		}
+		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// MarshalSSZTo ssz marshals the SubmitBlockRequestV2Optimistic object to a target array
+func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(344)
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(apiv1.BidTrace)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (1) 'ExecutionPayloadHeader'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.ExecutionPayloadHeader == nil {
+		s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+	}
+	offset += s.ExecutionPayloadHeader.SizeSSZ()
+
+	// Field (2) 'Signature'
+	dst = append(dst, s.Signature[:]...)
+
+	// Offset (3) 'Transactions'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(s.Transactions); ii++ {
+		offset += 4
+		offset += len(s.Transactions[ii])
+	}
+
+	// Offset (4) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+
+	// Field (1) 'ExecutionPayloadHeader'
+	if dst, err = s.ExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (3) 'Transactions'
+	if size := len(s.Transactions); size > 1073741824 {
+		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Transactions", size, 1073741824)
+		return
+	}
+	{
+		offset = 4 * len(s.Transactions)
+		for ii := 0; ii < len(s.Transactions); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(s.Transactions[ii])
+		}
+	}
+	for ii := 0; ii < len(s.Transactions); ii++ {
+		if size := len(s.Transactions[ii]); size > 1073741824 {
+			err = ssz.ErrBytesLengthFn("SubmitBlockRequestV2Optimistic.Transactions[ii]", size, 1073741824)
+			return
+		}
+		dst = append(dst, s.Transactions[ii]...)
+	}
+
+	// Field (4) 'Withdrawals'
+	if size := len(s.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(s.Withdrawals); ii++ {
+		if dst, err = s.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+	return dst, nil
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SubmitBlockRequestV2Optimistic object
+func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
+	size = 344
+
+	// Field (1) 'ExecutionPayloadHeader'
+	if s.ExecutionPayloadHeader == nil {
+		s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+	}
+	size += s.ExecutionPayloadHeader.SizeSSZ()
+
+	// Field (3) 'Transactions'
+	for ii := 0; ii < len(s.Transactions); ii++ {
+		size += 4
+		size += len(s.Transactions[ii])
+	}
+
+	// Field (4) 'Withdrawals'
+	size += len(s.Withdrawals) * 44
+
+	return
 }
