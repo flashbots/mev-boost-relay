@@ -162,6 +162,7 @@ type blockSimResult struct {
 	optimisticSubmission bool
 	requestErr           error
 	validationErr        error
+	overrides			 *common.BuilderBlockValidationResponseV2
 }
 
 // RelayAPI represents a single Relay instance
@@ -624,11 +625,11 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 	overrides, reqErr, simErr := api.simulateBlock(ctx, opts)
 
 	overrideGasValues(
-		opts.req,
+		&opts.req.BuilderSubmitBlockRequest,
 		overrides,
 	)
 
-	simResultC <- &blockSimResult{reqErr == nil, true, reqErr, simErr}
+	simResultC <- &blockSimResult{reqErr == nil, true, reqErr, simErr, overrides}
 	if reqErr != nil || simErr != nil {
 		// Mark builder as non-optimistic.
 		opts.builder.status.IsOptimistic = false
@@ -1644,7 +1645,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 	isBidBelowFloor := floorBidValue != nil && opts.payload.Value().Cmp(floorBidValue) == -1
 	isBidAtOrBelowFloor := floorBidValue != nil && opts.payload.Value().Cmp(floorBidValue) < 1
 	if opts.cancellationsEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
+		opts.simResultC <- &blockSimResult{false, false, nil, nil, nil}
 		opts.log.Info("submission below floor bid value, with cancellation")
 		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.payload.Slot(), opts.payload.ParentHash(), opts.payload.ProposerPubkey(), opts.payload.BuilderPubkey().String())
 		if err != nil {
@@ -1655,7 +1656,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 		api.Respond(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, nil, false
 	} else if !opts.cancellationsEnabled && isBidAtOrBelowFloor { // without cancellations: if at or below floor -> ignore
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
+		opts.simResultC <- &blockSimResult{false, false, nil, nil, nil}
 		opts.log.Info("submission at or below floor bid value, without cancellation")
 		api.RespondMsg(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, nil, false
@@ -1901,7 +1902,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		case simResult = <-simResultC:
 		case <-time.After(10 * time.Second):
 			log.Warn("timed out waiting for simulation result")
-			simResult = &blockSimResult{false, false, nil, nil}
+			simResult = &blockSimResult{false, false, nil, nil, nil}
+		}
+
+		if simResult.overrides != nil {
+			// override the gas values with the ones from the simulation
+			overrideGasValues(payload, simResult.overrides)
 		}
 
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission)
@@ -1967,11 +1973,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		overrides, requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
 
 		overrideGasValues(
-			opts.req,
+			&opts.req.BuilderSubmitBlockRequest,
 			overrides,
 		)
 
-		simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr}
+		simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr, overrides}
 		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 		log = log.WithFields(logrus.Fields{
 			"timestampAfterValidation": time.Now().UTC().UnixMilli(),
@@ -2383,7 +2389,7 @@ func (api *RelayAPI) handleReadyz(w http.ResponseWriter, req *http.Request) {
 }
 
 func overrideGasValues(
-	req *common.BuilderBlockValidationRequest,
+	req *common.BuilderSubmitBlockRequest,
 	overrides *common.BuilderBlockValidationResponseV2,
 ) {
 	if overrides != nil {
