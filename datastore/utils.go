@@ -13,10 +13,10 @@ type BuilderBids struct {
 	bidValues map[string]*big.Int
 }
 
-func NewBuilderBidsFromRedis(ctx context.Context, r *RedisCache, tx redis.Pipeliner, slot uint64, parentHash, proposerPubkey string) (*BuilderBids, error) {
+func NewBuilderBidsFromRedis(ctx context.Context, r *RedisCache, pipeliner redis.Pipeliner, slot uint64, parentHash, proposerPubkey string) (*BuilderBids, error) {
 	keyBidValues := r.keyBlockBuilderLatestBidsValue(slot, parentHash, proposerPubkey)
-	c := tx.HGetAll(ctx, keyBidValues)
-	_, err := tx.Exec(ctx)
+	c := pipeliner.HGetAll(ctx, keyBidValues)
+	_, err := pipeliner.Exec(ctx)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, err
 	}
