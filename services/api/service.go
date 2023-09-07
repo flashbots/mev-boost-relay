@@ -408,23 +408,28 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
+	var foundCapellaEpoch, foundDenebEpoch bool
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
+			foundCapellaEpoch = true
 			api.capellaEpoch = fork.Epoch
 		case api.opts.EthNetDetails.DenebForkVersionHex:
+			foundDenebEpoch = true
 			api.denebEpoch = fork.Epoch
 		}
 	}
 
+	if !foundCapellaEpoch || !foundDenebEpoch {
+		return ErrMissingForkVersions
+	}
+
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.capellaEpoch) {
-		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
-	} else if hasReachedFork(currentSlot, api.denebEpoch) {
+	if hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
-	} else {
-		return ErrMismatchedForkVersions
+	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
+		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
 	}
 
 	// start proposer API specific things
