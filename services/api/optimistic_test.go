@@ -59,7 +59,7 @@ type blockRequestOpts struct {
 	domain     boostTypes.Domain
 }
 
-func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBackend) {
+func generateKeyPair(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey) {
 	t.Helper()
 	// Setup test key pair.
 	sk, _, err := bls.GenerateNewKeypair()
@@ -69,6 +69,11 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	pkBytes := blsPubkey.Bytes()
 	var pubkey phase0.BLSPubKey
 	copy(pubkey[:], pkBytes[:])
+	return &pubkey, sk
+}
+
+func startTestBackend(t *testing.T, pubkey *phase0.BLSPubKey) *testBackend {
+	t.Helper()
 	pkStr := pubkey.String()
 
 	// Setup test backend.
@@ -134,7 +139,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	// require.Equal(t, count, 1)
 
 	backend.relay.headSlot.Store(40)
-	return &pubkey, sk, backend
+	return backend
 }
 
 func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr error, backend *testBackend) *httptest.ResponseRecorder {
@@ -176,7 +181,8 @@ func TestSimulateBlock(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pubkey, secretkey, backend := startTestBackend(t)
+			pubkey, secretkey := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
@@ -224,7 +230,8 @@ func TestProcessOptimisticBlock(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pubkey, secretkey, backend := startTestBackend(t)
+			pubkey, secretkey := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			pkStr := pubkey.String()
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
@@ -273,7 +280,8 @@ func TestDemoteBuilder(t *testing.T) {
 		IsOptimistic: false,
 		IsHighPrio:   true,
 	}
-	pubkey, secretkey, backend := startTestBackend(t)
+	pubkey, secretkey := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
 	pkStr := pubkey.String()
 	req := common.TestBuilderSubmitBlockRequest(secretkey, getTestBidTrace(*pubkey, collateral))
 	backend.relay.demoteBuilder(pkStr, &req, errFake)
@@ -291,7 +299,8 @@ func TestDemoteBuilder(t *testing.T) {
 }
 
 func TestPrepareBuildersForSlot(t *testing.T) {
-	pubkey, _, backend := startTestBackend(t)
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
 	pkStr := pubkey.String()
 	// Clear cache.
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{}
@@ -350,7 +359,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			pubkey, secretkey, backend := startTestBackend(t)
+			pubkey, secretkey := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			backend.relay.optimisticSlot.Store(slot)
 			backend.relay.capellaEpoch = 1
 			var randaoHash boostTypes.Hash
@@ -392,7 +402,8 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 }
 
 func TestInternalBuilderStatus(t *testing.T) {
-	pubkey, _, backend := startTestBackend(t)
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
 	// Set all to false initially.
 	err := backend.relay.db.SetBlockBuilderStatus(pubkey.String(), common.BuilderStatus{})
 	require.NoError(t, err)
@@ -419,7 +430,8 @@ func TestInternalBuilderStatus(t *testing.T) {
 }
 
 func TestInternalBuilderCollateral(t *testing.T) {
-	pubkey, _, backend := startTestBackend(t)
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
 	path := "/internal/v1/builder/collateral/" + pubkey.String()
 
 	// Set & Get.
@@ -433,4 +445,198 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, resp.BuilderID, "builder0x69")
 	require.Equal(t, resp.Collateral, "10000")
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2_fail_cancellations(t *testing.T) {
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
+	outBytes := make([]byte, 10)
+
+	// Disable cancellations.
+	backend.relay.ffEnableCancellations = false
+
+	// Set request with cancellations true.
+	rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2+"?cancellations=1", outBytes, map[string]string{})
+
+	// Check bad request is returned.
+	require.Equal(t, rr.Code, 400)
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2_fail_gzip(t *testing.T) {
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
+	outBytes := make([]byte, 10)
+
+	// Set request with gzip.
+	rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{"Content-Encoding": "gzip"})
+
+	// Check bad request is returned.
+	require.Equal(t, rr.Code, 400)
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2_fail_read_header(t *testing.T) {
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
+	outBytes := make([]byte, 0) // 0 bytes.
+
+	// Valid request but no bytes.
+	rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{})
+
+	// Check bad request is returned.
+	require.Equal(t, rr.Code, 400)
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2_fail_ssz_decode_header(t *testing.T) {
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
+	outBytes := make([]byte, 944) // 944 bytes is min required to try ssz decoding.
+	outBytes[0] = 0xaa
+
+	// Valid request but no bytes.
+	rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{})
+
+	// Check bad request is returned.
+	require.Equal(t, rr.Code, 400)
+}
+
+func TestBuilderApiSubmitNewBlockOptimisticV2_full(t *testing.T) {
+	pubkey, secretkey := generateKeyPair(t)
+
+	// Construct our test requests.
+	cleanReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	badSigReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	badSigReq.Signature[0] = 0xaa
+	invalidSigReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	invalidSigReq.Message.Slot += 1
+	badTimestampReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	badTimestampReq.ExecutionPayloadHeader.Timestamp -= 1
+	badWithdrawalsRootReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	badWithdrawalsRootReq.ExecutionPayloadHeader.WithdrawalsRoot[0] = 0xaa
+
+	// Bad requests that need signatures.
+	bidBadFeeRecipient := getTestBidTrace(*pubkey, 10)
+	bidBadFeeRecipient.ProposerFeeRecipient[0] = 0x42
+	badFeeRecipient := common.TestBuilderSubmitBlockRequestV2(secretkey, bidBadFeeRecipient)
+
+	testCases := []struct {
+		description    string
+		httpCode       uint64
+		simError       error
+		overwriteEntry bool
+		entry          *blockBuilderCacheEntry
+		request        *common.SubmitBlockRequestV2Optimistic
+	}{
+		{
+			description: "success",
+			httpCode:    200, // success
+			request:     cleanReq,
+		},
+		{
+			description: "failure_malformed_signature",
+			httpCode:    400, // failure
+			request:     badSigReq,
+		},
+		{
+			description: "failure_invalid_signature",
+			httpCode:    400, // failure
+			request:     invalidSigReq,
+		},
+		{
+			description:    "failure_no_builder_entry",
+			httpCode:       400, // failure
+			request:        common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10)),
+			entry:          nil,
+			overwriteEntry: true,
+		},
+		{
+			description: "failure_builder_not_optimistic",
+			httpCode:    400, // failure
+			request:     common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10)),
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: false,
+				},
+			},
+			overwriteEntry: true,
+		},
+		{
+			description: "failure_builder_insufficient_collateral",
+			httpCode:    400, // failure
+			request:     common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10)),
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: big.NewInt(int64(9)),
+			},
+			overwriteEntry: true,
+		},
+		{
+			description: "failure_builder_blacklisted",
+			httpCode:    200, // we return 200 here.
+			request:     common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10)),
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic:  true,
+					IsBlacklisted: true,
+				},
+				collateral: big.NewInt(int64(collateral)),
+			},
+			overwriteEntry: true,
+		},
+		{
+			description: "failure_bad_time_stamp",
+			httpCode:    400, // failure
+			request:     badTimestampReq,
+		},
+		{
+			description: "failure_bad_fee_recipient",
+			httpCode:    400, // failure
+			request:     badFeeRecipient,
+		},
+		{
+			description: "failure_bad_withdrawals_root",
+			httpCode:    400, // failure
+			request:     badWithdrawalsRootReq,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			backend := startTestBackend(t, pubkey)
+			backend.relay.optimisticSlot.Store(slot)
+			backend.relay.capellaEpoch = 1
+			var randaoHash boostTypes.Hash
+			err := randaoHash.FromSlice([]byte(randao))
+			require.NoError(t, err)
+			withRoot, err := ComputeWithdrawalsRoot([]*consensuscapella.Withdrawal{})
+			require.NoError(t, err)
+			backend.relay.payloadAttributes[emptyHash] = payloadAttributesHelper{
+				slot:            slot,
+				withdrawalsRoot: withRoot,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: randaoHash.String(),
+				},
+			}
+
+			if tc.overwriteEntry {
+				if tc.entry == nil {
+					delete(backend.relay.blockBuildersCache, pubkey.String())
+				} else {
+					backend.relay.blockBuildersCache[pubkey.String()] = tc.entry
+				}
+			}
+
+			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
+				simulationError: tc.simError,
+			}
+
+			outBytes, err := tc.request.MarshalSSZ()
+			require.NoError(t, err)
+
+			// Check http code.
+			rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{})
+			require.Equal(t, uint64(rr.Code), tc.httpCode)
+		})
+	}
 }

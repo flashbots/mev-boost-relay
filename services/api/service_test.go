@@ -571,7 +571,8 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			backend.relay.proposerDutiesLock.RLock()
 			backend.relay.proposerDutiesMap[tc.payload.Slot()] = tc.slotDuty
 			backend.relay.proposerDutiesLock.RUnlock()
@@ -638,6 +639,13 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					Message: &v1.BidTrace{
 						Slot: testSlot + 1, // submission for a future slot
 					},
+					ExecutionPayload: &capella.ExecutionPayload{
+						Withdrawals: []*capella.Withdrawal{
+							{
+								Index: 989694,
+							},
+						},
+					},
 				},
 			},
 			expectOk: false,
@@ -658,28 +666,11 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					},
 					ExecutionPayload: &capella.ExecutionPayload{
 						PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
-					},
-				},
-			},
-			expectOk: false,
-		},
-		{
-			description: "failure_nil_withdrawals",
-			attrs: payloadAttributesHelper{
-				slot: testSlot,
-				payloadAttributes: beaconclient.PayloadAttributes{
-					PrevRandao: testPrevRandao,
-				},
-			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: phase0.Hash32(parentHash),
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao:  [32]byte(prevRandao),
-						Withdrawals: nil, // set to nil to cause an error
+						Withdrawals: []*capella.Withdrawal{
+							{
+								Index: 989694,
+							},
+						},
 					},
 				},
 			},
@@ -716,7 +707,8 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[testParentHash] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
@@ -724,7 +716,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
+			withdrawalsRoot, err := ComputeWithdrawalsRoot(tc.payload.Withdrawals())
+			require.Nil(t, err)
+			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload, withdrawalsRoot)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -785,7 +779,8 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
@@ -848,7 +843,8 @@ func TestCheckBuilderEntry(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			backend.relay.blockBuildersCache[tc.pk.String()] = tc.entry
 			backend.relay.ffDisableLowPrioBuilders = true
 			w := httptest.NewRecorder()
@@ -920,7 +916,8 @@ func TestCheckFloorBidValue(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			err := backend.redis.SetFloorBidValue(tc.payload.Slot(), tc.payload.ParentHash(), tc.payload.ProposerPubkey(), tc.floorValue)
 			require.Nil(t, err)
 
@@ -994,7 +991,8 @@ func TestUpdateRedis(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			_, _, backend := startTestBackend(t)
+			pubkey, _ := generateKeyPair(t)
+			backend := startTestBackend(t, pubkey)
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
