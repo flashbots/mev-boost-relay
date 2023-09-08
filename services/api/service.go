@@ -409,13 +409,6 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
-	// feature flags
-	ffForceDenebForkSchedule := false // compatibility with older CL clients missing deneb fork schedule
-	if os.Getenv("FORCE_DENEB_FORK_SCHEDULE") != "" {
-		log.Warn("env: FORCE_DENEB_FORK_SCHEDULE: forcing validation for deneb fork schedule")
-		ffForceDenebForkSchedule = true
-	}
-
 	var foundCapellaEpoch, foundDenebEpoch bool
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
@@ -429,12 +422,25 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	if !foundCapellaEpoch || (!foundDenebEpoch && ffForceDenebForkSchedule) {
-		return ErrMissingForkVersions
+	// feature flags
+	ffCheckDenebForkSchedule := false // compatibility with older CL clients missing deneb fork schedule
+	if os.Getenv("CHECK_DENEB_FORK_SCHEDULE") != "" {
+		log.Warn("env: CHECK_DENEB_FORK_SCHEDULE: checking validation for deneb fork schedule")
+		ffCheckDenebForkSchedule = true
+	}
+
+	if ffCheckDenebForkSchedule {
+		if !foundCapellaEpoch || !foundDenebEpoch {
+			return ErrMissingForkVersions
+		}
+	} else {
+		if !foundCapellaEpoch {
+			return ErrMissingForkVersions
+		}
 	}
 
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.denebEpoch) && foundDenebEpoch {
+	if ffCheckDenebForkSchedule && hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
