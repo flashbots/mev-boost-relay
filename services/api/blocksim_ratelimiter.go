@@ -89,7 +89,10 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
 	rawResp, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
 
-	json.Unmarshal(rawResp.Result, resp)
+	err := json.Unmarshal(rawResp.Result, resp)
+	if err != nil {
+		return nil, err, nil
+	}
 
 	return resp, requestErr, validationErr
 }

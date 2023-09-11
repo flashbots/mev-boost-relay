@@ -762,7 +762,8 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 		return
 	}
 
-	// Instruct builders treat 30mm as the gas limit
+	// Changes the response to indicate that the target gas limit is
+	// RelayActualGasLimit, not the proposer-specified value.
 	for _, duty := range duties {
 		duty.Entry.Message.GasLimit = RelayActualGasLimit
 	}

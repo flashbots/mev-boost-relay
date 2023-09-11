@@ -1071,6 +1071,9 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 	return
 }
 
+// BuilderBlockValidationResponseV2 is the expected response from the builder
+// node simulation requests. It contains the modified gas limit and the new
+// block hash.
 type BuilderBlockValidationResponseV2 struct {
 	NewGasLimit  uint64        `json:"new_gas_limit,string"`
 	NewBlockHash phase0.Hash32 `json:"new_block_hash"`
