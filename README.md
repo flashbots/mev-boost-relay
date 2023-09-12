@@ -153,7 +153,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `ENABLE_IGNORABLE_VALIDATION_ERRORS` - enable ignorable validation errors
 * `USE_V2_PUBLISH_BLOCK_ENDPOINT` - uses the v2 publish block endpoint on the beacon node
-* `REQUIRE_DENEB_FORK_SCHEDULE` - enforces validation for beacon node to return a deneb fork schedule
 
 #### Development Environment Variables
 

@@ -53,8 +53,6 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
-	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
-	ErrMissingForkVersions        = errors.New("invalid fork version from beacon node")
 )
 
 var (
@@ -422,27 +420,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	// feature flags
-	ffRequireDenebForkSchedule := false // compatibility with older CL clients missing deneb fork schedule
-	if os.Getenv("REQUIRE_DENEB_FORK_SCHEDULE") != "" {
-		log.Warn("env: REQUIRE_DENEB_FORK_SCHEDULE: checking validation for deneb fork schedule")
-		ffRequireDenebForkSchedule = true
-	}
-
-	if ffRequireDenebForkSchedule {
-		if !foundCapellaEpoch || !foundDenebEpoch {
-			return ErrMissingForkVersions
-		}
-	} else {
-		if !foundCapellaEpoch {
-			return ErrMissingForkVersions
-		}
-	}
-
 	// Print fork version information
 	if foundDenebEpoch && hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
-	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
+	} else if foundCapellaEpoch && hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
 	}
 
