@@ -54,8 +54,6 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
-	ErrMismatchedForkVersions     = errors.New("can not find matching fork versions as retrieved from beacon node")
-	ErrMissingForkVersions        = errors.New("invalid fork version from beacon node")
 )
 
 var (
@@ -411,6 +409,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
+
 	var foundCapellaEpoch, foundDenebEpoch bool
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
@@ -424,14 +423,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}
 
-	if !foundCapellaEpoch || !foundDenebEpoch {
-		return ErrMissingForkVersions
-	}
-
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.denebEpoch) {
+	if foundDenebEpoch && hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
-	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
+	} else if foundCapellaEpoch && hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
 	}
 
