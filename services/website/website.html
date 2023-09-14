@@ -187,11 +187,11 @@
                     <table class="pure-table pure-table-horizontal">
                         <tbody>
                             <tr title="Currently active or pending validators on Ethereum PoS">
-                                <td>Validators total</td>
+                                <td>Validators active or in queue</td>
                                 <td>{{ .ValidatorsTotal | prettyInt }}</td>
                             </tr>
                             <tr title="Validators who have sent a registration at least once">
-                                <td>Validators registered</td>
+                                <td>Validators registered (all time)</td>
                                 <td>{{ .ValidatorsRegistered| prettyInt }}</td>
                             </tr>
                             <tr title="Last slot delivered through this relay">
