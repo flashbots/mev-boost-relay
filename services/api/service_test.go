@@ -937,7 +937,7 @@ func TestCheckFloorBidValue(t *testing.T) {
 				simResultC:           simResultC,
 				payload:              tc.payload,
 			}
-			floor, log, ok := backend.relay.checkFloorBidValue(bfOpts)
+			floor, ok := backend.relay.checkFloorBidValue(bfOpts)
 			require.Equal(t, tc.expectOk, ok)
 			if ok {
 				require.NotNil(t, floor)
