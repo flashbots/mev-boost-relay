@@ -1179,12 +1179,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Log at start and end of request
 	log.Info("request initiated")
-	defer func(log *logrus.Entry) {
+	defer func() {
 		log.WithFields(logrus.Fields{
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
 			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
 		}).Info("request finished")
-	}(log)
+	}()
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
@@ -1605,7 +1605,7 @@ type bidFloorOpts struct {
 	payload              *common.BuilderSubmitBlockRequest
 }
 
-func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.Entry, bool) {
+func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	// Reject new submissions once the payload for this slot was delivered - TODO: store in memory as well
 	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered(context.Background(), opts.tx)
 	if err != nil && !errors.Is(err, redis.Nil) {
@@ -1613,7 +1613,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 	} else if opts.payload.Slot() <= slotLastPayloadDelivered {
 		opts.log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(opts.w, http.StatusBadRequest, "payload for this slot was already delivered")
-		return nil, nil, false
+		return nil, false
 	}
 
 	// Grab floor bid value
@@ -1636,17 +1636,17 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, *logrus.En
 		if err != nil {
 			opts.log.WithError(err).Error("failed processing cancellable bid below floor")
 			api.RespondError(opts.w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
-			return nil, nil, false
+			return nil, false
 		}
 		api.Respond(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
-		return nil, nil, false
+		return nil, false
 	} else if !opts.cancellationsEnabled && isBidAtOrBelowFloor { // without cancellations: if at or below floor -> ignore
 		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("submission at or below floor bid value, without cancellation")
 		api.RespondMsg(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
-		return nil, nil, false
+		return nil, false
 	}
-	return floorBidValue, opts.log, true
+	return floorBidValue, true
 }
 
 type redisUpdateBidOpts struct {
@@ -1874,7 +1874,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		simResultC:           simResultC,
 		payload:              payload,
 	}
-	floorBidValue, log, ok := api.checkFloorBidValue(bfOpts)
+	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
 	if !ok {
 		return
 	}
