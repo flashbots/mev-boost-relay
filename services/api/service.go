@@ -1179,12 +1179,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Log at start and end of request
 	log.Info("request initiated")
-	defer func() {
+	defer func(log *logrus.Entry) {
 		log.WithFields(logrus.Fields{
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
 			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
 		}).Info("request finished")
-	}()
+	}(log)
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
