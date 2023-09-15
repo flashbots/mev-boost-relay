@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -691,7 +690,7 @@ func TestBuilderApiOptimisticV2SlowPath(t *testing.T) {
 		},
 		{
 			description:    "failure_empty_payload",
-			simError:       errors.New("test err"),
+			simError:       errFake,
 			expectDemotion: true,
 		},
 	}
