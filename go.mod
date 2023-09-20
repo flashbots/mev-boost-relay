@@ -12,7 +12,7 @@ require (
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.12.2
 	github.com/flashbots/go-boost-utils v1.6.0
-	github.com/flashbots/go-utils v0.4.12
+	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0
 	github.com/holiman/uint256 v1.2.3
