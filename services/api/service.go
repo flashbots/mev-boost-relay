@@ -2434,7 +2434,7 @@ func (api *RelayAPI) optimisticV2SlowPath(r io.Reader, v2Opts v2SlowPathOpts) {
 			RegisteredGasLimit:        v2Opts.gasLimit,
 		},
 	}
-	api.processOptimisticBlock(opts, simResultC)
+	go api.processOptimisticBlock(opts, simResultC)
 
 	nextTime := time.Now().UTC()
 	v2Opts.pf.Simulation = uint64(nextTime.Sub(v2Opts.eligibleAt).Microseconds())
