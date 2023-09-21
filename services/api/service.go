@@ -23,6 +23,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	builderCapella "github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-eth2-client/api/v1/capella"
+	capellaSpec "github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -65,6 +66,7 @@ var (
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
+	pathSubmitNewBlockV2     = "/relay/v2/builder/blocks"
 
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
@@ -342,6 +344,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+		r.HandleFunc(pathSubmitNewBlockV2, api.handleSubmitNewBlockV2).Methods(http.MethodPost)
 	}
 
 	// Data API
@@ -1503,7 +1506,7 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 	return slotDuty.Entry.Message.GasLimit, true
 }
 
-func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest) bool {
+func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, payload *common.BuilderSubmitBlockRequest, withdrawalsRoot phase0.Root) bool {
 	api.payloadAttributesLock.RLock()
 	attrs, ok := api.payloadAttributes[payload.ParentHash()]
 	api.payloadAttributesLock.RUnlock()
@@ -1521,13 +1524,6 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 	}
 
 	if hasReachedFork(payload.Slot(), api.capellaEpoch) { // Capella requires correct withdrawals
-		withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
-		if err != nil {
-			log.WithError(err).Warn("could not compute withdrawals root from payload")
-			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
-			return false
-		}
-
 		if withdrawalsRoot != attrs.withdrawalsRoot {
 			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
@@ -1839,7 +1835,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
-	ok = api.checkSubmissionPayloadAttrs(w, log, payload)
+	withdrawalsRoot, err := ComputeWithdrawalsRoot(payload.Withdrawals())
+	if err != nil {
+		log.WithError(err).Warn("could not compute withdrawals root from payload")
+		api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
+		return
+	}
+	ok = api.checkSubmissionPayloadAttrs(w, log, payload, withdrawalsRoot)
 	if !ok {
 		return
 	}
@@ -2052,6 +2054,298 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"profileTotalUs":     pf.Total,
 	}).Info("received block from builder")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Request) {
+	var pf common.Profile
+	var prevTime, nextTime time.Time
+
+	headSlot := api.headSlot.Load()
+	receivedAt := time.Now().UTC()
+	prevTime = receivedAt
+
+	args := req.URL.Query()
+	isCancellationEnabled := args.Get("cancellations") == "1"
+
+	log := api.log.WithFields(logrus.Fields{
+		"method":                "submitNewBlockV2",
+		"contentLength":         req.ContentLength,
+		"headSlot":              headSlot,
+		"cancellationEnabled":   isCancellationEnabled,
+		"timestampRequestStart": receivedAt.UnixMilli(),
+	})
+
+	// Log at start and end of request
+	log.Info("request initiated")
+	defer func() {
+		log.WithFields(logrus.Fields{
+			"timestampRequestFin": time.Now().UTC().UnixMilli(),
+			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+		}).Info("request finished")
+	}()
+
+	// If cancellations are disabled but builder requested it, return error
+	if isCancellationEnabled && !api.ffEnableCancellations {
+		log.Info("builder submitted with cancellations enabled, but feature flag is disabled")
+		api.RespondError(w, http.StatusBadRequest, "cancellations are disabled")
+		return
+	}
+
+	var err error
+	var r io.Reader = req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		r, err = gzip.NewReader(req.Body)
+		if err != nil {
+			log.WithError(err).Warn("could not create gzip reader")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		log = log.WithField("gzip-req", true)
+	}
+
+	var buf bytes.Buffer
+	rHeader := io.TeeReader(r, &buf)
+
+	// Header at most 944 bytes.
+	headBuf := make([]byte, 944)
+
+	// Read header bytes.
+	_, err = io.ReadFull(rHeader, headBuf)
+	if err != nil {
+		log.WithError(err).Warn("could not read full header")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Unmarshall just header.
+	var header common.SubmitBlockRequestV2Optimistic
+	err = header.UnmarshalSSZHeaderOnly(headBuf)
+	if err != nil {
+		log.WithError(err).Warn("could not unmarshall request")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
+	bid := header.Message
+	sig := header.Signature
+	eph := header.ExecutionPayloadHeader
+
+	log = log.WithFields(logrus.Fields{
+		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
+		"slot":                   bid.Slot,
+		"builderPubkey":          bid.BuilderPubkey.String(),
+		"blockHash":              bid.BlockHash.String(),
+		"proposerPubkey":         bid.ProposerPubkey.String(),
+		"parentHash":             bid.ParentHash.String(),
+		"value":                  bid.Value.String(),
+	})
+
+	log.WithFields(logrus.Fields{
+		"bid":         bid,
+		"signature":   sig,
+		"decode_time": pf.Decode,
+	}).Info("optimistically parsed bid")
+
+	// Check optimistic eligibility.
+	builderPubkey := bid.BuilderPubkey
+	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
+	if !ok {
+		log.Errorf("unable to read builder: %x from the builder cache, rejecting submission.", builderPubkey.String())
+		api.RespondError(w, http.StatusBadRequest, "unknown builder pubkey")
+		return
+	}
+	if !builderEntry.status.IsOptimistic {
+		log.Errorf("builder: %x not eligible for optimistic relaying.", builderPubkey.String())
+		api.RespondError(w, http.StatusBadRequest, "builder not eligible for optimistic relaying")
+		return
+	}
+	if builderEntry.collateral.Cmp(bid.Value.ToBig()) <= 0 || bid.Slot != api.optimisticSlot.Load() {
+		log.Warningf("insufficient collateral or non-optimistic slot. reverting to standard relaying.")
+		api.RespondError(w, http.StatusBadRequest, "insufficient collateral, unable to execute v2 optimistic relaying")
+		return
+	}
+	log = log.WithFields(logrus.Fields{
+		"builderEntry": builderEntry,
+	})
+
+	// Construct request from header.
+	payload := &common.BuilderSubmitBlockRequest{ //nolint:exhaustruct
+		Capella: &builderCapella.SubmitBlockRequest{
+			Message: bid,
+			// Transactions and Withdrawals are intentionally omitted.
+			ExecutionPayload: &capellaSpec.ExecutionPayload{ //nolint:exhaustruct
+				ParentHash:    eph.ParentHash,
+				FeeRecipient:  eph.FeeRecipient,
+				StateRoot:     eph.StateRoot,
+				ReceiptsRoot:  eph.ReceiptsRoot,
+				LogsBloom:     eph.LogsBloom,
+				PrevRandao:    eph.PrevRandao,
+				BlockNumber:   eph.BlockNumber,
+				GasLimit:      eph.GasLimit,
+				GasUsed:       eph.GasUsed,
+				Timestamp:     eph.Timestamp,
+				ExtraData:     eph.ExtraData,
+				BaseFeePerGas: eph.BaseFeePerGas,
+				BlockHash:     eph.BlockHash,
+			},
+			Signature: sig,
+		},
+	}
+
+	ok = api.checkSubmissionSlotDetails(w, log, headSlot, payload)
+	if !ok {
+		return
+	}
+
+	_, ok = api.checkBuilderEntry(w, log, builderPubkey)
+	if !ok {
+		return
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"builderIsHighPrio":     builderEntry.status.IsHighPrio,
+		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
+	})
+
+	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, payload)
+	if !ok {
+		return
+	}
+
+	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
+
+	ok = api.checkSubmissionPayloadAttrs(w, log, payload, eph.WithdrawalsRoot)
+	if !ok {
+		return
+	}
+
+	// Verify the signature
+	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
+	ok, err = boostTypes.VerifySignature(bid, api.opts.EthNetDetails.DomainBuilder, bid.BuilderPubkey[:], sig[:])
+	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
+	if err != nil {
+		log.WithError(err).Warn("failed verifying builder signature")
+		api.RespondError(w, http.StatusBadRequest, "failed verifying builder signature")
+		return
+	} else if !ok {
+		log.Warn("invalid builder signature")
+		api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		return
+	}
+
+	// Create the redis pipeline tx
+	tx := api.redis.NewTxPipeline()
+
+	// channel to send simulation result to the deferred function
+	simResultC := make(chan *blockSimResult, 1)
+	// var eligibleAt time.Time // will be set once the bid is ready
+
+	bfOpts := bidFloorOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		simResultC:           simResultC,
+		payload:              payload,
+	}
+	_, ok = api.checkFloorBidValue(bfOpts)
+	if !ok {
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
+
+	// Prepare the response data
+	getHeaderResponse, err := common.BuildGetHeaderResponseHeaderOnly(header.Message.Value, eph, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	if err != nil {
+		log.WithError(err).Error("could not sign builder bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	bidTrace := &common.BidTraceV2{ //nolint:exhaustruct
+		BidTrace:    *header.Message,
+		BlockNumber: header.ExecutionPayloadHeader.BlockNumber,
+	}
+
+	// Save to Redis
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), tx, bidTrace, payload, nil, getHeaderResponse, receivedAt, isCancellationEnabled, nil)
+	if err != nil {
+		log.WithError(err).Error("could not save bid and update top bids")
+		api.RespondError(w, http.StatusInternalServerError, "failed saving and updating bid")
+		return
+	}
+
+	// Add fields to logs
+	log = log.WithFields(logrus.Fields{
+		"timestampAfterBidUpdate":    time.Now().UTC().UnixMilli(),
+		"wasBidSavedInRedis":         updateBidResult.WasBidSaved,
+		"wasTopBidUpdated":           updateBidResult.WasTopBidUpdated,
+		"topBidValue":                updateBidResult.TopBidValue,
+		"prevTopBidValue":            updateBidResult.PrevTopBidValue,
+		"profileRedisSavePayloadUs":  updateBidResult.TimeSavePayload.Microseconds(),
+		"profileRedisUpdateTopBidUs": updateBidResult.TimeUpdateTopBid.Microseconds(),
+		"profileRedisUpdateFloorUs":  updateBidResult.TimeUpdateFloor.Microseconds(),
+	})
+
+	eligibleAt := time.Now().UTC()
+
+	// Read all remaining bytes into the tee reader
+	remainder, err := io.ReadAll(r)
+	if err != nil {
+		demotionErr := fmt.Errorf("%w: could not read full message", err)
+		api.demoteBuilder(payload.BuilderPubkey().String(), payload, demotionErr)
+		log.WithError(err).Warn("could not read full message")
+		return
+	}
+	remainderReader := bytes.NewReader(remainder)
+
+	slowPathOpts := v2SlowPathOpts{
+		header:                &header,
+		payload:               payload,
+		receivedAt:            receivedAt,
+		eligibleAt:            eligibleAt,
+		pf:                    pf,
+		isCancellationEnabled: isCancellationEnabled,
+		entry:                 builderEntry,
+		gasLimit:              gasLimit,
+		pipeliner:             tx,
+	}
+
+	// Join the header bytes with the remaining bytes.
+	go api.optimisticV2SlowPath(io.MultiReader(&buf, remainderReader), slowPathOpts)
+
+	log.WithFields(logrus.Fields{
+		"value":   bid.Value.String(),
+		"profile": pf.String(),
+	}).Info("saving v2 optimistic bid from builder")
+	w.WriteHeader(http.StatusOK)
+}
+
+type v2SlowPathOpts struct {
+	header                *common.SubmitBlockRequestV2Optimistic
+	payload               *common.BuilderSubmitBlockRequest
+	receivedAt            time.Time
+	eligibleAt            time.Time
+	pf                    common.Profile
+	isCancellationEnabled bool
+	entry                 *blockBuilderCacheEntry
+	gasLimit              uint64
+	pipeliner             redis.Pipeliner
+}
+
+func (api *RelayAPI) optimisticV2SlowPath(r io.Reader, v2Opts v2SlowPathOpts) {
+	log := api.log.WithFields(logrus.Fields{"method": "optimisticV2SlowPath"})
+
+	// TODO(mikeneuder): slow path
+
+	// All done
+	log.Info("received v2 block from builder")
 }
 
 // ---------------

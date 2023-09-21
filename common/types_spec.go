@@ -14,6 +14,7 @@ import (
 	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/flashbots/go-boost-utils/bls"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -69,6 +70,33 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 		}, nil
 	}
 	return nil, ErrEmptyPayload
+}
+
+func BuildGetHeaderResponseHeaderOnly(value *uint256.Int, header *consensuscapella.ExecutionPayloadHeader, sk *bls.SecretKey, pubkey *boostTypes.PublicKey, domain boostTypes.Domain) (*GetHeaderResponse, error) {
+	builderBid := capella.BuilderBid{
+		Value:  value,
+		Header: header,
+		Pubkey: *(*phase0.BLSPubKey)(pubkey),
+	}
+
+	sig, err := boostTypes.SignMessage(&builderBid, domain, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	signedBuilderBid := &capella.SignedBuilderBid{
+		Message:   &builderBid,
+		Signature: phase0.BLSSignature(sig),
+	}
+
+	return &GetHeaderResponse{
+		Capella: &spec.VersionedSignedBuilderBid{
+			Version:   consensusspec.DataVersionCapella,
+			Capella:   signedBuilderBid,
+			Bellatrix: nil,
+		},
+		Bellatrix: nil,
+	}, nil
 }
 
 func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*GetPayloadResponse, error) {
