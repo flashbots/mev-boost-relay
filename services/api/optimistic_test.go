@@ -509,7 +509,10 @@ func TestBuilderApiSubmitNewBlockOptimisticV2_full(t *testing.T) {
 	badSigReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
 	badSigReq.Signature[0] = 0xaa
 	invalidSigReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
-	invalidSigReq.Message.Slot += 1
+	// Sign over a message with a different value.
+	diffSig, err := boostTypes.SignMessage(getTestBidTrace(*pubkey, 11), boostTypes.DomainBuilder, secretkey)
+	require.Nil(t, err)
+	invalidSigReq.Signature = phase0.BLSSignature(diffSig)
 	badTimestampReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
 	badTimestampReq.ExecutionPayloadHeader.Timestamp -= 1
 	badWithdrawalsRootReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))

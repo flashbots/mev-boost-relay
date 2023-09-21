@@ -2149,25 +2149,11 @@ func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Req
 		"value":                  bid.Value.String(),
 	})
 
-	// Verify the signature
-	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
-	ok, err := boostTypes.VerifySignature(bid, api.opts.EthNetDetails.DomainBuilder, bid.BuilderPubkey[:], sig[:])
-	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
-	if err != nil {
-		log.WithError(err).Warn("failed verifying builder signature")
-		api.RespondError(w, http.StatusBadRequest, "failed verifying builder signature")
-		return
-	} else if !ok {
-		log.Warn("invalid builder signature")
-		api.RespondError(w, http.StatusBadRequest, "invalid signature")
-		return
-	}
-
 	log.WithFields(logrus.Fields{
 		"bid":         bid,
 		"signature":   sig,
 		"decode_time": pf.Decode,
-	}).Info("optimistically parsed bid and verified signature")
+	}).Info("optimistically parsed bid")
 
 	// Check optimistic eligibility.
 	builderPubkey := bid.BuilderPubkey
@@ -2239,6 +2225,20 @@ func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Req
 
 	ok = api.checkSubmissionPayloadAttrs(w, log, payload, eph.WithdrawalsRoot)
 	if !ok {
+		return
+	}
+
+	// Verify the signature
+	log = log.WithField("timestampBeforeSignatureCheck", time.Now().UTC().UnixMilli())
+	ok, err = boostTypes.VerifySignature(bid, api.opts.EthNetDetails.DomainBuilder, bid.BuilderPubkey[:], sig[:])
+	log = log.WithField("timestampAfterSignatureCheck", time.Now().UTC().UnixMilli())
+	if err != nil {
+		log.WithError(err).Warn("failed verifying builder signature")
+		api.RespondError(w, http.StatusBadRequest, "failed verifying builder signature")
+		return
+	} else if !ok {
+		log.Warn("invalid builder signature")
+		api.RespondError(w, http.StatusBadRequest, "invalid signature")
 		return
 	}
 
