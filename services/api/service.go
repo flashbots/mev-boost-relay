@@ -2252,7 +2252,7 @@ func (api *RelayAPI) handleSubmitNewBlockV2(w http.ResponseWriter, req *http.Req
 		simResultC:           simResultC,
 		payload:              payload,
 	}
-	_, log, ok = api.checkFloorBidValue(bfOpts)
+	_, ok = api.checkFloorBidValue(bfOpts)
 	if !ok {
 		return
 	}
