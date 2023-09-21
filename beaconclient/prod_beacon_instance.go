@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -17,9 +16,6 @@ import (
 type ProdBeaconInstance struct {
 	log       *logrus.Entry
 	beaconURI string
-
-	// feature flags
-	ffUseV2PublishBlockEndpoint bool
 }
 
 func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
@@ -27,16 +23,7 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 		"component": "beaconInstance",
 		"beaconURI": beaconURI,
 	})
-
-	client := &ProdBeaconInstance{_log, beaconURI, false}
-
-	// feature flags
-	if os.Getenv("USE_V2_PUBLISH_BLOCK_ENDPOINT") != "" {
-		_log.Warn("env: USE_V2_PUBLISH_BLOCK_ENDPOINT: use the v2 publish block endpoint")
-		client.ffUseV2PublishBlockEndpoint = true
-	}
-
-	return client
+	return &ProdBeaconInstance{_log, beaconURI}
 }
 
 // HeadEventData represents the data of a head event
@@ -270,14 +257,9 @@ func (c *ProdBeaconInstance) GetURI() string {
 }
 
 func (c *ProdBeaconInstance) PublishBlock(block *common.SignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error) {
-	var uri string
-	if c.ffUseV2PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
-	} else {
-		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
-	}
+	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
 	headers := http.Header{}
-	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella) // optional in v1, required in v2
+	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella)
 	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers)
 }
 
