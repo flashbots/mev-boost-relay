@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/attestantio/go-builder-client/api/capella"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	consensuscapella "github.com/attestantio/go-eth2-client/spec/capella"
@@ -640,6 +642,84 @@ func TestBuilderApiSubmitNewBlockOptimisticV2_full(t *testing.T) {
 			// Check http code.
 			rr := backend.requestBytes(http.MethodPost, pathSubmitNewBlockV2, outBytes, map[string]string{})
 			require.Equal(t, uint64(rr.Code), tc.httpCode)
+		})
+	}
+}
+
+func TestBuilderApiOptimisticV2SlowPath_fail_ssz_decode_header(t *testing.T) {
+	pubkey, _ := generateKeyPair(t)
+	backend := startTestBackend(t, pubkey)
+	outBytes := make([]byte, 944) // 944 bytes is min required to try ssz decoding.
+	outBytes[0] = 0xaa
+
+	r := bytes.NewReader(outBytes)
+
+	backend.relay.optimisticV2SlowPath(r, v2SlowPathOpts{
+		payload: &common.BuilderSubmitBlockRequest{
+			Capella: &capella.SubmitBlockRequest{
+				Message: &v1.BidTrace{
+					BuilderPubkey: *pubkey,
+				},
+			},
+		},
+	})
+
+	// Check that demotion occurred.
+	mockDB, ok := backend.relay.db.(*database.MockDB)
+	require.True(t, ok)
+	require.Equal(t, mockDB.Demotions[pubkey.String()], true)
+}
+
+func TestBuilderApiOptimisticV2SlowPath(t *testing.T) {
+	pubkey, secretkey := generateKeyPair(t)
+
+	testReq := common.TestBuilderSubmitBlockRequestV2(secretkey, getTestBidTrace(*pubkey, 10))
+	testPayload := &common.BuilderSubmitBlockRequest{
+		Capella: &capella.SubmitBlockRequest{
+			Message: &v1.BidTrace{
+				BuilderPubkey: *pubkey,
+			},
+			ExecutionPayload: &consensuscapella.ExecutionPayload{},
+		},
+	}
+
+	testCases := []struct {
+		description    string
+		simError       error
+		expectDemotion bool
+	}{
+		{
+			description: "success",
+		},
+		{
+			description:    "failure_empty_payload",
+			simError:       errFake,
+			expectDemotion: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			backend := startTestBackend(t, pubkey)
+			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
+				simulationError: tc.simError,
+			}
+
+			submissionBytes, err := testReq.MarshalSSZ()
+			require.NoError(t, err)
+
+			r := bytes.NewReader(submissionBytes)
+
+			opts := v2SlowPathOpts{
+				payload: testPayload,
+				entry:   &blockBuilderCacheEntry{},
+			}
+			backend.relay.optimisticV2SlowPath(r, opts)
+
+			// Check demotion status.
+			mockDB, ok := backend.relay.db.(*database.MockDB)
+			require.True(t, ok)
+			require.Equal(t, mockDB.Demotions[pubkey.String()], tc.expectDemotion)
 		})
 	}
 }
