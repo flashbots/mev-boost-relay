@@ -269,8 +269,9 @@ func DenebUnblindSignedBlock(blindedBlock *eth2builderApiV1Deneb.SignedBlindedBe
 }
 
 type BuilderBlockValidationRequest struct {
-	VersionedSubmitBlockRequest
-	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+	*VersionedSubmitBlockRequest
+	RegisteredGasLimit    uint64       `json:"registered_gas_limit,string"`
+	ParentBeaconBlockRoot *phase0.Root `json:"parent_beacon_block_root,omitempty"`
 }
 
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
@@ -278,16 +279,19 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	gasLimit, err := json.Marshal(&struct {
-		RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
+
+	attrs, err := json.Marshal(&struct {
+		RegisteredGasLimit    uint64 `json:"registered_gas_limit,string"`
+		ParentBeaconBlockRoot *phase0.Root `json:"parent_beacon_block_root,omitempty"`
 	}{
-		RegisteredGasLimit: r.RegisteredGasLimit,
+		RegisteredGasLimit:    r.RegisteredGasLimit,
+		ParentBeaconBlockRoot: r.ParentBeaconBlockRoot,
 	})
 	if err != nil {
 		return nil, err
 	}
-	gasLimit[0] = ','
-	return append(blockRequest[:len(blockRequest)-1], gasLimit...), nil
+	attrs[0] = ','
+	return append(blockRequest[:len(blockRequest)-1], attrs...), nil
 }
 
 type VersionedSubmitBlockRequest struct {

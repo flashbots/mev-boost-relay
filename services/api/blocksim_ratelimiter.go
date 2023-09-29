@@ -75,7 +75,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 		return ErrNoCapellaPayload, nil
 	}
 
-	submission, err := common.GetBlockSubmissionInfo(&payload.VersionedSubmitBlockRequest)
+	submission, err := common.GetBlockSubmissionInfo(payload.VersionedSubmitBlockRequest)
 	if err != nil {
 		return err, nil
 	}
