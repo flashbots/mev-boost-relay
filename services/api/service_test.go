@@ -372,7 +372,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	// Setup the test relay backend
 	backend.relay.headSlot.Store(headSlot)
 	backend.relay.capellaEpoch = 0
-	backend.relay.denebEpoch = 1
+	backend.relay.denebEpoch = 2
 	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 		Slot: headSlot,
@@ -887,13 +887,14 @@ func TestCheckFloorBidValue(t *testing.T) {
 		{
 			description: "success",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:  testSlot,
 							Value: uint256.NewInt(1),
 						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -902,12 +903,13 @@ func TestCheckFloorBidValue(t *testing.T) {
 		{
 			description: "failure_slot_already_delivered",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot: 0,
 						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -916,13 +918,14 @@ func TestCheckFloorBidValue(t *testing.T) {
 		{
 			description: "failure_cancellations_below_floor",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:  testSlot,
 							Value: uint256.NewInt(1),
 						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -933,13 +936,14 @@ func TestCheckFloorBidValue(t *testing.T) {
 		{
 			description: "failure_no_cancellations_at_floor",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:  testSlot,
 							Value: uint256.NewInt(0),
 						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -959,13 +963,15 @@ func TestCheckFloorBidValue(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			tx := backend.redis.NewTxPipeline()
 			simResultC := make(chan *blockSimResult, 1)
+			submission, err = common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
 			bfOpts := bidFloorOpts{
 				w:                    w,
 				tx:                   tx,
 				log:                  log,
 				cancellationsEnabled: tc.cancellationsEnabled,
 				simResultC:           simResultC,
-				payload:              tc.payload,
+				submission:           submission,
 			}
 			floor, ok := backend.relay.checkFloorBidValue(bfOpts)
 			require.Equal(t, tc.expectOk, ok)
@@ -989,10 +995,10 @@ func TestUpdateRedis(t *testing.T) {
 			description: "success",
 			floorValue:  "10",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:  testSlot,
 							Value: uint256.NewInt(1),
 						},
@@ -1012,10 +1018,10 @@ func TestUpdateRedis(t *testing.T) {
 			description: "failure_encode_failure_too_long_extra_data",
 			floorValue:  "10",
 			payload: &common.VersionedSubmitBlockRequest{
-				spec.VersionedSubmitBlockRequest{
-					Version: consensusspec.DataVersionCapella,
-					Capella: &builderCapella.SubmitBlockRequest{
-						Message: &apiv1.BidTrace{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
 							Slot:  testSlot,
 							Value: uint256.NewInt(1),
 						},

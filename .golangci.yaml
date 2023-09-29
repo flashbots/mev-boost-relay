@@ -71,8 +71,6 @@ linters-settings:
   gomoddirectives:
     replace-allow-list:
       - github.com/attestantio/go-eth2-client
-      - github.com/attestantio/go-builder-client
-      - github.com/ethereum/go-ethereum
 
   maintidx:
     under: 5
