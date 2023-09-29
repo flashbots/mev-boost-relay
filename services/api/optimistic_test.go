@@ -337,7 +337,7 @@ func TestDemoteBuilder(t *testing.T) {
 			pubkey, secretkey, backend := startTestBackend(t)
 			pkStr := pubkey.String()
 			req := common.TestBuilderSubmitBlockRequest(secretkey, getTestBidTrace(*pubkey, collateral, slot), tc.version)
-			backend.relay.demoteBuilder(pkStr, &req, errFake)
+			backend.relay.demoteBuilder(pkStr, req, errFake)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
