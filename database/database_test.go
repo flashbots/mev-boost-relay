@@ -87,7 +87,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			Value:                uint256.NewInt(collateral),
 		},
 	}, spec.DataVersionDeneb)
-	entry, err := db.SaveBuilderBlockSubmission(&req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
+	entry, err := db.SaveBuilderBlockSubmission(req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestInsertBuilderDemotion(t *testing.T) {
 
 	cases := []struct {
 		name string
-		req  common.VersionedSubmitBlockRequest
+		req  *common.VersionedSubmitBlockRequest
 	}{
 		{
 			name: "Capella",
@@ -326,7 +326,7 @@ func TestInsertBuilderDemotion(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			db := resetDatabase(t)
 
-			err = db.InsertBuilderDemotion(&c.req, errFoo)
+			err = db.InsertBuilderDemotion(c.req, errFoo)
 			require.NoError(t, err)
 
 			entry, err := db.GetBuilderDemotion(trace)
@@ -356,13 +356,13 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		req         common.VersionedSubmitBlockRequest
-		beaconBlock common.VersionedSignedBlockRequest
+		req         *common.VersionedSubmitBlockRequest
+		beaconBlock *common.VersionedSignedBlockRequest
 	}{
 		{
 			name: "Capella",
 			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionCapella),
-			beaconBlock: common.VersionedSignedBlockRequest{
+			beaconBlock: &common.VersionedSignedBlockRequest{
 				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
 					Version: spec.DataVersionCapella,
 					Capella: &capella.SignedBeaconBlock{},
@@ -371,7 +371,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 		}, {
 			name: "Deneb",
 			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionDeneb),
-			beaconBlock: common.VersionedSignedBlockRequest{
+			beaconBlock: &common.VersionedSignedBlockRequest{
 				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
 					Version: spec.DataVersionDeneb,
 					Deneb:   &eth2builderApiV1Deneb.SignedBlockContents{},
@@ -389,7 +389,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			require.Nil(t, demotion)
 
 			// Insert demotion
-			err = db.InsertBuilderDemotion(&c.req, errFoo)
+			err = db.InsertBuilderDemotion(c.req, errFoo)
 			require.NoError(t, err)
 
 			// Now demotion should show up.
@@ -403,7 +403,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			require.Empty(t, demotion.SignedValidatorRegistration.String)
 
 			// Update demotion with the signedBlock and signedRegistration.
-			err = db.UpdateBuilderDemotion(bt, &c.beaconBlock, &builderApiV1.SignedValidatorRegistration{})
+			err = db.UpdateBuilderDemotion(bt, c.beaconBlock, &builderApiV1.SignedValidatorRegistration{})
 			require.NoError(t, err)
 
 			// Signed block and validation should now be valid and non-empty.
