@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -420,10 +421,6 @@ func (api *RelayAPI) StartServer() (err error) {
 			foundDenebEpoch = true
 			api.denebEpoch = fork.Epoch
 		}
-	}
-
-	if !foundCapellaEpoch || !foundDenebEpoch {
-		return ErrMissingForkVersions
 	}
 
 	// Print fork version information
@@ -1360,7 +1357,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log = log.WithField("timestampAfterSignatureVerify", time.Now().UTC().UnixMilli())
 	log.Info("getPayload request received")
 
-	var getPayloadResp builderApiV1.VersionedExecutionPayload
+	var getPayloadResp *builderApi.VersionedSubmitBlindedBlockResponse
 	var msNeededForPublishing uint64
 
 	// Save information about delivered payload
@@ -1409,7 +1406,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		log.Warn("demotion found in getPayload, inserting refund justification")
 
 		// Prepare refund data.
-		signedBeaconBlock := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+		signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
+		if err != nil {
+			log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
+			api.RespondError(w, http.StatusInternalServerError, "failed to convert signed blinded beacon block to beacon block")
+			return
+		}
 
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
@@ -1420,7 +1422,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 				log.WithError(err).Error("error reading validator registration")
 			}
 		}
-		var signedRegistration *apiv1.SignedValidatorRegistration
+		var signedRegistration *builderApiV1.SignedValidatorRegistration
 		if registrationEntry != nil {
 			signedRegistration, err = registrationEntry.ToSignedValidatorRegistration()
 			if err != nil {
@@ -1705,7 +1707,7 @@ type bidFloorOpts struct {
 	log                  *logrus.Entry
 	cancellationsEnabled bool
 	simResultC           chan *blockSimResult
-	payload              *common.BuilderSubmitBlockRequest
+	submission           *common.BlockSubmissionInfo
 }
 
 func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
@@ -1713,14 +1715,14 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered(context.Background(), opts.tx)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		opts.log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else if opts.payload.Slot() <= slotLastPayloadDelivered {
+	} else if opts.submission.Slot <= slotLastPayloadDelivered {
 		opts.log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(opts.w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return nil, false
 	}
 
 	// Grab floor bid value
-	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), opts.tx, opts.payload.Slot(), opts.payload.ParentHash(), opts.payload.ProposerPubkey())
+	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), opts.tx, opts.submission.Slot, opts.submission.ParentHash.String(), opts.submission.Proposer.String())
 	if err != nil {
 		opts.log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
@@ -1730,12 +1732,12 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	// --------------------------------------------
 	// Skip submission if below the floor bid value
 	// --------------------------------------------
-	isBidBelowFloor := floorBidValue != nil && opts.payload.Value().Cmp(floorBidValue) == -1
-	isBidAtOrBelowFloor := floorBidValue != nil && opts.payload.Value().Cmp(floorBidValue) < 1
+	isBidBelowFloor := floorBidValue != nil && opts.submission.Value.ToBig().Cmp(floorBidValue) == -1
+	isBidAtOrBelowFloor := floorBidValue != nil && opts.submission.Value.ToBig().Cmp(floorBidValue) < 1
 	if opts.cancellationsEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
 		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("submission below floor bid value, with cancellation")
-		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.payload.Slot(), opts.payload.ParentHash(), opts.payload.ProposerPubkey(), opts.payload.BuilderPubkey().String())
+		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.submission.Slot, opts.submission.ParentHash.String(), opts.submission.Proposer.String(), opts.submission.Builder.String())
 		if err != nil {
 			opts.log.WithError(err).Error("failed processing cancellable bid below floor")
 			api.RespondError(opts.w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
@@ -1759,10 +1761,10 @@ type redisUpdateBidOpts struct {
 	cancellationsEnabled bool
 	receivedAt           time.Time
 	floorBidValue        *big.Int
-	payload              *common.BuilderSubmitBlockRequest
+	payload              *common.VersionedSubmitBlockRequest
 }
 
-func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApiV1.VersionedExecutionPayload, bool) {
+func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApi.VersionedSubmitBlindedBlockResponse, bool) {
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
@@ -1778,10 +1780,17 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 		return nil, nil, false
 	}
 
+	submission, err := common.GetBlockSubmissionInfo(opts.payload)
+	if err != nil {
+		opts.log.WithError(err).Error("could not get block submission info")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
 	bidTrace := common.BidTraceV2{
-		BidTrace:    *opts.payload.Message(),
-		BlockNumber: opts.payload.BlockNumber(),
-		NumTx:       uint64(opts.payload.NumTx()),
+		BidTrace:    *submission.BidTrace,
+		BlockNumber: submission.BlockNumber,
+		NumTx:       uint64(len(submission.Transactions)),
 	}
 
 	//
@@ -1970,13 +1979,20 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	simResultC := make(chan *blockSimResult, 1)
 	var eligibleAt time.Time // will be set once the bid is ready
 
+	submission, err = common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		log.WithError(err).Warn("missing fields in submit block request")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	bfOpts := bidFloorOpts{
 		w:                    w,
 		tx:                   tx,
 		log:                  log,
 		cancellationsEnabled: isCancellationEnabled,
 		simResultC:           simResultC,
-		payload:              payload,
+		submission:           submission,
 	}
 	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
 	if !ok {

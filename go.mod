@@ -5,13 +5,13 @@ go 1.20
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.30.5
-	github.com/attestantio/go-builder-client v0.3.2-0.20230701110827-d0ecfee1ab62
-	github.com/attestantio/go-eth2-client v0.18.1
+	github.com/attestantio/go-builder-client v0.3.2-0.20230809093013-1fa02af241e1
+	github.com/attestantio/go-eth2-client v0.18.3
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
-	github.com/ethereum/go-ethereum v1.13.1
-	github.com/flashbots/go-boost-utils v1.7.1-0.20230625230411-8c44018f4777
+	github.com/ethereum/go-ethereum v1.13.2
+	github.com/flashbots/go-boost-utils v1.7.2-0.20230922193448-757aa4804cd5
 	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0
@@ -40,7 +40,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230906160148-46873a6a7a06 // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
-	github.com/consensys/gnark-crypto v0.11.0 // indirect
+	github.com/consensys/gnark-crypto v0.11.2 // indirect
 	github.com/crate-crypto/go-kzg-4844 v0.3.0 // indirect
 	github.com/ethereum/c-kzg-4844 v0.3.1 // indirect
 	github.com/fatih/color v1.15.0 // indirect
@@ -120,8 +120,4 @@ retract (
 	v1.0.0-alpha1
 )
 
-replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20230802220600-85be1e39d33b
-
 replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230810012152-c934f6ee3bee
-
-replace github.com/ethereum/go-ethereum => github.com/MariusVanDerWijden/go-ethereum v1.8.22-0.20230807121326-6861f29a109a
