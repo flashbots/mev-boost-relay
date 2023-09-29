@@ -9,7 +9,7 @@ import (
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
-	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	eth2builderApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -374,7 +374,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			beaconBlock: common.VersionedSignedBlockRequest{
 				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
 					Version: spec.DataVersionDeneb,
-					Deneb:   &eth2ApiV1Deneb.SignedBlockContents{},
+					Deneb:   &eth2builderApiV1Deneb.SignedBlockContents{},
 				},
 			},
 		},

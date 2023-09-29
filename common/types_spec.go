@@ -9,8 +9,8 @@ import (
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
-	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
-	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	eth2builderApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	eth2builderApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -197,7 +197,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 	return &signedBeaconBlock, nil
 }
 
-func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaconBlock, executionPayload *capella.ExecutionPayload) *capella.SignedBeaconBlock {
+func CapellaUnblindSignedBlock(blindedBlock *eth2builderApiV1Capella.SignedBlindedBeaconBlock, executionPayload *capella.ExecutionPayload) *capella.SignedBeaconBlock {
 	return &capella.SignedBeaconBlock{
 		Signature: blindedBlock.Signature,
 		Message: &capella.BeaconBlock{
@@ -222,7 +222,7 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaco
 	}
 }
 
-func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
+func DenebUnblindSignedBlock(blindedBlock *eth2builderApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2builderApiV1Deneb.SignedBlockContents {
 	denebBlobSidecars := make([]*deneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
 
 	for i := range denebBlobSidecars {
@@ -240,7 +240,7 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 			Signature: denebBlobSidecars[i].Signature,
 		}
 	}
-	return &eth2ApiV1Deneb.SignedBlockContents{
+	return &eth2builderApiV1Deneb.SignedBlockContents{
 		SignedBlock: &deneb.SignedBeaconBlock{
 			Message: &deneb.BeaconBlock{
 				Slot:          blindedBlock.Message.Slot,
@@ -365,7 +365,7 @@ func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
+	denebContents := new(eth2builderApiV1Deneb.SignedBlockContents)
 	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebContents
@@ -401,14 +401,14 @@ func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	denebContents := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
+	denebContents := new(eth2builderApiV1Deneb.SignedBlindedBlockContents)
 	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebContents
 		return nil
 	}
 
-	capellaBlock := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+	capellaBlock := new(eth2builderApiV1Capella.SignedBlindedBeaconBlock)
 	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
 		r.Capella = capellaBlock

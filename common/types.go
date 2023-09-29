@@ -12,6 +12,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
+	boostSsz "github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
@@ -117,22 +118,22 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
 
-	domainBuilder, err = ComputeDomain(ssz.DomainTypeAppBuilder, genesisForkVersion, phase0.Root{}.String())
+	domainBuilder, err = ComputeDomain(boostSsz.DomainTypeAppBuilder, genesisForkVersion, phase0.Root{}.String())
 	if err != nil {
 		return nil, err
 	}
 
-	domainBeaconProposerBellatrix, err = ComputeDomain(ssz.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerBellatrix, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	domainBeaconProposerCapella, err = ComputeDomain(ssz.DomainTypeBeaconProposer, capellaForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerCapella, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, capellaForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	domainBeaconProposerDeneb, err = ComputeDomain(ssz.DomainTypeBeaconProposer, denebForkVersion, genesisValidatorsRoot)
+	domainBeaconProposerDeneb, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, denebForkVersion, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -366,11 +367,11 @@ Header only layout:
 [344-944) = EPH       (600 bytes)
 */
 type SubmitBlockRequestV2Optimistic struct {
-	Message                *apiv1.BidTrace
-	ExecutionPayloadHeader *consensuscapella.ExecutionPayloadHeader
-	Signature              phase0.BLSSignature              `ssz-size:"96"`
-	Transactions           []consensusbellatrix.Transaction `ssz-max:"1048576,1073741824" ssz-size:"?,?"`
-	Withdrawals            []*consensuscapella.Withdrawal   `ssz-max:"16"`
+	Message                *builderApiV1.BidTrace
+	ExecutionPayloadHeader *capella.ExecutionPayloadHeader
+	Signature              phase0.BLSSignature     `ssz-size:"96"`
+	Transactions           []bellatrix.Transaction `ssz-max:"1048576,1073741824" ssz-size:"?,?"`
+	Withdrawals            []*capella.Withdrawal   `ssz-max:"16"`
 }
 
 // MarshalSSZ ssz marshals the SubmitBlockRequestV2Optimistic object
@@ -391,7 +392,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 
 	// Field (0) 'Message'
 	if s.Message == nil {
-		s.Message = new(apiv1.BidTrace)
+		s.Message = new(builderApiV1.BidTrace)
 	}
 	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
 		return err
@@ -423,7 +424,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:o3]
 		if s.ExecutionPayloadHeader == nil {
-			s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+			s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
 		}
 		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -437,13 +438,13 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		s.Transactions = make([]consensusbellatrix.Transaction, num)
+		s.Transactions = make([]bellatrix.Transaction, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if len(buf) > 1073741824 {
 				return ssz.ErrBytesLength
 			}
 			if cap(s.Transactions[indx]) == 0 {
-				s.Transactions[indx] = consensusbellatrix.Transaction(make([]byte, 0, len(buf)))
+				s.Transactions[indx] = bellatrix.Transaction(make([]byte, 0, len(buf)))
 			}
 			s.Transactions[indx] = append(s.Transactions[indx], buf...)
 			return nil
@@ -460,10 +461,10 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		s.Withdrawals = make([]*consensuscapella.Withdrawal, num)
+		s.Withdrawals = make([]*capella.Withdrawal, num)
 		for ii := 0; ii < num; ii++ {
 			if s.Withdrawals[ii] == nil {
-				s.Withdrawals[ii] = new(consensuscapella.Withdrawal)
+				s.Withdrawals[ii] = new(capella.Withdrawal)
 			}
 			if err = s.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
 				return err
@@ -486,7 +487,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZHeaderOnly(buf []byte) erro
 
 	// Field (0) 'Message'
 	if s.Message == nil {
-		s.Message = new(apiv1.BidTrace)
+		s.Message = new(builderApiV1.BidTrace)
 	}
 	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
 		return err
@@ -513,7 +514,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZHeaderOnly(buf []byte) erro
 	{
 		buf = tail[o1:o3]
 		if s.ExecutionPayloadHeader == nil {
-			s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+			s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
 		}
 		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -529,7 +530,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 
 	// Field (0) 'Message'
 	if s.Message == nil {
-		s.Message = new(apiv1.BidTrace)
+		s.Message = new(builderApiV1.BidTrace)
 	}
 	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
 		return
@@ -538,7 +539,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 	// Offset (1) 'ExecutionPayloadHeader'
 	dst = ssz.WriteOffset(dst, offset)
 	if s.ExecutionPayloadHeader == nil {
-		s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+		s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
 	}
 	offset += s.ExecutionPayloadHeader.SizeSSZ()
 
@@ -599,7 +600,7 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 
 	// Field (1) 'ExecutionPayloadHeader'
 	if s.ExecutionPayloadHeader == nil {
-		s.ExecutionPayloadHeader = new(consensuscapella.ExecutionPayloadHeader)
+		s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
 	}
 	size += s.ExecutionPayloadHeader.SizeSSZ()
 
