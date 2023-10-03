@@ -281,7 +281,7 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	}
 
 	attrs, err := json.Marshal(&struct {
-		RegisteredGasLimit    uint64 `json:"registered_gas_limit,string"`
+		RegisteredGasLimit    uint64       `json:"registered_gas_limit,string"`
 		ParentBeaconBlockRoot *phase0.Root `json:"parent_beacon_block_root,omitempty"`
 	}{
 		RegisteredGasLimit:    r.RegisteredGasLimit,
