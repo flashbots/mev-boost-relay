@@ -122,4 +122,6 @@ retract (
 	v1.0.0-alpha1
 )
 
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230810012152-c934f6ee3bee
+replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20231003132440-649530ab1e0e
+
+replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20231003081344-5371b036e940

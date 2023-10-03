@@ -67,6 +67,7 @@ type PayloadAttributes struct {
 	PrevRandao            string                `json:"prev_randao"`
 	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
 	Withdrawals           []*capella.Withdrawal `json:"withdrawals"`
+	ParentBeaconBlockRoot string                `json:"parent_beacon_block_root"`
 }
 
 func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
