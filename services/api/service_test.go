@@ -701,7 +701,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission)
+			_, ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}

@@ -364,7 +364,7 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	resp, err := r.GetPayloadContentsDeneb(slot, proposerPubkey, blockHash)
 	if errors.Is(err, redis.Nil) {
-		// can't find builderApiDeneb payload, try find capella payload
+		// can't find deneb payload, try find capella payload
 		return r.GetExecutionPayloadCapella(slot, proposerPubkey, blockHash)
 	}
 	return resp, err
@@ -549,12 +549,12 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	// 1. Save the execution payload
 	switch payload.Version {
 	case spec.DataVersionCapella:
-		err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Capella)
+		err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), getPayloadResponse.Capella)
 		if err != nil {
 			return state, err
 		}
 	case spec.DataVersionDeneb:
-		err = r.SavePayloadContentsDeneb(ctx, pipeliner, submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), getPayloadResponse.Deneb)
+		err = r.SavePayloadContentsDeneb(ctx, pipeliner, submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), getPayloadResponse.Deneb)
 		if err != nil {
 			return state, err
 		}

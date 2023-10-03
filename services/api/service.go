@@ -140,6 +140,7 @@ type payloadAttributesHelper struct {
 	slot              uint64
 	parentHash        string
 	withdrawalsRoot   phase0.Root
+	parentBeaconRoot  *phase0.Root
 	payloadAttributes beaconclient.PayloadAttributes
 }
 
@@ -691,6 +692,22 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 		}
 	}
 
+	var parentBeaconRoot *phase0.Root
+	if hasReachedFork(payloadAttrSlot, api.denebEpoch) {
+		if payloadAttributes.Data.PayloadAttributes.ParentBeaconBlockRoot == "" {
+			log.Error("parent beacon block root in payload attributes is empty")
+			return
+		}
+		// TODO: (deneb) HexToRoot util function
+		hash, err := utils.HexToHash(payloadAttributes.Data.PayloadAttributes.ParentBeaconBlockRoot)
+		if err != nil {
+			log.WithError(err).Error("error parsing parent beacon block root from payload attributes")
+			return
+		}
+		root := phase0.Root(hash)
+		parentBeaconRoot = &root
+	}
+
 	api.payloadAttributesLock.Lock()
 	defer api.payloadAttributesLock.Unlock()
 
@@ -706,6 +723,7 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 		slot:              payloadAttrSlot,
 		parentHash:        payloadAttributes.Data.ParentBlockHash,
 		withdrawalsRoot:   withdrawalsRoot,
+		parentBeaconRoot:  parentBeaconRoot,
 		payloadAttributes: payloadAttributes.Data.PayloadAttributes,
 	}
 
@@ -1314,7 +1332,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if slotDuty == nil {
 		log.Warn("could not find slot duty")
 	} else {
-		log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient)
+		log = log.WithField("feeRecipient", slotDuty.Entry.Message.FeeRecipient.String())
 		if slotDuty.ValidatorIndex != uint64(proposerIndex) {
 			log.WithField("expectedProposerIndex", slotDuty.ValidatorIndex).Warn("not the expected proposer index")
 			api.RespondError(w, http.StatusBadRequest, "not the expected proposer index")
@@ -1603,7 +1621,7 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 	return slotDuty.Entry.Message.GasLimit, true
 }
 
-func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) bool {
+func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) (payloadAttributesHelper, bool) {
 	api.payloadAttributesLock.RLock()
 	attrs, ok := api.payloadAttributes[submission.ParentHash.String()]
 	api.payloadAttributesLock.RUnlock()
@@ -1612,14 +1630,14 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		log.Info("payload", submission.Slot, "attrs", attrs.slot)
 		log.Warn("payload attributes not (yet) known")
 		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
-		return false
+		return attrs, false
 	}
 
 	if submission.PrevRandao.String() != attrs.payloadAttributes.PrevRandao {
 		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", submission.PrevRandao.String(), attrs.payloadAttributes.PrevRandao)
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
-		return false
+		return attrs, false
 	}
 
 	if hasReachedFork(submission.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
@@ -1627,18 +1645,18 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
 			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
-			return false
+			return attrs, false
 		}
 
 		if withdrawalsRoot != attrs.withdrawalsRoot {
 			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
 			api.RespondError(w, http.StatusBadRequest, msg)
-			return false
+			return attrs, false
 		}
 	}
 
-	return true
+	return attrs, true
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
@@ -1954,7 +1972,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
 
-	ok = api.checkSubmissionPayloadAttrs(w, log, submission)
+	attrs, ok := api.checkSubmissionPayloadAttrs(w, log, submission)
 	if !ok {
 		return
 	}
@@ -2063,6 +2081,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		req: &common.BuilderBlockValidationRequest{
 			VersionedSubmitBlockRequest: payload,
 			RegisteredGasLimit:          gasLimit,
+			ParentBeaconBlockRoot:       attrs.parentBeaconRoot,
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
