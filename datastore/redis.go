@@ -146,6 +146,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		keyBlockBuilderStatus: fmt.Sprintf("%s/%s:block-builder-status", redisPrefix, prefix),
 		keyLastSlotDelivered:  fmt.Sprintf("%s/%s:last-slot-delivered", redisPrefix, prefix),
 		keyLastHashDelivered:  fmt.Sprintf("%s/%s:last-hash-delivered", redisPrefix, prefix),
+		currentSlot:           0,
 	}, nil
 }
 
@@ -814,7 +815,7 @@ func (r *RedisCache) SetFloorBidValue(slot uint64, parentHash, proposerPubkey, v
 func (r *RedisCache) BeginProcessingSlot(ctx context.Context, slot uint64) (err error) {
 	// Should never process more than one slot at a time
 	if r.currentSlot != 0 {
-		return fmt.Errorf("already processing slot %d", r.currentSlot)
+		return fmt.Errorf("already processing slot %d", r.currentSlot) //nolint:goerr113
 	}
 
 	keyProcessingSlot := r.keyProcessingSlot(slot)
