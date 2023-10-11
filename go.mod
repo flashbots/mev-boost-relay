@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
-	github.com/alicebob/miniredis/v2 v2.30.5
+	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/attestantio/go-builder-client v0.3.0
 	github.com/attestantio/go-eth2-client v0.16.4
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
