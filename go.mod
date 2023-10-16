@@ -11,7 +11,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.13.2
-	github.com/flashbots/go-boost-utils v1.7.2-0.20230922193448-757aa4804cd5
+	github.com/flashbots/go-boost-utils v1.7.2-0.20231015003800-1e2f5026e146
 	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.0

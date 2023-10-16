@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
+	eth2builderApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -162,4 +163,21 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBlockRequest, doma
 	}
 
 	return bls.VerifySignatureBytes(msg[:], sig[:], pubKey[:])
+}
+
+func verifyBlobSidecarSignature(sidecar *eth2builderApiV1Deneb.SignedBlindedBlobSidecar, domain phase0.Domain, pubKey []byte) (bool, error) {
+	if sidecar == nil || sidecar.Message == nil {
+		return false, errors.New("nil sidecar or message")
+	}
+	root, err := sidecar.Message.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+	signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
+	msg, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+
+	return bls.VerifySignatureBytes(msg[:], sidecar.Signature[:], pubKey[:])
 }
