@@ -1216,27 +1216,15 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	case spec.DataVersionCapella:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
 	case spec.DataVersionDeneb:
-		domain := api.opts.EthNetDetails.DomainBeaconProposerDeneb
-		if ok, err := verifyBlockSignature(block, domain, pubKey); !ok || err != nil {
+		if ok, err := verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey); !ok || err != nil {
+			api.log.WithError(err).Warn("failed to verify block signature for deneb")
 			return false, errors.Wrap(err, "failed to verify block signature for deneb")
 		}
 		// verify sidecar signatures
 		for i, sidecar := range block.Deneb.SignedBlindedBlobSidecars {
-			if sidecar == nil || sidecar.Message == nil {
-				return false, errors.New("nil sidecar or message")
-			}
-			root, err := sidecar.Message.HashTreeRoot()
-			if err != nil {
-				return false, errors.Wrap(err, fmt.Sprintf("failed to calculate hash tree root for sidecar index %d", i))
-			}
-			signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
-			msg, err := signingData.HashTreeRoot()
-			if err != nil {
-				return false, err
-			}
-
-			if ok, err := bls.VerifySignatureBytes(msg[:], sidecar.Signature[:], pubKey[:]); !ok || err != nil {
-				return false, errors.Wrap(err, fmt.Sprintf("failed to verify signature for sidecar index %d ", i))
+			if ok, err := verifyBlobSidecarSignature(sidecar, api.opts.EthNetDetails.DomainBlobSidecarDeneb, pubKey); !ok || err != nil {
+				api.log.WithError(err).Warn(fmt.Sprintf("failed to verify signature for sidecar index %d", i))
+				return false, errors.Wrap(err, fmt.Sprintf("failed to verify signature for sidecar index %d", i))
 			}
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
