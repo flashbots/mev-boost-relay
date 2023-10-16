@@ -51,6 +51,7 @@ type EthNetworkDetails struct {
 	DomainBeaconProposerBellatrix phase0.Domain
 	DomainBeaconProposerCapella   phase0.Domain
 	DomainBeaconProposerDeneb     phase0.Domain
+	DomainBlobSidecarDeneb        phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -63,6 +64,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var domainBeaconProposerBellatrix phase0.Domain
 	var domainBeaconProposerCapella phase0.Domain
 	var domainBeaconProposerDeneb phase0.Domain
+	var domainBlobSidecarDeneb phase0.Domain
 
 	switch networkName {
 	case EthNetworkSepolia:
@@ -113,6 +115,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBlobSidecarDeneb, err = ComputeDomain(boostSsz.DomainTypeBlobSidecar, denebForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
@@ -124,6 +131,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
+		DomainBlobSidecarDeneb:        domainBlobSidecarDeneb ,
 	}, nil
 }
 
