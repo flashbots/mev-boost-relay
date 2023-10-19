@@ -4,7 +4,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/cmd"
 )
 
-var Version = "dummy" // is set during build process
+var Version = "dev" // is set during build process
 
 func main() {
 	cmd.Version = Version
