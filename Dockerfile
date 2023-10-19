@@ -4,8 +4,7 @@ ARG VERSION
 WORKDIR /build
 
 # Cache for the modules
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 # Now adding all the code and start building
