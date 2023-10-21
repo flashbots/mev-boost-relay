@@ -131,7 +131,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
-		DomainBlobSidecarDeneb:        domainBlobSidecarDeneb ,
+		DomainBlobSidecarDeneb:        domainBlobSidecarDeneb,
 	}, nil
 }
 
