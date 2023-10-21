@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
+	ErrHTTPErrorResponse     = errors.New("got an HTTP error response")
+	ErrInvalidRequestPayload = errors.New("invalid request payload")
 
 	StateIDHead      = "head"
 	StateIDGenesis   = "genesis"
@@ -30,27 +31,52 @@ func parseBroadcastModeString(s string) (BroadcastMode, bool) {
 	return b, ok
 }
 
-func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration, headers http.Header) (code int, err error) {
+func makeJSONRequest(method, url string, payload any) (*http.Request, error) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal request: %w", err)
+	}
+	req, err := http.NewRequest(method, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("invalid request for %s: %w", url, err)
+	}
+	// Set content-type
+	req.Header.Add("Content-Type", "application/json")
+	return req, nil
+}
+
+func makeSSZRequest(method, url string, payload any) (*http.Request, error) {
+	if payloadBytes, ok := payload.([]byte); ok {
+		req, err := http.NewRequest(method, url, bytes.NewReader(payloadBytes))
+		if err != nil {
+			return nil, fmt.Errorf("invalid request for %s: %w", url, err)
+		}
+		// Set content-type
+		req.Header.Add("Content-Type", "application/octet-stream")
+		return req, nil
+	}
+	return nil, fmt.Errorf("invalid payload type for SSZ request: %w", ErrInvalidRequestPayload)
+}
+
+func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration, headers http.Header, ssz bool) (code int, err error) {
 	var req *http.Request
 
 	if payload == nil {
 		req, err = http.NewRequest(method, url, nil)
 	} else {
-		payloadBytes, err2 := json.Marshal(payload)
-		if err2 != nil {
-			return 0, fmt.Errorf("could not marshal request: %w", err2)
-		}
-		req, err = http.NewRequest(method, url, bytes.NewReader(payloadBytes))
-
-		// Set content-type
-		req.Header.Add("Content-Type", "application/json")
-		for k, v := range headers {
-			req.Header.Add(k, v[0])
+		if ssz {
+			req, err = makeSSZRequest(method, url, payload)
+		} else {
+			req, err = makeJSONRequest(method, url, payload)
 		}
 	}
 
 	if err != nil {
 		return 0, fmt.Errorf("invalid request for %s: %w", url, err)
+	}
+
+	for k, v := range headers {
+		req.Header.Add(k, v[0])
 	}
 	req.Header.Set("accept", "application/json")
 

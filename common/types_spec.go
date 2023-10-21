@@ -9,8 +9,8 @@ import (
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
-	eth2builderApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
-	eth2builderApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -189,7 +189,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 		if len(denebBlindedBlobs) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
 			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
 		}
-		
+
 		denebBlindedBlock := signedBlindedBeaconBlock.Deneb.SignedBlindedBlock
 		blockRoot, err := denebBlindedBlock.Message.HashTreeRoot()
 		if err != nil {
@@ -203,7 +203,7 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 	return &signedBeaconBlock, nil
 }
 
-func CapellaUnblindSignedBlock(blindedBlock *eth2builderApiV1Capella.SignedBlindedBeaconBlock, executionPayload *capella.ExecutionPayload) *capella.SignedBeaconBlock {
+func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaconBlock, executionPayload *capella.ExecutionPayload) *capella.SignedBeaconBlock {
 	return &capella.SignedBeaconBlock{
 		Signature: blindedBlock.Signature,
 		Message: &capella.BeaconBlock{
@@ -228,7 +228,7 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2builderApiV1Capella.SignedBlind
 	}
 }
 
-func DenebUnblindSignedBlock(blindedBlock *eth2builderApiV1Deneb.SignedBlindedBeaconBlock, blindedBlobs []*eth2builderApiV1Deneb.SignedBlindedBlobSidecar, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2builderApiV1Deneb.SignedBlockContents {
+func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blindedBlobs []*eth2ApiV1Deneb.SignedBlindedBlobSidecar, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
 	denebBlobSidecars := make([]*deneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
 
 	for i := range denebBlobSidecars {
@@ -246,7 +246,7 @@ func DenebUnblindSignedBlock(blindedBlock *eth2builderApiV1Deneb.SignedBlindedBe
 			Signature: blindedBlobs[i].Signature,
 		}
 	}
-	return &eth2builderApiV1Deneb.SignedBlockContents{
+	return &eth2ApiV1Deneb.SignedBlockContents{
 		SignedBlock: &deneb.SignedBeaconBlock{
 			Message: &deneb.BeaconBlock{
 				Slot:          blindedBlock.Message.Slot,
@@ -372,6 +372,38 @@ type VersionedSignedBlockRequest struct {
 	eth2Api.VersionedBlockRequest
 }
 
+func (r *VersionedSignedBlockRequest) MarshalSSZ() ([]byte, error) {
+	switch r.Version {
+	case spec.DataVersionCapella:
+		return r.Capella.MarshalSSZ()
+	case spec.DataVersionDeneb:
+		return r.Deneb.MarshalSSZ()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
+func (r *VersionedSignedBlockRequest) UnmarshalSSZ(input []byte) error {
+	var err error
+
+	denebRequest := new(eth2ApiV1Deneb.SignedBlockContents)
+	if err = denebRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = denebRequest
+		return nil
+	}
+
+	capellaRequest := new(capella.SignedBeaconBlock)
+	if err = capellaRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionCapella
+		r.Capella = capellaRequest
+		return nil
+	}
+	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
+}
+
 func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version {
 	case spec.DataVersionCapella:
@@ -388,7 +420,7 @@ func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	denebContents := new(eth2builderApiV1Deneb.SignedBlockContents)
+	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
 	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebContents
@@ -424,14 +456,14 @@ func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 
-	denebContents := new(eth2builderApiV1Deneb.SignedBlindedBlockContents)
+	denebContents := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
 	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebContents
 		return nil
 	}
 
-	capellaBlock := new(eth2builderApiV1Capella.SignedBlindedBeaconBlock)
+	capellaBlock := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
 	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
 		r.Capella = capellaBlock
