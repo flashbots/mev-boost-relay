@@ -18,7 +18,7 @@ type ProdBeaconInstance struct {
 	beaconURI string
 
 	// feature flags
-	ffUseV2PublishBlockEndpoint bool
+	ffUseV1PublishBlockEndpoint bool
 }
 
 func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
@@ -30,9 +30,9 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 	client := &ProdBeaconInstance{_log, beaconURI, false}
 
 	// feature flags
-	if os.Getenv("USE_V2_PUBLISH_BLOCK_ENDPOINT") != "" {
-		_log.Warn("env: USE_V2_PUBLISH_BLOCK_ENDPOINT: use the v2 publish block endpoint")
-		client.ffUseV2PublishBlockEndpoint = true
+	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
+		_log.Warn("env: USE_V1_PUBLISH_BLOCK_ENDPOINT: use the v2 publish block endpoint")
+		client.ffUseV1PublishBlockEndpoint = true
 	}
 
 	return client
@@ -274,12 +274,16 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedBlockRequ
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", block.Version.String()) // optional in v1, required in v2
 
-	if c.ffUseV2PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
-		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, true)
-	} else {
+	if c.ffUseV1PublishBlockEndpoint {
 		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+	} else {
+		blockSSZ, err := block.MarshalSSZ()
+		if err != nil {
+			return 0, fmt.Errorf("could not marshal block to SSZ: %w", err)
+		}
+		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
+		return fetchBeacon(http.MethodPost, uri, blockSSZ, nil, nil, headers, true)
 	}
 }
 

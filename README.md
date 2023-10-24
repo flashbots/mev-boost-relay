@@ -152,7 +152,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DISABLE_LOWPRIO_BUILDERS` - reject block submissions by low-prio builders
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `ENABLE_IGNORABLE_VALIDATION_ERRORS` - enable ignorable validation errors
-* `USE_V2_PUBLISH_BLOCK_ENDPOINT` - uses the v2 publish block endpoint on the beacon node
+* `USE_V1_PUBLISH_BLOCK_ENDPOINT` - uses the v1 publish block endpoint on the beacon node
 
 #### Development Environment Variables
 
