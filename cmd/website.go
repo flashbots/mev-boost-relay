@@ -45,7 +45,7 @@ func init() {
 	websiteCmd.Flags().BoolVar(&websiteShowConfigDetails, "show-config-details", websiteDefaultShowConfigDetails, "show config details")
 	websiteCmd.Flags().StringVar(&websiteLinkBeaconchain, "link-beaconchain", websiteDefaultLinkBeaconchain, "url for beaconcha.in")
 	websiteCmd.Flags().StringVar(&websiteLinkEtherscan, "link-etherscan", websiteDefaultLinkEtherscan, "url for etherscan")
-	websiteCmd.Flags().StringVar(&websiteLinkDataAPI, "link-dataapi", websiteDefaultLinkDataAPI, "origin url for data api (https://domain:port)")
+	websiteCmd.Flags().StringVar(&websiteLinkDataAPI, "link-data-api", websiteDefaultLinkDataAPI, "origin url for data api (https://domain:port)")
 	websiteCmd.Flags().StringVar(&websiteRelayURL, "relay-url", websiteDefaultRelayURL, "full url for the relay (https://pubkey@host)")
 }
 
