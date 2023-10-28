@@ -17,7 +17,7 @@ var (
 	websiteDefaultShowConfigDetails = os.Getenv("SHOW_CONFIG_DETAILS") == "1"
 	websiteDefaultLinkBeaconchain   = common.GetEnv("LINK_BEACONCHAIN", "https://beaconcha.in")
 	websiteDefaultLinkEtherscan     = common.GetEnv("LINK_ETHERSCAN", "https://etherscan.io")
-	websiteDefaultLinkDataAPI       = common.GetEnv("LINK_API", "")
+	websiteDefaultLinkDataAPI       = common.GetEnv("LINK_DATA_API", "")
 	websiteDefaultRelayURL          = common.GetEnv("RELAY_URL", "")
 
 	websiteListenAddr        string
