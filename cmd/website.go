@@ -17,6 +17,7 @@ var (
 	websiteDefaultShowConfigDetails = os.Getenv("SHOW_CONFIG_DETAILS") == "1"
 	websiteDefaultLinkBeaconchain   = common.GetEnv("LINK_BEACONCHAIN", "https://beaconcha.in")
 	websiteDefaultLinkEtherscan     = common.GetEnv("LINK_ETHERSCAN", "https://etherscan.io")
+	websiteDefaultLinkDataAPI       = common.GetEnv("LINK_API", "")
 	websiteDefaultRelayURL          = common.GetEnv("RELAY_URL", "")
 
 	websiteListenAddr        string
@@ -25,6 +26,7 @@ var (
 
 	websiteLinkBeaconchain string
 	websiteLinkEtherscan   string
+	websiteLinkDataAPI     string
 	websiteRelayURL        string
 )
 
@@ -43,6 +45,7 @@ func init() {
 	websiteCmd.Flags().BoolVar(&websiteShowConfigDetails, "show-config-details", websiteDefaultShowConfigDetails, "show config details")
 	websiteCmd.Flags().StringVar(&websiteLinkBeaconchain, "link-beaconchain", websiteDefaultLinkBeaconchain, "url for beaconcha.in")
 	websiteCmd.Flags().StringVar(&websiteLinkEtherscan, "link-etherscan", websiteDefaultLinkEtherscan, "url for etherscan")
+	websiteCmd.Flags().StringVar(&websiteLinkDataAPI, "link-dataapi", websiteDefaultLinkDataAPI, "origin url for data api (https://domain:port)")
 	websiteCmd.Flags().StringVar(&websiteRelayURL, "relay-url", websiteDefaultRelayURL, "full url for the relay (https://pubkey@host)")
 }
 
@@ -110,6 +113,7 @@ var websiteCmd = &cobra.Command{
 			ShowConfigDetails: websiteShowConfigDetails,
 			LinkBeaconchain:   websiteLinkBeaconchain,
 			LinkEtherscan:     websiteLinkEtherscan,
+			LinkDataAPI:       websiteLinkDataAPI,
 			RelayURL:          websiteRelayURL,
 		}
 

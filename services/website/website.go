@@ -42,6 +42,7 @@ type WebserverOpts struct {
 	ShowConfigDetails bool
 	LinkBeaconchain   string
 	LinkEtherscan     string
+	LinkDataAPI       string
 	RelayURL          string
 }
 
@@ -110,6 +111,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		ShowConfigDetails:           opts.ShowConfigDetails,
 		LinkBeaconchain:             opts.LinkBeaconchain,
 		LinkEtherscan:               opts.LinkEtherscan,
+		LinkDataAPI:                 opts.LinkDataAPI,
 		RelayURL:                    opts.RelayURL,
 	}
 
