@@ -40,6 +40,7 @@ type StatusHTMLData struct { //nolint:musttag
 	ShowConfigDetails bool
 	LinkBeaconchain   string
 	LinkEtherscan     string
+	LinkDataAPI       string
 	RelayURL          string
 }
 
