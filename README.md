@@ -171,7 +171,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `LINK_ETHERSCAN` - url for etherscan (default: `https://etherscan.io`)
 * `LISTEN_ADDR` - listen address for webserver (default: `localhost:9060`)
 * `RELAY_URL` - full url for the relay (https://pubkey@host)
-* `SHOW_CONFIG_DETAILS` - log configuration details
+* `SHOW_CONFIG_DETAILS` - when set to "1", logs configuration details
 
 ## Updating the website
 
