@@ -248,11 +248,12 @@
                 <tbody>
                     {{$linkBeaconchain := .LinkBeaconchain}}
                     {{$linkEtherscan := .LinkEtherscan}}
+                    {{$linkDataAPI := .LinkDataAPI}}
                     {{ range .Payloads }}
                     <tr>
                         <td>{{.Epoch | prettyInt}}</td>
                         <td>
-                            <a href="{{.LinkDataAPI}}/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot | prettyInt}}</a>
+                            <a href="{{$linkDataAPI}}/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot | prettyInt}}</a>
                         </td>
                         <td>{{.BlockNumber | prettyInt}}</td>
                         <td>{{.Value | weiToEth}}</td>
