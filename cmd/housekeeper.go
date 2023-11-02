@@ -68,7 +68,7 @@ var housekeeperCmd = &cobra.Command{
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 
 		// Connect to Redis and setup the datastore
-		redis, err := datastore.NewRedisCache(networkInfo.Name, redisURI, "")
+		redis, err := datastore.NewRedisCache(networkInfo.Name, redisURI, "", "")
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}

@@ -117,7 +117,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	}
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
-	mockRedis, err := datastore.NewRedisCache("", redisTestServer.Addr(), "")
+	mockRedis, err := datastore.NewRedisCache("", redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 	mockDS, err := datastore.NewDatastore(mockRedis, nil, mockDB)
 	require.NoError(t, err)

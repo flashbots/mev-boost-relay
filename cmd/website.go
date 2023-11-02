@@ -70,12 +70,14 @@ var websiteCmd = &cobra.Command{
 		log.Debug(networkInfo.String())
 
 		// Connect to Redis
-		if redisReadonlyURI == "" {
-			log.Infof("Connecting to Redis at %s ...", redisURI)
-		} else {
-			log.Infof("Connecting to Redis at %s / readonly: %s ...", redisURI, redisReadonlyURI)
+		log.Infof("Connecting to Redis at %s ...", redisURI)
+		if redisReadonlyURI != "" {
+			log.Infof("Connecting to readonly Redis at %s ...", redisReadonlyURI)
 		}
-		redis, err := datastore.NewRedisCache(networkInfo.Name, redisURI, redisReadonlyURI)
+		if redisArchiveURI != "" {
+			log.Infof("Connecting to block submission archive Redis at %s ...", redisArchiveURI)
+		}
+		redis, err := datastore.NewRedisCache(networkInfo.Name, redisURI, redisReadonlyURI, redisArchiveURI)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to connect to Redis at %s", redisURI)
 		}

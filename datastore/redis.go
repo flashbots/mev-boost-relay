@@ -78,6 +78,7 @@ func connectRedis(redisURI string) (*redis.Client, error) {
 }
 
 type RedisCache struct {
+	archiveClient  *redis.Client
 	client         *redis.Client
 	readonlyClient *redis.Client
 
@@ -105,7 +106,7 @@ type RedisCache struct {
 	keyLastHashDelivered  string
 }
 
-func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
+func NewRedisCache(prefix, redisURI, readonlyURI, archiveURI string) (*RedisCache, error) {
 	client, err := connectRedis(redisURI)
 	if err != nil {
 		return nil, err
@@ -119,7 +120,19 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		}
 	}
 
+	// By default we use the same client for block submission archiving, unless
+	// a different URI is provided. If latency is a concern, running a separate
+	// client connected to a separate instance is advisable.
+	archiveClient := client
+	if archiveURI != "" {
+		archiveClient, err = connectRedis(archiveURI)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &RedisCache{
+		archiveClient:  archiveClient,
 		client:         client,
 		readonlyClient: roClient,
 
@@ -849,4 +862,16 @@ func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 
 func (r *RedisCache) NewTxPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.TxPipeline()
+}
+
+func (r *RedisCache) ArchivePayloadRequest(payload []interface{}) error {
+	return r.archiveClient.XAdd(context.Background(), &redis.XAddArgs{
+		// We expect payload request logs to be at most 10 KiB in size. This
+		// means we can expect the stream to eventually take up
+		// 10_000 * 10 KiB = 100 MiB.
+		MaxLen: 10_000,
+		Approx: true,
+		Stream: "payload-request-archive",
+		Values: payload,
+	}).Err()
 }
