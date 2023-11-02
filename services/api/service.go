@@ -946,7 +946,7 @@ func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
 
 	// write the json response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		api.log.WithField("response", response).WithError(err).Error("Couldn't write response")
+		api.log.WithError(err).Error("Couldn't write response")
 		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
