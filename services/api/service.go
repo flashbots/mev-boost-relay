@@ -1677,35 +1677,63 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}()
 
 	// Get the response - from Redis, Memcache or DB
-	// note that recent mev-boost versions only send getPayload to relays that provided the bid
+	// note that recent mev-boost versions only send getPayload to relays that provided the bid, older versions send getPayload to all relays.
+	// Additionally, proposers may feel it's safer to ask for a bid from all relays and fork.
 	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
 	if err != nil || getPayloadResp == nil {
-		log.WithError(err).Warn("failed getting execution payload (1/2)")
-		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
+		log.WithError(err).Warn("failed first attempt to get execution payload")
 
-		// Try again
+		// Wait, then try again.
+		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
 		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+
 		if err != nil || getPayloadResp == nil {
 			// Still not found! Error out now.
 			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
-				bid, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
-				if errors.Is(err, sql.ErrNoRows) {
-					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
-					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
-				} else if err != nil {
-					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
-				} else if bid.EligibleAt.Valid {
-					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
-				} else {
-					log.Info("found bid but payload was never saved as bid was ineligible being below floor value")
+				// Couldn't find the execution payload, three options:
+				// 1. We're storing all payloads in postgres, we never received
+				// or served the bid, but someone still asked us for it. We can
+				// check this.
+				// 2. We do not store all payloads in postgres. The bid was
+				// never the top bid, so we didn't store it in Redis or
+				// Memcached either. We received, but never served the bid, but
+				// someone still asked us for it.
+				// 3. The bid was accepted but the payload was lost in all
+				// active stores. This is a critical error! If this ever
+				// happens, we have work to do.
+				// Annoyingly, we can't currently distinguish between 2 and 3!
+
+				// Check for case 1 if possible.
+				if !api.ffDisablePayloadDBStorage {
+					bid, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
+					if errors.Is(err, sql.ErrNoRows) {
+						log.Info("failed second attempt to get execution payload, discovered block was never submitted to this relay")
+						api.RespondError(w, http.StatusBadRequest, "no execution payload for this request, block was never seen by this relay")
+						return
+					}
+					if err != nil {
+						log.WithError(err).Error("failed second attempt to get execution payload, hit an error while checking if block was submitted to this relay")
+						api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request, hit an error while checking if block was submitted to this relay")
+						return
+					} else if bid.EligibleAt.Valid {
+						log.Error("failed getting execution payload not found, but found bid in database")
+					} else {
+						log.Info("found bid but payload was never saved as bid was ineligible being below floor value")
+					}
 				}
-			} else { // some other error
-				log.WithError(err).Error("failed getting execution payload (2/2) - error")
+
+				// Case 2 or 3, we don't know which.
+				log.Warn("failed second attempt to get execution payload, not found case, block was never submitted to this relay or bid was accepted but payload was lost")
+				api.RespondError(w, http.StatusBadRequest, "no execution payload for this request, block was never seen by this relay or bid was accepted but payload was lost, if you got this bid from us, please contact the relay")
+				return
+			} else {
+				log.WithError(err).Error("failed second attempt to get execution payload, error case")
+				api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
+				return
 			}
-			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
-			return
 		}
+
+		// The second attempt succeeded. We may continue.
 	}
 
 	// Now we know this relay also has the payload
