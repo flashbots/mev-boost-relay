@@ -24,15 +24,34 @@ var (
 	ErrUnknownNetwork = errors.New("unknown network")
 	ErrEmptyPayload   = errors.New("empty payload")
 
+	EthNetworkHolesky = "holesky"
 	EthNetworkSepolia = "sepolia"
 	EthNetworkGoerli  = "goerli"
 	EthNetworkMainnet = "mainnet"
 	EthNetworkCustom  = "custom"
 
+	GenesisForkVersionHolesky = "0x01017000"
+	GenesisForkVersionSepolia = "0x90000069"
+	GenesisForkVersionGoerli  = "0x00001020"
+	GenesisForkVersionMainnet = "0x00000000"
+
+	GenesisValidatorsRootHolesky = "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"
+	GenesisValidatorsRootSepolia = "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"
+	GenesisValidatorsRootGoerli  = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
+	GenesisValidatorsRootMainnet = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
+
+	BellatrixForkVersionHolesky = "0x03017000"
+	BellatrixForkVersionSepolia = "0x90000071"
+	BellatrixForkVersionGoerli  = "0x02001020"
+	BellatrixForkVersionMainnet = "0x02000000"
+
+	CapellaForkVersionHolesky = "0x04017000"
 	CapellaForkVersionSepolia = "0x90000072"
 	CapellaForkVersionGoerli  = "0x03001020"
 	CapellaForkVersionMainnet = "0x03000000"
 
+	// TODO: check deneb fork version for holesky when it is out
+	DenebForkVersionHolesky = "0x05017000"
 	DenebForkVersionSepolia = "0x90000073"
 	DenebForkVersionGoerli  = "0x04001020"
 	DenebForkVersionMainnet = "0x04000000"
@@ -68,22 +87,28 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var domainBeaconProposerDeneb boostTypes.Domain
 
 	switch networkName {
+	case EthNetworkHolesky:
+		genesisForkVersion = GenesisForkVersionHolesky
+		genesisValidatorsRoot = GenesisValidatorsRootHolesky
+		bellatrixForkVersion = BellatrixForkVersionHolesky
+		capellaForkVersion = CapellaForkVersionHolesky
+		denebForkVersion = DenebForkVersionHolesky
 	case EthNetworkSepolia:
-		genesisForkVersion = boostTypes.GenesisForkVersionSepolia
-		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootSepolia
-		bellatrixForkVersion = boostTypes.BellatrixForkVersionSepolia
+		genesisForkVersion = GenesisForkVersionSepolia
+		genesisValidatorsRoot = GenesisValidatorsRootSepolia
+		bellatrixForkVersion = BellatrixForkVersionSepolia
 		capellaForkVersion = CapellaForkVersionSepolia
 		denebForkVersion = DenebForkVersionSepolia
 	case EthNetworkGoerli:
-		genesisForkVersion = boostTypes.GenesisForkVersionGoerli
-		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootGoerli
-		bellatrixForkVersion = boostTypes.BellatrixForkVersionGoerli
+		genesisForkVersion = GenesisForkVersionGoerli
+		genesisValidatorsRoot = GenesisValidatorsRootGoerli
+		bellatrixForkVersion = BellatrixForkVersionGoerli
 		capellaForkVersion = CapellaForkVersionGoerli
 		denebForkVersion = DenebForkVersionGoerli
 	case EthNetworkMainnet:
-		genesisForkVersion = boostTypes.GenesisForkVersionMainnet
-		genesisValidatorsRoot = boostTypes.GenesisValidatorsRootMainnet
-		bellatrixForkVersion = boostTypes.BellatrixForkVersionMainnet
+		genesisForkVersion = GenesisForkVersionMainnet
+		genesisValidatorsRoot = GenesisValidatorsRootMainnet
+		bellatrixForkVersion = BellatrixForkVersionMainnet
 		capellaForkVersion = CapellaForkVersionMainnet
 		denebForkVersion = DenebForkVersionMainnet
 	case EthNetworkCustom:
