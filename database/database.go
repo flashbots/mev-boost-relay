@@ -34,7 +34,7 @@ type IDatabaseService interface {
 	GetExecutionPayloads(idFirst, idLast uint64) (entries []*ExecutionPayloadEntry, err error)
 	DeleteExecutionPayloads(idFirst, idLast uint64) error
 
-	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBlockRequest, signedAt time.Time, publishMs uint64) error
+	SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error
 	GetNumDeliveredPayloads() (uint64, error)
 	GetRecentDeliveredPayloads(filters GetPayloadsFilters) ([]*DeliveredPayloadEntry, error)
 	GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error)
@@ -48,7 +48,7 @@ type IDatabaseService interface {
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
 	InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error
-	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedBlockRequest, signedRegistration *builderApiV1.SignedValidatorRegistration) error
+	UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedProposal, signedRegistration *builderApiV1.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error)
 
 	GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayloadEntry, err error)
@@ -272,7 +272,7 @@ func (s *DatabaseService) GetExecutionPayloadEntryBySlotPkHash(slot uint64, prop
 	return entry, err
 }
 
-func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBlockRequest, signedAt time.Time, publishMs uint64) error {
+func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
 	_signedBlindedBeaconBlock, err := json.Marshal(signedBlindedBeaconBlock)
 	if err != nil {
 		return err
@@ -574,7 +574,7 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Versi
 	return err
 }
 
-func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedBlockRequest, signedRegistration *builderApiV1.SignedValidatorRegistration) error {
+func (s *DatabaseService) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedProposal, signedRegistration *builderApiV1.SignedValidatorRegistration) error {
 	_signedBeaconBlock, err := json.Marshal(signedBlock)
 	if err != nil {
 		return err

@@ -1066,7 +1066,7 @@ func TestUpdateRedis(t *testing.T) {
 func TestCheckProposerSignature(t *testing.T) {
 	t.Run("Unsupported version", func(t *testing.T) {
 		_, _, backend := startTestBackend(t)
-		payload := new(common.VersionedSignedBlindedBlockRequest)
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
 		payload.Version = spec.DataVersionBellatrix
 		ok, err := backend.relay.checkProposerSignature(payload, []byte{})
 		require.Error(t, err, "unsupported consensus data version")
@@ -1075,7 +1075,7 @@ func TestCheckProposerSignature(t *testing.T) {
 
 	t.Run("Valid Capella Signature", func(t *testing.T) {
 		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
-		payload := new(common.VersionedSignedBlindedBlockRequest)
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
 		err := json.Unmarshal(jsonBytes, payload)
 		require.NoError(t, err)
 		// start backend with goerli network
@@ -1093,7 +1093,7 @@ func TestCheckProposerSignature(t *testing.T) {
 
 	t.Run("Invalid Capella Signature", func(t *testing.T) {
 		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
-		payload := new(common.VersionedSignedBlindedBlockRequest)
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
 		err := json.Unmarshal(jsonBytes, payload)
 		require.NoError(t, err)
 		// change signature

@@ -40,7 +40,7 @@ func TestSignedBeaconBlockJSON(t *testing.T) {
 	require.NoError(t, err)
 	expectedJSONBytes := buffer.Bytes()
 
-	blockRequest := new(VersionedSignedBlockRequest)
+	blockRequest := new(VersionedSignedProposal)
 	err = json.Unmarshal(jsonBytes, blockRequest)
 	require.NoError(t, err)
 
@@ -57,7 +57,7 @@ func TestSignedBlindedBlockJSON(t *testing.T) {
 	require.NoError(t, err)
 	expectedJSONBytes := buffer.Bytes()
 
-	blockRequest := new(VersionedSignedBlindedBlockRequest)
+	blockRequest := new(VersionedSignedBlindedBeaconBlock)
 	err = json.Unmarshal(jsonBytes, blockRequest)
 	require.NoError(t, err)
 

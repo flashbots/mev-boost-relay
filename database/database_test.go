@@ -357,13 +357,13 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	cases := []struct {
 		name        string
 		req         *common.VersionedSubmitBlockRequest
-		beaconBlock *common.VersionedSignedBlockRequest
+		beaconBlock *common.VersionedSignedProposal
 	}{
 		{
 			name: "Capella",
 			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionCapella),
-			beaconBlock: &common.VersionedSignedBlockRequest{
-				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
+			beaconBlock: &common.VersionedSignedProposal{
+				VersionedSignedProposal: eth2Api.VersionedSignedProposal{
 					Version: spec.DataVersionCapella,
 					Capella: &capella.SignedBeaconBlock{},
 				},
@@ -371,8 +371,8 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 		}, {
 			name: "Deneb",
 			req:  common.TestBuilderSubmitBlockRequest(sk, bt, spec.DataVersionDeneb),
-			beaconBlock: &common.VersionedSignedBlockRequest{
-				VersionedBlockRequest: eth2Api.VersionedBlockRequest{
+			beaconBlock: &common.VersionedSignedProposal{
+				VersionedSignedProposal: eth2Api.VersionedSignedProposal{
 					Version: spec.DataVersionDeneb,
 					Deneb:   &eth2builderApiV1Deneb.SignedBlockContents{},
 				},

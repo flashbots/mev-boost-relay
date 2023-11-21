@@ -93,8 +93,8 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							Transactions:  []bellatrix.Transaction{},
 						},
 						BlobsBundle: &builderApiDeneb.BlobsBundle{
-							Commitments: []deneb.KzgCommitment{},
-							Proofs:      []deneb.KzgProof{},
+							Commitments: []deneb.KZGCommitment{},
+							Proofs:      []deneb.KZGProof{},
 							Blobs:       []deneb.Blob{},
 						},
 						Message: &builderApiV1.BidTrace{

@@ -6,7 +6,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.30.5
 	github.com/attestantio/go-builder-client v0.3.2-0.20230809093013-1fa02af241e1
-	github.com/attestantio/go-eth2-client v0.18.3
+	github.com/attestantio/go-eth2-client v0.19.5
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
@@ -48,7 +48,7 @@ require (
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
-	github.com/goccy/go-yaml v1.11.0 // indirect
+	github.com/goccy/go-yaml v1.11.2 // indirect
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -58,7 +58,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.18 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
@@ -74,7 +74,7 @@ require (
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
@@ -91,8 +91,8 @@ require (
 	github.com/ferranbt/fastssz v0.1.3
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
-	github.com/minio/sha256-simd v1.0.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
+	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rubenv/sql-migrate v1.5.2
@@ -116,12 +116,11 @@ require (
 retract (
 	v1.15.3
 	v1.15.2
-	v1.0.0-alpha4
 	v1.0.0-alpha3
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
 
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20231003132440-649530ab1e0e
+replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20231121172650-f072b1d01026
 
-replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20231003081344-5371b036e940
+replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20231111000900-7bf594d0ffd3

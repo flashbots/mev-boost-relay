@@ -28,7 +28,7 @@ func (*MockMultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRe
 	return nil, nil
 }
 
-func (*MockMultiBeaconClient) PublishBlock(block *common.VersionedSignedBlockRequest) (code int, err error) {
+func (*MockMultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) (code int, err error) {
 	return 0, nil
 }
 

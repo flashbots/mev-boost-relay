@@ -142,16 +142,11 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			}
 			blobRoots = append(blobRoots, root)
 		}
-		blindedBlobsBundle := builderApiDeneb.BlindedBlobsBundle{
-			Commitments: payload.Deneb.BlobsBundle.Commitments,
-			Proofs:      payload.Deneb.BlobsBundle.Proofs,
-			BlobRoots:   blobRoots,
-		}
 
 		builderBid := builderApiDeneb.BuilderBid{
-			Value:              value,
 			Header:             header.Deneb,
-			BlindedBlobsBundle: &blindedBlobsBundle,
+			BlobKZGCommitments: payload.Deneb.BlobsBundle.Commitments,
+			Value:              value,
 			Pubkey:             *pubkey,
 		}
 
@@ -174,9 +169,9 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 	}
 }
 
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBlockRequest, blockPayload *builderApi.VersionedSubmitBlindedBlockResponse) (*VersionedSignedBlockRequest, error) {
-	signedBeaconBlock := VersionedSignedBlockRequest{
-		eth2Api.VersionedBlockRequest{ //nolint:exhaustruct
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSignedBlindedBeaconBlock, blockPayload *builderApi.VersionedSubmitBlindedBlockResponse) (*VersionedSignedProposal, error) {
+	signedBeaconBlock := VersionedSignedProposal{
+		eth2Api.VersionedSignedProposal{ //nolint:exhaustruct
 			Version: signedBlindedBeaconBlock.Version,
 		},
 	}
@@ -185,18 +180,16 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 		capellaBlindedBlock := signedBlindedBeaconBlock.Capella
 		signedBeaconBlock.Capella = CapellaUnblindSignedBlock(capellaBlindedBlock, blockPayload.Capella)
 	case spec.DataVersionDeneb:
-		denebBlindedBlobs := signedBlindedBeaconBlock.Deneb.SignedBlindedBlobSidecars
-		if len(denebBlindedBlobs) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
+		denebBlindedBlock := signedBlindedBeaconBlock.Deneb
+		if len(denebBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
 			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
 		}
-
-		denebBlindedBlock := signedBlindedBeaconBlock.Deneb.SignedBlindedBlock
 		blockRoot, err := denebBlindedBlock.Message.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 
-		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, denebBlindedBlobs, blockPayload.Deneb, blockRoot)
+		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb, blockRoot)
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version.String()))
 	}
@@ -228,24 +221,7 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaco
 	}
 }
 
-func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blindedBlobs []*eth2ApiV1Deneb.SignedBlindedBlobSidecar, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
-	denebBlobSidecars := make([]*deneb.SignedBlobSidecar, len(blockPayload.BlobsBundle.Blobs))
-
-	for i := range denebBlobSidecars {
-		denebBlobSidecars[i] = &deneb.SignedBlobSidecar{
-			Message: &deneb.BlobSidecar{
-				BlockRoot:       blockRoot,
-				Index:           deneb.BlobIndex(i),
-				Slot:            blindedBlock.Message.Slot,
-				BlockParentRoot: blindedBlock.Message.ParentRoot,
-				ProposerIndex:   blindedBlock.Message.ProposerIndex,
-				Blob:            blockPayload.BlobsBundle.Blobs[i],
-				KzgCommitment:   blockPayload.BlobsBundle.Commitments[i],
-				KzgProof:        blockPayload.BlobsBundle.Proofs[i],
-			},
-			Signature: blindedBlobs[i].Signature,
-		}
-	}
+func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
 	return &eth2ApiV1Deneb.SignedBlockContents{
 		SignedBlock: &deneb.SignedBeaconBlock{
 			Message: &deneb.BeaconBlock{
@@ -254,7 +230,6 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 				ParentRoot:    blindedBlock.Message.ParentRoot,
 				StateRoot:     blindedBlock.Message.StateRoot,
 				Body: &deneb.BeaconBlockBody{
-					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 					RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
 					ETH1Data:              blindedBlock.Message.Body.ETH1Data,
 					Graffiti:              blindedBlock.Message.Body.Graffiti,
@@ -265,12 +240,14 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 					VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
 					SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
 					ExecutionPayload:      blockPayload.ExecutionPayload,
-					BlobKzgCommitments:    blockPayload.BlobsBundle.Commitments,
+					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
+					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
 				},
 			},
 			Signature: blindedBlock.Signature,
 		},
-		SignedBlobSidecars: denebBlobSidecars,
+		KZGProofs: blockPayload.BlobsBundle.Proofs,
+		Blobs:     blockPayload.BlobsBundle.Blobs,
 	}
 }
 
@@ -368,11 +345,11 @@ func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest")
 }
 
-type VersionedSignedBlockRequest struct {
-	eth2Api.VersionedBlockRequest
+type VersionedSignedProposal struct {
+	eth2Api.VersionedSignedProposal
 }
 
-func (r *VersionedSignedBlockRequest) MarshalSSZ() ([]byte, error) {
+func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
 	switch r.Version {
 	case spec.DataVersionCapella:
 		return r.Capella.MarshalSSZ()
@@ -385,7 +362,7 @@ func (r *VersionedSignedBlockRequest) MarshalSSZ() ([]byte, error) {
 	}
 }
 
-func (r *VersionedSignedBlockRequest) UnmarshalSSZ(input []byte) error {
+func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 	var err error
 
 	denebRequest := new(eth2ApiV1Deneb.SignedBlockContents)
@@ -404,7 +381,7 @@ func (r *VersionedSignedBlockRequest) UnmarshalSSZ(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
 }
 
-func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
+func (r *VersionedSignedProposal) MarshalJSON() ([]byte, error) {
 	switch r.Version {
 	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
@@ -417,7 +394,7 @@ func (r *VersionedSignedBlockRequest) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
+func (r *VersionedSignedProposal) UnmarshalJSON(input []byte) error {
 	var err error
 
 	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
@@ -436,11 +413,11 @@ func (r *VersionedSignedBlockRequest) UnmarshalJSON(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SignedBeaconBlockRequest")
 }
 
-type VersionedSignedBlindedBlockRequest struct {
-	eth2Api.VersionedBlindedBlockRequest
+type VersionedSignedBlindedBeaconBlock struct {
+	eth2Api.VersionedSignedBlindedBeaconBlock
 }
 
-func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
+func (r *VersionedSignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
 	switch r.Version {
 	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
@@ -453,13 +430,13 @@ func (r *VersionedSignedBlindedBlockRequest) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (r *VersionedSignedBlindedBlockRequest) UnmarshalJSON(input []byte) error {
+func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSON(input []byte) error {
 	var err error
 
-	denebContents := new(eth2ApiV1Deneb.SignedBlindedBlockContents)
-	if err = json.Unmarshal(input, denebContents); err == nil {
+	denebBlock := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
+	if err = json.Unmarshal(input, denebBlock); err == nil {
 		r.Version = spec.DataVersionDeneb
-		r.Deneb = denebContents
+		r.Deneb = denebBlock
 		return nil
 	}
 
