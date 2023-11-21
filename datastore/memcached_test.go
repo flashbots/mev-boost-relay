@@ -71,8 +71,8 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 						Transactions:  []bellatrix.Transaction{},
 					},
 					BlobsBundle: &builderApiDeneb.BlobsBundle{
-						Commitments: []deneb.KzgCommitment{},
-						Proofs:      []deneb.KzgProof{},
+						Commitments: []deneb.KZGCommitment{},
+						Proofs:      []deneb.KZGProof{},
 						Blobs:       []deneb.Blob{},
 					},
 				},

@@ -4,12 +4,10 @@ import (
 	"fmt"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
-	eth2builderApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
-	eth2UtilDeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -51,7 +49,7 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBlockRequest, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
+func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
 	if bb.Version != payload.Version {
 		return errors.Wrap(ErrPayloadMismatch, fmt.Sprintf("beacon block version %d does not match payload version %d", bb.Version, payload.Version))
 	}
@@ -81,7 +79,7 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBloc
 			return ErrHeaderHTRMismatch
 		}
 	case spec.DataVersionDeneb:
-		block := bb.Deneb.SignedBlindedBlock.Message
+		block := bb.Deneb.Message
 		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
 		if err != nil {
 			return err
@@ -102,30 +100,13 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBloc
 			return ErrHeaderHTRMismatch
 		}
 
-		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Commitments) {
+		if len(bb.Deneb.Message.Body.BlobKZGCommitments) != len(payload.Deneb.BlobsBundle.Commitments) {
 			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
 		}
-		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Proofs) {
-			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG proofs length")
-		}
-		if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Blobs) {
-			return errors.Wrap(ErrBlobMismatch, "mismatched number of blobs")
-		}
 
-		for i, blindedSidecar := range bb.Deneb.SignedBlindedBlobSidecars {
-			if blindedSidecar.Message.KzgCommitment != payload.Deneb.BlobsBundle.Commitments[i] {
+		for i, commitment := range bb.Deneb.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Deneb.BlobsBundle.Commitments[i] {
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
-			}
-			if blindedSidecar.Message.KzgProof != payload.Deneb.BlobsBundle.Proofs[i] {
-				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG proof at index %d", i))
-			}
-			blobRootHelper := eth2UtilDeneb.BeaconBlockBlob{Blob: payload.Deneb.BlobsBundle.Blobs[i]}
-			blobRoot, err := blobRootHelper.HashTreeRoot()
-			if err != nil {
-				return errors.New(fmt.Sprintf("failed to compute blob root at index %d", i))
-			}
-			if blindedSidecar.Message.BlobRoot != blobRoot {
-				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched blob root at index %d", i))
 			}
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
@@ -147,12 +128,12 @@ func hasReachedFork(slot, forkEpoch uint64) bool {
 	return currentEpoch >= forkEpoch
 }
 
-func verifyBlockSignature(block *common.VersionedSignedBlindedBlockRequest, domain phase0.Domain, pubKey []byte) (bool, error) {
+func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domain phase0.Domain, pubKey []byte) (bool, error) {
 	root, err := block.Root()
 	if err != nil {
 		return false, err
 	}
-	sig, err := block.BeaconBlockSignature()
+	sig, err := block.Signature()
 	if err != nil {
 		return false, err
 	}
@@ -163,21 +144,4 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBlockRequest, doma
 	}
 
 	return bls.VerifySignatureBytes(msg[:], sig[:], pubKey[:])
-}
-
-func verifyBlobSidecarSignature(sidecar *eth2builderApiV1Deneb.SignedBlindedBlobSidecar, domain phase0.Domain, pubKey []byte) (bool, error) {
-	if sidecar == nil || sidecar.Message == nil {
-		return false, errors.New("nil sidecar or message")
-	}
-	root, err := sidecar.Message.HashTreeRoot()
-	if err != nil {
-		return false, err
-	}
-	signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
-	msg, err := signingData.HashTreeRoot()
-	if err != nil {
-		return false, err
-	}
-
-	return bls.VerifySignatureBytes(msg[:], sidecar.Signature[:], pubKey[:])
 }

@@ -46,7 +46,7 @@ type IMultiBeaconClient interface {
 	// GetStateValidators returns all active and pending validators from the beacon node
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
-	PublishBlock(block *common.VersionedSignedBlockRequest) (code int, err error)
+	PublishBlock(block *common.VersionedSignedProposal) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
@@ -64,7 +64,7 @@ type IBeaconInstance interface {
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
-	PublishBlock(block *common.VersionedSignedBlockRequest, broadcastMode BroadcastMode) (code int, err error)
+	PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
@@ -259,7 +259,7 @@ type publishResp struct {
 }
 
 // PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
-func (c *MultiBeaconClient) PublishBlock(block *common.VersionedSignedBlockRequest) (code int, err error) {
+func (c *MultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) (code int, err error) {
 	slot, err := block.Slot()
 	if err != nil {
 		c.log.WithError(err).Warn("failed to publish block as block slot is missing")

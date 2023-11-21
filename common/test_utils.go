@@ -96,8 +96,8 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version s
 						BaseFeePerGas: uint256.NewInt(0),
 					},
 					BlobsBundle: &builderApiDeneb.BlobsBundle{
-						Commitments: []deneb.KzgCommitment{},
-						Proofs:      []deneb.KzgProof{},
+						Commitments: []deneb.KZGCommitment{},
+						Proofs:      []deneb.KZGProof{},
 						Blobs:       []deneb.Blob{},
 					},
 				},

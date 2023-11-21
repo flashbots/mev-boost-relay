@@ -1211,22 +1211,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	api.RespondOK(w, bid)
 }
 
-func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBlockRequest, pubKey []byte) (bool, error) {
+func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBeaconBlock, pubKey []byte) (bool, error) {
 	switch block.Version {
 	case spec.DataVersionCapella:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
 	case spec.DataVersionDeneb:
-		if ok, err := verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey); !ok || err != nil {
-			api.log.WithError(err).Warn("failed to verify block signature for deneb")
-			return false, errors.Wrap(err, "failed to verify block signature for deneb")
-		}
-		// verify sidecar signatures
-		for i, sidecar := range block.Deneb.SignedBlindedBlobSidecars {
-			if ok, err := verifyBlobSidecarSignature(sidecar, api.opts.EthNetDetails.DomainBlobSidecarDeneb, pubKey); !ok || err != nil {
-				api.log.WithError(err).Warn(fmt.Sprintf("failed to verify signature for sidecar index %d", i))
-				return false, errors.Wrap(err, fmt.Sprintf("failed to verify signature for sidecar index %d", i))
-			}
-		}
+		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey)
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
@@ -1277,7 +1267,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Decode payload
-	payload := new(common.VersionedSignedBlindedBlockRequest)
+	payload := new(common.VersionedSignedBlindedBeaconBlock)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
 		log.WithError(err).Warn("failed to decode getPayload request")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")

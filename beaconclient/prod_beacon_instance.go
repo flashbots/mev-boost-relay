@@ -269,7 +269,7 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
-func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedBlockRequest, broadcastMode BroadcastMode) (code int, err error) {
+func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", block.Version.String()) // optional in v1, required in v2
