@@ -5,8 +5,8 @@ go 1.20
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.30.5
-	github.com/attestantio/go-builder-client v0.3.2-0.20230809093013-1fa02af241e1
-	github.com/attestantio/go-eth2-client v0.19.5
+	github.com/attestantio/go-builder-client v0.4.2-0.20231122091430-0eafc4522bf2
+	github.com/attestantio/go-eth2-client v0.19.7-0.20231205092204-3087274ef2ac
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
@@ -120,7 +120,3 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
-
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20231121172650-f072b1d01026
-
-replace github.com/attestantio/go-builder-client => github.com/avalonche/go-builder-client v0.0.0-20231111000900-7bf594d0ffd3
