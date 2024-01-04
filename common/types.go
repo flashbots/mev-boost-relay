@@ -13,7 +13,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
 

@@ -1222,7 +1222,6 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	default:
 		return false, errors.New("unsupported consensus data version")
 	}
-	return true, nil
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {

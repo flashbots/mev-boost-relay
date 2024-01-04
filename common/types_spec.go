@@ -15,7 +15,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	eth2UtilDeneb "github.com/attestantio/go-eth2-client/util/deneb"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
@@ -133,16 +132,6 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			},
 		}, nil
 	case spec.DataVersionDeneb:
-		var blobRoots []phase0.Root
-		for i, blob := range payload.Deneb.BlobsBundle.Blobs {
-			blobRootHelper := eth2UtilDeneb.BeaconBlockBlob{Blob: blob}
-			root, err := blobRootHelper.HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to calculate blob root at blob index %d", i))
-			}
-			blobRoots = append(blobRoots, root)
-		}
-
 		builderBid := builderApiDeneb.BuilderBid{
 			Header:             header.Deneb,
 			BlobKZGCommitments: payload.Deneb.BlobsBundle.Commitments,

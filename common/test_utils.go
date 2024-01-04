@@ -185,8 +185,10 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 					ExecutionPayload: &deneb.ExecutionPayload{ //nolint:exhaustruct
 						BaseFeePerGas: uint256.NewInt(0),
 					},
-					BlobsBundle: &builderApiDeneb.BlobsBundle{}, //nolint:exhaustruct
-					Signature:   phase0.BLSSignature{},
+					BlobsBundle: &builderApiDeneb.BlobsBundle{ //nolint:exhaustruct
+						Commitments: make([]deneb.KZGCommitment, 0),
+					},
+					Signature: phase0.BLSSignature{},
 				},
 			},
 		}
