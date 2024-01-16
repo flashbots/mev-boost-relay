@@ -278,12 +278,8 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
 	} else {
-		blockSSZ, err := block.MarshalSSZ()
-		if err != nil {
-			return 0, fmt.Errorf("could not marshal block to SSZ: %w", err)
-		}
 		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
-		return fetchBeacon(http.MethodPost, uri, blockSSZ, nil, nil, headers, true)
+		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
 	}
 }
 
