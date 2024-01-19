@@ -93,14 +93,12 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		if err != nil {
 			return nil, err
 		}
-		capella := api.VersionedExecutionPayload{
-			Version:   consensusspec.DataVersionCapella,
-			Capella:   executionPayload,
-			Bellatrix: nil,
+		capella := api.VersionedExecutionPayload{ //nolint:exhaustruct
+			Version: consensusspec.DataVersionCapella,
+			Capella: executionPayload,
 		}
-		return &common.VersionedExecutionPayload{
-			Capella:   &capella,
-			Bellatrix: nil,
+		return &common.VersionedExecutionPayload{ //nolint:exhaustruct
+			Capella: &capella,
 		}, nil
 	} else if payloadVersion == common.ForkVersionStringBellatrix {
 		executionPayload := new(types.ExecutionPayload)

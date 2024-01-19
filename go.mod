@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.31.0
-	github.com/attestantio/go-builder-client v0.3.0
+	github.com/attestantio/go-builder-client v0.4.2
 	github.com/attestantio/go-eth2-client v0.19.9
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
@@ -45,7 +45,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
-	github.com/goccy/go-yaml v1.11.0 // indirect
+	github.com/goccy/go-yaml v1.11.2 // indirect
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect

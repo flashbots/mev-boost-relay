@@ -59,13 +59,11 @@ func BuildGetHeaderResponse(payload *BuilderSubmitBlockRequest, sk *bls.SecretKe
 		if err != nil {
 			return nil, err
 		}
-		return &GetHeaderResponse{
-			Capella: &spec.VersionedSignedBuilderBid{
-				Version:   consensusspec.DataVersionCapella,
-				Capella:   signedBuilderBid,
-				Bellatrix: nil,
+		return &GetHeaderResponse{ //nolint:exhaustruct
+			Capella: &spec.VersionedSignedBuilderBid{ //nolint:exhaustruct
+				Version: consensusspec.DataVersionCapella,
+				Capella: signedBuilderBid,
 			},
-			Bellatrix: nil,
 		}, nil
 	}
 	return nil, ErrEmptyPayload
@@ -83,13 +81,11 @@ func BuildGetPayloadResponse(payload *BuilderSubmitBlockRequest) (*GetPayloadRes
 	}
 
 	if payload.Capella != nil {
-		return &GetPayloadResponse{
-			Capella: &api.VersionedExecutionPayload{
-				Version:   consensusspec.DataVersionCapella,
-				Capella:   payload.Capella.ExecutionPayload,
-				Bellatrix: nil,
+		return &GetPayloadResponse{ //nolint:exhaustruct
+			Capella: &api.VersionedExecutionPayload{ //nolint:exhaustruct
+				Version: consensusspec.DataVersionCapella,
+				Capella: payload.Capella.ExecutionPayload,
 			},
-			Bellatrix: nil,
 		}, nil
 	}
 
