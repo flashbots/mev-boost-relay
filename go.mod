@@ -14,7 +14,7 @@ require (
 	github.com/flashbots/go-boost-utils v1.6.0
 	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/holiman/uint256 v1.2.3
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.8
