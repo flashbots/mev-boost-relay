@@ -46,7 +46,6 @@ var (
 	CapellaForkVersionGoerli  = "0x03001020"
 	CapellaForkVersionMainnet = "0x03000000"
 
-	// TODO: check deneb fork version for holesky when it is out
 	DenebForkVersionHolesky = "0x05017000"
 	DenebForkVersionSepolia = "0x90000073"
 	DenebForkVersionGoerli  = "0x04001020"

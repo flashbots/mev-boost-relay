@@ -1561,6 +1561,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"numTx":       len(txs),
 		"blockNumber": blockNumber,
 	})
+	// deneb specific logging
+	if getPayloadResp.Deneb != nil {
+		log = log.WithFields(logrus.Fields{
+			"numBlobs": len(getPayloadResp.Deneb.BlobsBundle.Blobs),
+		})
+	}
 	log.Info("execution payload delivered")
 }
 
@@ -1910,6 +1916,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"payloadBytes":           len(requestPayloadBytes),
 		"isLargeRequest":         isLargeRequest,
 	})
+	// deneb specific logging
+	if payload.Deneb != nil {
+		log = log.WithFields(logrus.Fields{
+			"numBlobs": len(payload.Deneb.BlobsBundle.Blobs),
+		})
+	}
 
 	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
 	if !ok {

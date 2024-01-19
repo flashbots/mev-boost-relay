@@ -75,5 +75,5 @@ func TestGetPayloadDatabaseDeneb(t *testing.T) {
 	ds := setupTestDatastore(t, mockDB)
 	payload, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
 	require.NoError(t, err)
-	require.Equal(t, "0x5", payload.Deneb.ExecutionPayload.BaseFeePerGas.String())
+	require.Equal(t, "5", payload.Deneb.ExecutionPayload.BaseFeePerGas.String())
 }
