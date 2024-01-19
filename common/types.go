@@ -517,23 +517,20 @@ func (b *BuilderSubmitBlockRequest) HasExecutionPayload() bool {
 
 func (b *BuilderSubmitBlockRequest) ExecutionPayloadResponse() (*GetPayloadResponse, error) {
 	if b.Bellatrix != nil {
-		return &GetPayloadResponse{
+		return &GetPayloadResponse{ //nolint:exhaustruct
 			Bellatrix: &boostTypes.GetPayloadResponse{
 				Version: boostTypes.VersionString(consensusspec.DataVersionBellatrix.String()),
 				Data:    b.Bellatrix.ExecutionPayload,
 			},
-			Capella: nil,
 		}, nil
 	}
 
 	if b.Capella != nil {
-		return &GetPayloadResponse{
-			Capella: &api.VersionedExecutionPayload{
-				Version:   consensusspec.DataVersionCapella,
-				Capella:   b.Capella.ExecutionPayload,
-				Bellatrix: nil,
+		return &GetPayloadResponse{ //nolint:exhaustruct
+			Capella: &api.VersionedExecutionPayload{ //nolint:exhaustruct
+				Version: consensusspec.DataVersionCapella,
+				Capella: b.Capella.ExecutionPayload,
 			},
-			Bellatrix: nil,
 		}, nil
 	}
 
