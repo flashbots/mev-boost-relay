@@ -5,14 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
-	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,79 +23,115 @@ func TestSubmitBuilderBlockJSON(t *testing.T) {
 	require.NoError(t, err)
 	expectedJSONBytes := buffer.Bytes()
 
-	require.Equal(t, expectedJSONBytes, bytes.ToLower(marshalledJSONBytes))
+	require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
 }
 
 func TestSignedBeaconBlockJSON(t *testing.T) {
-	jsonBytes := LoadGzippedBytes(t, "../testdata/signedBeaconBlock_Goerli.json.gz")
-	buffer := new(bytes.Buffer)
-	err := json.Compact(buffer, jsonBytes)
-	require.NoError(t, err)
-	expectedJSONBytes := buffer.Bytes()
+	testCases := []struct {
+		name     string
+		filepath string
+	}{
+		{
+			name:     "Capella",
+			filepath: "../testdata/signedBeaconBlockCapella_Goerli.json.gz",
+		},
+		{
+			name:     "Deneb",
+			filepath: "../testdata/signedBeaconBlockContentsDeneb_Goerli.json.gz",
+		},
+	}
 
-	blockRequest := new(VersionedSignedProposal)
-	err = json.Unmarshal(jsonBytes, blockRequest)
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			jsonBytes := LoadGzippedBytes(t, testCase.filepath)
+			buffer := new(bytes.Buffer)
+			err := json.Compact(buffer, jsonBytes)
+			require.NoError(t, err)
+			expectedJSONBytes := buffer.Bytes()
 
-	marshalledJSONBytes, err := json.Marshal(blockRequest)
-	require.NoError(t, err)
+			blockRequest := new(VersionedSignedProposal)
+			err = json.Unmarshal(jsonBytes, blockRequest)
+			require.NoError(t, err)
 
-	require.Equal(t, expectedJSONBytes, bytes.ToLower(marshalledJSONBytes))
+			marshalledJSONBytes, err := json.Marshal(blockRequest)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
+		})
+	}
 }
 
 func TestSignedBlindedBlockJSON(t *testing.T) {
-	jsonBytes := LoadGzippedBytes(t, "../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
-	buffer := new(bytes.Buffer)
-	err := json.Compact(buffer, jsonBytes)
-	require.NoError(t, err)
-	expectedJSONBytes := buffer.Bytes()
+	testCases := []struct {
+		name     string
+		filepath string
+	}{
+		{
+			name:     "Capella",
+			filepath: "../testdata/signedBlindedBeaconBlockCapella_Goerli.json.gz",
+		},
+		{
+			name:     "Deneb",
+			filepath: "../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz",
+		},
+	}
 
-	blockRequest := new(VersionedSignedBlindedBeaconBlock)
-	err = json.Unmarshal(jsonBytes, blockRequest)
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			jsonBytes := LoadGzippedBytes(t, testCase.filepath)
+			buffer := new(bytes.Buffer)
+			err := json.Compact(buffer, jsonBytes)
+			require.NoError(t, err)
+			expectedJSONBytes := buffer.Bytes()
 
-	marshalledJSONBytes, err := json.Marshal(blockRequest)
-	require.NoError(t, err)
+			blockRequest := new(VersionedSignedBlindedBeaconBlock)
+			err = json.Unmarshal(jsonBytes, blockRequest)
+			require.NoError(t, err)
 
-	require.Equal(t, expectedJSONBytes, bytes.ToLower(marshalledJSONBytes))
+			marshalledJSONBytes, err := json.Marshal(blockRequest)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
+		})
+	}
 }
 
 func TestBuildGetPayloadResponse(t *testing.T) {
-	t.Run("Capella", func(t *testing.T) {
-		jsonBytes := LoadGzippedBytes(t, "../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+	testCases := []struct {
+		name      string
+		filepath  string
+		version   spec.DataVersion
+		blockHash string
+	}{
+		{
+			name:     "Capella",
+			filepath: "../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			version:  spec.DataVersionCapella,
+			blockHash: "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121",
+		},
+		{
+			name:     "Deneb",
+			filepath: "../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			version:  spec.DataVersionDeneb,
+			blockHash: "0x195e2aac0a52cf26428336142e74eafd55d9228f315c2f2fe9253406ef9ef544",
+		},
+	}
 
-		submitBlockData := new(VersionedSubmitBlockRequest)
-		err := json.Unmarshal(jsonBytes, &submitBlockData)
-		require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			jsonBytes := LoadGzippedBytes(t, testCase.filepath)
 
-		resp, err := BuildGetPayloadResponse(submitBlockData)
-		require.NoError(t, err)
+			submitBlockData := new(VersionedSubmitBlockRequest)
+			err := json.Unmarshal(jsonBytes, &submitBlockData)
+			require.NoError(t, err)
 
-		require.Equal(t, spec.DataVersionCapella, resp.Version)
-		require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", resp.Capella.BlockHash.String())
-	})
+			resp, err := BuildGetPayloadResponse(submitBlockData)
+			require.NoError(t, err)
 
-	t.Run("Deneb", func(t *testing.T) {
-		// TODO: (deneb) add block request from goerli / devnet
-		submitBlockData := &VersionedSubmitBlockRequest{
-			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
-				Version: spec.DataVersionDeneb,
-				Deneb: &builderApiDeneb.SubmitBlockRequest{
-					ExecutionPayload: &deneb.ExecutionPayload{
-						BaseFeePerGas: uint256.NewInt(123),
-						BlockHash:     phase0.Hash32{0x09},
-						Transactions:  []bellatrix.Transaction{},
-					},
-					BlobsBundle: &builderApiDeneb.BlobsBundle{},
-					Message:     &builderApiV1.BidTrace{},
-				},
-			},
-		}
-
-		resp, err := BuildGetPayloadResponse(submitBlockData)
-		require.NoError(t, err)
-
-		require.Equal(t, spec.DataVersionDeneb, resp.Version)
-		require.Equal(t, "0x0900000000000000000000000000000000000000000000000000000000000000", resp.Deneb.ExecutionPayload.BlockHash.String())
-	})
+			require.Equal(t, testCase.version, resp.Version)
+			blockHash, err := resp.BlockHash()
+			require.NoError(t, err)
+			require.Equal(t, testCase.blockHash, blockHash.String())
+		})
+	}
 }
