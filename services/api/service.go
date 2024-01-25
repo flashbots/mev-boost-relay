@@ -185,8 +185,8 @@ type RelayAPI struct {
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
-	capellaEpoch uint64
-	denebEpoch   uint64
+	capellaEpoch int64
+	denebEpoch   int64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -411,23 +411,28 @@ func (api *RelayAPI) StartServer() (err error) {
 	if err != nil {
 		return err
 	}
-	var foundCapellaEpoch, foundDenebEpoch bool
+
+	api.denebEpoch = -1
+	api.capellaEpoch = -1
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
-			foundCapellaEpoch = true
-			api.capellaEpoch = fork.Epoch
+			api.capellaEpoch = int64(fork.Epoch)
 		case api.opts.EthNetDetails.DenebForkVersionHex:
-			foundDenebEpoch = true
-			api.denebEpoch = fork.Epoch
+			api.denebEpoch = int64(fork.Epoch)
 		}
 	}
 
+	if api.denebEpoch == -1 {
+		// log warning that deneb epoch was not found in CL fork schedule, suggest CL upgrade
+		log.Info("Deneb epoch not found in fork schedule")
+	}
+
 	// Print fork version information
-	if foundDenebEpoch && hasReachedFork(currentSlot, api.denebEpoch) {
+	if hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
-	} else if foundCapellaEpoch && hasReachedFork(currentSlot, api.capellaEpoch) {
+	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
 	}
 

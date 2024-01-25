@@ -121,9 +121,12 @@ func checkBLSPublicKeyHex(pkHex string) error {
 	return err
 }
 
-func hasReachedFork(slot, forkEpoch uint64) bool {
+func hasReachedFork(slot uint64, forkEpoch int64) bool {
+	if forkEpoch < 0 {
+		return false
+	}
 	currentEpoch := slot / common.SlotsPerEpoch
-	return currentEpoch >= forkEpoch
+	return currentEpoch >= uint64(forkEpoch)
 }
 
 func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domain phase0.Domain, pubKey []byte) (bool, error) {
