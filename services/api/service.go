@@ -1282,7 +1282,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	defer func() {
 		bidTrace, err := api.redis.GetBidTrace(payload.Slot(), proposerPubkey.String(), payload.BlockHash())
 		if err != nil {
-			log.WithError(err).Error("failed to get bidTrace for delivered payload from redis")
+			log.WithError(err).Info("failed to get bidTrace for delivered payload from redis")
 			return
 		}
 
