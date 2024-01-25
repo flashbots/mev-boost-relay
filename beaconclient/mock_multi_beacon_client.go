@@ -58,10 +58,6 @@ func (*MockMultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, 
 	return resp, nil
 }
 
-func (*MockMultiBeaconClient) GetBlock(blockID string) (block *GetBlockResponse, err error) {
-	return nil, nil
-}
-
 func (*MockMultiBeaconClient) GetRandao(slot uint64) (spec *GetRandaoResponse, err error) {
 	return nil, nil
 }

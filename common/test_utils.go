@@ -87,13 +87,15 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version s
 				Version: spec.DataVersionDeneb,
 				Deneb: &builderApiDeneb.SubmitBlockRequest{
 					Message:   &bid.BidTrace,
-					Signature: [96]byte(signature),
+					Signature: signature,
 					ExecutionPayload: &deneb.ExecutionPayload{ //nolint:exhaustruct
 						Transactions:  []bellatrix.Transaction{[]byte{0x03}},
 						Timestamp:     bid.Slot * 12, // 12 seconds per slot.
 						PrevRandao:    _HexToHash("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"),
 						Withdrawals:   []*capella.Withdrawal{},
 						BaseFeePerGas: uint256.NewInt(0),
+						BlobGasUsed:   321,
+						ExcessBlobGas: 123,
 					},
 					BlobsBundle: &builderApiDeneb.BlobsBundle{
 						Commitments: []deneb.KZGCommitment{},
@@ -109,7 +111,7 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2, version s
 			Version: spec.DataVersionCapella,
 			Capella: &builderApiCapella.SubmitBlockRequest{
 				Message:   &bid.BidTrace,
-				Signature: [96]byte(signature),
+				Signature: signature,
 				ExecutionPayload: &capella.ExecutionPayload{ //nolint:exhaustruct
 					Transactions: []bellatrix.Transaction{[]byte{0x03}},
 					Timestamp:    bid.Slot * 12, // 12 seconds per slot.

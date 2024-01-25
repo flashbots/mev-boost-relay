@@ -57,7 +57,7 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 	versionedPayload := &builderApi.VersionedExecutionPayload{ //nolint:exhaustivestruct
 		Version: payload.Version,
 	}
-	switch bb.Version {
+	switch bb.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		bbHeaderHtr, err := bb.Capella.Message.Body.ExecutionPayloadHeader.HashTreeRoot()
 		if err != nil {
@@ -109,8 +109,6 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
 			}
 		}
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
 		return ErrUnsupportedPayload
 	}

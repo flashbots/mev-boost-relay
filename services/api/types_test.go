@@ -91,6 +91,8 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							BaseFeePerGas: uint256.NewInt(123),
 							BlockHash:     phase0.Hash32{0x09},
 							Transactions:  []bellatrix.Transaction{},
+							BlobGasUsed:   5005,
+							ExcessBlobGas: 5006,
 						},
 						BlobsBundle: &builderApiDeneb.BlobsBundle{
 							Commitments: []deneb.KZGCommitment{},

@@ -17,16 +17,14 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/pkg/errors"
 )
 
 var (
-	ErrMissingRequest     = errors.New("req is nil")
-	ErrMissingSecretKey   = errors.New("secret key is nil")
-	ErrInvalidTransaction = errors.New("invalid transaction")
-	ErrInvalidVersion     = errors.New("invalid version")
+	ErrMissingRequest   = errors.New("req is nil")
+	ErrMissingSecretKey = errors.New("secret key is nil")
+	ErrInvalidVersion   = errors.New("invalid version")
 )
 
 type HTTPErrorResp struct {
@@ -35,8 +33,6 @@ type HTTPErrorResp struct {
 }
 
 var NilResponse = struct{}{}
-
-var ZeroU256 = boostTypes.IntToU256(0)
 
 func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
@@ -111,7 +107,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 		return nil, err
 	}
 
-	switch payload.Version {
+	switch payload.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		builderBid := builderApiCapella.BuilderBid{
 			Value:  value,
@@ -151,10 +147,8 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 				Signature: sig,
 			},
 		}, nil
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version.String()))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version))
 	}
 }
 
@@ -173,14 +167,10 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 		if len(denebBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
 			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
 		}
-		blockRoot, err := denebBlindedBlock.Message.HashTreeRoot()
-		if err != nil {
-			return nil, err
-		}
 
-		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb, blockRoot)
+		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb)
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version.String()))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version))
 	}
 	return &signedBeaconBlock, nil
 }
@@ -194,7 +184,6 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaco
 			ParentRoot:    blindedBlock.Message.ParentRoot,
 			StateRoot:     blindedBlock.Message.StateRoot,
 			Body: &capella.BeaconBlockBody{
-				BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 				RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
 				ETH1Data:              blindedBlock.Message.Body.ETH1Data,
 				Graffiti:              blindedBlock.Message.Body.Graffiti,
@@ -205,12 +194,13 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaco
 				VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
 				SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
 				ExecutionPayload:      executionPayload,
+				BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 			},
 		},
 	}
 }
 
-func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle, blockRoot phase0.Root) *eth2ApiV1Deneb.SignedBlockContents {
+func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Deneb.SignedBlockContents {
 	return &eth2ApiV1Deneb.SignedBlockContents{
 		SignedBlock: &deneb.SignedBeaconBlock{
 			Message: &deneb.BeaconBlock{
@@ -271,15 +261,13 @@ type VersionedSubmitBlockRequest struct {
 }
 
 func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
-	switch r.Version {
+	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return r.Capella.MarshalSSZ()
 	case spec.DataVersionDeneb:
 		return r.Deneb.MarshalSSZ()
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 
@@ -303,21 +291,18 @@ func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 }
 
 func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
-	switch r.Version {
+	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
-
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = json.Unmarshal(input, denebRequest); err == nil {
 		r.Version = spec.DataVersionDeneb
@@ -339,21 +324,18 @@ type VersionedSignedProposal struct {
 }
 
 func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
-	switch r.Version {
+	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return r.Capella.MarshalSSZ()
 	case spec.DataVersionDeneb:
 		return r.Deneb.MarshalSSZ()
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 
 func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 	var err error
-
 	denebRequest := new(eth2ApiV1Deneb.SignedBlockContents)
 	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
@@ -371,15 +353,13 @@ func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 }
 
 func (r *VersionedSignedProposal) MarshalJSON() ([]byte, error) {
-	switch r.Version {
+	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 
@@ -399,7 +379,7 @@ func (r *VersionedSignedProposal) UnmarshalJSON(input []byte) error {
 		r.Capella = capellaBlock
 		return nil
 	}
-	return errors.Wrap(err, "failed to unmarshal SignedBeaconBlockRequest")
+	return errors.Wrap(err, "failed to unmarshal SignedProposal")
 }
 
 type VersionedSignedBlindedBeaconBlock struct {
@@ -407,15 +387,13 @@ type VersionedSignedBlindedBeaconBlock struct {
 }
 
 func (r *VersionedSignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
-	switch r.Version {
+	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
-		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 

@@ -1212,13 +1212,11 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 }
 
 func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBeaconBlock, pubKey []byte) (bool, error) {
-	switch block.Version {
+	switch block.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
 	case spec.DataVersionDeneb:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey)
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
 		return false, errors.New("unsupported consensus data version")
 	}
@@ -1279,16 +1277,19 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload slot")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload slot")
+		return
 	}
 	blockHash, err := payload.ExecutionBlockHash()
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload block hash")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload block hash")
+		return
 	}
 	proposerIndex, err := payload.ProposerIndex()
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload proposer index")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload proposer index")
+		return
 	}
 	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (uint64(slot) * common.SecondsPerSlot)
 	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
@@ -1564,7 +1565,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// deneb specific logging
 	if getPayloadResp.Deneb != nil {
 		log = log.WithFields(logrus.Fields{
-			"numBlobs": len(getPayloadResp.Deneb.BlobsBundle.Blobs),
+			"numBlobs":      len(getPayloadResp.Deneb.BlobsBundle.Blobs),
+			"blobGasUsed":   getPayloadResp.Deneb.ExecutionPayload.BlobGasUsed,
+			"excessBlobGas": getPayloadResp.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
 	log.Info("execution payload delivered")
@@ -1919,7 +1922,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// deneb specific logging
 	if payload.Deneb != nil {
 		log = log.WithFields(logrus.Fields{
-			"numBlobs": len(payload.Deneb.BlobsBundle.Blobs),
+			"numBlobs":      len(payload.Deneb.BlobsBundle.Blobs),
+			"blobGasUsed":   payload.Deneb.ExecutionPayload.BlobGasUsed,
+			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
 

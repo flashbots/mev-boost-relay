@@ -559,7 +559,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 			return state, err
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		return state, fmt.Errorf("unsupported payload version: %d", payload.Version) //nolint:goerr113
+		return state, fmt.Errorf("unsupported payload version: %s", payload.Version) //nolint:goerr113
 	}
 
 	// Record time needed to save payload

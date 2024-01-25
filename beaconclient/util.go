@@ -46,16 +46,17 @@ func makeJSONRequest(method, url string, payload any) (*http.Request, error) {
 }
 
 func makeSSZRequest(method, url string, payload any) (*http.Request, error) {
-	if payloadBytes, ok := payload.([]byte); ok {
-		req, err := http.NewRequest(method, url, bytes.NewReader(payloadBytes))
-		if err != nil {
-			return nil, fmt.Errorf("invalid request for %s: %w", url, err)
-		}
-		// Set content-type
-		req.Header.Add("Content-Type", "application/octet-stream")
-		return req, nil
+	payloadBytes, ok := payload.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type for SSZ request: %w", ErrInvalidRequestPayload)
 	}
-	return nil, fmt.Errorf("invalid payload type for SSZ request: %w", ErrInvalidRequestPayload)
+	req, err := http.NewRequest(method, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("invalid request for %s: %w", url, err)
+	}
+	// Set content-type
+	req.Header.Add("Content-Type", "application/octet-stream")
+	return req, nil
 }
 
 func fetchBeacon(method, url string, payload, dst any, timeout *time.Duration, headers http.Header, ssz bool) (code int, err error) {

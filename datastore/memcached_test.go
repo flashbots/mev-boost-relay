@@ -36,7 +36,7 @@ var (
 )
 
 func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLSSignature, version spec.DataVersion) common.VersionedSubmitBlockRequest {
-	switch version {
+	switch version { //nolint:exhaustive
 	case spec.DataVersionDeneb:
 		return common.VersionedSubmitBlockRequest{
 			VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
@@ -69,6 +69,8 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 						BaseFeePerGas: uint256.NewInt(123),
 						BlockHash:     phase0.Hash32{0x09},
 						Transactions:  []bellatrix.Transaction{},
+						BlobGasUsed:   5005,
+						ExcessBlobGas: 5006,
 					},
 					BlobsBundle: &builderApiDeneb.BlobsBundle{
 						Commitments: []deneb.KZGCommitment{},
@@ -114,8 +116,6 @@ func testBuilderSubmitBlockRequest(pubkey phase0.BLSPubKey, signature phase0.BLS
 				},
 			},
 		}
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		fallthrough
 	default:
 		return common.VersionedSubmitBlockRequest{}
 	}

@@ -31,7 +31,7 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 
 	// feature flags
 	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
-		_log.Warn("env: USE_V1_PUBLISH_BLOCK_ENDPOINT: use the v2 publish block endpoint")
+		_log.Warn("env: USE_V1_PUBLISH_BLOCK_ENDPOINT: use the v1 publish block endpoint")
 		client.ffUseV1PublishBlockEndpoint = true
 	}
 
@@ -237,50 +237,20 @@ func (c *ProdBeaconInstance) GetHeaderForSlot(slot uint64) (*GetHeaderResponse, 
 	return resp, err
 }
 
-type GetBlockResponse struct {
-	Data struct {
-		Message struct {
-			Slot uint64 `json:"slot,string"`
-			Body struct {
-				ExecutionPayload capella.ExecutionPayload `json:"execution_payload"`
-			}
-		}
-	}
-}
-
-// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-// blockID can be 'head' or slot number
-func (c *ProdBeaconInstance) GetBlock(blockID string) (block *GetBlockResponse, err error) {
-	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/%s", c.beaconURI, blockID)
-	resp := new(GetBlockResponse)
-	_, err = fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
-	return resp, err
-}
-
-// GetBlockForSlot returns the block for a given slot - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-func (c *ProdBeaconInstance) GetBlockForSlot(slot uint64) (*GetBlockResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v2/beacon/blocks/%d", c.beaconURI, slot)
-	resp := new(GetBlockResponse)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
-	return resp, err
-}
-
 func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
 func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
-	headers := http.Header{}
-	headers.Add("Eth-Consensus-Version", block.Version.String()) // optional in v1, required in v2
-
 	if c.ffUseV1PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
-		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode)
 	} else {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode.String())
-		return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
 	}
+	headers := http.Header{}
+	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella) // optional in v1, required in v2
+	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
 }
 
 type GetGenesisResponse struct {
