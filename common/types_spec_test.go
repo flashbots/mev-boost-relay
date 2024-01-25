@@ -104,15 +104,15 @@ func TestBuildGetPayloadResponse(t *testing.T) {
 		blockHash string
 	}{
 		{
-			name:     "Capella",
-			filepath: "../testdata/submitBlockPayloadCapella_Goerli.json.gz",
-			version:  spec.DataVersionCapella,
+			name:      "Capella",
+			filepath:  "../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			version:   spec.DataVersionCapella,
 			blockHash: "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121",
 		},
 		{
-			name:     "Deneb",
-			filepath: "../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
-			version:  spec.DataVersionDeneb,
+			name:      "Deneb",
+			filepath:  "../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			version:   spec.DataVersionDeneb,
 			blockHash: "0x195e2aac0a52cf26428336142e74eafd55d9228f315c2f2fe9253406ef9ef544",
 		},
 	}

@@ -473,7 +473,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.NoError(t, err)
 
 			// Update
-			switch req.Version {
+			switch req.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				req.Capella.Message.Slot = submissionSlot
 				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)

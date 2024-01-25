@@ -88,7 +88,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			// json -> marshalled ssz -> matches expected ssz 
+			// json -> marshalled ssz -> matches expected ssz
 			payload := new(builderSpec.VersionedSignedBuilderBid)
 
 			jsonBytes, err := os.ReadFile(fmt.Sprintf("%s.json", testCase.filepath))
@@ -98,7 +98,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			require.NoError(t, err)
 
 			var ssz []byte
-			switch payload.Version {
+			switch payload.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				ssz, err = payload.Capella.MarshalSSZ()
 				require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 
 			// check hash tree root
 			var htr [32]byte
-			switch payload.Version {
+			switch payload.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				htr, err = payload.Capella.HashTreeRoot()
 				require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			require.Equal(t, testCase.hashTreeRoot, hexutil.Encode(htr[:]))
 
 			// ssz -> marshalled json -> matches expected json
-			switch payload.Version {
+			switch payload.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				payload.Capella = new(builderApiCapella.SignedBuilderBid)
 				err = payload.Capella.UnmarshalSSZ(sszExpectedBytes)
