@@ -426,7 +426,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	if api.denebEpoch == -1 {
 		// log warning that deneb epoch was not found in CL fork schedule, suggest CL upgrade
-		log.Warn("deneb epoch not found in fork schedule, you may need to upgrade the beacon client")
+		log.Info("Deneb epoch not found in fork schedule")
 	}
 
 	// Print fork version information
