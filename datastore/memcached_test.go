@@ -223,16 +223,16 @@ func TestMemcached(t *testing.T) {
 					require.NoError(t, err)
 
 					// key should not exist in cache yet
-					empty, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					empty, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err)
 					require.Nil(t, empty)
 
 					submission, err = common.GetBlockSubmissionInfo(&tc.Input)
 					require.NoError(t, err)
-					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
+					err = mem.SaveExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					get, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					get, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err, "expected no error when fetching execution payload from memcached but found [%v]", err)
 
 					getBytes, err := get.MarshalJSON()
@@ -259,20 +259,20 @@ func TestMemcached(t *testing.T) {
 					submission, err := common.GetBlockSubmissionInfo(&tc.Input)
 					require.NoError(t, err)
 
-					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
+					err = mem.SaveExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					prev, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					prev, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err)
 					require.Equal(t, len(prev.Capella.Transactions), len(submission.Transactions))
 
 					payload.Capella.GasLimit++
 					require.NotEqual(t, prev.Capella.GasLimit, payload.Capella.GasLimit)
 
-					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
+					err = mem.SaveExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					current, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					current, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err)
 					require.Equal(t, current.Capella.GasLimit, payload.Capella.GasLimit)
 					require.NotEqual(t, current.Capella.GasLimit, prev.Capella.GasLimit)
@@ -304,17 +304,17 @@ func TestMemcached(t *testing.T) {
 					submission, err := common.GetBlockSubmissionInfo(&tc.Input)
 					require.NoError(t, err)
 
-					require.Equal(t, submission.Proposer.String(), pk.String())
+					require.Equal(t, submission.BidTrace.ProposerPubkey.String(), pk.String())
 
-					err = mem.SaveExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String(), payload)
+					err = mem.SaveExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), payload)
 					require.NoError(t, err)
 
-					ret, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					ret, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err)
 					require.Equal(t, len(ret.Capella.Transactions), len(submission.Transactions))
 
 					time.Sleep((time.Duration(defaultMemcachedExpirySeconds) + 2) * time.Second)
-					expired, err := mem.GetExecutionPayload(submission.Slot, submission.Proposer.String(), submission.BlockHash.String())
+					expired, err := mem.GetExecutionPayload(submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String())
 					require.NoError(t, err)
 					require.NotEqual(t, ret, expired)
 					require.Nil(t, expired)

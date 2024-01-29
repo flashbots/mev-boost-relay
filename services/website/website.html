@@ -240,7 +240,8 @@
                                 </svg>
                             </a>
                         </th>
-                        <th>Num tx</th>
+                        <th>Num txs</th>
+                        <th>Num blobs</th>
                         <th>Block hash</th>
                         <th></th>
                     </tr>
@@ -258,6 +259,9 @@
                         <td>{{.BlockNumber | prettyInt}}</td>
                         <td>{{.Value | weiToEth}}</td>
                         <td>{{.NumTx }}</td>
+                        <td>
+                            <div title="Blob Gas Used: {{.BlobGasUsed}}">{{.NumBlobs }}</div>
+                        </td>
                         <td>{{.BlockHash}}</td>
                         <td>
                             <div class="icons-container">

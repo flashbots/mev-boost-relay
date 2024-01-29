@@ -30,11 +30,11 @@ func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockReque
 	if err != nil {
 		return err
 	}
-	if submission.BlockHash.String() != submission.ExecutionPayloadBlockHash.String() {
+	if submission.BidTrace.BlockHash.String() != submission.ExecutionPayloadBlockHash.String() {
 		return ErrBlockHashMismatch
 	}
 
-	if submission.ParentHash.String() != submission.ExecutionPayloadParentHash.String() {
+	if submission.BidTrace.ParentHash.String() != submission.ExecutionPayloadParentHash.String() {
 		return ErrParentHashMismatch
 	}
 

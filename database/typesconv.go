@@ -44,9 +44,9 @@ func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*Ex
 	}
 
 	return &ExecutionPayloadEntry{
-		Slot:           submission.Slot,
-		ProposerPubkey: submission.Proposer.String(),
-		BlockHash:      submission.BlockHash.String(),
+		Slot:           submission.BidTrace.Slot,
+		ProposerPubkey: submission.BidTrace.ProposerPubkey.String(),
+		BlockHash:      submission.BidTrace.BlockHash.String(),
 
 		Version: version,
 		Payload: string(_payload),

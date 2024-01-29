@@ -10,10 +10,10 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -194,8 +194,11 @@ type BuilderGetValidatorsResponseEntry struct {
 
 type BidTraceV2 struct {
 	builderApiV1.BidTrace
-	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
-	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
+	BlockNumber   uint64 `db:"block_number"    json:"block_number,string"`
+	NumTx         uint64 `db:"num_tx"          json:"num_tx,string"`
+	NumBlobs      uint64 `db:"num_blobs"       json:"num_blobs,string"`
+	BlobGasUsed   uint64 `db:"blob_gas_used"   json:"blob_gas_used,string"`
+	ExcessBlobGas uint64 `db:"excess_blob_gas" json:"excess_blob_gas,string"`
 }
 
 type BidTraceV2JSON struct {
@@ -328,23 +331,19 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 
 type BlockSubmissionInfo struct {
 	BidTrace                   *builderApiV1.BidTrace
-	Slot                       uint64
-	BlockHash                  phase0.Hash32
-	ParentHash                 phase0.Hash32
 	ExecutionPayloadBlockHash  phase0.Hash32
 	ExecutionPayloadParentHash phase0.Hash32
-	Builder                    phase0.BLSPubKey
-	Proposer                   phase0.BLSPubKey
-	ProposerFeeRecipient       bellatrix.ExecutionAddress
 	GasUsed                    uint64
 	GasLimit                   uint64
 	Timestamp                  uint64
 	BlockNumber                uint64
-	Value                      *uint256.Int
 	PrevRandao                 phase0.Hash32
 	Signature                  phase0.BLSSignature
 	Transactions               []bellatrix.Transaction
 	Withdrawals                []*capella.Withdrawal
+	Blobs                      []deneb.Blob
+	BlobGasUsed                uint64
+	ExcessBlobGas              uint64
 }
 
 /*

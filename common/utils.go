@@ -17,6 +17,7 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -190,35 +191,11 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if err != nil {
 		return nil, err
 	}
-	slot, err := submission.Slot()
-	if err != nil {
-		return nil, err
-	}
-	blockHash, err := submission.BlockHash()
-	if err != nil {
-		return nil, err
-	}
-	parentHash, err := submission.ParentHash()
-	if err != nil {
-		return nil, err
-	}
 	executionPayloadBlockHash, err := submission.ExecutionPayloadBlockHash()
 	if err != nil {
 		return nil, err
 	}
 	executionPayloadParentHash, err := submission.ExecutionPayloadParentHash()
-	if err != nil {
-		return nil, err
-	}
-	builder, err := submission.Builder()
-	if err != nil {
-		return nil, err
-	}
-	proposerPubkey, err := submission.ProposerPubKey()
-	if err != nil {
-		return nil, err
-	}
-	proposerFeeRecipient, err := submission.ProposerFeeRecipient()
 	if err != nil {
 		return nil, err
 	}
@@ -238,10 +215,6 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if err != nil {
 		return nil, err
 	}
-	value, err := submission.Value()
-	if err != nil {
-		return nil, err
-	}
 	blockNumber, err := submission.BlockNumber()
 	if err != nil {
 		return nil, err
@@ -254,25 +227,32 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if err != nil {
 		return nil, err
 	}
+	// TODO (deneb): after deneb fork error if no blob fields
+	var (
+		blobs         []deneb.Blob
+		blobGasUsed   uint64
+		excessBlobGas uint64
+	)
+	if submission.Version == spec.DataVersionDeneb {
+		blobs = submission.Deneb.BlobsBundle.Blobs
+		blobGasUsed = submission.Deneb.ExecutionPayload.BlobGasUsed
+		excessBlobGas = submission.Deneb.ExecutionPayload.ExcessBlobGas
+	}
 	return &BlockSubmissionInfo{
 		BidTrace:                   bidTrace,
 		Signature:                  signature,
-		Slot:                       slot,
-		BlockHash:                  blockHash,
-		ParentHash:                 parentHash,
 		ExecutionPayloadBlockHash:  executionPayloadBlockHash,
 		ExecutionPayloadParentHash: executionPayloadParentHash,
-		Builder:                    builder,
-		Proposer:                   proposerPubkey,
-		ProposerFeeRecipient:       proposerFeeRecipient,
 		GasUsed:                    gasUsed,
 		GasLimit:                   gasLimit,
 		Timestamp:                  timestamp,
 		Transactions:               txs,
-		Value:                      value,
 		PrevRandao:                 prevRandao,
 		BlockNumber:                blockNumber,
 		Withdrawals:                withdrawals,
+		Blobs:                      blobs,
+		BlobGasUsed:                blobGasUsed,
+		ExcessBlobGas:              excessBlobGas,
 	}, nil
 }
 

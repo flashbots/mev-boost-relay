@@ -217,21 +217,21 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 
 		Signature: submission.Signature.String(),
 
-		Slot:       submission.Slot,
-		BlockHash:  submission.BlockHash.String(),
-		ParentHash: submission.ParentHash.String(),
+		Slot:       submission.BidTrace.Slot,
+		BlockHash:  submission.BidTrace.BlockHash.String(),
+		ParentHash: submission.BidTrace.ParentHash.String(),
 
-		BuilderPubkey:        submission.Builder.String(),
-		ProposerPubkey:       submission.Proposer.String(),
-		ProposerFeeRecipient: submission.ProposerFeeRecipient.String(),
+		BuilderPubkey:        submission.BidTrace.BuilderPubkey.String(),
+		ProposerPubkey:       submission.BidTrace.ProposerPubkey.String(),
+		ProposerFeeRecipient: submission.BidTrace.ProposerFeeRecipient.String(),
 
 		GasUsed:  submission.GasUsed,
 		GasLimit: submission.GasLimit,
 
 		NumTx: uint64(len(submission.Transactions)),
-		Value: submission.Value.Dec(),
+		Value: submission.BidTrace.Value.Dec(),
 
-		Epoch:       submission.Slot / common.SlotsPerEpoch,
+		Epoch:       submission.BidTrace.Slot / common.SlotsPerEpoch,
 		BlockNumber: submission.BlockNumber,
 
 		DecodeDuration:       profile.Decode,
@@ -299,12 +299,16 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2, sign
 		NumTx: bidTrace.NumTx,
 		Value: bidTrace.Value.ToBig().String(),
 
+		NumBlobs:      bidTrace.NumBlobs,
+		BlobGasUsed:   bidTrace.BlobGasUsed,
+		ExcessBlobGas: bidTrace.ExcessBlobGas,
+
 		PublishMs: publishMs,
 	}
 
 	query := `INSERT INTO ` + vars.TableDeliveredPayload + `
-		(signed_at, signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value, publish_ms) VALUES
-		(:signed_at, :signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value, :publish_ms)
+		(signed_at, signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, publish_ms) VALUES
+		(:signed_at, :signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value, :num_blobs, :blob_gas_used, :excess_blob_gas, :publish_ms)
 		ON CONFLICT DO NOTHING`
 	_, err = s.DB.NamedExec(query, deliveredPayloadEntry)
 	return err
@@ -321,7 +325,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 		"builder_pubkey":  queryArgs.BuilderPubkey,
 	}
 
-	fields := "id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, publish_ms"
+	fields := "id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, gas_used, gas_limit, publish_ms"
 
 	whereConds := []string{}
 	if queryArgs.Slot > 0 {
@@ -375,7 +379,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 }
 
 func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
-	query := `SELECT id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, publish_ms
+	query := `SELECT id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, gas_used, gas_limit, publish_ms
 	FROM ` + vars.TableDeliveredPayload + `
 	WHERE id >= $1 AND id <= $2
 	ORDER BY slot ASC`
@@ -553,16 +557,16 @@ func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.Versi
 	builderDemotionEntry := BuilderDemotionEntry{
 		SubmitBlockRequest: NewNullString(string(_submitBlockRequest)),
 
-		Epoch: submission.Slot / common.SlotsPerEpoch,
-		Slot:  submission.Slot,
+		Epoch: submission.BidTrace.Slot / common.SlotsPerEpoch,
+		Slot:  submission.BidTrace.Slot,
 
-		BuilderPubkey:  submission.Builder.String(),
-		ProposerPubkey: submission.Proposer.String(),
+		BuilderPubkey:  submission.BidTrace.BuilderPubkey.String(),
+		ProposerPubkey: submission.BidTrace.ProposerPubkey.String(),
 
-		Value:        submission.Value.Dec(),
-		FeeRecipient: submission.ProposerFeeRecipient.String(),
+		Value:        submission.BidTrace.Value.Dec(),
+		FeeRecipient: submission.BidTrace.ProposerFeeRecipient.String(),
 
-		BlockHash: submission.BlockHash.String(),
+		BlockHash: submission.BidTrace.BlockHash.String(),
 		SimError:  simError.Error(),
 	}
 
