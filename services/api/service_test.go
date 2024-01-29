@@ -538,7 +538,7 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, submission)
+			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, submission.BidTrace)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
 			require.Equal(t, tc.expectOk, ok)
 		})
@@ -756,6 +756,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 						ExecutionPayload: &deneb.ExecutionPayload{
 							Timestamp: testSlot * common.SecondsPerSlot,
 						},
+						BlobsBundle: &builderApiDeneb.BlobsBundle{},
 						Message: &builderApiV1.BidTrace{
 							Slot: testSlot,
 						},
@@ -955,7 +956,7 @@ func TestCheckFloorBidValue(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			err = backend.redis.SetFloorBidValue(submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), tc.floorValue)
+			err = backend.redis.SetFloorBidValue(submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), tc.floorValue)
 			require.Nil(t, err)
 
 			w := httptest.NewRecorder()

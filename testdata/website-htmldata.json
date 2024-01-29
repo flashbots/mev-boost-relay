@@ -40,6 +40,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -64,6 +66,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -88,6 +92,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -112,6 +118,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -136,6 +144,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -160,6 +170,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -184,6 +196,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -208,6 +222,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -232,6 +248,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -256,6 +274,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -280,6 +300,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -304,6 +326,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -328,6 +352,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -352,6 +378,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -376,6 +404,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -400,6 +430,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -424,6 +456,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -448,6 +482,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -472,6 +508,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -496,6 +534,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -520,6 +560,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -544,6 +586,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -568,6 +612,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -592,6 +638,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -616,6 +664,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -640,6 +690,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -664,6 +716,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -688,6 +742,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -712,6 +768,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         },
         {
@@ -736,6 +794,8 @@
             "GasUsed": 21000,
             "GasLimit": 30000000,
             "NumTx": 1,
+            "NumBlobs": 1,
+            "BlobGasUsed": 21000,
             "Value": "21000"
         }
     ]

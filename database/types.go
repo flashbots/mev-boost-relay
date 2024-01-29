@@ -193,6 +193,10 @@ type DeliveredPayloadEntry struct {
 	NumTx uint64 `db:"num_tx"`
 	Value string `db:"value"`
 
+	NumBlobs      uint64 `db:"num_blobs"`
+	BlobGasUsed   uint64 `db:"blob_gas_used"`
+	ExcessBlobGas uint64 `db:"excess_blob_gas"`
+
 	PublishMs uint64 `db:"publish_ms"`
 }
 
