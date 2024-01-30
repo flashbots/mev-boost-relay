@@ -7,10 +7,9 @@ import (
 )
 
 var (
-	ErrMissingRequest     = errors.New("req is nil")
-	ErrMissingSecretKey   = errors.New("secret key is nil")
-	ErrEmptyPayload       = errors.New("nil payload")
-	ErrInvalidTransaction = errors.New("invalid transaction")
+	ErrMissingRequest   = errors.New("req is nil")
+	ErrMissingSecretKey = errors.New("secret key is nil")
+	ErrEmptyPayload     = errors.New("nil payload")
 
 	NilResponse = struct{}{}
 	ZeroU256    = boostTypes.IntToU256(0)

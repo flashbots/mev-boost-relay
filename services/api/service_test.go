@@ -13,14 +13,17 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	builderCapella "github.com/attestantio/go-builder-client/api/capella"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -40,9 +43,8 @@ const (
 )
 
 var (
-	builderSigningDomain = types.Domain([32]byte{0, 0, 0, 1, 245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169})
-	testAddress          = types.Address([20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
-	testAddress2         = types.Address([20]byte{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+	testAddress  = bellatrix.ExecutionAddress([20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+	testAddress2 = bellatrix.ExecutionAddress([20]byte{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
 )
 
 type testBackend struct {
@@ -159,40 +161,6 @@ func (be *testBackend) requestWithUA(method, path, userAgent string, payload any
 	return rr
 }
 
-// func generateSignedValidatorRegistration(sk *bls.SecretKey, feeRecipient types.Address, timestamp uint64) (*types.SignedValidatorRegistration, error) {
-// 	var err error
-// 	if sk == nil {
-// 		sk, _, err = bls.GenerateNewKeypair()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-
-// 	blsPubKey, _ := bls.PublicKeyFromSecretKey(sk)
-
-// 	var pubKey types.PublicKey
-// 	err = pubKey.FromSlice(bls.PublicKeyToBytes(blsPubKey))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	msg := &types.RegisterValidatorRequestMessage{
-// 		FeeRecipient: feeRecipient,
-// 		Timestamp:    timestamp,
-// 		Pubkey:       pubKey,
-// 		GasLimit:     278234191203,
-// 	}
-
-// 	sig, err := types.SignMessage(msg, builderSigningDomain, sk)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return &types.SignedValidatorRegistration{
-// 		Message:   msg,
-// 		Signature: sig,
-// 	}, nil
-// }
-
 func TestWebserver(t *testing.T) {
 	t.Run("errors when webserver is already existing", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
@@ -226,65 +194,12 @@ func TestLivez(t *testing.T) {
 func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
-	// t.Run("Normal function", func(t *testing.T) {
-	// 	backend := newTestBackend(t, 1)
-	// 	pubkeyHex := common.ValidPayloadRegisterValidator.Message.Pubkey.PubkeyHex()
-	// 	index := uint64(17)
-	// 	err := backend.redis.SetKnownValidator(pubkeyHex, index)
-	// 	require.NoError(t, err)
-
-	// 	// Update datastore
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-	// 	require.True(t, backend.datastore.IsKnownValidator(pubkeyHex))
-	// 	pkH, ok := backend.datastore.GetKnownValidatorPubkeyByIndex(index)
-	// 	require.True(t, ok)
-	// 	require.Equal(t, pubkeyHex, pkH)
-
-	// 	payload := []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}
-	// 	rr := backend.request(http.MethodPost, path, payload)
-	// 	require.Equal(t, http.StatusOK, rr.Code)
-	// 	time.Sleep(20 * time.Millisecond) // registrations are processed asynchronously
-
-	// 	isKnown := backend.datastore.IsKnownValidator(pubkeyHex)
-	// 	require.True(t, isKnown)
-	// })
-
 	t.Run("not a known validator", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
-		rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
-
-	// t.Run("Reject registration for >10sec into the future", func(t *testing.T) {
-	// 	backend := newTestBackend(t, 1)
-
-	// 	// Allow +10 sec
-	// 	td := uint64(time.Now().Unix())
-	// 	payload, err := generateSignedValidatorRegistration(nil, types.Address{1}, td+10)
-	// 	require.NoError(t, err)
-	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-	// 	require.NoError(t, err)
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-
-	// 	rr := backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
-	// 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-
-	// 	// Disallow +11 sec
-	// 	td = uint64(time.Now().Unix())
-	// 	payload, err = generateSignedValidatorRegistration(nil, types.Address{1}, td+12)
-	// 	require.NoError(t, err)
-	// 	err = backend.redis.SetKnownValidator(payload.Message.Pubkey.PubkeyHex(), 1)
-	// 	require.NoError(t, err)
-	// 	_, err = backend.datastore.RefreshKnownValidators()
-	// 	require.NoError(t, err)
-
-	// 	rr = backend.request(http.MethodPost, path, []types.SignedValidatorRegistration{*payload})
-	// 	require.Equal(t, http.StatusBadRequest, rr.Code)
-	// 	require.Contains(t, rr.Body.String(), "timestamp too far in the future")
-	// })
 }
 
 func TestGetHeader(t *testing.T) {
@@ -302,35 +217,62 @@ func TestGetHeader(t *testing.T) {
 	parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
-	bidValue := big.NewInt(99)
+	bidValue := uint256.NewInt(99)
 	trace := &common.BidTraceV2{
-		BidTrace: v1.BidTrace{
-			Value: uint256.MustFromBig(bidValue),
+		BidTrace: builderApiV1.BidTrace{
+			Value: bidValue,
 		},
 	}
 
 	// request path
 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
 
-	// Create a bid
+	// Create a capella bid
 	opts := common.CreateTestBlockSubmissionOpts{
 		Slot:           slot,
 		ParentHash:     parentHash,
 		ProposerPubkey: proposerPubkey,
+		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
 	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 1: regular request works and returns a bid
+	// Check 1: regular capella request works and returns a bid
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	resp := common.GetHeaderResponse{}
+	resp := builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, bidValue.String(), resp.Value().String())
+	value, err := resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, spec.DataVersionCapella, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
 
-	// Check 2: Request returns 204 if sending a filtered user agent
+	// Create a deneb bid
+	path = fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot+1, parentHash, proposerPubkey)
+	opts = common.CreateTestBlockSubmissionOpts{
+		Slot:           slot + 1,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPubkey,
+		Version:        spec.DataVersionDeneb,
+	}
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	require.NoError(t, err)
+
+	// Check 2: regular deneb request works and returns a bid
+	rr = backend.request(http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	err = json.Unmarshal(rr.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, spec.DataVersionDeneb, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check 3: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
 	require.Equal(t, http.StatusNoContent, rr.Code)
 }
@@ -387,7 +329,6 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 
 		for _, invalidBlockHash := range invalidBlockHashes {
 			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
-			t.Log(invalidBlockHash)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
 		}
@@ -395,139 +336,227 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 }
 
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+	testCases := []struct {
+		name      string
+		filepath  string
+		sszLength int
+	}{
+		{
+			name:      "Capella",
+			filepath:  "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			sszLength: 352239,
+		},
+		{
+			name:      "Deneb",
+			filepath:  "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			sszLength: 872081,
+		},
+	}
 
-	req := new(common.BuilderSubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, &req)
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			requestPayloadJSONBytes := common.LoadGzippedBytes(t, testCase.filepath)
 
-	reqSSZ, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZ))
+			req := new(common.VersionedSubmitBlockRequest)
+			err := json.Unmarshal(requestPayloadJSONBytes, req)
+			require.NoError(t, err)
 
-	test := new(builderCapella.SubmitBlockRequest)
-	err = test.UnmarshalSSZ(reqSSZ)
-	require.NoError(t, err)
+			reqSSZ, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Equal(t, testCase.sszLength, len(reqSSZ))
+
+			test := new(common.VersionedSubmitBlockRequest)
+			err = test.UnmarshalSSZ(reqSSZ)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestBuilderSubmitBlock(t *testing.T) {
-	path := "/relay/v1/builder/blocks"
-	backend := newTestBackend(t, 1)
+	type testHelper struct {
+		headSlot            uint64
+		submissionTimestamp int
+		parentHash          string
+		feeRecipient        string
+		withdrawalRoot      string
+		prevRandao          string
+		jsonReqSize         int
+		sszReqSize          int
+		jsonGzipReqSize     int
+		sszGzipReqSize      int
+	}
 
-	headSlot := uint64(32)
-	submissionSlot := headSlot + 1
-	submissionTimestamp := 1606824419
-
-	// Payload attributes
-	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json.gz"
-	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
-	feeRec, err := types.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
-	require.NoError(t, err)
-	withdrawalsRoot, err := hexutil.Decode("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
-	require.NoError(t, err)
-	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-
-	// Setup the test relay backend
-	backend.relay.headSlot.Store(headSlot)
-	backend.relay.capellaEpoch = 0
-	backend.relay.denebEpoch = 1
-	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
-	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
-		Slot: headSlot,
-		Entry: &types.SignedValidatorRegistration{
-			Message: &types.RegisterValidatorRequestMessage{
-				FeeRecipient: feeRec,
+	testCases := []struct {
+		name     string
+		filepath string
+		data     testHelper
+	}{
+		{
+			name:     "Capella",
+			filepath: "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            32,
+				submissionTimestamp: 1606824419,
+				parentHash:          "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6",
+				feeRecipient:        "0x5cc0dde14e7256340cc820415a6022a7d1c93a35",
+				withdrawalRoot:      "0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8",
+				prevRandao:          "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4",
+				jsonReqSize:         704810,
+				sszReqSize:          352239,
+				jsonGzipReqSize:     207788,
+				sszGzipReqSize:      195923,
+			},
+		},
+		{
+			name:     "Deneb",
+			filepath: "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            86,
+				submissionTimestamp: 1606825067,
+				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
+				feeRecipient:        "0x455E5AA18469bC6ccEF49594645666C587A3a71B",
+				withdrawalRoot:      "0x3cb816ccf6bb079b4f462e81db1262064f321a4afa4ff32c1f7e0a1c603836af",
+				prevRandao:          "0x6d414d3ffba7ba51155c3528739102c2889005940913b5d4c8031eed30764d4d",
+				jsonReqSize:         1744002,
+				sszReqSize:          872081,
+				jsonGzipReqSize:     385043,
+				sszGzipReqSize:      363271,
 			},
 		},
 	}
-	backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
-	backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
-		slot:       submissionSlot,
-		parentHash: parentHash,
-		payloadAttributes: beaconclient.PayloadAttributes{
-			PrevRandao: prevRandao,
-		},
-		withdrawalsRoot: phase0.Root(withdrawalsRoot),
+	path := "/relay/v1/builder/blocks"
+	backend := newTestBackend(t, 1)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			headSlot := testCase.data.headSlot
+			submissionSlot := headSlot + 1
+			submissionTimestamp := testCase.data.submissionTimestamp
+
+			// Payload attributes
+			payloadJSONFilename := testCase.filepath
+			parentHash := testCase.data.parentHash
+			feeRec, err := utils.HexToAddress(testCase.data.feeRecipient)
+			require.NoError(t, err)
+			withdrawalsRoot, err := utils.HexToHash(testCase.data.withdrawalRoot)
+			require.NoError(t, err)
+			prevRandao := testCase.data.prevRandao
+
+			// Setup the test relay backend
+			backend.relay.headSlot.Store(headSlot)
+			backend.relay.capellaEpoch = 0
+			backend.relay.denebEpoch = 2
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: headSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						FeeRecipient: feeRec,
+					},
+				},
+			}
+			backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
+			backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
+				slot:       submissionSlot,
+				parentHash: parentHash,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: prevRandao,
+				},
+				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+			}
+
+			// Prepare the request payload
+			req := new(common.VersionedSubmitBlockRequest)
+			requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
+			require.NoError(t, err)
+			err = json.Unmarshal(requestPayloadJSONBytes, req)
+			require.NoError(t, err)
+
+			// Update
+			switch req.Version { //nolint:exhaustive
+			case spec.DataVersionCapella:
+				req.Capella.Message.Slot = submissionSlot
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			case spec.DataVersionDeneb:
+				req.Deneb.Message.Slot = submissionSlot
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			default:
+				require.Fail(t, "unknown data version")
+			}
+
+			// Send JSON encoded request
+			reqJSONBytes, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, testCase.data.jsonReqSize, len(reqJSONBytes))
+			reqJSONBytes2, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ encoded request
+			reqSSZBytes, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Equal(t, testCase.data.sszReqSize, len(reqSSZBytes))
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+				"Content-Type": "application/octet-stream",
+			})
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send JSON+GZIP encoded request
+			headers := map[string]string{
+				"Content-Encoding": "gzip",
+			}
+			jsonGzip := gzipBytes(t, reqJSONBytes)
+			require.Equal(t, testCase.data.jsonGzipReqSize, len(jsonGzip))
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ+GZIP encoded request
+			headers = map[string]string{
+				"Content-Type":     "application/octet-stream",
+				"Content-Encoding": "gzip",
+			}
+
+			sszGzip := gzipBytes(t, reqSSZBytes)
+			require.Equal(t, testCase.data.sszGzipReqSize, len(sszGzip))
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+		})
 	}
-
-	// Prepare the request payload
-	req := new(common.BuilderSubmitBlockRequest)
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
-	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, &req)
-	require.NoError(t, err)
-
-	// Update
-	req.Capella.Message.Slot = submissionSlot
-	req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
-
-	// Send JSON encoded request
-	reqJSONBytes, err := req.Capella.MarshalJSON()
-	require.NoError(t, err)
-	require.Equal(t, 704810, len(reqJSONBytes))
-	reqJSONBytes2, err := json.Marshal(req.Capella)
-	require.NoError(t, err)
-	require.Equal(t, reqJSONBytes, reqJSONBytes2)
-	rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send SSZ encoded request
-	reqSSZBytes, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZBytes))
-	rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
-		"Content-Type": "application/octet-stream",
-	})
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send JSON+GZIP encoded request
-	headers := map[string]string{
-		"Content-Encoding": "gzip",
-	}
-	jsonGzip := gzipBytes(t, reqJSONBytes)
-	require.Equal(t, 207788, len(jsonGzip))
-	rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send SSZ+GZIP encoded request
-	headers = map[string]string{
-		"Content-Type":     "application/octet-stream",
-		"Content-Encoding": "gzip",
-	}
-
-	sszGzip := gzipBytes(t, reqSSZBytes)
-	require.Equal(t, 195923, len(sszGzip))
-	rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string
 		slotDuty       *common.BuilderGetValidatorsResponseEntry
-		payload        *common.BuilderSubmitBlockRequest
+		payload        *common.VersionedSubmitBlockRequest
 		expectOk       bool
 		expectGasLimit uint64
 	}{
 		{
 			description: "success",
 			slotDuty: &common.BuilderGetValidatorsResponseEntry{
-				Entry: &types.SignedValidatorRegistration{
-					Message: &types.RegisterValidatorRequestMessage{
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
 						FeeRecipient: testAddress,
 						GasLimit:     testGasLimit,
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -537,10 +566,14 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_nil_slot_duty",
 			slotDuty:    nil,
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -550,18 +583,22 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		{
 			description: "failure_diff_fee_recipient",
 			slotDuty: &common.BuilderGetValidatorsResponseEntry{
-				Entry: &types.SignedValidatorRegistration{
-					Message: &types.RegisterValidatorRequestMessage{
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
 						FeeRecipient: testAddress,
 						GasLimit:     testGasLimit,
 					},
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:                 testSlot,
-						ProposerFeeRecipient: bellatrix.ExecutionAddress(testAddress2),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:                 testSlot,
+							ProposerFeeRecipient: testAddress2,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -573,13 +610,17 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.proposerDutiesLock.RLock()
-			backend.relay.proposerDutiesMap[tc.payload.Slot()] = tc.slotDuty
+			slot, err := tc.payload.Slot()
+			require.NoError(t, err)
+			backend.relay.proposerDutiesMap[slot] = tc.slotDuty
 			backend.relay.proposerDutiesLock.RUnlock()
 
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			gasLimit, ok := backend.relay.checkSubmissionFeeRecipient(w, log, submission)
 			require.Equal(t, tc.expectGasLimit, gasLimit)
 			require.Equal(t, tc.expectOk, ok)
 		})
@@ -587,17 +628,17 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 }
 
 func TestCheckSubmissionPayloadAttrs(t *testing.T) {
-	withdrawalsRoot, err := hexutil.Decode(testWithdrawalsRoot)
+	withdrawalsRoot, err := utils.HexToHash(testWithdrawalsRoot)
 	require.NoError(t, err)
-	prevRandao, err := hexutil.Decode(testPrevRandao)
+	prevRandao, err := utils.HexToHash(testPrevRandao)
 	require.NoError(t, err)
-	parentHash, err := hexutil.Decode(testParentHash)
+	parentHash, err := utils.HexToHash(testParentHash)
 	require.NoError(t, err)
 
 	cases := []struct {
 		description string
 		attrs       payloadAttributesHelper
-		payload     *common.BuilderSubmitBlockRequest
+		payload     *common.VersionedSubmitBlockRequest
 		expectOk    bool
 	}{
 		{
@@ -610,19 +651,22 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: [32]byte(prevRandao),
-						Withdrawals: []*capella.Withdrawal{
-							{
-								Index: 989694,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: prevRandao,
+							Withdrawals: []*capella.Withdrawal{
+								{
+									Index: 989694,
+								},
 							},
 						},
-					},
-					Message: &v1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: phase0.Hash32(parentHash),
+						Message: &builderApiV1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
 					},
 				},
 			},
@@ -633,10 +677,14 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			attrs: payloadAttributesHelper{
 				slot: testSlot,
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot: testSlot + 1, // submission for a future slot
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot + 1, // submission for a future slot
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -650,14 +698,17 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: phase0.Hash32(parentHash),
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
+						},
 					},
 				},
 			},
@@ -671,15 +722,18 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: phase0.Hash32(parentHash),
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao:  [32]byte(prevRandao),
-						Withdrawals: nil, // set to nil to cause an error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao:  [32]byte(prevRandao),
+							Withdrawals: nil, // set to nil to cause an error
+						},
 					},
 				},
 			},
@@ -695,19 +749,22 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 					PrevRandao: testPrevRandao,
 				},
 			},
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						PrevRandao: [32]byte(prevRandao),
-						Withdrawals: []*capella.Withdrawal{
-							{
-								Index: 989694,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							PrevRandao: [32]byte(prevRandao),
+							Withdrawals: []*capella.Withdrawal{
+								{
+									Index: 989694,
+								},
 							},
 						},
-					},
-					Message: &v1.BidTrace{
-						Slot:       testSlot,
-						ParentHash: phase0.Hash32(parentHash),
+						Message: &builderApiV1.BidTrace{
+							Slot:       testSlot,
+							ParentHash: parentHash,
+						},
 					},
 				},
 			},
@@ -724,7 +781,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkSubmissionPayloadAttrs(w, log, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			_, ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -733,36 +792,70 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 func TestCheckSubmissionSlotDetails(t *testing.T) {
 	cases := []struct {
 		description string
-		payload     *common.BuilderSubmitBlockRequest
+		payload     *common.VersionedSubmitBlockRequest
 		expectOk    bool
 	}{
 		{
 			description: "success",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						Timestamp: testSlot * common.SecondsPerSlot,
-					},
-					Message: &v1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot,
+						},
 					},
 				},
 			},
 			expectOk: true,
 		},
 		{
-			description: "failure_nil_capella",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: nil, // nil to cause error
+			description: "non_capella_slot",
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot + 32,
+						},
+					},
+				},
+			},
+			expectOk: false,
+		},
+		{
+			description: "non_deneb_slot",
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionDeneb,
+					Deneb: &builderApiDeneb.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
+							Timestamp: testSlot * common.SecondsPerSlot,
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot,
+						},
+					},
+				},
 			},
 			expectOk: false,
 		},
 		{
 			description: "failure_past_slot",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot: testSlot - 1, // use old slot to cause error
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot - 1, // use old slot to cause error
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -770,13 +863,16 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 		},
 		{
 			description: "failure_wrong_timestamp",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					ExecutionPayload: &capella.ExecutionPayload{
-						Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
-					},
-					Message: &v1.BidTrace{
-						Slot: testSlot,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{
+							Timestamp: testSlot*common.SecondsPerSlot - 1, // use wrong timestamp to cause error
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot: testSlot,
+						},
 					},
 				},
 			},
@@ -786,21 +882,23 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
-
+			backend.relay.capellaEpoch = 1
+			backend.relay.denebEpoch = 2
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
 }
 
 func TestCheckBuilderEntry(t *testing.T) {
-	builderPubkeyByte, err := hexutil.Decode(testBuilderPubkey)
+	builderPubkey, err := utils.HexToPubkey(testBuilderPubkey)
 	require.NoError(t, err)
-	builderPubkey := phase0.BLSPubKey(builderPubkeyByte)
 	diffPubkey := builderPubkey
 	diffPubkey[0] = 0xff
 	cases := []struct {
@@ -863,18 +961,22 @@ func TestCheckBuilderEntry(t *testing.T) {
 func TestCheckFloorBidValue(t *testing.T) {
 	cases := []struct {
 		description          string
-		payload              *common.BuilderSubmitBlockRequest
+		payload              *common.VersionedSubmitBlockRequest
 		cancellationsEnabled bool
 		floorValue           string
 		expectOk             bool
 	}{
 		{
 			description: "success",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:  testSlot,
-						Value: uint256.NewInt(1),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:  testSlot,
+							Value: uint256.NewInt(1),
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -882,10 +984,14 @@ func TestCheckFloorBidValue(t *testing.T) {
 		},
 		{
 			description: "failure_slot_already_delivered",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot: 0,
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot: 0,
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -893,11 +999,15 @@ func TestCheckFloorBidValue(t *testing.T) {
 		},
 		{
 			description: "failure_cancellations_below_floor",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:  testSlot,
-						Value: uint256.NewInt(1),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:  testSlot,
+							Value: uint256.NewInt(1),
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -907,11 +1017,15 @@ func TestCheckFloorBidValue(t *testing.T) {
 		},
 		{
 			description: "failure_no_cancellations_at_floor",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:  testSlot,
-						Value: uint256.NewInt(0),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:  testSlot,
+							Value: uint256.NewInt(0),
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
 				},
 			},
@@ -921,7 +1035,9 @@ func TestCheckFloorBidValue(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
-			err := backend.redis.SetFloorBidValue(tc.payload.Slot(), tc.payload.ParentHash(), tc.payload.ProposerPubkey(), tc.floorValue)
+			submission, err := common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
+			err = backend.redis.SetFloorBidValue(submission.Slot, submission.ParentHash.String(), submission.Proposer.String(), tc.floorValue)
 			require.Nil(t, err)
 
 			w := httptest.NewRecorder()
@@ -929,13 +1045,15 @@ func TestCheckFloorBidValue(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			tx := backend.redis.NewTxPipeline()
 			simResultC := make(chan *blockSimResult, 1)
+			submission, err = common.GetBlockSubmissionInfo(tc.payload)
+			require.NoError(t, err)
 			bfOpts := bidFloorOpts{
 				w:                    w,
 				tx:                   tx,
 				log:                  log,
 				cancellationsEnabled: tc.cancellationsEnabled,
 				simResultC:           simResultC,
-				payload:              tc.payload,
+				submission:           submission,
 			}
 			floor, ok := backend.relay.checkFloorBidValue(bfOpts)
 			require.Equal(t, tc.expectOk, ok)
@@ -952,19 +1070,22 @@ func TestUpdateRedis(t *testing.T) {
 		description          string
 		cancellationsEnabled bool
 		floorValue           string
-		payload              *common.BuilderSubmitBlockRequest
+		payload              *common.VersionedSubmitBlockRequest
 		expectOk             bool
 	}{
 		{
 			description: "success",
 			floorValue:  "10",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:  testSlot,
-						Value: uint256.NewInt(1),
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:  testSlot,
+							Value: uint256.NewInt(1),
+						},
+						ExecutionPayload: &capella.ExecutionPayload{},
 					},
-					ExecutionPayload: &capella.ExecutionPayload{},
 				},
 			},
 			expectOk: true,
@@ -978,14 +1099,17 @@ func TestUpdateRedis(t *testing.T) {
 		{
 			description: "failure_encode_failure_too_long_extra_data",
 			floorValue:  "10",
-			payload: &common.BuilderSubmitBlockRequest{
-				Capella: &builderCapella.SubmitBlockRequest{
-					Message: &v1.BidTrace{
-						Slot:  testSlot,
-						Value: uint256.NewInt(1),
-					},
-					ExecutionPayload: &capella.ExecutionPayload{
-						ExtraData: make([]byte, 33), // Max extra data length is 32.
+			payload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{
+							Slot:  testSlot,
+							Value: uint256.NewInt(1),
+						},
+						ExecutionPayload: &capella.ExecutionPayload{
+							ExtraData: make([]byte, 33), // Max extra data length is 32.
+						},
 					},
 				},
 			},
@@ -1019,6 +1143,104 @@ func TestUpdateRedis(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckProposerSignature(t *testing.T) {
+	t.Run("Unsupported version", func(t *testing.T) {
+		_, _, backend := startTestBackend(t)
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		payload.Version = spec.DataVersionBellatrix
+		ok, err := backend.relay.checkProposerSignature(payload, []byte{})
+		require.Error(t, err, "unsupported consensus data version")
+		require.False(t, ok)
+	})
+
+	t.Run("Valid Capella Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockCapella_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0xa8afcb5313602f936864b30600f568e04069e596ceed9b55e2a1c872c959ddcb90589636469c15d97e7565344d9ed4ad")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	t.Run("Invalid Capella Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockCapella_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// change signature
+		signature, err := utils.HexToSignature(
+			"0x942d85822e86a182b0a535361b379015a03e5ce4416863d3baa46b42eef06f070462742b79fbc77c0802699ba6d2ab00" +
+				"11740dad6bfcf05b1f15c5a11687ae2aa6a08c03ad1ff749d7a48e953d13b5d7c2bd1da4cfcf30ba6d918b587d6525f0",
+		)
+		require.NoError(t, err)
+		payload.Capella.Signature = signature
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0xa8afcb5313602f936864b30600f568e04069e596ceed9b55e2a1c872c959ddcb90589636469c15d97e7565344d9ed4ad")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("Valid Deneb Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		t.Log(payload.Deneb.Message.Slot)
+		pubkey, err := utils.HexToPubkey("0x8322b8af5c6d97e855cc75ad19d59b381a880630cded89268c14acb058cf3c5720ebcde5fa6087dcbb64dbd826936148")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	t.Run("Invalid Deneb Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// change signature
+		signature, err := utils.HexToSignature(
+			"0x942d85822e86a182b0a535361b379015a03e5ce4416863d3baa46b42eef06f070462742b79fbc77c0802699ba6d2ab00" +
+				"11740dad6bfcf05b1f15c5a11687ae2aa6a08c03ad1ff749d7a48e953d13b5d7c2bd1da4cfcf30ba6d918b587d6525f0",
+		)
+		require.NoError(t, err)
+		payload.Deneb.Signature = signature
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0x8322b8af5c6d97e855cc75ad19d59b381a880630cded89268c14acb058cf3c5720ebcde5fa6087dcbb64dbd826936148")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
 }
 
 func gzipBytes(t *testing.T, b []byte) []byte {

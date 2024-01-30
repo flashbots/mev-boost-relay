@@ -7,6 +7,13 @@ import (
 	"os"
 	"testing"
 
+	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/ethereum/go-ethereum/common"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
@@ -97,4 +104,91 @@ func TestGetEnvStrSlice(t *testing.T) {
 	require.Equal(t, "str1", r[0])
 	require.Equal(t, "str2", r[1])
 	os.Unsetenv(testEnvVar)
+}
+
+func TestGetBlockSubmissionInfo(t *testing.T) {
+	cases := []struct {
+		name     string
+		payload  *VersionedSubmitBlockRequest
+		expected *BlockSubmissionInfo
+		err      string
+	}{
+		{
+			name: "valid builderApiCapella",
+			payload: &VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message:          &builderApiV1.BidTrace{},
+						ExecutionPayload: &capella.ExecutionPayload{},
+					},
+				},
+			},
+			expected: &BlockSubmissionInfo{
+				BidTrace: &builderApiV1.BidTrace{},
+			},
+		},
+		{
+			name: "unsupported version",
+			payload: &VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionBellatrix,
+					Bellatrix: &builderApiBellatrix.SubmitBlockRequest{
+						Message:          &builderApiV1.BidTrace{},
+						ExecutionPayload: &bellatrix.ExecutionPayload{},
+					},
+				},
+			},
+			expected: nil,
+			err:      "unsupported version",
+		},
+		{
+			name: "missing data",
+			payload: &VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+				},
+			},
+			expected: nil,
+			err:      "no data",
+		},
+		{
+			name: "missing message",
+			payload: &VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						ExecutionPayload: &capella.ExecutionPayload{},
+					},
+				},
+			},
+			expected: nil,
+			err:      "no data message",
+		},
+		{
+			name: "missing execution payload",
+			payload: &VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionCapella,
+					Capella: &builderApiCapella.SubmitBlockRequest{
+						Message: &builderApiV1.BidTrace{},
+					},
+				},
+			},
+			expected: nil,
+			err:      "no data execution payload",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			submission, err := GetBlockSubmissionInfo(tc.payload)
+			require.Equal(t, tc.expected, submission)
+			if tc.err == "" {
+				require.Nil(t, err)
+			} else {
+				require.Equal(t, tc.err, err.Error())
+			}
+		})
+	}
 }

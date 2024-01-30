@@ -8,24 +8,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 
-	"github.com/attestantio/go-builder-client/api/capella"
-	v1 "github.com/attestantio/go-builder-client/api/v1"
-	capellaspec "github.com/attestantio/go-eth2-client/spec/capella"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -75,15 +72,15 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 }
 
 // ComputeDomain computes the signing domain
-func ComputeDomain(domainType types.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain types.Domain, err error) {
-	genesisValidatorsRoot := types.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
+func ComputeDomain(domainType phase0.DomainType, forkVersionHex, genesisValidatorsRootHex string) (domain phase0.Domain, err error) {
+	genesisValidatorsRoot := phase0.Root(ethcommon.HexToHash(genesisValidatorsRootHex))
 	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
 	if err != nil || len(forkVersionBytes) != 4 {
 		return domain, ErrInvalidForkVersion
 	}
 	var forkVersion [4]byte
 	copy(forkVersion[:], forkVersionBytes[:4])
-	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
+	return ssz.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
 func GetEnv(key, defaultValue string) string {
@@ -172,70 +169,6 @@ func StrToPhase0Hash(s string) (ret phase0.Hash32, err error) {
 	return ret, nil
 }
 
-type CreateTestBlockSubmissionOpts struct {
-	relaySk bls.SecretKey
-	relayPk types.PublicKey
-	domain  types.Domain
-
-	Slot           uint64
-	ParentHash     string
-	ProposerPubkey string
-}
-
-func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *big.Int, opts *CreateTestBlockSubmissionOpts) (payload *BuilderSubmitBlockRequest, getPayloadResponse *GetPayloadResponse, getHeaderResponse *GetHeaderResponse) {
-	t.Helper()
-	var err error
-
-	slot := uint64(0)
-	relaySk := bls.SecretKey{}
-	relayPk := types.PublicKey{}
-	domain := types.Domain{}
-	proposerPk := phase0.BLSPubKey{}
-	parentHash := phase0.Hash32{}
-
-	if opts != nil {
-		relaySk = opts.relaySk
-		relayPk = opts.relayPk
-		domain = opts.domain
-		slot = opts.Slot
-
-		if opts.ProposerPubkey != "" {
-			proposerPk, err = StrToPhase0Pubkey(opts.ProposerPubkey)
-			require.NoError(t, err)
-		}
-
-		if opts.ParentHash != "" {
-			parentHash, err = StrToPhase0Hash(opts.ParentHash)
-			require.NoError(t, err)
-		}
-	}
-
-	builderPk, err := StrToPhase0Pubkey(builderPubkey)
-	require.NoError(t, err)
-
-	payload = &BuilderSubmitBlockRequest{ //nolint:exhaustruct
-		Capella: &capella.SubmitBlockRequest{
-			Message: &v1.BidTrace{ //nolint:exhaustruct
-				BuilderPubkey:  builderPk,
-				Value:          uint256.MustFromBig(value),
-				Slot:           slot,
-				ParentHash:     parentHash,
-				ProposerPubkey: proposerPk,
-			},
-			ExecutionPayload: &capellaspec.ExecutionPayload{}, //nolint:exhaustruct
-			Signature:        phase0.BLSSignature{},
-		},
-	}
-
-	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
-	require.NoError(t, err)
-
-	getPayloadResponse, err = BuildGetPayloadResponse(payload)
-	require.NoError(t, err)
-
-	return payload, getPayloadResponse, getHeaderResponse
-}
-
 // GetEnvDurationSec returns the value of the environment variable as duration in seconds,
 // or defaultValue if the environment variable doesn't exist or is not a valid integer
 func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
@@ -246,4 +179,120 @@ func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
 		}
 	}
 	return time.Duration(defaultValueSec) * time.Second
+}
+
+func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubmissionInfo, error) {
+	bidTrace, err := submission.BidTrace()
+	if err != nil {
+		return nil, err
+	}
+	signature, err := submission.Signature()
+	if err != nil {
+		return nil, err
+	}
+	slot, err := submission.Slot()
+	if err != nil {
+		return nil, err
+	}
+	blockHash, err := submission.BlockHash()
+	if err != nil {
+		return nil, err
+	}
+	parentHash, err := submission.ParentHash()
+	if err != nil {
+		return nil, err
+	}
+	executionPayloadBlockHash, err := submission.ExecutionPayloadBlockHash()
+	if err != nil {
+		return nil, err
+	}
+	executionPayloadParentHash, err := submission.ExecutionPayloadParentHash()
+	if err != nil {
+		return nil, err
+	}
+	builder, err := submission.Builder()
+	if err != nil {
+		return nil, err
+	}
+	proposerPubkey, err := submission.ProposerPubKey()
+	if err != nil {
+		return nil, err
+	}
+	proposerFeeRecipient, err := submission.ProposerFeeRecipient()
+	if err != nil {
+		return nil, err
+	}
+	gasUsed, err := submission.GasUsed()
+	if err != nil {
+		return nil, err
+	}
+	gasLimit, err := submission.GasLimit()
+	if err != nil {
+		return nil, err
+	}
+	timestamp, err := submission.Timestamp()
+	if err != nil {
+		return nil, err
+	}
+	txs, err := submission.Transactions()
+	if err != nil {
+		return nil, err
+	}
+	value, err := submission.Value()
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, err := submission.BlockNumber()
+	if err != nil {
+		return nil, err
+	}
+	prevRandao, err := submission.PrevRandao()
+	if err != nil {
+		return nil, err
+	}
+	withdrawals, err := submission.Withdrawals()
+	if err != nil {
+		return nil, err
+	}
+	return &BlockSubmissionInfo{
+		BidTrace:                   bidTrace,
+		Signature:                  signature,
+		Slot:                       slot,
+		BlockHash:                  blockHash,
+		ParentHash:                 parentHash,
+		ExecutionPayloadBlockHash:  executionPayloadBlockHash,
+		ExecutionPayloadParentHash: executionPayloadParentHash,
+		Builder:                    builder,
+		Proposer:                   proposerPubkey,
+		ProposerFeeRecipient:       proposerFeeRecipient,
+		GasUsed:                    gasUsed,
+		GasLimit:                   gasLimit,
+		Timestamp:                  timestamp,
+		Transactions:               txs,
+		Value:                      value,
+		PrevRandao:                 prevRandao,
+		BlockNumber:                blockNumber,
+		Withdrawals:                withdrawals,
+	}, nil
+}
+
+func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
+	switch submission.Version {
+	case spec.DataVersionCapella:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
+			Capella: submission.Capella.ExecutionPayload,
+		}, nil
+	case spec.DataVersionDeneb:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
+			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: submission.Deneb.ExecutionPayload,
+				BlobsBundle:      submission.Deneb.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		return nil, ErrInvalidForkVersion
+	}
+	return nil, ErrEmptyPayload
 }

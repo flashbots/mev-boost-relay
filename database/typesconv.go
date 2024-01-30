@@ -4,37 +4,49 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/attestantio/go-builder-client/api"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var ErrUnsupportedExecutionPayload = errors.New("unsupported execution payload version")
 
-func PayloadToExecPayloadEntry(payload *common.BuilderSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
+func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*ExecutionPayloadEntry, error) {
 	var _payload []byte
 	var version string
 	var err error
-	if payload.Bellatrix != nil {
-		_payload, err = json.Marshal(payload.Bellatrix.ExecutionPayload)
-		if err != nil {
-			return nil, err
-		}
-		version = common.ForkVersionStringBellatrix
-	}
-	if payload.Capella != nil {
+
+	switch payload.Version {
+	case spec.DataVersionCapella:
 		_payload, err = json.Marshal(payload.Capella.ExecutionPayload)
 		if err != nil {
 			return nil, err
 		}
 		version = common.ForkVersionStringCapella
+	case spec.DataVersionDeneb:
+		_payload, err = json.Marshal(builderApiDeneb.ExecutionPayloadAndBlobsBundle{
+			ExecutionPayload: payload.Deneb.ExecutionPayload,
+			BlobsBundle:      payload.Deneb.BlobsBundle,
+		})
+		if err != nil {
+			return nil, err
+		}
+		version = common.ForkVersionStringDeneb
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		return nil, ErrUnsupportedExecutionPayload
 	}
+
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ExecutionPayloadEntry{
-		Slot:           payload.Slot(),
-		ProposerPubkey: payload.ProposerPubkey(),
-		BlockHash:      payload.BlockHash(),
+		Slot:           submission.Slot,
+		ProposerPubkey: submission.Proposer.String(),
+		BlockHash:      submission.BlockHash.String(),
 
 		Version: version,
 		Payload: string(_payload),
@@ -83,36 +95,27 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 	}
 }
 
-func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *common.VersionedExecutionPayload, err error) {
+func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *builderApi.VersionedSubmitBlindedBlockResponse, err error) {
 	payloadVersion := executionPayloadEntry.Version
 	if payloadVersion == common.ForkVersionStringDeneb {
-		return nil, ErrUnsupportedExecutionPayload
+		executionPayload := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
+			Deneb:   executionPayload,
+		}, nil
 	} else if payloadVersion == common.ForkVersionStringCapella {
 		executionPayload := new(capella.ExecutionPayload)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
-		capella := api.VersionedExecutionPayload{ //nolint:exhaustruct
-			Version: consensusspec.DataVersionCapella,
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
 			Capella: executionPayload,
-		}
-		return &common.VersionedExecutionPayload{ //nolint:exhaustruct
-			Capella: &capella,
-		}, nil
-	} else if payloadVersion == common.ForkVersionStringBellatrix {
-		executionPayload := new(types.ExecutionPayload)
-		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
-		if err != nil {
-			return nil, err
-		}
-		bellatrix := types.GetPayloadResponse{
-			Version: types.VersionString(common.ForkVersionStringBellatrix),
-			Data:    executionPayload,
-		}
-		return &common.VersionedExecutionPayload{
-			Bellatrix: &bellatrix,
-			Capella:   nil,
 		}, nil
 	} else {
 		return nil, ErrUnsupportedExecutionPayload

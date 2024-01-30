@@ -20,17 +20,13 @@ var (
 	ErrBeaconBlock202           = errors.New("beacon block failed validation but was still broadcast (202)")
 )
 
-type BroadcastMode int
+type BroadcastMode string
 
 const (
-	Gossip                   BroadcastMode = iota // lightweight gossip checks only
-	Consensus                                     // full consensus checks, including validation of all signatures and blocks fields
-	ConsensusAndEquivocation                      // the same as `consensus`, with an extra equivocation check
+	Gossip                   BroadcastMode = "gossip"                     // lightweight gossip checks only
+	Consensus                BroadcastMode = "consensus"                  // full consensus checks, including validation of all signatures and blocks fields
+	ConsensusAndEquivocation BroadcastMode = "consensus_and_equivocation" // the same as `consensus`, with an extra equivocation check
 )
-
-func (b BroadcastMode) String() string {
-	return [...]string{"gossip", "consensus", "consensus_and_equivocation"}[b]
-}
 
 // IMultiBeaconClient is the interface for the MultiBeaconClient, which can manage several beacon client instances under the hood
 type IMultiBeaconClient interface {
@@ -42,11 +38,10 @@ type IMultiBeaconClient interface {
 	// GetStateValidators returns all active and pending validators from the beacon node
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
-	PublishBlock(block *common.SignedBeaconBlock) (code int, err error)
+	PublishBlock(block *common.VersionedSignedProposal) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
-	GetBlock(blockID string) (block *GetBlockResponse, err error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
 }
@@ -60,11 +55,10 @@ type IBeaconInstance interface {
 	GetStateValidators(stateID string) (*GetStateValidatorsResponse, error)
 	GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error)
 	GetURI() string
-	PublishBlock(block *common.SignedBeaconBlock, broadcastMode BroadcastMode) (code int, err error)
+	PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
-	GetBlock(blockID string) (*GetBlockResponse, error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
 }
@@ -99,10 +93,10 @@ func NewMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) 
 	if broadcastModeStr != "" {
 		broadcastMode, ok := parseBroadcastModeString(broadcastModeStr)
 		if !ok {
-			msg := fmt.Sprintf("env: BROADCAST_MODE: invalid value %s, leaving to default value %s", broadcastModeStr, client.broadcastMode.String())
+			msg := fmt.Sprintf("env: BROADCAST_MODE: invalid value %s, leaving to default value %s", broadcastModeStr, client.broadcastMode)
 			client.log.Warn(msg)
 		} else {
-			client.log.Info(fmt.Sprintf("env: BROADCAST_MODE: setting mode to %s", broadcastMode.String()))
+			client.log.Info(fmt.Sprintf("env: BROADCAST_MODE: setting mode to %s", broadcastMode))
 			client.broadcastMode = broadcastMode
 		}
 	}
@@ -255,10 +249,20 @@ type publishResp struct {
 }
 
 // PublishBlock publishes the signed beacon block via https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/publishBlock
-func (c *MultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
+func (c *MultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) (code int, err error) {
+	slot, err := block.Slot()
+	if err != nil {
+		c.log.WithError(err).Warn("failed to publish block as block slot is missing")
+		return 0, err
+	}
+	blockHash, err := block.ExecutionBlockHash()
+	if err != nil {
+		c.log.WithError(err).Warn("failed to publish block as block hash is missing")
+		return 0, err
+	}
 	log := c.log.WithFields(logrus.Fields{
-		"slot":      block.Slot(),
-		"blockHash": block.BlockHash(),
+		"slot":      slot,
+		"blockHash": blockHash.String(),
 	})
 
 	clients := c.beaconInstancesByLastResponse()
@@ -357,23 +361,6 @@ func (c *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, er
 	}
 
 	c.log.WithError(err).Error("failed to get fork schedule on any CL node")
-	return nil, err
-}
-
-// GetBlock returns a block - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2
-func (c *MultiBeaconClient) GetBlock(blockID string) (block *GetBlockResponse, err error) {
-	clients := c.beaconInstancesByLastResponse()
-	for _, client := range clients {
-		log := c.log.WithField("uri", client.GetURI())
-		if block, err = client.GetBlock(blockID); err != nil {
-			log.WithField("blockID", blockID).WithError(err).Warn("failed to get block")
-			continue
-		}
-
-		return block, nil
-	}
-
-	c.log.WithField("blockID", blockID).WithError(err).Error("failed to get block from any CL node")
 	return nil, err
 }
 

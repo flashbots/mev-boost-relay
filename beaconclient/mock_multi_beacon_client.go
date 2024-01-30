@@ -20,10 +20,6 @@ func (*MockMultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 func (*MockMultiBeaconClient) SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent) {
 }
 
-// func (*MockMultiBeaconClient) FetchValidators(headSlot uint64) (map[types.PubkeyHex]ValidatorResponseEntry, error) {
-// 	return nil, nil
-// }
-
 func (*MockMultiBeaconClient) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
 	return nil, nil
 }
@@ -32,7 +28,7 @@ func (*MockMultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesRe
 	return nil, nil
 }
 
-func (*MockMultiBeaconClient) PublishBlock(block *common.SignedBeaconBlock) (code int, err error) {
+func (*MockMultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) (code int, err error) {
 	return 0, nil
 }
 
@@ -60,10 +56,6 @@ func (*MockMultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, 
 		},
 	}
 	return resp, nil
-}
-
-func (*MockMultiBeaconClient) GetBlock(blockID string) (block *GetBlockResponse, err error) {
-	return nil, nil
 }
 
 func (*MockMultiBeaconClient) GetRandao(slot uint64) (spec *GetRandaoResponse, err error) {

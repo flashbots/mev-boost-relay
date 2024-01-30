@@ -1,32 +1,40 @@
 package api
 
 import (
-	"errors"
+	"fmt"
 
+	builderApi "github.com/attestantio/go-builder-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utilcapella "github.com/attestantio/go-eth2-client/util/capella"
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
+	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/pkg/errors"
 )
 
 var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
-	ErrNoPayloads               = errors.New("no payloads")
-	ErrNoWithdrawals            = errors.New("no withdrawals")
-	ErrPayloadMismatchBellatrix = errors.New("bellatrix beacon-block but no bellatrix payload")
-	ErrPayloadMismatchCapella   = errors.New("capella beacon-block but no capella payload")
-	ErrHeaderHTRMismatch        = errors.New("beacon-block and payload header mismatch")
+	ErrUnsupportedPayload = errors.New("unsupported payload version")
+	ErrNoWithdrawals      = errors.New("no withdrawals")
+	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
+	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
+	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
 )
 
-func SanityCheckBuilderBlockSubmission(payload *common.BuilderSubmitBlockRequest) error {
-	if payload.BlockHash() != payload.ExecutionPayloadBlockHash() {
+func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	if err != nil {
+		return err
+	}
+	if submission.BlockHash.String() != submission.ExecutionPayloadBlockHash.String() {
 		return ErrBlockHashMismatch
 	}
 
-	if payload.ParentHash() != payload.ExecutionPayloadParentHash() {
+	if submission.ParentHash.String() != submission.ExecutionPayloadParentHash.String() {
 		return ErrParentHashMismatch
 	}
 
@@ -37,52 +45,53 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	if w == nil {
 		return phase0.Root{}, ErrNoWithdrawals
 	}
-	withdrawals := utilcapella.ExecutionPayloadWithdrawals{Withdrawals: w}
+	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
 }
 
-func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *common.VersionedExecutionPayload) error {
-	if bb.Bellatrix != nil { // process Bellatrix beacon block
-		if payload.Bellatrix == nil {
-			return ErrPayloadMismatchBellatrix
-		}
-		bbHeaderHtr, err := bb.Bellatrix.Message.Body.ExecutionPayloadHeader.HashTreeRoot()
-		if err != nil {
-			return err
-		}
-
-		payloadHeader, err := boostTypes.PayloadToPayloadHeader(payload.Bellatrix.Data)
-		if err != nil {
-			return err
-		}
-		payloadHeaderHtr, err := payloadHeader.HashTreeRoot()
-		if err != nil {
-			return err
-		}
-
-		if bbHeaderHtr != payloadHeaderHtr {
-			return ErrHeaderHTRMismatch
-		}
-
-		// bellatrix block and payload are equal
-		return nil
+func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
+	if bb.Version != payload.Version {
+		return errors.Wrap(ErrPayloadMismatch, fmt.Sprintf("beacon block version %d does not match payload version %d", bb.Version, payload.Version))
 	}
 
-	if bb.Capella != nil { // process Capella beacon block
-		if payload.Capella == nil {
-			return ErrPayloadMismatchCapella
-		}
-
+	versionedPayload := &builderApi.VersionedExecutionPayload{ //nolint:exhaustivestruct
+		Version: payload.Version,
+	}
+	switch bb.Version { //nolint:exhaustive
+	case spec.DataVersionCapella:
 		bbHeaderHtr, err := bb.Capella.Message.Body.ExecutionPayloadHeader.HashTreeRoot()
 		if err != nil {
 			return err
 		}
 
-		payloadHeader, err := common.CapellaPayloadToPayloadHeader(payload.Capella.Capella)
+		versionedPayload.Capella = payload.Capella
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
 		if err != nil {
 			return err
 		}
-		payloadHeaderHtr, err := payloadHeader.HashTreeRoot()
+
+		payloadHeaderHtr, err := payloadHeader.Capella.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+	case spec.DataVersionDeneb:
+		block := bb.Deneb.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Deneb = payload.Deneb.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Deneb.HashTreeRoot()
 		if err != nil {
 			return err
 		}
@@ -91,19 +100,49 @@ func EqExecutionPayloadToHeader(bb *common.SignedBlindedBeaconBlock, payload *co
 			return ErrHeaderHTRMismatch
 		}
 
-		// capella block and payload are equal
-		return nil
-	}
+		if len(bb.Deneb.Message.Body.BlobKZGCommitments) != len(payload.Deneb.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
 
-	return ErrNoPayloads
+		for i, commitment := range bb.Deneb.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Deneb.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+		}
+	default:
+		return ErrUnsupportedPayload
+	}
+	// block and payload are equal
+	return nil
 }
 
 func checkBLSPublicKeyHex(pkHex string) error {
-	var proposerPubkey boostTypes.PublicKey
-	return proposerPubkey.UnmarshalText([]byte(pkHex))
+	_, err := utils.HexToPubkey(pkHex)
+	return err
 }
 
-func hasReachedFork(slot, forkEpoch uint64) bool {
+func hasReachedFork(slot uint64, forkEpoch int64) bool {
+	if forkEpoch < 0 {
+		return false
+	}
 	currentEpoch := slot / common.SlotsPerEpoch
-	return currentEpoch >= forkEpoch
+	return currentEpoch >= uint64(forkEpoch)
+}
+
+func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domain phase0.Domain, pubKey []byte) (bool, error) {
+	root, err := block.Root()
+	if err != nil {
+		return false, err
+	}
+	sig, err := block.Signature()
+	if err != nil {
+		return false, err
+	}
+	signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
+	msg, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+
+	return bls.VerifySignatureBytes(msg[:], sig[:], pubKey[:])
 }

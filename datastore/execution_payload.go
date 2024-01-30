@@ -1,9 +1,11 @@
 package datastore
 
-import "github.com/flashbots/mev-boost-relay/common"
+import (
+	builderApi "github.com/attestantio/go-builder-client/api"
+)
 
 // ExecutionPayloadRepository defines methods to fetch and store execution engine payloads
 type ExecutionPayloadRepository interface {
-	GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*common.VersionedExecutionPayload, error)
-	SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *common.GetPayloadResponse) error
+	GetExecutionPayload(slot uint64, proposerPubKey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error)
+	SaveExecutionPayload(slot uint64, proposerPubKey, blockHash string, payload *builderApi.VersionedSubmitBlindedBlockResponse) error
 }
