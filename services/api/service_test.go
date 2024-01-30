@@ -218,7 +218,7 @@ func TestGetHeader(t *testing.T) {
 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 	bidValue := uint256.NewInt(99)
-	trace := &common.BidTraceV2{
+	trace := &common.BidTraceV2WithBlobFields{
 		BidTrace: builderApiV1.BidTrace{
 			Value: bidValue,
 		},
