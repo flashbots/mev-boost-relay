@@ -1798,7 +1798,7 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 		return nil, nil, false
 	}
 
-	bidTrace := common.BidTraceV2{
+	bidTrace := common.BidTraceV2WithBlobFields{
 		BidTrace:      *submission.BidTrace,
 		BlockNumber:   submission.BlockNumber,
 		NumTx:         uint64(len(submission.Transactions)),

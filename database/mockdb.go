@@ -85,7 +85,7 @@ func (db MockDB) GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries 
 	return nil, nil
 }
 
-func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2, signedBlindedBeaconBlock *common.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
+func (db MockDB) SaveDeliveredPayload(bidTrace *common.BidTraceV2WithBlobFields, signedBlindedBeaconBlock *common.VersionedSignedBlindedBeaconBlock, signedAt time.Time, publishMs uint64) error {
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (db MockDB) InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmi
 	return nil
 }
 
-func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *common.VersionedSignedProposal, signedRegistration *builderApiV1.SignedValidatorRegistration) error {
+func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2WithBlobFields, signedBlock *common.VersionedSignedProposal, signedRegistration *builderApiV1.SignedValidatorRegistration) error {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {
@@ -175,7 +175,7 @@ func (db MockDB) UpdateBuilderDemotion(trace *common.BidTraceV2, signedBlock *co
 	return nil
 }
 
-func (db MockDB) GetBuilderDemotion(trace *common.BidTraceV2) (*BuilderDemotionEntry, error) {
+func (db MockDB) GetBuilderDemotion(trace *common.BidTraceV2WithBlobFields) (*BuilderDemotionEntry, error) {
 	pubkey := trace.BuilderPubkey.String()
 	_, ok := db.Builders[pubkey]
 	if !ok {

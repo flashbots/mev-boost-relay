@@ -130,7 +130,7 @@ func TestBuilderBids(t *testing.T) {
 			Version:        version,
 		}
 
-		trace := &common.BidTraceV2{
+		trace := &common.BidTraceV2WithBlobFields{
 			BidTrace: builderApiV1.BidTrace{
 				Value: uint256.NewInt(123),
 			},
