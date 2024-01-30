@@ -1640,7 +1640,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Save information about delivered payload
 	defer func() {
-		bidTrace, err := api.redis.GetBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
+		bidTrace, err := datastore.GetBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
 		if err != nil {
 			log.WithError(err).Info("failed to get bidTrace for delivered payload from redis")
 			return
@@ -1784,13 +1784,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Get the response - from Redis, Memcache or DB
 	// note that recent mev-boost versions only send getPayload to relays that provided the bid, older versions send getPayload to all relays.
 	// Additionally, proposers may feel it's safer to ask for a bid from all relays and fork.
-	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+	getPayloadResp, err = datastore.GetPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed first attempt to get execution payload")
 
 		// Wait, then try again.
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+		getPayloadResp, err = datastore.GetPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
 
 		if err != nil || getPayloadResp == nil {
 			// Still not found! Error out now.
