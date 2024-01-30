@@ -290,6 +290,19 @@ func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
 }
 
+func (r *VersionedSubmitBlockRequest) HashTreeRoot() (phase0.Root, error) {
+	switch r.Version {
+	case spec.DataVersionCapella:
+		return r.Capella.HashTreeRoot()
+	case spec.DataVersionDeneb:
+		return r.Deneb.HashTreeRoot()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		fallthrough
+	default:
+		return phase0.Root{}, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
 func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:

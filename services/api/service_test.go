@@ -336,116 +336,198 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 }
 
 func TestBuilderSubmitBlockSSZ(t *testing.T) {
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, "../../testdata/submitBlockPayloadCapella_Goerli.json.gz")
+	testCases := []struct {
+		name      string
+		filepath  string
+		sszLength int
+	}{
+		{
+			name:      "Capella",
+			filepath:  "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			sszLength: 352239,
+		},
+		{
+			name:      "Deneb",
+			filepath:  "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			sszLength: 872081,
+		},
+	}
 
-	req := new(common.VersionedSubmitBlockRequest)
-	req.Capella = new(builderApiCapella.SubmitBlockRequest)
-	err := json.Unmarshal(requestPayloadJSONBytes, req.Capella)
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			requestPayloadJSONBytes := common.LoadGzippedBytes(t, testCase.filepath)
 
-	reqSSZ, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZ))
+			req := new(common.VersionedSubmitBlockRequest)
+			err := json.Unmarshal(requestPayloadJSONBytes, req)
+			require.NoError(t, err)
 
-	test := new(builderApiCapella.SubmitBlockRequest)
-	err = test.UnmarshalSSZ(reqSSZ)
-	require.NoError(t, err)
+			reqSSZ, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Equal(t, testCase.sszLength, len(reqSSZ))
+
+			test := new(common.VersionedSubmitBlockRequest)
+			err = test.UnmarshalSSZ(reqSSZ)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestBuilderSubmitBlock(t *testing.T) {
-	path := "/relay/v1/builder/blocks"
-	backend := newTestBackend(t, 1)
+	type testHelper struct {
+		headSlot            uint64
+		submissionTimestamp int
+		parentHash          string
+		feeRecipient        string
+		withdrawalRoot      string
+		prevRandao          string
+		jsonReqSize         int
+		sszReqSize          int
+		jsonGzipReqSize     int
+		sszGzipReqSize      int
+	}
 
-	headSlot := uint64(32)
-	submissionSlot := headSlot + 1
-	submissionTimestamp := 1606824419
-
-	// Payload attributes
-	payloadJSONFilename := "../../testdata/submitBlockPayloadCapella_Goerli.json.gz"
-	parentHash := "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
-	feeRec, err := utils.HexToAddress("0x5cc0dde14e7256340cc820415a6022a7d1c93a35")
-	require.NoError(t, err)
-	withdrawalsRoot, err := utils.HexToHash("0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8")
-	require.NoError(t, err)
-	prevRandao := "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-
-	// Setup the test relay backend
-	backend.relay.headSlot.Store(headSlot)
-	backend.relay.capellaEpoch = 0
-	backend.relay.denebEpoch = 2
-	backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
-	backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
-		Slot: headSlot,
-		Entry: &builderApiV1.SignedValidatorRegistration{
-			Message: &builderApiV1.ValidatorRegistration{
-				FeeRecipient: feeRec,
+	testCases := []struct {
+		name     string
+		filepath string
+		data     testHelper
+	}{
+		{
+			name:     "Capella",
+			filepath: "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            32,
+				submissionTimestamp: 1606824419,
+				parentHash:          "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6",
+				feeRecipient:        "0x5cc0dde14e7256340cc820415a6022a7d1c93a35",
+				withdrawalRoot:      "0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8",
+				prevRandao:          "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4",
+				jsonReqSize:         704810,
+				sszReqSize:          352239,
+				jsonGzipReqSize:     207788,
+				sszGzipReqSize:      195923,
+			},
+		},
+		{
+			name:     "Deneb",
+			filepath: "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            86,
+				submissionTimestamp: 1606825067,
+				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
+				feeRecipient:        "0x455E5AA18469bC6ccEF49594645666C587A3a71B",
+				withdrawalRoot:      "0x3cb816ccf6bb079b4f462e81db1262064f321a4afa4ff32c1f7e0a1c603836af",
+				prevRandao:          "0x6d414d3ffba7ba51155c3528739102c2889005940913b5d4c8031eed30764d4d",
+				jsonReqSize:         1744002,
+				sszReqSize:          872081,
+				jsonGzipReqSize:     385043,
+				sszGzipReqSize:      363271,
 			},
 		},
 	}
-	backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
-	backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
-		slot:       submissionSlot,
-		parentHash: parentHash,
-		payloadAttributes: beaconclient.PayloadAttributes{
-			PrevRandao: prevRandao,
-		},
-		withdrawalsRoot: phase0.Root(withdrawalsRoot),
+	path := "/relay/v1/builder/blocks"
+	backend := newTestBackend(t, 1)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			headSlot := testCase.data.headSlot
+			submissionSlot := headSlot + 1
+			submissionTimestamp := testCase.data.submissionTimestamp
+
+			// Payload attributes
+			payloadJSONFilename := testCase.filepath
+			parentHash := testCase.data.parentHash
+			feeRec, err := utils.HexToAddress(testCase.data.feeRecipient)
+			require.NoError(t, err)
+			withdrawalsRoot, err := utils.HexToHash(testCase.data.withdrawalRoot)
+			require.NoError(t, err)
+			prevRandao := testCase.data.prevRandao
+
+			// Setup the test relay backend
+			backend.relay.headSlot.Store(headSlot)
+			backend.relay.capellaEpoch = 0
+			backend.relay.denebEpoch = 2
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: headSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						FeeRecipient: feeRec,
+					},
+				},
+			}
+			backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
+			backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
+				slot:       submissionSlot,
+				parentHash: parentHash,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: prevRandao,
+				},
+				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+			}
+
+			// Prepare the request payload
+			req := new(common.VersionedSubmitBlockRequest)
+			requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
+			require.NoError(t, err)
+			err = json.Unmarshal(requestPayloadJSONBytes, req)
+			require.NoError(t, err)
+
+			// Update
+			switch req.Version { //nolint:exhaustive
+			case spec.DataVersionCapella:
+				req.Capella.Message.Slot = submissionSlot
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			case spec.DataVersionDeneb:
+				req.Deneb.Message.Slot = submissionSlot
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			default:
+				require.Fail(t, "unknown data version")
+			}
+
+			// Send JSON encoded request
+			reqJSONBytes, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, testCase.data.jsonReqSize, len(reqJSONBytes))
+			reqJSONBytes2, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ encoded request
+			reqSSZBytes, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Equal(t, testCase.data.sszReqSize, len(reqSSZBytes))
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+				"Content-Type": "application/octet-stream",
+			})
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send JSON+GZIP encoded request
+			headers := map[string]string{
+				"Content-Encoding": "gzip",
+			}
+			jsonGzip := gzipBytes(t, reqJSONBytes)
+			require.Equal(t, testCase.data.jsonGzipReqSize, len(jsonGzip))
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ+GZIP encoded request
+			headers = map[string]string{
+				"Content-Type":     "application/octet-stream",
+				"Content-Encoding": "gzip",
+			}
+
+			sszGzip := gzipBytes(t, reqSSZBytes)
+			require.Equal(t, testCase.data.sszGzipReqSize, len(sszGzip))
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+		})
 	}
-
-	// Prepare the request payload
-	req := new(common.VersionedSubmitBlockRequest)
-	req.Capella = new(builderApiCapella.SubmitBlockRequest)
-	requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
-	require.NoError(t, err)
-	err = json.Unmarshal(requestPayloadJSONBytes, req.Capella)
-	require.NoError(t, err)
-
-	// Update
-	req.Capella.Message.Slot = submissionSlot
-	req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
-
-	// Send JSON encoded request
-	reqJSONBytes, err := req.Capella.MarshalJSON()
-	require.NoError(t, err)
-	require.Equal(t, 704810, len(reqJSONBytes))
-	reqJSONBytes2, err := json.Marshal(req.Capella)
-	require.NoError(t, err)
-	require.Equal(t, reqJSONBytes, reqJSONBytes2)
-	rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send SSZ encoded request
-	reqSSZBytes, err := req.Capella.MarshalSSZ()
-	require.NoError(t, err)
-	require.Equal(t, 352239, len(reqSSZBytes))
-	rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
-		"Content-Type": "application/octet-stream",
-	})
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send JSON+GZIP encoded request
-	headers := map[string]string{
-		"Content-Encoding": "gzip",
-	}
-	jsonGzip := gzipBytes(t, reqJSONBytes)
-	require.Equal(t, 207788, len(jsonGzip))
-	rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	// Send SSZ+GZIP encoded request
-	headers = map[string]string{
-		"Content-Type":     "application/octet-stream",
-		"Content-Encoding": "gzip",
-	}
-
-	sszGzip := gzipBytes(t, reqSSZBytes)
-	require.Equal(t, 195923, len(sszGzip))
-	rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
-	require.Contains(t, rr.Body.String(), "invalid signature")
-	require.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestCheckSubmissionFeeRecipient(t *testing.T) {
@@ -1074,7 +1156,7 @@ func TestCheckProposerSignature(t *testing.T) {
 	})
 
 	t.Run("Valid Capella Signature", func(t *testing.T) {
-		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockCapella_Goerli.json.gz")
 		payload := new(common.VersionedSignedBlindedBeaconBlock)
 		err := json.Unmarshal(jsonBytes, payload)
 		require.NoError(t, err)
@@ -1092,7 +1174,7 @@ func TestCheckProposerSignature(t *testing.T) {
 	})
 
 	t.Run("Invalid Capella Signature", func(t *testing.T) {
-		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlock_Goerli.json.gz")
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockCapella_Goerli.json.gz")
 		payload := new(common.VersionedSignedBlindedBeaconBlock)
 		err := json.Unmarshal(jsonBytes, payload)
 		require.NoError(t, err)
@@ -1110,6 +1192,50 @@ func TestCheckProposerSignature(t *testing.T) {
 		backend.relay.opts.EthNetDetails = *goerli
 		// check signature
 		pubkey, err := utils.HexToPubkey("0xa8afcb5313602f936864b30600f568e04069e596ceed9b55e2a1c872c959ddcb90589636469c15d97e7565344d9ed4ad")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("Valid Deneb Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		t.Log(payload.Deneb.Message.Slot)
+		pubkey, err := utils.HexToPubkey("0x8322b8af5c6d97e855cc75ad19d59b381a880630cded89268c14acb058cf3c5720ebcde5fa6087dcbb64dbd826936148")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	t.Run("Invalid Deneb Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// change signature
+		signature, err := utils.HexToSignature(
+			"0x942d85822e86a182b0a535361b379015a03e5ce4416863d3baa46b42eef06f070462742b79fbc77c0802699ba6d2ab00" +
+				"11740dad6bfcf05b1f15c5a11687ae2aa6a08c03ad1ff749d7a48e953d13b5d7c2bd1da4cfcf30ba6d918b587d6525f0",
+		)
+		require.NoError(t, err)
+		payload.Deneb.Signature = signature
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0x8322b8af5c6d97e855cc75ad19d59b381a880630cded89268c14acb058cf3c5720ebcde5fa6087dcbb64dbd826936148")
 		require.NoError(t, err)
 		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
 		require.NoError(t, err)

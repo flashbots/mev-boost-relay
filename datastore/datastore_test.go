@@ -1,15 +1,11 @@
 package datastore
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
-	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,45 +31,45 @@ func TestGetPayloadFailure(t *testing.T) {
 }
 
 func TestGetPayloadDatabaseFallback(t *testing.T) {
-	filename := "../testdata/executionPayloadCapella_Goerli.json.gz"
-	payloadBytes := common.LoadGzippedBytes(t, filename)
-
-	// prepare mock database with execution payload entry
-	mockDB := &database.MockDB{
-		ExecPayloads: map[string]*database.ExecutionPayloadEntry{
-			"1-a-b": {
-				Version: common.ForkVersionStringCapella,
-				Payload: string(payloadBytes),
-			},
+	testCases := []struct {
+		description string
+		filename    string
+		version     string
+		blockHash   string
+	}{
+		{
+			description: "Good Capella Payload",
+			filename:    "../testdata/executionPayloadCapella_Goerli.json.gz",
+			version:     common.ForkVersionStringCapella,
+			blockHash:   "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121",
+		},
+		{
+			description: "Good Deneb Payload",
+			filename:    "../testdata/executionPayloadAndBlobsBundleDeneb_Goerli.json.gz",
+			version:     common.ForkVersionStringDeneb,
+			blockHash:   "0xbd1ae4f7edb2315d2df70a8d9881fab8d6763fb1c00533ae729050928c38d05a",
 		},
 	}
-	ds := setupTestDatastore(t, mockDB)
-	payload, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
-	require.NoError(t, err)
-	require.Equal(t, "0x1bafdc454116b605005364976b134d761dd736cb4788d25c835783b46daeb121", payload.Capella.BlockHash.String())
-}
 
-func TestGetPayloadDatabaseDeneb(t *testing.T) {
-	// TODO: (deneb) add execution payload and blobs bundle from goerli / devnet
-	payloadBytes, err := json.Marshal(&builderApiDeneb.ExecutionPayloadAndBlobsBundle{
-		ExecutionPayload: &deneb.ExecutionPayload{
-			BaseFeePerGas: uint256.NewInt(5),
-		},
-		BlobsBundle: &builderApiDeneb.BlobsBundle{},
-	})
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			payloadBytes := common.LoadGzippedBytes(t, testCase.filename)
 
-	// prepare mock database with execution payload entry
-	mockDB := &database.MockDB{
-		ExecPayloads: map[string]*database.ExecutionPayloadEntry{
-			"1-a-b": {
-				Version: common.ForkVersionStringDeneb,
-				Payload: string(payloadBytes),
-			},
-		},
+			// prepare mock database with execution payload entry
+			mockDB := &database.MockDB{
+				ExecPayloads: map[string]*database.ExecutionPayloadEntry{
+					"1-a-b": {
+						Version: testCase.version,
+						Payload: string(payloadBytes),
+					},
+				},
+			}
+			ds := setupTestDatastore(t, mockDB)
+			payload, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
+			require.NoError(t, err)
+			blockHash, err := payload.BlockHash()
+			require.NoError(t, err)
+			require.Equal(t, testCase.blockHash, blockHash.String())
+		})
 	}
-	ds := setupTestDatastore(t, mockDB)
-	payload, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
-	require.NoError(t, err)
-	require.Equal(t, "5", payload.Deneb.ExecutionPayload.BaseFeePerGas.String())
 }
