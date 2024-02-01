@@ -42,8 +42,8 @@ var (
 	errFake      = fmt.Errorf("foo error")
 )
 
-func getTestBidTrace(pubkey phase0.BLSPubKey, value, slot uint64) *common.BidTraceV2 {
-	return &common.BidTraceV2{
+func getTestBidTrace(pubkey phase0.BLSPubKey, value, slot uint64) *common.BidTraceV2WithBlobFields {
+	return &common.BidTraceV2WithBlobFields{
 		BidTrace: builderApiV1.BidTrace{
 			Slot:                 slot,
 			BuilderPubkey:        pubkey,

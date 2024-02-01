@@ -77,7 +77,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	hashSlice, err := hexutil.Decode(blockHashStr)
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
-	req := common.TestBuilderSubmitBlockRequest(sk, &common.BidTraceV2{
+	req := common.TestBuilderSubmitBlockRequest(sk, &common.BidTraceV2WithBlobFields{
 		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
@@ -298,7 +298,7 @@ func TestInsertBuilderDemotion(t *testing.T) {
 	hashSlice, err := hexutil.Decode(blockHashStr)
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
-	trace := &common.BidTraceV2{
+	trace := &common.BidTraceV2WithBlobFields{
 		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,
@@ -344,7 +344,7 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 	hashSlice, err := hexutil.Decode(blockHashStr)
 	require.NoError(t, err)
 	copy(testBlockHash[:], hashSlice)
-	bt := &common.BidTraceV2{
+	bt := &common.BidTraceV2WithBlobFields{
 		BidTrace: builderApiV1.BidTrace{
 			BlockHash:            testBlockHash,
 			Slot:                 slot,

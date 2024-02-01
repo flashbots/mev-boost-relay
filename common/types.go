@@ -10,10 +10,10 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -194,8 +194,8 @@ type BuilderGetValidatorsResponseEntry struct {
 
 type BidTraceV2 struct {
 	builderApiV1.BidTrace
-	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
-	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
+	BlockNumber uint64 `db:"block_number"    json:"block_number,string"`
+	NumTx       uint64 `db:"num_tx"          json:"num_tx,string"`
 }
 
 type BidTraceV2JSON struct {
@@ -326,25 +326,93 @@ func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	}
 }
 
+type BidTraceV2WithBlobFields struct {
+	builderApiV1.BidTrace
+	BlockNumber   uint64 `db:"block_number"    json:"block_number,string"`
+	NumTx         uint64 `db:"num_tx"          json:"num_tx,string"`
+	NumBlobs      uint64 `db:"num_blobs"       json:"num_blobs,string"`
+	BlobGasUsed   uint64 `db:"blob_gas_used"   json:"blob_gas_used,string"`
+	ExcessBlobGas uint64 `db:"excess_blob_gas" json:"excess_blob_gas,string"`
+}
+
+type BidTraceV2WithBlobFieldsJSON struct {
+	Slot                 uint64 `json:"slot,string"`
+	ParentHash           string `json:"parent_hash"`
+	BlockHash            string `json:"block_hash"`
+	BuilderPubkey        string `json:"builder_pubkey"`
+	ProposerPubkey       string `json:"proposer_pubkey"`
+	ProposerFeeRecipient string `json:"proposer_fee_recipient"`
+	GasLimit             uint64 `json:"gas_limit,string"`
+	GasUsed              uint64 `json:"gas_used,string"`
+	Value                string `json:"value"`
+	NumTx                uint64 `json:"num_tx,string"`
+	BlockNumber          uint64 `json:"block_number,string"`
+	NumBlobs             uint64 `json:"num_blobs,string"`
+	BlobGasUsed          uint64 `json:"blob_gas_used,string"`
+	ExcessBlobGas        uint64 `json:"excess_blob_gas,string"`
+}
+
+func (b BidTraceV2WithBlobFields) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&BidTraceV2WithBlobFieldsJSON{
+		Slot:                 b.Slot,
+		ParentHash:           b.ParentHash.String(),
+		BlockHash:            b.BlockHash.String(),
+		BuilderPubkey:        b.BuilderPubkey.String(),
+		ProposerPubkey:       b.ProposerPubkey.String(),
+		ProposerFeeRecipient: b.ProposerFeeRecipient.String(),
+		GasLimit:             b.GasLimit,
+		GasUsed:              b.GasUsed,
+		Value:                b.Value.ToBig().String(),
+		NumTx:                b.NumTx,
+		BlockNumber:          b.BlockNumber,
+		NumBlobs:             b.NumBlobs,
+		BlobGasUsed:          b.BlobGasUsed,
+		ExcessBlobGas:        b.ExcessBlobGas,
+	})
+}
+
+func (b *BidTraceV2WithBlobFields) UnmarshalJSON(data []byte) error {
+	params := &struct {
+		NumTx         uint64 `json:"num_tx,string"`
+		BlockNumber   uint64 `json:"block_number,string"`
+		NumBlobs      uint64 `json:"num_blobs,string"`
+		BlobGasUsed   uint64 `json:"blob_gas_used,string"`
+		ExcessBlobGas uint64 `json:"excess_blob_gas,string"`
+	}{}
+	err := json.Unmarshal(data, params)
+	if err != nil {
+		return err
+	}
+	b.NumTx = params.NumTx
+	b.BlockNumber = params.BlockNumber
+	b.NumBlobs = params.NumBlobs
+	b.BlobGasUsed = params.BlobGasUsed
+	b.ExcessBlobGas = params.ExcessBlobGas
+
+	bidTrace := new(builderApiV1.BidTrace)
+	err = json.Unmarshal(data, bidTrace)
+	if err != nil {
+		return err
+	}
+	b.BidTrace = *bidTrace
+	return nil
+}
+
 type BlockSubmissionInfo struct {
 	BidTrace                   *builderApiV1.BidTrace
-	Slot                       uint64
-	BlockHash                  phase0.Hash32
-	ParentHash                 phase0.Hash32
 	ExecutionPayloadBlockHash  phase0.Hash32
 	ExecutionPayloadParentHash phase0.Hash32
-	Builder                    phase0.BLSPubKey
-	Proposer                   phase0.BLSPubKey
-	ProposerFeeRecipient       bellatrix.ExecutionAddress
 	GasUsed                    uint64
 	GasLimit                   uint64
 	Timestamp                  uint64
 	BlockNumber                uint64
-	Value                      *uint256.Int
 	PrevRandao                 phase0.Hash32
 	Signature                  phase0.BLSSignature
 	Transactions               []bellatrix.Transaction
 	Withdrawals                []*capella.Withdrawal
+	Blobs                      []deneb.Blob
+	BlobGasUsed                uint64
+	ExcessBlobGas              uint64
 }
 
 /*

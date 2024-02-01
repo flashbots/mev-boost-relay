@@ -7,6 +7,7 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
@@ -232,28 +233,47 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 
 type BuilderBlockValidationRequest struct {
 	*VersionedSubmitBlockRequest
-	RegisteredGasLimit    uint64       `json:"registered_gas_limit,string"`
-	ParentBeaconBlockRoot *phase0.Root `json:"parent_beacon_block_root,omitempty"`
+	RegisteredGasLimit    uint64
+	ParentBeaconBlockRoot *phase0.Root
+}
+
+type capellaBuilderBlockValidationRequestJSON struct {
+	Message            *builderApiV1.BidTrace    `json:"message"`
+	ExecutionPayload   *capella.ExecutionPayload `json:"execution_payload"`
+	Signature          string                    `json:"signature"`
+	RegisteredGasLimit uint64                    `json:"registered_gas_limit,string"`
+}
+
+type denebBuilderBlockValidationRequestJSON struct {
+	Message               *builderApiV1.BidTrace       `json:"message"`
+	ExecutionPayload      *deneb.ExecutionPayload      `json:"execution_payload"`
+	BlobsBundle           *builderApiDeneb.BlobsBundle `json:"blobs_bundle"`
+	Signature             string                       `json:"signature"`
+	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
+	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
 }
 
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
-	blockRequest, err := json.Marshal(r.VersionedSubmitBlockRequest)
-	if err != nil {
-		return nil, err
+	switch r.Version { //nolint:exhaustive
+	case spec.DataVersionCapella:
+		return json.Marshal(&capellaBuilderBlockValidationRequestJSON{
+			Message:            r.Capella.Message,
+			ExecutionPayload:   r.Capella.ExecutionPayload,
+			Signature:          r.Capella.Signature.String(),
+			RegisteredGasLimit: r.RegisteredGasLimit,
+		})
+	case spec.DataVersionDeneb:
+		return json.Marshal(&denebBuilderBlockValidationRequestJSON{
+			Message:               r.Deneb.Message,
+			ExecutionPayload:      r.Deneb.ExecutionPayload,
+			BlobsBundle:           r.Deneb.BlobsBundle,
+			Signature:             r.Deneb.Signature.String(),
+			RegisteredGasLimit:    r.RegisteredGasLimit,
+			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
+		})
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
-
-	attrs, err := json.Marshal(&struct {
-		RegisteredGasLimit    uint64       `json:"registered_gas_limit,string"`
-		ParentBeaconBlockRoot *phase0.Root `json:"parent_beacon_block_root,omitempty"`
-	}{
-		RegisteredGasLimit:    r.RegisteredGasLimit,
-		ParentBeaconBlockRoot: r.ParentBeaconBlockRoot,
-	})
-	if err != nil {
-		return nil, err
-	}
-	attrs[0] = ','
-	return append(blockRequest[:len(blockRequest)-1], attrs...), nil
 }
 
 type VersionedSubmitBlockRequest struct {
