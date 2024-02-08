@@ -1727,6 +1727,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	if err != nil && !errors.Is(err, redis.Nil) {
 		opts.log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if opts.submission.BidTrace.Slot <= slotLastPayloadDelivered {
+		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(opts.w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return nil, false
@@ -2008,19 +2009,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	bfOpts := bidFloorOpts{
-		w:                    w,
-		tx:                   tx,
-		log:                  log,
-		cancellationsEnabled: isCancellationEnabled,
-		simResultC:           simResultC,
-		submission:           submission,
-	}
-	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
-	if !ok {
-		return
-	}
-
 	// Deferred saving of the builder submission to database (whenever this function ends)
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
@@ -2043,6 +2031,19 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
 	}()
+
+	bfOpts := bidFloorOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		simResultC:           simResultC,
+		submission:           submission,
+	}
+	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
+	if !ok {
+		return
+	}
 
 	// ---------------------------------
 	// THE BID WILL BE SIMULATED SHORTLY
