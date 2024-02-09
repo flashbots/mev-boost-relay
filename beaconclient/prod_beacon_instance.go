@@ -244,9 +244,9 @@ func (c *ProdBeaconInstance) GetURI() string {
 func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	if c.ffUseV1PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode)
-	} else {
 		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
+	} else {
+		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode)
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", common.ForkVersionStringCapella) // optional in v1, required in v2
