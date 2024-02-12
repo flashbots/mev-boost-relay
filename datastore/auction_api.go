@@ -8,10 +8,16 @@ import (
 	"net/url"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/pkg/errors"
 )
 
 const API_ROOT = "http://turbo-auction-api"
+
+var ErrFailedToParsePayload = errors.New("failed to parse payload")
 
 func GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	queryParams := url.Values{}
@@ -38,13 +44,29 @@ func GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builder
 		return nil, err
 	}
 
-	payload := new(builderApi.VersionedSubmitBlindedBlockResponse)
-	err = json.Unmarshal(body, &payload)
-	if err != nil {
-		return nil, err
+	// Try to parse deneb contents
+	denebPayloadContents := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
+	err = denebPayloadContents.UnmarshalSSZ([]byte(body))
+
+	if err == nil {
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionDeneb,
+			Deneb:   denebPayloadContents,
+		}, nil
 	}
 
-	return payload, nil
+	// Try to parse capella payload
+	capellaPayload := new(capella.ExecutionPayload)
+	err = capellaPayload.UnmarshalSSZ([]byte(body))
+
+	if err == nil {
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionCapella,
+			Capella: capellaPayload,
+		}, nil
+	}
+
+	return nil, ErrFailedToParsePayload
 }
 
 func GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
