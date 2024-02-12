@@ -1788,9 +1788,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if err != nil || getPayloadResp == nil {
 		log.WithError(err).Warn("failed first attempt to get execution payload")
 
-		// Wait, then try again.
+		// Wait, then try again (this time from Redis)
 		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
-		getPayloadResp, err = datastore.GetPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
 
 		if err != nil || getPayloadResp == nil {
 			// Still not found! Error out now.
