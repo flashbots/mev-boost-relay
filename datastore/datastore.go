@@ -21,6 +21,7 @@ import (
 )
 
 var ErrExecutionPayloadNotFound = errors.New("execution payload not found")
+var ErrBidTraceNotFound = errors.New("bidtrace not found")
 
 type GetHeaderResponseKey struct {
 	Slot           uint64

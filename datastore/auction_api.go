@@ -27,6 +27,7 @@ func GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builder
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
 		return nil, ErrExecutionPayloadNotFound
@@ -59,6 +60,11 @@ func GetBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTrac
 	resp, err := http.Get(fullUrl)
 	if err != nil {
 		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, ErrBidTraceNotFound
 	}
 
 	body, err := io.ReadAll(resp.Body)
