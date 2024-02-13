@@ -27,7 +27,7 @@ func setupTestDatastore(t *testing.T, mockDB *database.MockDB) *Datastore {
 func TestGetPayloadFailure(t *testing.T) {
 	ds := setupTestDatastore(t, &database.MockDB{})
 	_, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
-	require.Error(t, ErrExecutionPayloadNotFound, err)
+	require.ErrorIs(t, ErrExecutionPayloadNotFound, err)
 }
 
 func TestGetPayloadDatabaseFallback(t *testing.T) {

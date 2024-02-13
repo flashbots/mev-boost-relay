@@ -16,24 +16,24 @@ import (
 func makeTestSubmitBlockRequestV2Optimistic(t *testing.T) *SubmitBlockRequestV2Optimistic {
 	t.Helper()
 	testParentHash, err := utils.HexToHash("0xec51bd499a3fa0270f1446fbf05ff0b61157cfe4ec719bb4c3e834e339ee9c5c")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testBlockHash, err := utils.HexToHash("0x3f5b5aaa800a3d25c3f75e72dc45da89fdd58168f1358a9f94aac8b029361a0a")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testRandao, err := utils.HexToHash("0x8cf6b7fbfbaf80da001fe769fd02e9b8dbfa0a646d9cf51b5d7137dd4f8103cc")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testRoot, err := utils.HexToHash("0x7554727cee6d976a1dfdad80b392b37c87f0651ff5b01f6a0b3402bcfce92077")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testBuilderPubkey, err := utils.HexToPubkey("0xae7bde4839fa905b7d8125fd84cfdcd0c32cd74e1be3fa24263d71b520fc78113326ce0a90b95d73f19e6d8150a2f73b")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testProposerPubkey, err := utils.HexToPubkey("0xbb8e223239fa905b7d8125fd84cfdcd0c32cd74e1be3fa24263d71b520fc78113326ce0a90b95d73f19e6d8150a2f73b")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testAddress, err := utils.HexToAddress("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testSignature, err := utils.HexToSignature("0xb06311be19c92307c06070578af9ad147c9c6ea902439eac19f785f3dca478c354b79a0af9b09839c3d06c1ccf2185b0162f4d4fbf981220f77586b52ed9ae8a8acfc953baaa30dee15e1b112913c6cbe02c780d7b5363a4af16563fe55c2e88")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	testValue := new(uint256.Int)
 	err = testValue.SetFromDecimal("100")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	return &SubmitBlockRequestV2Optimistic{
 		Message: &builderApiV1.BidTrace{
@@ -108,13 +108,13 @@ func TestSubmitBlockRequestV2Optimistic(t *testing.T) {
 
 	// Encode the object.
 	sszObj, err := obj.MarshalSSZ()
-	require.Nil(t, err)
-	require.Equal(t, obj.SizeSSZ(), len(sszObj))
+	require.NoError(t, err)
+	require.Len(t, sszObj, obj.SizeSSZ())
 
 	// Unmarshal the full object.
 	unmarshal := new(SubmitBlockRequestV2Optimistic)
 	err = unmarshal.UnmarshalSSZ(sszObj)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	compareV2RequestEquality(t, obj, unmarshal)
 
@@ -125,10 +125,10 @@ func TestSubmitBlockRequestV2Optimistic(t *testing.T) {
 	// Unmarshal just the header.
 	unmarshalHeader := new(SubmitBlockRequestV2Optimistic)
 	err = unmarshalHeader.UnmarshalSSZHeaderOnly(sszObj)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	compareV2RequestEquality(t, obj, unmarshalHeader)
 
 	// Make sure size is correct (must have 32 bytes of ExtraData).
-	require.Equal(t, unmarshalHeader.SizeSSZ(), 944)
+	require.Equal(t, 944, unmarshalHeader.SizeSSZ())
 }

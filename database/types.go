@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"fmt"
+	"strconv"
 	"time"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
@@ -114,9 +114,9 @@ var ExecutionPayloadEntryCSVHeader = []string{"id", "inserted_at", "slot", "prop
 
 func (e *ExecutionPayloadEntry) ToCSVRecord() []string {
 	return []string{
-		fmt.Sprint(e.ID),
+		strconv.FormatInt(e.ID, 10),
 		e.InsertedAt.UTC().String(),
-		fmt.Sprint(e.Slot),
+		strconv.FormatUint(e.Slot, 10),
 		e.ProposerPubkey,
 		e.BlockHash,
 		e.Version,

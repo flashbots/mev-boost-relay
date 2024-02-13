@@ -44,5 +44,5 @@ func TestExecutionPayloadEntryToExecutionPayloadDeneb(t *testing.T) {
 	payload, err := ExecutionPayloadEntryToExecutionPayload(entry)
 	require.NoError(t, err)
 	require.Equal(t, "0xbd1ae4f7edb2315d2df70a8d9881fab8d6763fb1c00533ae729050928c38d05a", payload.Deneb.ExecutionPayload.BlockHash.String())
-	require.Equal(t, 1, len(payload.Deneb.BlobsBundle.Blobs))
+	require.Len(t, payload.Deneb.BlobsBundle.Blobs, 1)
 }
