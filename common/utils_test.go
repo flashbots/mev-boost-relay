@@ -91,7 +91,7 @@ func TestGetEnvStrSlice(t *testing.T) {
 	testEnvVar := "TESTENV_TestGetEnvStrSlice"
 	os.Unsetenv(testEnvVar)
 	r := GetEnvStrSlice(testEnvVar, nil)
-	require.Len(t, r, 0)
+	require.Empty(t, r)
 
 	t.Setenv(testEnvVar, "")
 	r = GetEnvStrSlice(testEnvVar, nil)
@@ -185,7 +185,7 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 			submission, err := GetBlockSubmissionInfo(tc.payload)
 			require.Equal(t, tc.expected, submission)
 			if tc.err == "" {
-				require.Nil(t, err)
+				require.NoError(t, err)
 			} else {
 				require.Equal(t, tc.err, err.Error())
 			}

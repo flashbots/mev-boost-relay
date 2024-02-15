@@ -294,7 +294,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			simResult := <-simResultC
 			require.True(t, simResult.optimisticSubmission)
 			require.Equal(t, tc.simulationError, simResult.validationErr)
-			require.Nil(t, simResult.requestErr)
+			require.NoError(t, simResult.requestErr)
 			require.True(t, simResult.wasSimulated)
 
 			// Check demotion but no refund.
@@ -361,9 +361,9 @@ func TestPrepareBuildersForSlot(t *testing.T) {
 	backend.relay.prepareBuildersForSlot(slot + 1)
 	entry, ok := backend.relay.blockBuildersCache[pkStr]
 	require.True(t, ok)
-	require.Equal(t, true, entry.status.IsHighPrio)
-	require.Equal(t, true, entry.status.IsOptimistic)
-	require.Equal(t, false, entry.status.IsBlacklisted)
+	require.True(t, entry.status.IsHighPrio)
+	require.True(t, entry.status.IsOptimistic)
+	require.False(t, entry.status.IsBlacklisted)
 	require.Zero(t, entry.collateral.Cmp(big.NewInt(int64(collateral))))
 }
 
@@ -515,10 +515,10 @@ func TestInternalBuilderStatus(t *testing.T) {
 	setAndGetStatus := func(arg string, expected common.BuilderStatus) {
 		// Set & Get.
 		rr := backend.request(http.MethodPost, path+arg, nil)
-		require.Equal(t, rr.Code, http.StatusOK)
+		require.Equal(t, http.StatusOK, rr.Code)
 
 		rr = backend.request(http.MethodGet, path, nil)
-		require.Equal(t, rr.Code, http.StatusOK)
+		require.Equal(t, http.StatusOK, rr.Code)
 		resp := &database.BlockBuilderEntry{}
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
@@ -538,13 +538,13 @@ func TestInternalBuilderCollateral(t *testing.T) {
 
 	// Set & Get.
 	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil)
-	require.Equal(t, rr.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rr.Code)
 
 	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil)
-	require.Equal(t, rr.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rr.Code)
 	resp := &database.BlockBuilderEntry{}
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, resp.BuilderID, "builder0x69")
-	require.Equal(t, resp.Collateral, "10000")
+	require.Equal(t, "builder0x69", resp.BuilderID)
+	require.Equal(t, "10000", resp.Collateral)
 }

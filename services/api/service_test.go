@@ -297,7 +297,7 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	resp := []common.BuilderGetValidatorsResponseEntry{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(resp))
+	require.Len(t, resp, 1)
 	require.Equal(t, uint64(1), resp[0].Slot)
 	require.Equal(t, common.ValidPayloadRegisterValidator, *resp[0].Entry)
 }
@@ -363,7 +363,7 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 
 			reqSSZ, err := req.MarshalSSZ()
 			require.NoError(t, err)
-			require.Equal(t, testCase.sszLength, len(reqSSZ))
+			require.Len(t, reqSSZ, testCase.sszLength)
 
 			test := new(common.VersionedSubmitBlockRequest)
 			err = test.UnmarshalSSZ(reqSSZ)
@@ -487,7 +487,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			// Send JSON encoded request
 			reqJSONBytes, err := json.Marshal(req)
 			require.NoError(t, err)
-			require.Equal(t, testCase.data.jsonReqSize, len(reqJSONBytes))
+			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.Equal(t, reqJSONBytes, reqJSONBytes2)
@@ -498,7 +498,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			// Send SSZ encoded request
 			reqSSZBytes, err := req.MarshalSSZ()
 			require.NoError(t, err)
-			require.Equal(t, testCase.data.sszReqSize, len(reqSSZBytes))
+			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
 				"Content-Type": "application/octet-stream",
 			})
@@ -510,7 +510,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				"Content-Encoding": "gzip",
 			}
 			jsonGzip := gzipBytes(t, reqJSONBytes)
-			require.Equal(t, testCase.data.jsonGzipReqSize, len(jsonGzip))
+			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -522,7 +522,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			}
 
 			sszGzip := gzipBytes(t, reqSSZBytes)
-			require.Equal(t, testCase.data.sszGzipReqSize, len(sszGzip))
+			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -1039,7 +1039,7 @@ func TestCheckFloorBidValue(t *testing.T) {
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
 			err = backend.redis.SetFloorBidValue(submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), tc.floorValue)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			w := httptest.NewRecorder()
 			logger := logrus.New()

@@ -9,10 +9,10 @@ package housekeeper
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -238,7 +238,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	// Pretty-print
 	_duties := make([]string, len(proposerDuties))
 	for i, duty := range proposerDuties {
-		_duties[i] = fmt.Sprint(duty.Slot)
+		_duties[i] = strconv.FormatUint(duty.Slot, 10)
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))

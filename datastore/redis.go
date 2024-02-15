@@ -21,6 +21,7 @@ import (
 )
 
 var (
+	redisScheme = "redis://"
 	redisPrefix = "boost-relay"
 
 	expiryBidCache = 45 * time.Second
@@ -43,8 +44,8 @@ var (
 
 func connectRedis(redisURI string) (*redis.Client, error) {
 	// Handle both URIs and full URLs, assume unencrypted connections
-	if !strings.HasPrefix(redisURI, "redis://") && !strings.HasPrefix(redisURI, "rediss://") {
-		redisURI = "redis://" + redisURI
+	if !strings.HasPrefix(redisURI, redisScheme) && !strings.HasPrefix(redisURI, "rediss://") {
+		redisURI = redisScheme + redisURI
 	}
 
 	redisOpts, err := redis.ParseURL(redisURI)

@@ -3,7 +3,7 @@ package datastore
 
 import (
 	"database/sql"
-	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -122,7 +122,7 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 	})
 	log.Infof("received known validators from beacon-node")
 
-	err = ds.redis.SetStats(RedisStatsFieldValidatorsTotal, fmt.Sprint(numValidators))
+	err = ds.redis.SetStats(RedisStatsFieldValidatorsTotal, strconv.Itoa(numValidators))
 	if err != nil {
 		log.WithError(err).Error("failed to set stats for RedisStatsFieldValidatorsTotal")
 	}

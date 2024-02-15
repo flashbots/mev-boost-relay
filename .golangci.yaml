@@ -30,6 +30,7 @@ linters:
     - deadcode
     - varcheck
     - interfacebloat
+    - exhaustruct
 
     #
     # Disabled because of generics:
@@ -122,3 +123,9 @@ issues:
     - path: (.+)_test.go
       linters:
         - exhaustruct
+    - path: database/.*.go
+      linters:
+        - goconst
+    - path: cmd/tool/.*.go
+      linters:
+        - goconst

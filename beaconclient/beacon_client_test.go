@@ -77,7 +77,7 @@ func TestBeaconInstance(t *testing.T) {
 
 	vals, err := bc.GetStateValidators("1")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(vals.Data))
+	require.Len(t, vals.Data, 1)
 	require.Contains(t, validatorResponseEntryToMap(vals.Data), "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")
 }
 
@@ -188,7 +188,7 @@ func TestFetchValidators(t *testing.T) {
 
 		validators, err := backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
-		require.Equal(t, 1, len(validators.Data))
+		require.Len(t, validators.Data, 1)
 		require.Contains(t, validatorResponseEntryToMap(validators.Data), testPubKey)
 
 		// only beacon 2 should have a validator, and should be used by default
@@ -199,7 +199,7 @@ func TestFetchValidators(t *testing.T) {
 
 		validators, err = backend.beaconClient.GetStateValidators("1")
 		require.NoError(t, err)
-		require.Equal(t, 1, len(validators.Data))
+		require.Len(t, validators.Data, 1)
 	})
 }
 
@@ -239,5 +239,5 @@ func TestGetForkSchedule(t *testing.T) {
 
 	forkSchedule, err := bc.GetForkSchedule()
 	require.NoError(t, err)
-	require.Equal(t, 4, len(forkSchedule.Data))
+	require.Len(t, forkSchedule.Data, 4)
 }

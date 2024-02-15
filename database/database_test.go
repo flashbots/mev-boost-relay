@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -205,7 +206,7 @@ func TestMigrations(t *testing.T) {
 	rowCount := 0
 	err := db.DB.QueryRow(query).Scan(&rowCount)
 	require.NoError(t, err)
-	require.Equal(t, len(migrations.Migrations.Migrations), rowCount)
+	require.Len(t, migrations.Migrations.Migrations, rowCount)
 }
 
 func TestSetBlockBuilderStatus(t *testing.T) {
@@ -448,7 +449,7 @@ func TestGetBuilderSubmissions(t *testing.T) {
 	require.Equal(t, optimisticSubmission, e.OptimisticSubmission)
 	require.Equal(t, pubkey, e.BuilderPubkey)
 	require.Equal(t, feeRecipient.String(), e.ProposerFeeRecipient)
-	require.Equal(t, fmt.Sprint(collateral), e.Value)
+	require.Equal(t, strconv.Itoa(collateral), e.Value)
 }
 
 func TestUpsertTooLateGetPayload(t *testing.T) {
@@ -462,7 +463,7 @@ func TestUpsertTooLateGetPayload(t *testing.T) {
 
 	entries, err := db.GetTooLateGetPayload(slot)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(entries))
+	require.Len(t, entries, 1)
 	entry := entries[0]
 	require.Equal(t, pk, entry.ProposerPubkey)
 	require.Equal(t, hash, entry.BlockHash)
@@ -484,7 +485,7 @@ func TestUpsertTooLateGetPayload(t *testing.T) {
 
 	entries, err = db.GetTooLateGetPayload(slot)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(entries))
+	require.Len(t, entries, 2)
 	entry = entries[1]
 	require.Equal(t, hash2, entry.BlockHash)
 }

@@ -819,7 +819,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	// pretty-print
 	_duties := make([]string, len(duties))
 	for i, duty := range duties {
-		_duties[i] = fmt.Sprint(duty.Slot)
+		_duties[i] = strconv.FormatUint(duty.Slot, 10)
 	}
 	sort.Strings(_duties)
 	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))

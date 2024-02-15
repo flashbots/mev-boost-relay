@@ -109,7 +109,7 @@ func TestRedisProposerDuties(t *testing.T) {
 	duties2, err := cache.GetProposerDuties()
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(duties2))
+	require.Len(t, duties2, 1)
 	require.Equal(t, duties[0].Entry.Message.FeeRecipient, duties2[0].Entry.Message.FeeRecipient)
 }
 
@@ -264,14 +264,14 @@ func TestRedisURIs(t *testing.T) {
 	// test connection with and without protocol
 	_, err = NewRedisCache("", redisTestServer.Addr(), "")
 	require.NoError(t, err)
-	_, err = NewRedisCache("", "redis://"+redisTestServer.Addr(), "")
+	_, err = NewRedisCache("", redisScheme+redisTestServer.Addr(), "")
 	require.NoError(t, err)
 
 	// test connection w/ credentials
 	username := "user"
 	password := "pass"
 	redisTestServer.RequireUserAuth(username, password)
-	fullURL := "redis://" + username + ":" + password + "@" + redisTestServer.Addr()
+	fullURL := redisScheme + username + ":" + password + "@" + redisTestServer.Addr()
 	_, err = NewRedisCache("", fullURL, "")
 	require.NoError(t, err)
 
@@ -440,7 +440,7 @@ func TestGetBuilderLatestValue(t *testing.T) {
 func TestPipelineNilCheck(t *testing.T) {
 	cache := setupTestRedis(t)
 	f, err := cache.GetFloorBidValue(context.Background(), cache.NewPipeline(), 0, "1", "2")
-	require.NoError(t, err, err)
+	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0), f)
 }
 

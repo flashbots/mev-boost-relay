@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
@@ -194,8 +195,8 @@ type BuilderGetValidatorsResponseEntry struct {
 
 type BidTraceV2 struct {
 	builderApiV1.BidTrace
-	BlockNumber uint64 `db:"block_number"    json:"block_number,string"`
-	NumTx       uint64 `db:"num_tx"          json:"num_tx,string"`
+	BlockNumber uint64 `db:"block_number" json:"block_number,string"`
+	NumTx       uint64 `db:"num_tx"       json:"num_tx,string"`
 }
 
 type BidTraceV2JSON struct {
@@ -267,17 +268,17 @@ func (b *BidTraceV2JSON) CSVHeader() []string {
 
 func (b *BidTraceV2JSON) ToCSVRecord() []string {
 	return []string{
-		fmt.Sprint(b.Slot),
+		strconv.FormatUint(b.Slot, 10),
 		b.ParentHash,
 		b.BlockHash,
 		b.BuilderPubkey,
 		b.ProposerPubkey,
 		b.ProposerFeeRecipient,
-		fmt.Sprint(b.GasLimit),
-		fmt.Sprint(b.GasUsed),
+		strconv.FormatUint(b.GasLimit, 10),
+		strconv.FormatUint(b.GasUsed, 10),
 		b.Value,
-		fmt.Sprint(b.NumTx),
-		fmt.Sprint(b.BlockNumber),
+		strconv.FormatUint(b.NumTx, 10),
+		strconv.FormatUint(b.BlockNumber, 10),
 	}
 }
 
@@ -309,20 +310,20 @@ func (b *BidTraceV2WithTimestampJSON) CSVHeader() []string {
 
 func (b *BidTraceV2WithTimestampJSON) ToCSVRecord() []string {
 	return []string{
-		fmt.Sprint(b.Slot),
+		strconv.FormatUint(b.Slot, 10),
 		b.ParentHash,
 		b.BlockHash,
 		b.BuilderPubkey,
 		b.ProposerPubkey,
 		b.ProposerFeeRecipient,
-		fmt.Sprint(b.GasLimit),
-		fmt.Sprint(b.GasUsed),
+		strconv.FormatUint(b.GasLimit, 10),
+		strconv.FormatUint(b.GasUsed, 10),
 		b.Value,
-		fmt.Sprint(b.NumTx),
-		fmt.Sprint(b.BlockNumber),
-		fmt.Sprint(b.Timestamp),
-		fmt.Sprint(b.TimestampMs),
-		fmt.Sprint(b.OptimisticSubmission),
+		strconv.FormatUint(b.NumTx, 10),
+		strconv.FormatUint(b.BlockNumber, 10),
+		strconv.FormatInt(b.Timestamp, 10),
+		strconv.FormatInt(b.TimestampMs, 10),
+		strconv.FormatBool(b.OptimisticSubmission),
 	}
 }
 
@@ -599,7 +600,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 		s.Message = new(builderApiV1.BidTrace)
 	}
 	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
-		return
+		return nil, err
 	}
 
 	// Offset (1) 'ExecutionPayloadHeader'
@@ -624,13 +625,13 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 
 	// Field (1) 'ExecutionPayloadHeader'
 	if dst, err = s.ExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
-		return
+		return nil, err
 	}
 
 	// Field (3) 'Transactions'
 	if size := len(s.Transactions); size > 1073741824 {
 		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Transactions", size, 1073741824)
-		return
+		return nil, err
 	}
 	{
 		offset = 4 * len(s.Transactions)
@@ -642,7 +643,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 	for ii := 0; ii < len(s.Transactions); ii++ {
 		if size := len(s.Transactions[ii]); size > 1073741824 {
 			err = ssz.ErrBytesLengthFn("SubmitBlockRequestV2Optimistic.Transactions[ii]", size, 1073741824)
-			return
+			return nil, err
 		}
 		dst = append(dst, s.Transactions[ii]...)
 	}
@@ -650,11 +651,11 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 	// Field (4) 'Withdrawals'
 	if size := len(s.Withdrawals); size > 16 {
 		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Withdrawals", size, 16)
-		return
+		return nil, err
 	}
 	for ii := 0; ii < len(s.Withdrawals); ii++ {
 		if dst, err = s.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
-			return
+			return nil, err
 		}
 	}
 	return dst, nil
