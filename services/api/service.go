@@ -1361,6 +1361,38 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	var getPayloadResp *builderApi.VersionedSubmitBlindedBlockResponse
 	var msNeededForPublishing uint64
 
+	// Get the response - from Redis, Memcache or DB
+	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+	if err != nil || getPayloadResp == nil {
+		log.WithError(err).Warn("failed getting execution payload (1/2)")
+		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
+
+		// Try again
+		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+		if err != nil || getPayloadResp == nil {
+			// Still not found! Error out now.
+			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
+				_, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
+				if errors.Is(err, sql.ErrNoRows) {
+					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
+					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
+				} else if err != nil {
+					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
+				} else {
+					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
+				}
+			} else { // some other error
+				log.WithError(err).Error("failed getting execution payload (2/2) - error")
+			}
+			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
+			return
+		}
+	}
+
+	// Now we know this relay also has the payload
+	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
+
 	// Save information about delivered payload
 	defer func() {
 		bidTrace, err := api.redis.GetBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
@@ -1441,39 +1473,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			}).WithError(err).Error("unable to update builder demotion with refund justification")
 		}
 	}()
-
-	// Get the response - from Redis, Memcache or DB
-	// note that recent mev-boost versions only send getPayload to relays that provided the bid
-	getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
-	if err != nil || getPayloadResp == nil {
-		log.WithError(err).Warn("failed getting execution payload (1/2)")
-		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
-
-		// Try again
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
-		if err != nil || getPayloadResp == nil {
-			// Still not found! Error out now.
-			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
-				_, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
-				if errors.Is(err, sql.ErrNoRows) {
-					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
-					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
-				} else if err != nil {
-					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
-				} else {
-					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
-				}
-			} else { // some other error
-				log.WithError(err).Error("failed getting execution payload (2/2) - error")
-			}
-			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
-			return
-		}
-	}
-
-	// Now we know this relay also has the payload
-	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
 
 	// Check whether getPayload has already been called -- TODO: do we need to allow multiple submissions of one blinded block?
 	err = api.redis.CheckAndSetLastSlotAndHashDelivered(uint64(slot), blockHash.String())
