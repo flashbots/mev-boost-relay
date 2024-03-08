@@ -1455,14 +1455,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			// Still not found! Error out now.
 			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
 				// Couldn't find the execution payload, maybe it never was submitted to our relay! Check that now
-				_, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
+				bid, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
 				if errors.Is(err, sql.ErrNoRows) {
 					log.Warn("failed getting execution payload (2/2) - payload not found, block was never submitted to this relay")
 					api.RespondError(w, http.StatusBadRequest, "no execution payload for this request - block was never seen by this relay")
 				} else if err != nil {
 					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
-				} else {
+				} else if bid.EligibleAt.Valid {
 					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
+				} else {
+					log.Info("found bid but payload was never saved as bid was ineligible being below floor value")
 				}
 			} else { // some other error
 				log.WithError(err).Error("failed getting execution payload (2/2) - error")
@@ -1540,11 +1542,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
-	if err != nil || code != http.StatusOK {
+	if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
 		log.WithError(err).WithField("code", code).Error("failed to publish block")
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return
 	}
+
 	timeAfterPublish := time.Now().UTC().UnixMilli()
 	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish)
 	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
@@ -2292,13 +2295,13 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 		api.RespondError(w, http.StatusBadRequest, "cannot specify both slot and cursor")
 		return
 	} else if args.Get("slot") != "" {
-		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
+		filters.Slot, err = strconv.ParseInt(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
 			return
 		}
 	} else if args.Get("cursor") != "" {
-		filters.Cursor, err = strconv.ParseUint(args.Get("cursor"), 10, 64)
+		filters.Cursor, err = strconv.ParseInt(args.Get("cursor"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid cursor argument")
 			return
@@ -2315,7 +2318,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 	}
 
 	if args.Get("block_number") != "" {
-		filters.BlockNumber, err = strconv.ParseUint(args.Get("block_number"), 10, 64)
+		filters.BlockNumber, err = strconv.ParseInt(args.Get("block_number"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
 			return
@@ -2359,7 +2362,7 @@ func (api *RelayAPI) handleDataProposerPayloadDelivered(w http.ResponseWriter, r
 
 	deliveredPayloads, err := api.db.GetRecentDeliveredPayloads(filters)
 	if err != nil {
-		api.log.WithError(err).Error("error getting recent payloads")
+		api.log.WithError(err).Error("error getting recently delivered payloads")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -2390,7 +2393,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("slot") != "" {
-		filters.Slot, err = strconv.ParseUint(args.Get("slot"), 10, 64)
+		filters.Slot, err = strconv.ParseInt(args.Get("slot"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid slot argument")
 			return
@@ -2407,7 +2410,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("block_number") != "" {
-		filters.BlockNumber, err = strconv.ParseUint(args.Get("block_number"), 10, 64)
+		filters.BlockNumber, err = strconv.ParseInt(args.Get("block_number"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid block_number argument")
 			return
@@ -2429,7 +2432,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 	}
 
 	if args.Get("limit") != "" {
-		_limit, err := strconv.ParseUint(args.Get("limit"), 10, 64)
+		_limit, err := strconv.ParseInt(args.Get("limit"), 10, 64)
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, "invalid limit argument")
 			return
@@ -2443,7 +2446,7 @@ func (api *RelayAPI) handleDataBuilderBidsReceived(w http.ResponseWriter, req *h
 
 	blockSubmissions, err := api.db.GetBuilderSubmissions(filters)
 	if err != nil {
-		api.log.WithError(err).Error("error getting recent payloads")
+		api.log.WithError(err).Error("error getting recent builder submissions")
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
