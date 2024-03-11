@@ -294,7 +294,7 @@ func (c *MultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) 
 		} else if res.code == 202 {
 			// Should the block fail full validation, a separate success response code (202) is used to indicate that the block was successfully broadcast but failed integration.
 			// https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/publishBlock
-			log.WithField("statusCode", res.code).WithError(res.err).Warn("block failed validation but was still broadcast")
+			log.WithField("statusCode", res.code).WithError(res.err).Warn("CL client failed block integration, but block was successfully broadcast")
 			lastErrPublishResp = res
 			continue
 		}
