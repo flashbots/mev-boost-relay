@@ -819,13 +819,18 @@ func (r *RedisCache) BeginProcessingSlot(ctx context.Context, slot uint64) (err 
 	}
 
 	keyProcessingSlot := r.keyProcessingSlot(slot)
-	err = r.client.Incr(ctx, keyProcessingSlot).Err()
+
+	pipe := r.client.TxPipeline()
+	pipe.Incr(ctx, keyProcessingSlot)
+	pipe.Expire(ctx, keyProcessingSlot, expiryLock)
+	_, err = pipe.Exec(ctx)
+
 	if err != nil {
 		return err
 	}
+
 	r.currentSlot = slot
-	err = r.client.Expire(ctx, keyProcessingSlot, expiryLock).Err()
-	return err
+	return nil
 }
 
 // EndProcessingSlot signals that a builder process is done handling blocks for the current slot
@@ -836,9 +841,18 @@ func (r *RedisCache) EndProcessingSlot(ctx context.Context) (err error) {
 	}
 
 	keyProcessingSlot := r.keyProcessingSlot(r.currentSlot)
-	err = r.client.Decr(ctx, keyProcessingSlot).Err()
+
+	pipe := r.client.TxPipeline()
+	pipe.Decr(ctx, keyProcessingSlot)
+	pipe.Expire(ctx, keyProcessingSlot, expiryLock)
+	_, err = pipe.Exec(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	r.currentSlot = 0
-	return err
+	return nil
 }
 
 // WaitForSlotComplete waits for a slot to be completed by all builder processes

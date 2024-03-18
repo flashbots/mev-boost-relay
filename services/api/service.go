@@ -844,7 +844,7 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot, prevHeadSlot uint64) {
 	// Now we release our lock and wait for all other builder processes to wrap up
 	err := api.redis.EndProcessingSlot(context.Background())
 	if err != nil {
-		api.log.WithError(err).Error("failed to update redis optimistic processing slot")
+		api.log.WithError(err).Error("failed to unlock redis optimistic processing slot")
 	}
 	err = api.redis.WaitForSlotComplete(context.Background(), prevHeadSlot+1)
 	if err != nil {
@@ -860,7 +860,8 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot, prevHeadSlot uint64) {
 	api.optimisticSlot.Store(headSlot + 1)
 	err = api.redis.BeginProcessingSlot(context.Background(), headSlot+1)
 	if err != nil {
-		api.log.WithError(err).Error("failed to update redis optimistic processing slot")
+		api.log.WithError(err).Error("failed to lock redis optimistic processing slot")
+		api.optimisticSlot.Store(0)
 	}
 
 	builders, err := api.db.GetBlockBuilders()
