@@ -7,6 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/attestantio/go-builder-client v0.4.3-0.20240124194555-d44db06f45fa
 	github.com/attestantio/go-eth2-client v0.19.9
+	github.com/aws/aws-sdk-go v1.51.3
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
@@ -56,6 +57,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/uuid v1.3.1 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect

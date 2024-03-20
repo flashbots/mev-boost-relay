@@ -221,6 +221,9 @@ type RelayAPI struct {
 	optimisticBlocksWG sync.WaitGroup
 	// Cache for builder statuses and collaterals.
 	blockBuildersCache map[string]*blockBuilderCacheEntry
+
+	// queue to save builder submissions
+	blockSubmissionQueue IPayloadQueue
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -269,6 +272,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		}
 	}
 
+	queue, err := NewPayloadQueue()
+	if err != nil {
+		return nil, err
+	}
+
 	api = &RelayAPI{
 		opts:         opts,
 		log:          opts.Log,
@@ -286,6 +294,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
 		validatorRegC: make(chan builderApiV1.SignedValidatorRegistration, 450_000),
+
+		blockSubmissionQueue: queue,
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -1730,6 +1740,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	if err != nil && !errors.Is(err, redis.Nil) {
 		opts.log.WithError(err).Error("failed to get delivered payload slot from redis")
 	} else if opts.submission.BidTrace.Slot <= slotLastPayloadDelivered {
+		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(opts.w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return nil, false
@@ -2011,19 +2022,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	bfOpts := bidFloorOpts{
-		w:                    w,
-		tx:                   tx,
-		log:                  log,
-		cancellationsEnabled: isCancellationEnabled,
-		simResultC:           simResultC,
-		submission:           submission,
-	}
-	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
-	if !ok {
-		return
-	}
-
 	// Deferred saving of the builder submission to database (whenever this function ends)
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
@@ -2045,7 +2043,25 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		if err != nil {
 			log.WithError(err).Error("failed to upsert block-builder-entry")
 		}
+
+		err = api.blockSubmissionQueue.SendPayload(payload, receivedAt, eligibleAt, simResult.wasSimulated, simResult.validationErr)
+		if err != nil {
+			log.WithError(err).Error("failed to send payload to block submission queue")
+		}
 	}()
+
+	bfOpts := bidFloorOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		simResultC:           simResultC,
+		submission:           submission,
+	}
+	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
+	if !ok {
+		return
+	}
 
 	// ---------------------------------
 	// THE BID WILL BE SIMULATED SHORTLY
