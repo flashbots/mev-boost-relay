@@ -6,7 +6,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/attestantio/go-builder-client v0.4.3-0.20240124194555-d44db06f45fa
-	github.com/attestantio/go-eth2-client v0.19.9
+	github.com/attestantio/go-eth2-client v0.21.1
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
@@ -91,7 +91,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ferranbt/fastssz v0.1.3
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -105,9 +105,9 @@ require (
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
-	golang.org/x/net v0.18.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -121,3 +121,9 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
+
+// git clone git@github.com:jtraglia/go-eth2-client.git -b electra
+replace github.com/attestantio/go-eth2-client => ../../jtraglia/go-eth2-client
+
+// git clone git@github.com:jtraglia/go-builder-client.git -b electra
+replace github.com/attestantio/go-builder-client => ../../jtraglia/go-builder-client

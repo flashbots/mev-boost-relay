@@ -12,6 +12,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
@@ -55,6 +56,7 @@ var (
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
 	ForkVersionStringDeneb     = "deneb"
+	ForkVersionStringElectra   = "electra"
 )
 
 type EthNetworkDetails struct {
@@ -64,11 +66,13 @@ type EthNetworkDetails struct {
 	BellatrixForkVersionHex  string
 	CapellaForkVersionHex    string
 	DenebForkVersionHex      string
+	ElectraForkVersionHex    string
 
 	DomainBuilder                 phase0.Domain
 	DomainBeaconProposerBellatrix phase0.Domain
 	DomainBeaconProposerCapella   phase0.Domain
 	DomainBeaconProposerDeneb     phase0.Domain
+	DomainBeaconProposerElectra   phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -77,10 +81,12 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var bellatrixForkVersion string
 	var capellaForkVersion string
 	var denebForkVersion string
+	var electraForkVersion string
 	var domainBuilder phase0.Domain
 	var domainBeaconProposerBellatrix phase0.Domain
 	var domainBeaconProposerCapella phase0.Domain
 	var domainBeaconProposerDeneb phase0.Domain
+	var domainBeaconProposerElectra phase0.Domain
 
 	switch networkName {
 	case EthNetworkHolesky:
@@ -137,6 +143,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBeaconProposerElectra, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, electraForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
@@ -148,6 +159,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
+		DomainBeaconProposerElectra:   domainBeaconProposerElectra,
 	}, nil
 }
 
@@ -160,10 +172,12 @@ func (e *EthNetworkDetails) String() string {
 	BellatrixForkVersionHex: %s, 
 	CapellaForkVersionHex: %s, 
 	DenebForkVersionHex: %s,
+	ElectraForkVersionHex: %s,
 	DomainBuilder: %x, 
 	DomainBeaconProposerBellatrix: %x, 
 	DomainBeaconProposerCapella: %x, 
 	DomainBeaconProposerDeneb: %x
+	DomainBeaconProposerElectra: %x
 }`,
 		e.Name,
 		e.GenesisForkVersionHex,
@@ -171,10 +185,12 @@ func (e *EthNetworkDetails) String() string {
 		e.BellatrixForkVersionHex,
 		e.CapellaForkVersionHex,
 		e.DenebForkVersionHex,
+		e.ElectraForkVersionHex,
 		e.DomainBuilder,
 		e.DomainBeaconProposerBellatrix,
 		e.DomainBeaconProposerCapella,
-		e.DomainBeaconProposerDeneb)
+		e.DomainBeaconProposerDeneb,
+		e.DomainBeaconProposerElectra)
 }
 
 type PubkeyHex string
@@ -414,6 +430,7 @@ type BlockSubmissionInfo struct {
 	Blobs                      []deneb.Blob
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
+	Exits                      []*electra.ExecutionLayerExit
 }
 
 /*
@@ -424,6 +441,8 @@ a block. The message must be SSZ encoded. The first three fields are at most
 which is sufficient data to set the bid of the builder. The `Transactions`
 and `Withdrawals` fields are required to construct the full SignedBeaconBlock
 and are parsed asynchronously.
+
+TODO(JWT): Does this need to be updated? It hasn't been updated for Deneb.
 
 Header only layout:
 [000-236) = Message   (236 bytes)

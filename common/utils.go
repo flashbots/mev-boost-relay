@@ -16,8 +16,8 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -227,16 +227,21 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if err != nil {
 		return nil, err
 	}
-	// TODO (deneb): after deneb fork error if no blob fields
-	var (
-		blobs         []deneb.Blob
-		blobGasUsed   uint64
-		excessBlobGas uint64
-	)
-	if submission.Version == spec.DataVersionDeneb {
-		blobs = submission.Deneb.BlobsBundle.Blobs
-		blobGasUsed = submission.Deneb.ExecutionPayload.BlobGasUsed
-		excessBlobGas = submission.Deneb.ExecutionPayload.ExcessBlobGas
+	blobs, err := submission.Blobs()
+	if err != nil {
+		return nil, err
+	}
+	blobGasUsed, err := submission.BlobGasUsed()
+	if err != nil {
+		return nil, err
+	}
+	excessBlobGas, err := submission.ExcessBlobGas()
+	if err != nil {
+		return nil, err
+	}
+	exits, err := submission.Exits()
+	if submission.Version >= spec.DataVersionElectra && err != nil {
+		return nil, err
 	}
 	return &BlockSubmissionInfo{
 		BidTrace:                   bidTrace,
@@ -253,6 +258,7 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 		Blobs:                      blobs,
 		BlobGasUsed:                blobGasUsed,
 		ExcessBlobGas:              excessBlobGas,
+		Exits:                      exits,
 	}, nil
 }
 
@@ -269,6 +275,14 @@ func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest)
 			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: submission.Deneb.ExecutionPayload,
 				BlobsBundle:      submission.Deneb.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionElectra:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionElectra,
+			Electra: &builderApiElectra.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: submission.Electra.ExecutionPayload,
+				BlobsBundle:      submission.Electra.BlobsBundle,
 			},
 		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:

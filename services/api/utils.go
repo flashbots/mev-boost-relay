@@ -2,12 +2,14 @@ package api
 
 import (
 	"fmt"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
+	eth2UtilElectra "github.com/attestantio/go-eth2-client/util/electra"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -20,6 +22,7 @@ var (
 
 	ErrUnsupportedPayload = errors.New("unsupported payload version")
 	ErrNoWithdrawals      = errors.New("no withdrawals")
+	ErrNoExits            = errors.New("no execution layer exits")
 	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
 	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
 	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
@@ -47,6 +50,14 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	}
 	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
+}
+
+func ComputeExitsRoot(e []*electra.ExecutionLayerExit) (phase0.Root, error) {
+	if e == nil {
+		return phase0.Root{}, ErrNoExits
+	}
+	exits := eth2UtilElectra.ExecutionPayloadExits{Exits: e}
+	return exits.HashTreeRoot()
 }
 
 func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {

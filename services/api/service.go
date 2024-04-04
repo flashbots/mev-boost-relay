@@ -142,6 +142,7 @@ type payloadAttributesHelper struct {
 	withdrawalsRoot   phase0.Root
 	parentBeaconRoot  *phase0.Root
 	payloadAttributes beaconclient.PayloadAttributes
+	exitsRoot         phase0.Root
 }
 
 // Data needed to issue a block validation request.
@@ -187,6 +188,7 @@ type RelayAPI struct {
 	genesisInfo  *beaconclient.GetGenesisResponse
 	capellaEpoch int64
 	denebEpoch   int64
+	electraEpoch int64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -412,8 +414,9 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
-	api.denebEpoch = -1
 	api.capellaEpoch = -1
+	api.denebEpoch = -1
+	api.electraEpoch = -1
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
@@ -421,6 +424,8 @@ func (api *RelayAPI) StartServer() (err error) {
 			api.capellaEpoch = int64(fork.Epoch)
 		case api.opts.EthNetDetails.DenebForkVersionHex:
 			api.denebEpoch = int64(fork.Epoch)
+		case api.opts.EthNetDetails.ElectraForkVersionHex:
+			api.electraEpoch = int64(fork.Epoch)
 		}
 	}
 
@@ -548,6 +553,10 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 
 func (api *RelayAPI) isDeneb(slot uint64) bool {
 	return hasReachedFork(slot, api.denebEpoch)
+}
+
+func (api *RelayAPI) isElectra(slot uint64) bool {
+	return hasReachedFork(slot, api.electraEpoch)
 }
 
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
@@ -1570,12 +1579,32 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"numTx":       len(txs),
 		"blockNumber": blockNumber,
 	})
-	// deneb specific logging
-	if getPayloadResp.Deneb != nil {
+	if getPayloadResp.Version >= spec.DataVersionDeneb {
+		blobs, err := getPayloadResp.Blobs()
+		if err != nil {
+			log.WithError(err).Info("failed to get blobs")
+		}
+		blobGasUsed, err := getPayloadResp.BlobGasUsed()
+		if err != nil {
+			log.WithError(err).Info("failed to get blobGasUsed")
+		}
+		excessBlobGas, err := getPayloadResp.ExcessBlobGas()
+		if err != nil {
+			log.WithError(err).Info("failed to get excessBlobGas")
+		}
 		log = log.WithFields(logrus.Fields{
-			"numBlobs":      len(getPayloadResp.Deneb.BlobsBundle.Blobs),
-			"blobGasUsed":   getPayloadResp.Deneb.ExecutionPayload.BlobGasUsed,
-			"excessBlobGas": getPayloadResp.Deneb.ExecutionPayload.ExcessBlobGas,
+			"numBlobs":      len(blobs),
+			"blobGasUsed":   blobGasUsed,
+			"excessBlobGas": excessBlobGas,
+		})
+	}
+	if getPayloadResp.Version >= spec.DataVersionElectra {
+		exits, err := getPayloadResp.Exits()
+		if err != nil {
+			log.WithError(err).Info("failed to get exits")
+		}
+		log = log.WithFields(logrus.Fields{
+			"numExecutionLayerExits": len(exits),
 		})
 	}
 	log.Info("execution payload delivered")
@@ -1652,16 +1681,36 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		}
 	}
 
+	if hasReachedFork(submission.BidTrace.Slot, api.electraEpoch) { // Electra requires correct exits
+		exitsRoot, err := ComputeExitsRoot(submission.Exits)
+		if err != nil {
+			log.WithError(err).Warn("could not compute exits root from payload")
+			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
+			return attrs, false
+		}
+
+		if exitsRoot != attrs.exitsRoot {
+			msg := fmt.Sprintf("incorrect exits root - got: %s, expected: %s", exitsRoot.String(), attrs.exitsRoot.String())
+			log.Info(msg)
+			api.RespondError(w, http.StatusBadRequest, msg)
+			return attrs, false
+		}
+	}
+
 	return attrs, true
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
+	if api.isElectra(submission.BidTrace.Slot) && payload.Electra == nil {
+		log.Info("rejecting submission - non electra payload for electra fork")
+		api.RespondError(w, http.StatusBadRequest, "not electra payload")
+		return false
+	}
 	if api.isDeneb(submission.BidTrace.Slot) && payload.Deneb == nil {
 		log.Info("rejecting submission - non deneb payload for deneb fork")
 		api.RespondError(w, http.StatusBadRequest, "not deneb payload")
 		return false
 	}
-
 	if api.isCapella(submission.BidTrace.Slot) && payload.Capella == nil {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
@@ -1932,12 +1981,36 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"payloadBytes":           len(requestPayloadBytes),
 		"isLargeRequest":         isLargeRequest,
 	})
-	// deneb specific logging
-	if payload.Deneb != nil {
+	if payload.Version >= spec.DataVersionDeneb {
+		blobs, err := payload.Blobs()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		blobGasUsed, err := payload.BlobGasUsed()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		excessBlobGas, err := payload.ExcessBlobGas()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		log = log.WithFields(logrus.Fields{
-			"numBlobs":      len(payload.Deneb.BlobsBundle.Blobs),
-			"blobGasUsed":   payload.Deneb.ExecutionPayload.BlobGasUsed,
-			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
+			"numBlobs":      len(blobs),
+			"blobGasUsed":   blobGasUsed,
+			"excessBlobGas": excessBlobGas,
+		})
+	}
+	if payload.Version >= spec.DataVersionElectra {
+		exits, err := payload.Exits()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		log = log.WithFields(logrus.Fields{
+			"numExecutionLayerExits": len(exits),
 		})
 	}
 
