@@ -53,6 +53,11 @@ var (
 	DenebForkVersionGoerli  = "0x04001020"
 	DenebForkVersionMainnet = "0x04000000"
 
+	ElectraForkVersionHolesky = "0x06017000"
+	ElectraForkVersionSepolia = "0x90000074"
+	ElectraForkVersionGoerli  = "0x05001020"
+	ElectraForkVersionMainnet = "0x05000000"
+
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
 	ForkVersionStringDeneb     = "deneb"
@@ -95,30 +100,35 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		bellatrixForkVersion = BellatrixForkVersionHolesky
 		capellaForkVersion = CapellaForkVersionHolesky
 		denebForkVersion = DenebForkVersionHolesky
+		electraForkVersion = ElectraForkVersionHolesky
 	case EthNetworkSepolia:
 		genesisForkVersion = GenesisForkVersionSepolia
 		genesisValidatorsRoot = GenesisValidatorsRootSepolia
 		bellatrixForkVersion = BellatrixForkVersionSepolia
 		capellaForkVersion = CapellaForkVersionSepolia
 		denebForkVersion = DenebForkVersionSepolia
+		electraForkVersion = ElectraForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = GenesisForkVersionGoerli
 		genesisValidatorsRoot = GenesisValidatorsRootGoerli
 		bellatrixForkVersion = BellatrixForkVersionGoerli
 		capellaForkVersion = CapellaForkVersionGoerli
 		denebForkVersion = DenebForkVersionGoerli
+		electraForkVersion = ElectraForkVersionGoerli
 	case EthNetworkMainnet:
 		genesisForkVersion = GenesisForkVersionMainnet
 		genesisValidatorsRoot = GenesisValidatorsRootMainnet
 		bellatrixForkVersion = BellatrixForkVersionMainnet
 		capellaForkVersion = CapellaForkVersionMainnet
 		denebForkVersion = DenebForkVersionMainnet
+		electraForkVersion = ElectraForkVersionMainnet
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
 		bellatrixForkVersion = os.Getenv("BELLATRIX_FORK_VERSION")
 		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
 		denebForkVersion = os.Getenv("DENEB_FORK_VERSION")
+		electraForkVersion = os.Getenv("ELECTRA_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}

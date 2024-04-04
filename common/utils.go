@@ -228,15 +228,15 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 		return nil, err
 	}
 	blobs, err := submission.Blobs()
-	if err != nil {
+	if submission.Version >= spec.DataVersionDeneb && err != nil {
 		return nil, err
 	}
 	blobGasUsed, err := submission.BlobGasUsed()
-	if err != nil {
+	if submission.Version >= spec.DataVersionDeneb && err != nil {
 		return nil, err
 	}
 	excessBlobGas, err := submission.ExcessBlobGas()
-	if err != nil {
+	if submission.Version >= spec.DataVersionDeneb && err != nil {
 		return nil, err
 	}
 	exits, err := submission.Exits()

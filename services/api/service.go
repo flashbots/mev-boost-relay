@@ -433,9 +433,15 @@ func (api *RelayAPI) StartServer() (err error) {
 		// log warning that deneb epoch was not found in CL fork schedule, suggest CL upgrade
 		log.Info("Deneb epoch not found in fork schedule")
 	}
+	if api.electraEpoch == -1 {
+		// log warning that electra epoch was not found in CL fork schedule, suggest CL upgrade
+		log.Info("Electra epoch not found in fork schedule")
+	}
 
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.denebEpoch) {
+	if hasReachedFork(currentSlot, api.electraEpoch) {
+		log.Infof("electra fork detected (currentEpoch: %d / electraEpoch: %d)", common.SlotToEpoch(currentSlot), api.electraEpoch)
+	} else if hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
@@ -1685,7 +1691,7 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		exitsRoot, err := ComputeExitsRoot(submission.Exits)
 		if err != nil {
 			log.WithError(err).Warn("could not compute exits root from payload")
-			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
+			api.RespondError(w, http.StatusBadRequest, "could not compute exits root")
 			return attrs, false
 		}
 
