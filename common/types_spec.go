@@ -77,6 +77,20 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 			Version: spec.DataVersionDeneb,
 			Deneb:   signedBuilderBid.Deneb,
 		}, nil
+	case spec.DataVersionElectra:
+		versionedPayload.Electra = payload.Electra.ExecutionPayload
+		header, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return nil, err
+		}
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		if err != nil {
+			return nil, err
+		}
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionElectra,
+			Electra: signedBuilderBid.Electra,
+		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrInvalidVersion
 	default:
@@ -97,6 +111,14 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: payload.Deneb.ExecutionPayload,
 				BlobsBundle:      payload.Deneb.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionElectra:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionElectra,
+			Electra: &builderApiElectra.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: payload.Electra.ExecutionPayload,
+				BlobsBundle:      payload.Electra.BlobsBundle,
 			},
 		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
@@ -151,6 +173,26 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 				Signature: sig,
 			},
 		}, nil
+	case spec.DataVersionElectra:
+		builderBid := builderApiElectra.BuilderBid{
+			Header:             header.Electra,
+			BlobKZGCommitments: payload.Electra.BlobsBundle.Commitments,
+			Value:              value,
+			Pubkey:             *pubkey,
+		}
+
+		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		if err != nil {
+			return nil, err
+		}
+
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionElectra,
+			Electra: &builderApiElectra.SignedBuilderBid{
+				Message:   &builderBid,
+				Signature: sig,
+			},
+		}, nil
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version))
 	}
@@ -171,8 +213,13 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 		if len(denebBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
 			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
 		}
-
 		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb)
+	case spec.DataVersionElectra:
+		electraBlindedBlock := signedBlindedBeaconBlock.Electra
+		if len(electraBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Electra.BlobsBundle.Blobs) {
+			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
+		}
+		signedBeaconBlock.Electra = ElectraUnblindSignedBlock(electraBlindedBlock, blockPayload.Electra)
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version))
 	}
@@ -225,6 +272,37 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 					ExecutionPayload:      blockPayload.ExecutionPayload,
 					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
+				},
+			},
+			Signature: blindedBlock.Signature,
+		},
+		KZGProofs: blockPayload.BlobsBundle.Proofs,
+		Blobs:     blockPayload.BlobsBundle.Blobs,
+	}
+}
+
+func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
+	return &eth2ApiV1Electra.SignedBlockContents{
+		SignedBlock: &electra.SignedBeaconBlock{
+			Message: &electra.BeaconBlock{
+				Slot:          blindedBlock.Message.Slot,
+				ProposerIndex: blindedBlock.Message.ProposerIndex,
+				ParentRoot:    blindedBlock.Message.ParentRoot,
+				StateRoot:     blindedBlock.Message.StateRoot,
+				Body: &electra.BeaconBlockBody{
+					RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
+					ETH1Data:              blindedBlock.Message.Body.ETH1Data,
+					Graffiti:              blindedBlock.Message.Body.Graffiti,
+					ProposerSlashings:     blindedBlock.Message.Body.ProposerSlashings,
+					AttesterSlashings:     blindedBlock.Message.Body.AttesterSlashings,
+					Attestations:          blindedBlock.Message.Body.Attestations,
+					Deposits:              blindedBlock.Message.Body.Deposits,
+					VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
+					SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
+					ExecutionPayload:      blockPayload.ExecutionPayload,
+					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
+					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
+					Consolidations:        blindedBlock.Message.Body.Consolidations,
 				},
 			},
 			Signature: blindedBlock.Signature,

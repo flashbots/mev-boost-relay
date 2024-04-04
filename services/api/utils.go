@@ -2,11 +2,11 @@ package api
 
 import (
 	"fmt"
-	"github.com/attestantio/go-eth2-client/spec/electra"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
 	eth2UtilElectra "github.com/attestantio/go-eth2-client/util/electra"
