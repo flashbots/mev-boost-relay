@@ -1880,6 +1880,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	nextTime = time.Now().UTC()
+	pf.PayloadLoad = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
 	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
@@ -1952,10 +1956,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithFields(logrus.Fields{
-		"builderIsHighPrio":     builderEntry.status.IsHighPrio,
-		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
-	})
+	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
 
 	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, submission.BidTrace)
 	if !ok {
@@ -1977,8 +1978,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
-
 	attrs, ok := api.checkSubmissionPayloadAttrs(w, log, submission)
 	if !ok {
 		return
@@ -1998,6 +1997,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, "invalid signature")
 		return
 	}
+
+	log = log.WithField("timestampBeforeCheckingFloorBid", time.Now().UTC().UnixMilli())
 
 	// Create the redis pipeline tx
 	tx := api.redis.NewTxPipeline()
@@ -2026,6 +2027,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithField("timestampAfterCheckingFloorBid", time.Now().UTC().UnixMilli())
+
 	// Deferred saving of the builder submission to database (whenever this function ends)
 	defer func() {
 		savePayloadToDatabase := !api.ffDisablePayloadDBStorage
@@ -2053,6 +2056,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// THE BID WILL BE SIMULATED SHORTLY
 	// ---------------------------------
 
+	log = log.WithField("timestampBeforeCheckingTopBid", time.Now().UTC().UnixMilli())
+
 	// Get the latest top bid value from Redis
 	bidIsTopBid := false
 	topBidValue, err := api.redis.GetTopBidValue(context.Background(), tx, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
@@ -2066,6 +2071,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 	}
 
+	log = log.WithField("timestampAfterCheckingTopBid", time.Now().UTC().UnixMilli())
+
+	nextTime = time.Now().UTC()
+	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
 	// Simulate the block submission and save to db
 	fastTrackValidation := builderEntry.status.IsHighPrio && bidIsTopBid && !isLargeRequest
 	timeBeforeValidation := time.Now().UTC()
@@ -2074,10 +2085,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampBeforeValidation": timeBeforeValidation.UTC().UnixMilli(),
 		"fastTrackValidation":       fastTrackValidation,
 	})
-
-	nextTime = time.Now().UTC()
-	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
-	prevTime = nextTime
 
 	// Construct simulation request
 	opts := blockSimOptions{
