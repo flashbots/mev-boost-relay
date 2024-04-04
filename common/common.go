@@ -42,6 +42,7 @@ type BuilderStatus struct {
 // field corresponds to the number of microseconds in each stage. The `Total`
 // field is the number of microseconds taken for entire flow.
 type Profile struct {
+	PayloadLoad uint64
 	Decode      uint64
 	Prechecks   uint64
 	Simulation  uint64
