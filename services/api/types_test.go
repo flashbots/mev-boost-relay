@@ -1,6 +1,8 @@
 package api
 
 import (
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"testing"
 
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
@@ -93,6 +95,52 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							Transactions:  []bellatrix.Transaction{},
 							BlobGasUsed:   5005,
 							ExcessBlobGas: 5006,
+						},
+						BlobsBundle: &builderApiDeneb.BlobsBundle{
+							Commitments: []deneb.KZGCommitment{},
+							Proofs:      []deneb.KZGProof{},
+							Blobs:       []deneb.Blob{},
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot:                 1,
+							ParentHash:           phase0.Hash32{0x01},
+							BlockHash:            phase0.Hash32{0x09},
+							BuilderPubkey:        builderPk,
+							ProposerPubkey:       phase0.BLSPubKey{0x03},
+							ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+							Value:                uint256.NewInt(123),
+							GasLimit:             5002,
+							GasUsed:              5003,
+						},
+						Signature: builderSk,
+					},
+				},
+			},
+		},
+		{
+			name: "Electra",
+			reqPayload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionElectra,
+					Electra: &builderApiElectra.SubmitBlockRequest{
+						ExecutionPayload: &electra.ExecutionPayload{
+							ParentHash:    phase0.Hash32{0x01},
+							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+							StateRoot:     phase0.Root{0x03},
+							ReceiptsRoot:  phase0.Root{0x04},
+							LogsBloom:     [256]byte{0x05},
+							PrevRandao:    phase0.Hash32{0x06},
+							BlockNumber:   5001,
+							GasLimit:      5002,
+							GasUsed:       5003,
+							Timestamp:     5004,
+							ExtraData:     []byte{0x07},
+							BaseFeePerGas: uint256.NewInt(123),
+							BlockHash:     phase0.Hash32{0x09},
+							Transactions:  []bellatrix.Transaction{},
+							BlobGasUsed:   5005,
+							ExcessBlobGas: 5006,
+							Exits:         make([]*electra.ExecutionLayerExit, 0),
 						},
 						BlobsBundle: &builderApiDeneb.BlobsBundle{
 							Commitments: []deneb.KZGCommitment{},
