@@ -257,14 +257,31 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2
-	if c.ffUseSSZEncodingPublishBlock {
-		blockSSZ, err := block.MarshalSSZ()
-		if err != nil {
-			return 0, fmt.Errorf("could not marshal block to SSZ: %w", err)
-		}
-		return fetchBeacon(http.MethodPost, uri, blockSSZ, nil, nil, headers, true)
+
+	var payloadBytes []byte
+	useSSZ := c.ffUseSSZEncodingPublishBlock
+	log := c.log
+	encodeStartTime := time.Now().UTC()
+	if useSSZ {
+		log = log.WithField("publishContentType", "ssz")
+		payloadBytes, err = block.MarshalSSZ()
+	} else {
+		log = log.WithField("publishContentType", "json")
+		payloadBytes, err = json.Marshal(block)
 	}
-	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+	if err != nil {
+		return 0, fmt.Errorf("could not marshal request: %w", err)
+	}
+	publishingStartTime := time.Now().UTC()
+	encodeTime := publishingStartTime.Sub(encodeStartTime).Milliseconds()
+	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
+	publishTime := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
+	log.WithFields(logrus.Fields{
+		"encodeTime":      encodeTime,
+		"publishTime":     publishTime,
+		"payloadBytesLen": len(payloadBytes),
+	}).Info("finished publish block request")
+	return code, err
 }
 
 type GetGenesisResponse struct {
