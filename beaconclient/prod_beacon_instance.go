@@ -275,7 +275,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	publishingStartTime := time.Now().UTC()
 	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
 	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
-	publishTime := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
+	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
 	log.WithFields(logrus.Fields{
 		"encodeDurationMs":      encodeTime,
 		"publishDurationMs":     publishTime,
