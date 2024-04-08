@@ -22,6 +22,7 @@ var (
 
 	ErrUnsupportedPayload = errors.New("unsupported payload version")
 	ErrNoWithdrawals      = errors.New("no withdrawals")
+	ErrNoDepositReceipts  = errors.New("no deposit receipts")
 	ErrNoExits            = errors.New("no execution layer exits")
 	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
 	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
@@ -50,6 +51,14 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	}
 	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
+}
+
+func ComputeDepositReceiptsRoot(e []*electra.DepositReceipt) (phase0.Root, error) {
+	if e == nil {
+		return phase0.Root{}, ErrNoDepositReceipts
+	}
+	depositReceipts := eth2UtilElectra.DepositReceipts{DepositReceipts: e}
+	return depositReceipts.HashTreeRoot()
 }
 
 func ComputeExitsRoot(e []*electra.ExecutionLayerExit) (phase0.Root, error) {

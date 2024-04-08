@@ -239,6 +239,10 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if submission.Version >= spec.DataVersionDeneb && err != nil {
 		return nil, err
 	}
+	depositReceipts, err := submission.DepositReceipts()
+	if submission.Version >= spec.DataVersionElectra && err != nil {
+		return nil, err
+	}
 	exits, err := submission.Exits()
 	if submission.Version >= spec.DataVersionElectra && err != nil {
 		return nil, err
@@ -258,6 +262,7 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 		Blobs:                      blobs,
 		BlobGasUsed:                blobGasUsed,
 		ExcessBlobGas:              excessBlobGas,
+		DepositReceipts:            depositReceipts,
 		Exits:                      exits,
 	}, nil
 }

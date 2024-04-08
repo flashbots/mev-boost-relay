@@ -137,12 +137,13 @@ type RelayAPIOpts struct {
 }
 
 type payloadAttributesHelper struct {
-	slot              uint64
-	parentHash        string
-	withdrawalsRoot   phase0.Root
-	parentBeaconRoot  *phase0.Root
-	payloadAttributes beaconclient.PayloadAttributes
-	exitsRoot         phase0.Root
+	slot                uint64
+	parentHash          string
+	withdrawalsRoot     phase0.Root
+	parentBeaconRoot    *phase0.Root
+	payloadAttributes   beaconclient.PayloadAttributes
+	depositReceiptsRoot phase0.Root
+	exitsRoot           phase0.Root
 }
 
 // Data needed to issue a block validation request.
@@ -1605,6 +1606,14 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 	if getPayloadResp.Version >= spec.DataVersionElectra {
+		depositReceipts, err := getPayloadResp.DepositReceipts()
+		if err != nil {
+			log.WithError(err).Info("failed to get deposit receipts")
+		}
+		log = log.WithFields(logrus.Fields{
+			"numDepositReceipts": len(depositReceipts),
+		})
+
 		exits, err := getPayloadResp.Exits()
 		if err != nil {
 			log.WithError(err).Info("failed to get exits")
@@ -1671,14 +1680,13 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		return attrs, false
 	}
 
-	if hasReachedFork(submission.BidTrace.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
+	if hasReachedFork(submission.BidTrace.Slot, api.capellaEpoch) {
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
 			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
 			return attrs, false
 		}
-
 		if withdrawalsRoot != attrs.withdrawalsRoot {
 			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
@@ -1687,14 +1695,26 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		}
 	}
 
-	if hasReachedFork(submission.BidTrace.Slot, api.electraEpoch) { // Electra requires correct exits
+	if hasReachedFork(submission.BidTrace.Slot, api.electraEpoch) {
+		depositReceiptsRoot, err := ComputeDepositReceiptsRoot(submission.DepositReceipts)
+		if err != nil {
+			log.WithError(err).Warn("could not compute deposit receipts root from payload")
+			api.RespondError(w, http.StatusBadRequest, "could not compute deposit receipts root")
+			return attrs, false
+		}
+		if depositReceiptsRoot != attrs.depositReceiptsRoot {
+			msg := fmt.Sprintf("incorrect deposit receipts root - got: %s, expected: %s", depositReceiptsRoot.String(), attrs.depositReceiptsRoot.String())
+			log.Info(msg)
+			api.RespondError(w, http.StatusBadRequest, msg)
+			return attrs, false
+		}
+
 		exitsRoot, err := ComputeExitsRoot(submission.Exits)
 		if err != nil {
 			log.WithError(err).Warn("could not compute exits root from payload")
 			api.RespondError(w, http.StatusBadRequest, "could not compute exits root")
 			return attrs, false
 		}
-
 		if exitsRoot != attrs.exitsRoot {
 			msg := fmt.Sprintf("incorrect exits root - got: %s, expected: %s", exitsRoot.String(), attrs.exitsRoot.String())
 			log.Info(msg)
@@ -2010,6 +2030,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 	}
 	if payload.Version >= spec.DataVersionElectra {
+		depositReceipts, err := payload.DepositReceipts()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		log = log.WithFields(logrus.Fields{
+			"numDepositReceipts": len(depositReceipts),
+		})
+
 		exits, err := payload.Exits()
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, err.Error())

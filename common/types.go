@@ -440,6 +440,7 @@ type BlockSubmissionInfo struct {
 	Blobs                      []deneb.Blob
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
+	DepositReceipts            []*electra.DepositReceipt
 	Exits                      []*electra.ExecutionLayerExit
 }
 
