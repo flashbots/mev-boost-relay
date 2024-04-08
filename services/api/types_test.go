@@ -1,18 +1,18 @@
 package api
 
 import (
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
-	"github.com/attestantio/go-eth2-client/spec/electra"
 	"testing"
 
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"

@@ -3,10 +3,10 @@ package database
 import (
 	"encoding/json"
 	"errors"
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
