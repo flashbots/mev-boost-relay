@@ -278,7 +278,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	publishTime := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
 	log.WithFields(logrus.Fields{
 		"encodeDurationMs":      encodeTime,
-		"publishTime":     publishTime,
+		"publishDurationMs":     publishTime,
 		"payloadBytes": len(payloadBytes),
 	}).Info("finished publish block request")
 	return code, err
