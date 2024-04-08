@@ -1238,6 +1238,8 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
 	case spec.DataVersionDeneb:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey)
+	case spec.DataVersionElectra:
+		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerElectra, pubKey)
 	default:
 		return false, errors.New("unsupported consensus data version")
 	}
