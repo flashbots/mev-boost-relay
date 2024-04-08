@@ -312,7 +312,7 @@ func (b *DenebBlockValidationRequest) MarshalSSZTo(buf []byte) (dst []byte, err 
 		b.Message = new(builderApiV1.BidTrace)
 	}
 	if dst, err = b.Message.MarshalSSZTo(dst); err != nil {
-		return
+		return nil, err
 	}
 
 	// Offset (1) 'ExecutionPayload'
@@ -327,7 +327,6 @@ func (b *DenebBlockValidationRequest) MarshalSSZTo(buf []byte) (dst []byte, err 
 	if b.BlobsBundle == nil {
 		b.BlobsBundle = new(builderApiDeneb.BlobsBundle)
 	}
-	offset += b.BlobsBundle.SizeSSZ()
 
 	// Field (3) 'Signature'
 	dst = append(dst, b.Signature[:]...)
@@ -340,15 +339,15 @@ func (b *DenebBlockValidationRequest) MarshalSSZTo(buf []byte) (dst []byte, err 
 
 	// Field (1) 'ExecutionPayload'
 	if dst, err = b.ExecutionPayload.MarshalSSZTo(dst); err != nil {
-		return
+		return nil, err
 	}
 
 	// Field (2) 'BlobsBundle'
 	if dst, err = b.BlobsBundle.MarshalSSZTo(dst); err != nil {
-		return
+		return nil, err
 	}
 
-	return
+	return dst, nil
 }
 
 type VersionedSubmitBlockRequest struct {
