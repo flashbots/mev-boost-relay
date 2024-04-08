@@ -279,7 +279,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	log.WithFields(logrus.Fields{
 		"encodeTime":      encodeTime,
 		"publishTime":     publishTime,
-		"payloadBytesLen": len(payloadBytes),
+		"payloadBytes": len(payloadBytes),
 	}).Info("finished publish block request")
 	return code, err
 }
