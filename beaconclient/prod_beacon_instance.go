@@ -258,6 +258,11 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2
 
+	slot, err := block.Slot()
+	if err != nil {
+		slot = 0
+	}
+
 	var payloadBytes []byte
 	useSSZ := c.ffUseSSZEncodingPublishBlock
 	log := c.log
@@ -277,6 +282,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
 	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
 	log.WithFields(logrus.Fields{
+		"slot":              slot,
 		"encodeDurationMs":  encodeDurationMs,
 		"publishDurationMs": publishDurationMs,
 		"payloadBytes":      len(payloadBytes),
