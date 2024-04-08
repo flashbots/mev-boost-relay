@@ -38,7 +38,7 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 	}
 
 	if os.Getenv("USE_SSZ_ENCODING_PUBLISH_BLOCK") != "" {
-		_log.Warn("env: USE_SSZ_ENCODING_PUBLISH_BLOCK: use SSZ encoding to publish block")
+		_log.Warn("env: USE_SSZ_ENCODING_PUBLISH_BLOCK: using SSZ encoding to publish blocks")
 		client.ffUseSSZEncodingPublishBlock = true
 	}
 
