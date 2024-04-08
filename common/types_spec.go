@@ -16,6 +16,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	fastssz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -237,6 +238,12 @@ type BuilderBlockValidationRequest struct {
 	ParentBeaconBlockRoot *phase0.Root
 }
 
+type DenebBlockValidationRequest struct {
+	builderApiDeneb.SubmitBlockRequest
+	RegisteredGasLimit    uint64
+	ParentBeaconBlockRoot phase0.Root
+}
+
 type capellaBuilderBlockValidationRequestJSON struct {
 	Message            *builderApiV1.BidTrace    `json:"message"`
 	ExecutionPayload   *capella.ExecutionPayload `json:"execution_payload"`
@@ -274,6 +281,74 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
+}
+
+func (r *BuilderBlockValidationRequest) MarshalSSZ() ([]byte, error) {
+	switch r.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		req := &DenebBlockValidationRequest{
+			SubmitBlockRequest:    *r.Deneb,
+			RegisteredGasLimit:    r.RegisteredGasLimit,
+			ParentBeaconBlockRoot: *r.ParentBeaconBlockRoot,
+		}
+		return req.MarshalSSZ()
+	default:
+		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
+	}
+}
+
+// MarshalSSZ ssz marshals the DenebBlockValidationRequest object
+func (b *DenebBlockValidationRequest) MarshalSSZ() ([]byte, error) {
+	return fastssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the DenebBlockValidationRequest object to a target array
+func (b *DenebBlockValidationRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(380)
+
+	// Field (0) 'Message'
+	if b.Message == nil {
+		b.Message = new(builderApiV1.BidTrace)
+	}
+	if dst, err = b.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (1) 'ExecutionPayload'
+	dst = fastssz.WriteOffset(dst, offset)
+	if b.ExecutionPayload == nil {
+		b.ExecutionPayload = new(deneb.ExecutionPayload)
+	}
+	offset += b.ExecutionPayload.SizeSSZ()
+
+	// Offset (2) 'BlobsBundle'
+	dst = fastssz.WriteOffset(dst, offset)
+	if b.BlobsBundle == nil {
+		b.BlobsBundle = new(builderApiDeneb.BlobsBundle)
+	}
+	offset += b.BlobsBundle.SizeSSZ()
+
+	// Field (3) 'Signature'
+	dst = append(dst, b.Signature[:]...)
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	dst = append(dst, b.ParentBeaconBlockRoot[:]...)
+
+	// Field (5) 'RegisteredGasLimit'
+	dst = fastssz.MarshalUint64(dst, b.RegisteredGasLimit)
+
+	// Field (1) 'ExecutionPayload'
+	if dst, err = b.ExecutionPayload.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'BlobsBundle'
+	if dst, err = b.BlobsBundle.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
 }
 
 type VersionedSubmitBlockRequest struct {

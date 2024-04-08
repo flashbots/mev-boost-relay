@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,17 +36,19 @@ type IBlockSimRateLimiter interface {
 }
 
 type BlockSimulationRateLimiter struct {
-	cv          *sync.Cond
-	counter     int64
-	blockSimURL string
-	client      http.Client
+	cv              *sync.Cond
+	counter         int64
+	blockSimURL     string
+	blockSimHTTPURL string
+	client          http.Client
 }
 
-func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimiter {
+func NewBlockSimulationRateLimiter(blockSimURL, blockSimHTTPURL string) *BlockSimulationRateLimiter {
 	return &BlockSimulationRateLimiter{
-		cv:          sync.NewCond(&sync.Mutex{}),
-		counter:     0,
-		blockSimURL: blockSimURL,
+		cv:              sync.NewCond(&sync.Mutex{}),
+		counter:         0,
+		blockSimURL:     blockSimURL,
+		blockSimHTTPURL: blockSimHTTPURL,
 		client: http.Client{ //nolint:exhaustruct
 			Timeout: simRequestTimeout,
 		},
@@ -71,7 +74,6 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 		return fmt.Errorf("%w, %w", ErrRequestClosed, err), nil
 	}
 
-	var simReq *jsonrpc.JSONRPCRequest
 	if payload.Version == spec.DataVersionCapella && payload.Capella == nil {
 		return ErrNoCapellaPayload, nil
 	}
@@ -95,7 +97,14 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 		headers.Add("X-Fast-Track", "true")
 	}
 
+	if (b.blockSimHTTPURL != "") && (payload.Version == spec.DataVersionDeneb) {
+		// Create and fire off HTTP request
+		requestErr, validationErr = SendHTTPRequest(&b.client, payload, b.blockSimHTTPURL, headers)
+		return requestErr, validationErr
+	}
+
 	// Create and fire off JSON-RPC request
+	var simReq *jsonrpc.JSONRPCRequest
 	if payload.Version == spec.DataVersionDeneb {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
 	} else {
@@ -108,6 +117,49 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 // CurrentCounter returns the number of waiting and active requests
 func (b *BlockSimulationRateLimiter) CurrentCounter() int64 {
 	return atomic.LoadInt64(&b.counter)
+}
+
+func SendHTTPRequest(client *http.Client, req *common.BuilderBlockValidationRequest, url string, headers http.Header) (requestErr, validationErr error) {
+	payloadBytes, err := req.MarshalSSZ()
+	if err != nil {
+		return fmt.Errorf("could not marshal request: %w", err), nil
+	}
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("invalid request for %s: %w", url, err), nil
+	}
+
+	httpReq.Header.Add("Content-Type", "application/octet-stream")
+	httpReq.Header.Add("Eth-Consensus-Version", strings.ToLower(req.Version.String()))
+	httpReq.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		httpReq.Header.Add(k, v[0])
+	}
+
+	// execute request
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return err, nil
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("could not read response body for %s: %w", url, err), nil
+	}
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		ec := &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{}
+		if err = json.Unmarshal(bodyBytes, ec); err != nil {
+			return fmt.Errorf("could not unmarshal error response from validation node for %s from %s: %w", url, string(bodyBytes), err), nil
+		}
+		return nil, fmt.Errorf("%w: %s", ErrSimulationFailed, ec.Message)
+	}
+
+	return nil, nil
 }
 
 // SendJSONRPCRequest sends the request to URL and returns the general JsonRpcResponse, or an error (note: not the JSONRPCError)

@@ -114,8 +114,9 @@ var (
 type RelayAPIOpts struct {
 	Log *logrus.Entry
 
-	ListenAddr  string
-	BlockSimURL string
+	ListenAddr      string
+	BlockSimURL     string
+	BlockSimHTTPURL string
 
 	BeaconClient beaconclient.IMultiBeaconClient
 	Datastore    *datastore.Datastore
@@ -283,7 +284,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
 		proposerDutiesResponse: &[]byte{},
-		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
+		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL, opts.BlockSimHTTPURL),
 
 		validatorRegC: make(chan builderApiV1.SignedValidatorRegistration, 450_000),
 	}
