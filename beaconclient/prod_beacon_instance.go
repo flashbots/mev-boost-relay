@@ -273,7 +273,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 		return 0, fmt.Errorf("could not marshal request: %w", err)
 	}
 	publishingStartTime := time.Now().UTC()
-	encodeTime := publishingStartTime.Sub(encodeStartTime).Milliseconds()
+	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
 	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
 	publishTime := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
 	log.WithFields(logrus.Fields{
