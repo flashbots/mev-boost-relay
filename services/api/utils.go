@@ -23,7 +23,7 @@ var (
 	ErrUnsupportedPayload = errors.New("unsupported payload version")
 	ErrNoWithdrawals      = errors.New("no withdrawals")
 	ErrNoDepositReceipts  = errors.New("no deposit receipts")
-	ErrNoExits            = errors.New("no execution layer exits")
+	ErrNoWithdrawRequests = errors.New("no execution layer withdraw requests")
 	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
 	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
 	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
@@ -53,19 +53,19 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func ComputeDepositReceiptsRoot(e []*electra.DepositReceipt) (phase0.Root, error) {
-	if e == nil {
+func ComputeDepositReceiptsRoot(d []*electra.DepositReceipt) (phase0.Root, error) {
+	if d == nil {
 		return phase0.Root{}, ErrNoDepositReceipts
 	}
-	depositReceipts := eth2UtilElectra.DepositReceipts{DepositReceipts: e}
+	depositReceipts := eth2UtilElectra.DepositReceipts{DepositReceipts: d}
 	return depositReceipts.HashTreeRoot()
 }
 
-func ComputeExitsRoot(e []*electra.ExecutionLayerExit) (phase0.Root, error) {
+func ComputeWithdrawRequestsRoot(e []*electra.ExecutionLayerWithdrawRequest) (phase0.Root, error) {
 	if e == nil {
-		return phase0.Root{}, ErrNoExits
+		return phase0.Root{}, ErrNoWithdrawRequests
 	}
-	exits := eth2UtilElectra.ExecutionPayloadExits{Exits: e}
+	exits := eth2UtilElectra.ExecutionPayloadWithdrawRequests{WithdrawRequests: e}
 	return exits.HashTreeRoot()
 }
 

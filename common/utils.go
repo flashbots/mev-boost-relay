@@ -243,7 +243,7 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if submission.Version >= spec.DataVersionElectra && err != nil {
 		return nil, err
 	}
-	exits, err := submission.Exits()
+	withdrawRequests, err := submission.WithdrawRequests()
 	if submission.Version >= spec.DataVersionElectra && err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 		BlobGasUsed:                blobGasUsed,
 		ExcessBlobGas:              excessBlobGas,
 		DepositReceipts:            depositReceipts,
-		Exits:                      exits,
+		WithdrawRequests:           withdrawRequests,
 	}, nil
 }
 
