@@ -146,3 +146,7 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domai
 
 	return bls.VerifySignatureBytes(msg[:], sig[:], pubKey[:])
 }
+
+func getPayloadAttributesKey(parentHash string, slot uint64) string {
+	return fmt.Sprintf("%s-%d", parentHash, slot)
+}
