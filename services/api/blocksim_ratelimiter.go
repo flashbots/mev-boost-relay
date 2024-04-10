@@ -57,6 +57,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	cnt := atomic.AddInt64(&b.counter, 1)
 	for maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
 		b.cv.Wait()
+		cnt = atomic.LoadInt64(&b.counter)
 	}
 	b.cv.L.Unlock()
 
