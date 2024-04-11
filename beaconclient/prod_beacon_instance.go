@@ -19,7 +19,8 @@ type ProdBeaconInstance struct {
 	beaconURI string
 
 	// feature flags
-	ffUseV1PublishBlockEndpoint bool
+	ffUseV1PublishBlockEndpoint  bool
+	ffUseSSZEncodingPublishBlock bool
 }
 
 func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
@@ -28,12 +29,17 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 		"beaconURI": beaconURI,
 	})
 
-	client := &ProdBeaconInstance{_log, beaconURI, false}
+	client := &ProdBeaconInstance{_log, beaconURI, false, false}
 
 	// feature flags
 	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
 		_log.Warn("env: USE_V1_PUBLISH_BLOCK_ENDPOINT: use the v1 publish block endpoint")
 		client.ffUseV1PublishBlockEndpoint = true
+	}
+
+	if os.Getenv("USE_SSZ_ENCODING_PUBLISH_BLOCK") != "" {
+		_log.Warn("env: USE_SSZ_ENCODING_PUBLISH_BLOCK: using SSZ encoding to publish blocks")
+		client.ffUseSSZEncodingPublishBlock = true
 	}
 
 	return client
@@ -251,7 +257,37 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2
-	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+
+	slot, err := block.Slot()
+	if err != nil {
+		slot = 0
+	}
+
+	var payloadBytes []byte
+	useSSZ := c.ffUseSSZEncodingPublishBlock
+	log := c.log
+	encodeStartTime := time.Now().UTC()
+	if useSSZ {
+		log = log.WithField("publishContentType", "ssz")
+		payloadBytes, err = block.MarshalSSZ()
+	} else {
+		log = log.WithField("publishContentType", "json")
+		payloadBytes, err = json.Marshal(block)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not marshal request: %w", err)
+	}
+	publishingStartTime := time.Now().UTC()
+	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
+	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
+	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
+	log.WithFields(logrus.Fields{
+		"slot":              slot,
+		"encodeDurationMs":  encodeDurationMs,
+		"publishDurationMs": publishDurationMs,
+		"payloadBytes":      len(payloadBytes),
+	}).Info("finished publish block request")
+	return code, err
 }
 
 type GetGenesisResponse struct {
