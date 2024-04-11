@@ -56,7 +56,7 @@ func fetchBeacon(method, url string, payload []byte, dst any, timeout *time.Dura
 	req.Header.Set("accept", "application/json")
 
 	client := &http.Client{}
-	if timeout != nil && timeout.Seconds() > 0 {
+	if timeout != nil && timeout.Milliseconds() > 0 {
 		client.Timeout = *timeout
 	}
 	resp, err := client.Do(req)
