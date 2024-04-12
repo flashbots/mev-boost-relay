@@ -22,7 +22,7 @@ require (
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/tdewolff/minify v2.3.6+incompatible
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
