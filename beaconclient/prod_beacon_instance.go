@@ -21,6 +21,9 @@ type ProdBeaconInstance struct {
 	// feature flags
 	ffUseV1PublishBlockEndpoint  bool
 	ffUseSSZEncodingPublishBlock bool
+
+	// http clients
+	publishingClient *http.Client
 }
 
 func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
@@ -29,7 +32,7 @@ func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInsta
 		"beaconURI": beaconURI,
 	})
 
-	client := &ProdBeaconInstance{_log, beaconURI, false, false}
+	client := &ProdBeaconInstance{_log, beaconURI, false, false, &http.Client{}}
 
 	// feature flags
 	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
@@ -179,7 +182,7 @@ func (c *ProdBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {
 	uri := c.beaconURI + "/eth/v1/node/syncing"
 	timeout := 5 * time.Second
 	resp := new(SyncStatusPayload)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, &timeout, http.Header{}, false)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, &http.Client{Timeout: timeout}, http.Header{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +282,7 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	}
 	publishingStartTime := time.Now().UTC()
 	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
-	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
+	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, c.publishingClient, headers, useSSZ)
 	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
 	log.WithFields(logrus.Fields{
 		"slot":              slot,
