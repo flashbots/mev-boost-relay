@@ -22,7 +22,7 @@ func main() {
 
 	log.Infof("Using beacon endpoints: %s", strings.Join(beaconURIs, ", "))
 	for _, uri := range beaconURIs {
-		beaconInstance := beaconclient.NewProdBeaconInstance(log, uri)
+		beaconInstance := beaconclient.NewProdBeaconInstance(log, uri, uri)
 		go subscribeHead(beaconInstance)
 		go subscribePayloadAttr(beaconInstance)
 	}

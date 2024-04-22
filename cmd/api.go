@@ -53,6 +53,7 @@ func init() {
 
 	apiCmd.Flags().StringVar(&apiListenAddr, "listen-addr", apiDefaultListenAddr, "listen address for webserver")
 	apiCmd.Flags().StringSliceVar(&beaconNodeURIs, "beacon-uris", defaultBeaconURIs, "beacon endpoints")
+	apiCmd.Flags().StringSliceVar(&beaconNodePublishURIs, "beacon-publish-uris", defaultBeaconPublishURIs, "beacon publish endpoints")
 	apiCmd.Flags().StringVar(&redisURI, "redis-uri", defaultRedisURI, "redis uri")
 	apiCmd.Flags().StringVar(&redisReadonlyURI, "redis-readonly-uri", defaultRedisReadonlyURI, "redis readonly uri")
 	apiCmd.Flags().StringVar(&postgresDSN, "db", defaultPostgresDSN, "PostgreSQL DSN")
@@ -100,9 +101,18 @@ var apiCmd = &cobra.Command{
 			log.Fatalf("no beacon endpoints specified")
 		}
 		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ", "))
+		if len(beaconNodePublishURIs) == 0 {
+			// default to same endpoint as the beacon endpoints
+			beaconNodePublishURIs = beaconNodeURIs
+		} else if len(beaconNodePublishURIs) != len(beaconNodeURIs) {
+			log.Fatalf("beacon publish endpoints do not match the number of beacon endpoints")
+		} else {
+			log.Infof("Using beacon publish endpoints: %s", strings.Join(beaconNodePublishURIs, ", "))
+		}
+
 		var beaconInstances []beaconclient.IBeaconInstance
-		for _, uri := range beaconNodeURIs {
-			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
+		for i, uri := range beaconNodeURIs {
+			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri, beaconNodePublishURIs[i]))
 		}
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 

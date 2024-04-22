@@ -15,8 +15,9 @@ import (
 )
 
 type ProdBeaconInstance struct {
-	log       *logrus.Entry
-	beaconURI string
+	log              *logrus.Entry
+	beaconURI        string
+	beaconPublishURI string
 
 	// feature flags
 	ffUseV1PublishBlockEndpoint  bool
@@ -26,13 +27,14 @@ type ProdBeaconInstance struct {
 	publishingClient *http.Client
 }
 
-func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
+func NewProdBeaconInstance(log *logrus.Entry, beaconURI, beaconPublishURI string) *ProdBeaconInstance {
 	_log := log.WithFields(logrus.Fields{
-		"component": "beaconInstance",
-		"beaconURI": beaconURI,
+		"component":        "beaconInstance",
+		"beaconURI":        beaconURI,
+		"beaconPublishURI": beaconPublishURI,
 	})
 
-	client := &ProdBeaconInstance{_log, beaconURI, false, false, &http.Client{}}
+	client := &ProdBeaconInstance{_log, beaconURI, beaconPublishURI, false, false, &http.Client{}}
 
 	// feature flags
 	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
@@ -251,12 +253,16 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
+func (c *ProdBeaconInstance) GetPublishURI() string {
+	return c.beaconPublishURI
+}
+
 func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	if c.ffUseV1PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
+		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconPublishURI)
 	} else {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode)
+		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconPublishURI, broadcastMode)
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2

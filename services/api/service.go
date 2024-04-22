@@ -2007,13 +2007,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	simResultC := make(chan *blockSimResult, 1)
 	var eligibleAt time.Time // will be set once the bid is ready
 
-	submission, err = common.GetBlockSubmissionInfo(payload)
-	if err != nil {
-		log.WithError(err).Warn("missing fields in submit block request")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	bfOpts := bidFloorOpts{
 		w:                    w,
 		tx:                   tx,
