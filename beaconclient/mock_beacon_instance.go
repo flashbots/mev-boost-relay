@@ -100,6 +100,10 @@ func (c *MockBeaconInstance) GetURI() string {
 	return ""
 }
 
+func (c *MockBeaconInstance) GetPublishURI() string {
+	return ""
+}
+
 func (c *MockBeaconInstance) addDelay() {
 	if c.ResponseDelay > 0 {
 		time.Sleep(c.ResponseDelay)

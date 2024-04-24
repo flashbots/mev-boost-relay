@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 var (
@@ -31,7 +30,7 @@ func parseBroadcastModeString(s string) (BroadcastMode, bool) {
 	return b, ok
 }
 
-func fetchBeacon(method, url string, payload []byte, dst any, timeout *time.Duration, headers http.Header, ssz bool) (code int, err error) {
+func fetchBeacon(method, url string, payload []byte, dst any, httpClient *http.Client, headers http.Header, ssz bool) (code int, err error) {
 	var req *http.Request
 
 	if payload == nil {
@@ -55,10 +54,11 @@ func fetchBeacon(method, url string, payload []byte, dst any, timeout *time.Dura
 	}
 	req.Header.Set("accept", "application/json")
 
-	client := &http.Client{}
-	if timeout != nil && timeout.Milliseconds() > 0 {
-		client.Timeout = *timeout
+	client := http.DefaultClient
+	if httpClient != nil {
+		client = httpClient
 	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("client refused for %s: %w", url, err)

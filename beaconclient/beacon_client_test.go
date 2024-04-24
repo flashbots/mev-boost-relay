@@ -48,7 +48,7 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 func TestBeaconInstance(t *testing.T) {
 	r := mux.NewRouter()
 	srv := httptest.NewServer(r)
-	bc := NewProdBeaconInstance(common.TestLog, srv.URL)
+	bc := NewProdBeaconInstance(common.TestLog, srv.URL, srv.URL)
 
 	r.HandleFunc("/eth/v1/beacon/states/1/validators", func(w http.ResponseWriter, _ *http.Request) {
 		resp := []byte(`{
@@ -206,7 +206,7 @@ func TestFetchValidators(t *testing.T) {
 func TestGetForkSchedule(t *testing.T) {
 	r := mux.NewRouter()
 	srv := httptest.NewServer(r)
-	bc := NewProdBeaconInstance(common.TestLog, srv.URL)
+	bc := NewProdBeaconInstance(common.TestLog, srv.URL, srv.URL)
 
 	r.HandleFunc("/eth/v1/config/fork_schedule", func(w http.ResponseWriter, _ *http.Request) {
 		resp := []byte(`{
