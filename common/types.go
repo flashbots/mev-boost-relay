@@ -441,7 +441,7 @@ type BlockSubmissionInfo struct {
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
 	DepositReceipts            []*electra.DepositReceipt
-	WithdrawRequests           []*electra.ExecutionLayerWithdrawRequest
+	WithdrawalRequests         []*electra.ExecutionLayerWithdrawalRequest
 }
 
 /*

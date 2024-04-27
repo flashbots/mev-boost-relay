@@ -20,13 +20,13 @@ var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
-	ErrUnsupportedPayload = errors.New("unsupported payload version")
-	ErrNoWithdrawals      = errors.New("no withdrawals")
-	ErrNoDepositReceipts  = errors.New("no deposit receipts")
-	ErrNoWithdrawRequests = errors.New("no execution layer withdraw requests")
-	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
-	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
-	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
+	ErrUnsupportedPayload   = errors.New("unsupported payload version")
+	ErrNoWithdrawals        = errors.New("no withdrawals")
+	ErrNoDepositReceipts    = errors.New("no deposit receipts")
+	ErrNoWithdrawalRequests = errors.New("no execution layer withdrawal requests")
+	ErrPayloadMismatch      = errors.New("beacon-block and payload version mismatch")
+	ErrHeaderHTRMismatch    = errors.New("beacon-block and payload header mismatch")
+	ErrBlobMismatch         = errors.New("beacon-block and payload blob contents mismatch")
 )
 
 func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
@@ -61,11 +61,11 @@ func ComputeDepositReceiptsRoot(d []*electra.DepositReceipt) (phase0.Root, error
 	return depositReceipts.HashTreeRoot()
 }
 
-func ComputeWithdrawRequestsRoot(e []*electra.ExecutionLayerWithdrawRequest) (phase0.Root, error) {
+func ComputeWithdrawalRequestsRoot(e []*electra.ExecutionLayerWithdrawalRequest) (phase0.Root, error) {
 	if e == nil {
-		return phase0.Root{}, ErrNoWithdrawRequests
+		return phase0.Root{}, ErrNoWithdrawalRequests
 	}
-	exits := eth2UtilElectra.ExecutionPayloadWithdrawRequests{WithdrawRequests: e}
+	exits := eth2UtilElectra.ExecutionPayloadWithdrawalRequests{WithdrawalRequests: e}
 	return exits.HashTreeRoot()
 }
 

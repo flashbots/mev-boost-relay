@@ -137,13 +137,13 @@ type RelayAPIOpts struct {
 }
 
 type payloadAttributesHelper struct {
-	slot                 uint64
-	parentHash           string
-	withdrawalsRoot      phase0.Root
-	parentBeaconRoot     *phase0.Root
-	payloadAttributes    beaconclient.PayloadAttributes
-	depositReceiptsRoot  phase0.Root
-	withdrawRequestsRoot phase0.Root
+	slot                   uint64
+	parentHash             string
+	withdrawalsRoot        phase0.Root
+	parentBeaconRoot       *phase0.Root
+	payloadAttributes      beaconclient.PayloadAttributes
+	depositReceiptsRoot    phase0.Root
+	withdrawalRequestsRoot phase0.Root
 }
 
 // Data needed to issue a block validation request.
@@ -1616,12 +1616,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			"numDepositReceipts": len(depositReceipts),
 		})
 
-		withdrawRequests, err := getPayloadResp.WithdrawRequests()
+		withdrawalRequests, err := getPayloadResp.WithdrawalRequests()
 		if err != nil {
-			log.WithError(err).Info("failed to get withdraw requests")
+			log.WithError(err).Info("failed to get withdrawal requests")
 		}
 		log = log.WithFields(logrus.Fields{
-			"numExecutionLayerWithdrawRequests": len(withdrawRequests),
+			"numExecutionLayerWithdrawalRequests": len(withdrawalRequests),
 		})
 	}
 	log.Info("execution payload delivered")
@@ -1711,14 +1711,14 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 			return attrs, false
 		}
 
-		withdrawRequestsRoot, err := ComputeWithdrawRequestsRoot(submission.WithdrawRequests)
+		withdrawalRequestsRoot, err := ComputeWithdrawalRequestsRoot(submission.WithdrawalRequests)
 		if err != nil {
-			log.WithError(err).Warn("could not compute withdraw requests root from payload")
-			api.RespondError(w, http.StatusBadRequest, "could not compute withdraw requests root")
+			log.WithError(err).Warn("could not compute withdrawal requests root from payload")
+			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawal requests root")
 			return attrs, false
 		}
-		if withdrawRequestsRoot != attrs.withdrawRequestsRoot {
-			msg := fmt.Sprintf("incorrect withdraw requests root - got: %s, expected: %s", withdrawRequestsRoot.String(), attrs.withdrawRequestsRoot.String())
+		if withdrawalRequestsRoot != attrs.withdrawalRequestsRoot {
+			msg := fmt.Sprintf("incorrect withdrawal requests root - got: %s, expected: %s", withdrawalRequestsRoot.String(), attrs.withdrawalRequestsRoot.String())
 			log.Info(msg)
 			api.RespondError(w, http.StatusBadRequest, msg)
 			return attrs, false
@@ -2041,13 +2041,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"numDepositReceipts": len(depositReceipts),
 		})
 
-		withdrawRequests, err := payload.WithdrawRequests()
+		withdrawalRequests, err := payload.WithdrawalRequests()
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		log = log.WithFields(logrus.Fields{
-			"numExecutionLayerWithdrawRequests": len(withdrawRequests),
+			"numExecutionLayerWithdrawalRequests": len(withdrawalRequests),
 		})
 	}
 
