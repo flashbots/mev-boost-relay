@@ -23,10 +23,12 @@ func NewNullString(s string) sql.NullString {
 	}
 }
 
+// NewNullTime returns a sql.NullTime with the given time.Time. If the time is
+// the zero value, the NullTime is invalid.
 func NewNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{
 		Time:  t,
-		Valid: true,
+		Valid: t != time.Time{},
 	}
 }
 

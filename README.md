@@ -153,6 +153,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `FORCE_GET_HEADER_204` - force 204 as getHeader response
 * `ENABLE_IGNORABLE_VALIDATION_ERRORS` - enable ignorable validation errors
 * `USE_V1_PUBLISH_BLOCK_ENDPOINT` - uses the v1 publish block endpoint on the beacon node
+* `USE_SSZ_ENCODING_PUBLISH_BLOCK` - uses the SSZ encoding for the publish block endpoint
 
 #### Development Environment Variables
 

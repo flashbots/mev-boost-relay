@@ -15,25 +15,36 @@ import (
 )
 
 type ProdBeaconInstance struct {
-	log       *logrus.Entry
-	beaconURI string
+	log              *logrus.Entry
+	beaconURI        string
+	beaconPublishURI string
 
 	// feature flags
-	ffUseV1PublishBlockEndpoint bool
+	ffUseV1PublishBlockEndpoint  bool
+	ffUseSSZEncodingPublishBlock bool
+
+	// http clients
+	publishingClient *http.Client
 }
 
-func NewProdBeaconInstance(log *logrus.Entry, beaconURI string) *ProdBeaconInstance {
+func NewProdBeaconInstance(log *logrus.Entry, beaconURI, beaconPublishURI string) *ProdBeaconInstance {
 	_log := log.WithFields(logrus.Fields{
-		"component": "beaconInstance",
-		"beaconURI": beaconURI,
+		"component":        "beaconInstance",
+		"beaconURI":        beaconURI,
+		"beaconPublishURI": beaconPublishURI,
 	})
 
-	client := &ProdBeaconInstance{_log, beaconURI, false}
+	client := &ProdBeaconInstance{_log, beaconURI, beaconPublishURI, false, false, &http.Client{}}
 
 	// feature flags
 	if os.Getenv("USE_V1_PUBLISH_BLOCK_ENDPOINT") != "" {
 		_log.Warn("env: USE_V1_PUBLISH_BLOCK_ENDPOINT: use the v1 publish block endpoint")
 		client.ffUseV1PublishBlockEndpoint = true
+	}
+
+	if os.Getenv("USE_SSZ_ENCODING_PUBLISH_BLOCK") != "" {
+		_log.Warn("env: USE_SSZ_ENCODING_PUBLISH_BLOCK: using SSZ encoding to publish blocks")
+		client.ffUseSSZEncodingPublishBlock = true
 	}
 
 	return client
@@ -173,7 +184,7 @@ func (c *ProdBeaconInstance) SyncStatus() (*SyncStatusPayloadData, error) {
 	uri := c.beaconURI + "/eth/v1/node/syncing"
 	timeout := 5 * time.Second
 	resp := new(SyncStatusPayload)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, &timeout, http.Header{}, false)
+	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, &http.Client{Timeout: timeout}, http.Header{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -242,16 +253,50 @@ func (c *ProdBeaconInstance) GetURI() string {
 	return c.beaconURI
 }
 
+func (c *ProdBeaconInstance) GetPublishURI() string {
+	return c.beaconPublishURI
+}
+
 func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	if c.ffUseV1PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconURI)
+		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconPublishURI)
 	} else {
-		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconURI, broadcastMode)
+		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconPublishURI, broadcastMode)
 	}
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2
-	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
+
+	slot, err := block.Slot()
+	if err != nil {
+		slot = 0
+	}
+
+	var payloadBytes []byte
+	useSSZ := c.ffUseSSZEncodingPublishBlock
+	log := c.log
+	encodeStartTime := time.Now().UTC()
+	if useSSZ {
+		log = log.WithField("publishContentType", "ssz")
+		payloadBytes, err = block.MarshalSSZ()
+	} else {
+		log = log.WithField("publishContentType", "json")
+		payloadBytes, err = json.Marshal(block)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not marshal request: %w", err)
+	}
+	publishingStartTime := time.Now().UTC()
+	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
+	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, c.publishingClient, headers, useSSZ)
+	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
+	log.WithFields(logrus.Fields{
+		"slot":              slot,
+		"encodeDurationMs":  encodeDurationMs,
+		"publishDurationMs": publishDurationMs,
+		"payloadBytes":      len(payloadBytes),
+	}).Info("finished publish block request")
+	return code, err
 }
 
 type GetGenesisResponse struct {

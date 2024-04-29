@@ -63,7 +63,7 @@ var housekeeperCmd = &cobra.Command{
 		log.Infof("Using beacon endpoints: %s", strings.Join(beaconNodeURIs, ", "))
 		var beaconInstances []beaconclient.IBeaconInstance
 		for _, uri := range beaconNodeURIs {
-			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri))
+			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri, uri))
 		}
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
 

@@ -48,6 +48,12 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 		blockSimURL: blockSimURL,
 		client: http.Client{ //nolint:exhaustruct
 			Timeout: simRequestTimeout,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 100,
+				MaxConnsPerHost:     100,
+				IdleConnTimeout:     90 * time.Second,
+			},
 		},
 	}
 }

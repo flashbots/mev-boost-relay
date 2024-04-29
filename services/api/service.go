@@ -695,7 +695,7 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 
 	// discard payload attributes if already known
 	api.payloadAttributesLock.RLock()
-	_, ok := api.payloadAttributes[payloadAttributes.Data.ParentBlockHash]
+	_, ok := api.payloadAttributes[getPayloadAttributesKey(payloadAttributes.Data.ParentBlockHash, payloadAttrSlot)]
 	api.payloadAttributesLock.RUnlock()
 
 	if ok {
@@ -735,12 +735,12 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 	// Step 1: clean up old ones
 	for parentBlockHash, attr := range api.payloadAttributes {
 		if attr.slot < apiHeadSlot {
-			delete(api.payloadAttributes, parentBlockHash)
+			delete(api.payloadAttributes, getPayloadAttributesKey(parentBlockHash, attr.slot))
 		}
 	}
 
 	// Step 2: save new one
-	api.payloadAttributes[payloadAttributes.Data.ParentBlockHash] = payloadAttributesHelper{
+	api.payloadAttributes[getPayloadAttributesKey(payloadAttributes.Data.ParentBlockHash, payloadAttrSlot)] = payloadAttributesHelper{
 		slot:              payloadAttrSlot,
 		parentHash:        payloadAttributes.Data.ParentBlockHash,
 		withdrawalsRoot:   withdrawalsRoot,
@@ -1663,7 +1663,7 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 
 func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) (payloadAttributesHelper, bool) {
 	api.payloadAttributesLock.RLock()
-	attrs, ok := api.payloadAttributes[submission.BidTrace.ParentHash.String()]
+	attrs, ok := api.payloadAttributes[getPayloadAttributesKey(submission.BidTrace.ParentHash.String(), submission.BidTrace.Slot)]
 	api.payloadAttributesLock.RUnlock()
 	if !ok || submission.BidTrace.Slot != attrs.slot {
 		log.WithFields(logrus.Fields{
@@ -1765,7 +1765,7 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 func (api *RelayAPI) checkBuilderEntry(w http.ResponseWriter, log *logrus.Entry, builderPubkey phase0.BLSPubKey) (*blockBuilderCacheEntry, bool) {
 	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
 	if !ok {
-		log.Warnf("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
+		log.Infof("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
 		builderEntry = &blockBuilderCacheEntry{
 			status: common.BuilderStatus{
 				IsHighPrio:    false,
@@ -1957,6 +1957,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	nextTime = time.Now().UTC()
+	pf.PayloadLoad = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
 	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
@@ -2062,10 +2066,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithFields(logrus.Fields{
-		"builderIsHighPrio":     builderEntry.status.IsHighPrio,
-		"timestampAfterChecks1": time.Now().UTC().UnixMilli(),
-	})
+	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
 
 	gasLimit, ok := api.checkSubmissionFeeRecipient(w, log, submission.BidTrace)
 	if !ok {
@@ -2087,8 +2088,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	log = log.WithField("timestampBeforeAttributesCheck", time.Now().UTC().UnixMilli())
-
 	attrs, ok := api.checkSubmissionPayloadAttrs(w, log, submission)
 	if !ok {
 		return
@@ -2109,19 +2108,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	log = log.WithField("timestampBeforeCheckingFloorBid", time.Now().UTC().UnixMilli())
+
 	// Create the redis pipeline tx
 	tx := api.redis.NewTxPipeline()
 
 	// channel to send simulation result to the deferred function
 	simResultC := make(chan *blockSimResult, 1)
 	var eligibleAt time.Time // will be set once the bid is ready
-
-	submission, err = common.GetBlockSubmissionInfo(payload)
-	if err != nil {
-		log.WithError(err).Warn("missing fields in submit block request")
-		api.RespondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	bfOpts := bidFloorOpts{
 		w:                    w,
@@ -2135,6 +2129,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	if !ok {
 		return
 	}
+
+	log = log.WithField("timestampAfterCheckingFloorBid", time.Now().UTC().UnixMilli())
 
 	// Deferred saving of the builder submission to database (whenever this function ends)
 	defer func() {
@@ -2163,6 +2159,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	// THE BID WILL BE SIMULATED SHORTLY
 	// ---------------------------------
 
+	log = log.WithField("timestampBeforeCheckingTopBid", time.Now().UTC().UnixMilli())
+
 	// Get the latest top bid value from Redis
 	bidIsTopBid := false
 	topBidValue, err := api.redis.GetTopBidValue(context.Background(), tx, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
@@ -2176,6 +2174,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 	}
 
+	log = log.WithField("timestampAfterCheckingTopBid", time.Now().UTC().UnixMilli())
+
+	nextTime = time.Now().UTC()
+	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
 	// Simulate the block submission and save to db
 	fastTrackValidation := builderEntry.status.IsHighPrio && bidIsTopBid && !isLargeRequest
 	timeBeforeValidation := time.Now().UTC()
@@ -2184,10 +2188,6 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"timestampBeforeValidation": timeBeforeValidation.UTC().UnixMilli(),
 		"fastTrackValidation":       fastTrackValidation,
 	})
-
-	nextTime = time.Now().UTC()
-	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
-	prevTime = nextTime
 
 	// Construct simulation request
 	opts := blockSimOptions{

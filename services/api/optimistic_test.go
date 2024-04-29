@@ -471,7 +471,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			require.NoError(t, err)
 			withRoot, err := ComputeWithdrawalsRoot([]*capella.Withdrawal{})
 			require.NoError(t, err)
-			backend.relay.payloadAttributes[emptyHash] = payloadAttributesHelper{
+			backend.relay.payloadAttributes[getPayloadAttributesKey(emptyHash, tc.slot)] = payloadAttributesHelper{
 				slot:            tc.slot,
 				withdrawalsRoot: withRoot,
 				payloadAttributes: beaconclient.PayloadAttributes{
