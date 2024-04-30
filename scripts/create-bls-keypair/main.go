@@ -8,16 +8,11 @@ import (
 )
 
 func main() {
-	sk, _, err := bls.GenerateNewKeypair()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	blsPubkey, err := bls.PublicKeyFromSecretKey(sk)
+	sk, pk, err := bls.GenerateNewKeypair()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	fmt.Printf("secret key: 0x%x\n", bls.SecretKeyToBytes(sk))
-	fmt.Printf("public key: 0x%x\n", bls.PublicKeyToBytes(blsPubkey))
+	fmt.Printf("public key: 0x%x\n", bls.PublicKeyToBytes(pk))
 }
