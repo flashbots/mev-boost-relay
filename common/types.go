@@ -21,6 +21,8 @@ import (
 var (
 	ErrUnknownNetwork      = errors.New("unknown network")
 	ErrEmptyPayload        = errors.New("empty payload")
+	ErrEmptyPayloadHeader  = errors.New("empty payload header")
+	ErrEmptyPayloadMessage = errors.New("empty payload message")
 	ErrVersionNotSupported = errors.New("version is not supported")
 
 	EthNetworkHolesky = "holesky"
@@ -418,6 +420,15 @@ type BlockSubmissionInfo struct {
 	ExcessBlobGas              uint64
 }
 
+type HeaderSubmissionInfo struct {
+	BidTrace         *builderApiV1.BidTrace
+	Signature        phase0.BLSSignature
+	Timestamp        uint64
+	PrevRandao       phase0.Hash32
+	TransactionsRoot phase0.Root
+	WithdrawalsRoot  phase0.Root
+}
+
 // VersionedSubmitHeaderOptimistic is a versioned signed header to construct the builder bid.
 type VersionedSubmitHeaderOptimistic struct {
 	Version spec.DataVersion
@@ -467,6 +478,12 @@ func (h *VersionedSubmitHeaderOptimistic) UnmarshalJSON(data []byte) error {
 func (h *VersionedSubmitHeaderOptimistic) BidTrace() (*builderApiV1.BidTrace, error) {
 	switch h.Version { //nolint:exhaustive
 	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return nil, ErrEmptyPayload
+		}
+		if h.Deneb.Message == nil {
+			return nil, ErrEmptyPayloadMessage
+		}
 		return h.Deneb.Message, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
@@ -476,6 +493,12 @@ func (h *VersionedSubmitHeaderOptimistic) BidTrace() (*builderApiV1.BidTrace, er
 func (h *VersionedSubmitHeaderOptimistic) ExecutionPayloadBlockHash() (phase0.Hash32, error) {
 	switch h.Version { //nolint:exhaustive
 	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Hash32{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Hash32{}, ErrEmptyPayloadHeader
+		}
 		return h.Deneb.ExecutionPayloadHeader.BlockHash, nil
 	default:
 		return phase0.Hash32{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
@@ -485,9 +508,72 @@ func (h *VersionedSubmitHeaderOptimistic) ExecutionPayloadBlockHash() (phase0.Ha
 func (h *VersionedSubmitHeaderOptimistic) Signature() (phase0.BLSSignature, error) {
 	switch h.Version { //nolint:exhaustive
 	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.BLSSignature{}, ErrEmptyPayload
+		}
 		return h.Deneb.Signature, nil
 	default:
 		return phase0.BLSSignature{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) Timestamp() (uint64, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return 0, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return 0, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.Timestamp, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) PrevRandao() (phase0.Hash32, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Hash32{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Hash32{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.PrevRandao, nil
+	default:
+		return phase0.Hash32{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) TransactionsRoot() (phase0.Root, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Root{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Root{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.TransactionsRoot, nil
+	default:
+		return phase0.Root{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) WithdrawalsRoot() (phase0.Root, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Root{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Root{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.WithdrawalsRoot, nil
+	default:
+		return phase0.Root{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
 	}
 }
 
