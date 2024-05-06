@@ -21,6 +21,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	bApubkey = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	bBpubkey = "0x2e02be2c9f9eccf9856478fdb7876598fed2da09f45c233969ba647a250231150ecf38bce5771adb6171c86b79a92f16"
+
+	slot           = uint64(2)
+	parentHash     = "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
+	proposerPubkey = "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
+)
+
 func setupTestRedis(t *testing.T) *RedisCache {
 	t.Helper()
 	var err error
@@ -113,6 +122,59 @@ func TestRedisProposerDuties(t *testing.T) {
 	require.Equal(t, duties[0].Entry.Message.FeeRecipient, duties2[0].Entry.Message.FeeRecipient)
 }
 
+func TestRedisBidUpdate(t *testing.T) {
+	opts := common.CreateTestBlockSubmissionOpts{
+		Slot:           slot,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPubkey,
+		Version:        spec.DataVersionDeneb,
+	}
+
+	t.Run("Saves bid trace and payload into the cache", func(t *testing.T) {
+		cache := setupTestRedis(t)
+		payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(10), &opts)
+		submission, err := common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+		require.NoError(t, err)
+		require.True(t, resp.WasBidSaved, resp)
+		require.True(t, resp.WasTopBidUpdated)
+		require.True(t, resp.IsNewTopBid)
+		require.Equal(t, big.NewInt(10), resp.TopBidValue)
+		trace, err := cache.GetBidTrace(slot, proposerPubkey, submission.ExecutionPayloadBlockHash.String())
+		require.NoError(t, err)
+		bidTrace := &common.BidTraceV2WithBlobFields{
+			BidTrace:      *submission.BidTrace,
+			BlockNumber:   submission.BlockNumber,
+			NumTx:         uint64(len(submission.Transactions)),
+			NumBlobs:      uint64(len(submission.Blobs)),
+			BlobGasUsed:   submission.BlobGasUsed,
+			ExcessBlobGas: submission.ExcessBlobGas,
+		}
+		require.Equal(t, bidTrace, trace)
+		payloadContents, err := cache.GetPayloadContents(slot, proposerPubkey, submission.ExecutionPayloadBlockHash.String())
+		require.NoError(t, err)
+		require.Equal(t, getPayloadResp, payloadContents)
+	})
+
+	t.Run("Does not save bid trace and payload in cache if not provided", func(t *testing.T) {
+		cache := setupTestRedis(t)
+		payload, _, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(10), &opts)
+		submission, err := common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, nil, nil, getHeaderResp, time.Now(), false, nil)
+		require.NoError(t, err)
+		require.True(t, resp.WasBidSaved, resp)
+		require.True(t, resp.WasTopBidUpdated)
+		require.True(t, resp.IsNewTopBid)
+		require.Equal(t, big.NewInt(10), resp.TopBidValue)
+		_, err = cache.GetBidTrace(slot, proposerPubkey, submission.ExecutionPayloadBlockHash.String())
+		require.Error(t, err, redis.Nil)
+		_, err = cache.GetPayloadContents(slot, proposerPubkey, submission.ExecutionPayloadBlockHash.String())
+		require.Error(t, err, redis.Nil)
+	})
+}
+
 func TestBuilderBids(t *testing.T) {
 	versions := []spec.DataVersion{
 		spec.DataVersionCapella,
@@ -120,20 +182,11 @@ func TestBuilderBids(t *testing.T) {
 	}
 
 	for _, version := range versions {
-		slot := uint64(2)
-		parentHash := "0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747"
-		proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 		opts := common.CreateTestBlockSubmissionOpts{
-			Slot:           2,
+			Slot:           slot,
 			ParentHash:     parentHash,
 			ProposerPubkey: proposerPubkey,
 			Version:        version,
-		}
-
-		trace := &common.BidTraceV2WithBlobFields{
-			BidTrace: builderApiV1.BidTrace{
-				Value: uint256.NewInt(123),
-			},
 		}
 
 		// Notation:
@@ -141,9 +194,6 @@ func TestBuilderBids(t *testing.T) {
 		// - ba1c: builder A, bid 1, cancellation enabled
 		//
 		// test 1: ba1=10 -> ba2=5 -> ba3c=5 -> bb1=20 -> ba4c=3 -> bb2c=2
-		//
-		bApubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
-		bBpubkey := "0x2e02be2c9f9eccf9856478fdb7876598fed2da09f45c233969ba647a250231150ecf38bce5771adb6171c86b79a92f16"
 
 		// Setup redis instance
 		cache := setupTestRedis(t)
@@ -179,7 +229,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit ba1=10
 		payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(10), &opts)
-		resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+		submission, err := common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err := cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 		require.NoError(t, err)
 		require.True(t, resp.WasBidSaved, resp)
 		require.True(t, resp.WasTopBidUpdated)
@@ -198,7 +250,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit ba2=5 (should not update, because floor is 10)
 		payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(5), &opts)
-		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+		submission, err = common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 		require.NoError(t, err)
 		require.False(t, resp.WasBidSaved, resp)
 		require.False(t, resp.WasTopBidUpdated)
@@ -209,7 +263,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit ba3c=5 (should not update, because floor is 10)
 		payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bApubkey, uint256.NewInt(5), &opts)
-		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+		submission, err = common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 		require.NoError(t, err)
 		require.True(t, resp.WasBidSaved)
 		require.False(t, resp.WasTopBidUpdated)
@@ -221,7 +277,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit bb1=20
 		payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(20), &opts)
-		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+		submission, err = common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 		require.NoError(t, err)
 		require.True(t, resp.WasBidSaved)
 		require.True(t, resp.WasTopBidUpdated)
@@ -232,7 +290,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit bb2c=22
 		payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(22), &opts)
-		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+		submission, err = common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 		require.NoError(t, err)
 		require.True(t, resp.WasBidSaved)
 		require.True(t, resp.WasTopBidUpdated)
@@ -243,7 +303,9 @@ func TestBuilderBids(t *testing.T) {
 
 		// submit bb3c=12 (should update top bid, using floor at 20)
 		payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, bBpubkey, uint256.NewInt(12), &opts)
-		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), true, nil)
+		submission, err = common.GetBlockSubmissionInfo(payload)
+		require.NoError(t, err)
+		resp, err = cache.SaveBidAndUpdateTopBid(context.Background(), cache.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), true, nil)
 		require.NoError(t, err)
 		require.True(t, resp.WasBidSaved)
 		require.True(t, resp.WasTopBidUpdated)

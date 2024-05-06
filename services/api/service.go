@@ -69,6 +69,7 @@ var (
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
+	pathSubmitHeader         = "/relay/v1/builder/headers"
 
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
@@ -347,6 +348,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+		r.HandleFunc(pathSubmitHeader, api.handleSubmitNewHeader).Methods(http.MethodPost)
 	}
 
 	// Data API
@@ -1615,35 +1617,28 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 	return slotDuty.Entry.Message.GasLimit, true
 }
 
-func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) (payloadAttributesHelper, bool) {
+func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, bidTrace *builderApiV1.BidTrace, prevRandao phase0.Hash32, withdrawalsRoot phase0.Root) (payloadAttributesHelper, bool) {
 	api.payloadAttributesLock.RLock()
-	attrs, ok := api.payloadAttributes[getPayloadAttributesKey(submission.BidTrace.ParentHash.String(), submission.BidTrace.Slot)]
+	attrs, ok := api.payloadAttributes[getPayloadAttributesKey(bidTrace.ParentHash.String(), bidTrace.Slot)]
 	api.payloadAttributesLock.RUnlock()
-	if !ok || submission.BidTrace.Slot != attrs.slot {
+	if !ok || bidTrace.Slot != attrs.slot {
 		log.WithFields(logrus.Fields{
 			"attributesFound": ok,
-			"payloadSlot":     submission.BidTrace.Slot,
+			"payloadSlot":     bidTrace.Slot,
 			"attrsSlot":       attrs.slot,
 		}).Warn("payload attributes not (yet) known")
 		api.RespondError(w, http.StatusBadRequest, "payload attributes not (yet) known")
 		return attrs, false
 	}
 
-	if submission.PrevRandao.String() != attrs.payloadAttributes.PrevRandao {
-		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", submission.PrevRandao.String(), attrs.payloadAttributes.PrevRandao)
+	if prevRandao.String() != attrs.payloadAttributes.PrevRandao {
+		msg := fmt.Sprintf("incorrect prev_randao - got: %s, expected: %s", prevRandao.String(), attrs.payloadAttributes.PrevRandao)
 		log.Info(msg)
 		api.RespondError(w, http.StatusBadRequest, msg)
 		return attrs, false
 	}
 
-	if hasReachedFork(submission.BidTrace.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
-		withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
-		if err != nil {
-			log.WithError(err).Warn("could not compute withdrawals root from payload")
-			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
-			return attrs, false
-		}
-
+	if hasReachedFork(bidTrace.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
 		if withdrawalsRoot != attrs.withdrawalsRoot {
 			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
@@ -1655,30 +1650,30 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 	return attrs, true
 }
 
-func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
-	if api.isDeneb(submission.BidTrace.Slot) && payload.Deneb == nil {
+func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payloadVersion spec.DataVersion, payloadTimestamp uint64, bidTrace *builderApiV1.BidTrace) bool {
+	if api.isDeneb(bidTrace.Slot) && payloadVersion != spec.DataVersionDeneb {
 		log.Info("rejecting submission - non deneb payload for deneb fork")
 		api.RespondError(w, http.StatusBadRequest, "not deneb payload")
 		return false
 	}
 
-	if api.isCapella(submission.BidTrace.Slot) && payload.Capella == nil {
+	if api.isCapella(bidTrace.Slot) && payloadVersion != spec.DataVersionCapella {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
 		return false
 	}
 
-	if submission.BidTrace.Slot <= headSlot {
+	if bidTrace.Slot <= headSlot {
 		log.Info("submitNewBlock failed: submission for past slot")
 		api.RespondError(w, http.StatusBadRequest, "submission for past slot")
 		return false
 	}
 
 	// Timestamp check
-	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)
-	if submission.Timestamp != expectedTimestamp {
-		log.Warnf("incorrect timestamp. got %d, expected %d", submission.Timestamp, expectedTimestamp)
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", submission.Timestamp, expectedTimestamp))
+	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (bidTrace.Slot * common.SecondsPerSlot)
+	if payloadTimestamp != expectedTimestamp {
+		log.Warnf("incorrect timestamp. got %d, expected %d", payloadTimestamp, expectedTimestamp)
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("incorrect timestamp. got %d, expected %d", payloadTimestamp, expectedTimestamp))
 		return false
 	}
 
@@ -1717,13 +1712,28 @@ func (api *RelayAPI) checkBuilderEntry(w http.ResponseWriter, log *logrus.Entry,
 	return builderEntry, true
 }
 
+func (api *RelayAPI) checkBuilderBid(w http.ResponseWriter, log *logrus.Entry, bidTrace *builderApiV1.BidTrace, transactionsRoot phase0.Root, builderEntry *blockBuilderCacheEntry) bool {
+	// Check bid value
+	if bidTrace.Value.ToBig().Cmp(ZeroU256.BigInt()) == 0 || transactionsRoot.String() == common.EmptyTxRoot {
+		log.Info("rejecting bid: block with 0 value or empty tx root")
+		api.RespondError(w, http.StatusBadRequest, "block with 0 value")
+		return false
+	}
+	// Check bid has enough collateral if optimistic
+	if builderEntry.status.IsOptimistic && builderEntry.collateral.Cmp(bidTrace.Value.ToBig()) == -1 {
+		log.Info("rejecting bid: insufficient collateral")
+		api.RespondError(w, http.StatusBadRequest, "builder has insufficient collateral to cover bid")
+		return false
+	}
+	return true
+}
+
 type bidFloorOpts struct {
 	w                    http.ResponseWriter
 	tx                   redis.Pipeliner
 	log                  *logrus.Entry
 	cancellationsEnabled bool
-	simResultC           chan *blockSimResult
-	submission           *common.BlockSubmissionInfo
+	bidTrace             *builderApiV1.BidTrace
 }
 
 func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
@@ -1731,14 +1741,14 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	slotLastPayloadDelivered, err := api.redis.GetLastSlotDelivered(context.Background(), opts.tx)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		opts.log.WithError(err).Error("failed to get delivered payload slot from redis")
-	} else if opts.submission.BidTrace.Slot <= slotLastPayloadDelivered {
+	} else if opts.bidTrace.Slot <= slotLastPayloadDelivered {
 		opts.log.Info("rejecting submission because payload for this slot was already delivered")
 		api.RespondError(opts.w, http.StatusBadRequest, "payload for this slot was already delivered")
 		return nil, false
 	}
 
 	// Grab floor bid value
-	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), opts.tx, opts.submission.BidTrace.Slot, opts.submission.BidTrace.ParentHash.String(), opts.submission.BidTrace.ProposerPubkey.String())
+	floorBidValue, err := api.redis.GetFloorBidValue(context.Background(), opts.tx, opts.bidTrace.Slot, opts.bidTrace.ParentHash.String(), opts.bidTrace.ProposerPubkey.String())
 	if err != nil {
 		opts.log.WithError(err).Error("failed to get floor bid value from redis")
 	} else {
@@ -1748,12 +1758,11 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	// --------------------------------------------
 	// Skip submission if below the floor bid value
 	// --------------------------------------------
-	isBidBelowFloor := floorBidValue != nil && opts.submission.BidTrace.Value.ToBig().Cmp(floorBidValue) == -1
-	isBidAtOrBelowFloor := floorBidValue != nil && opts.submission.BidTrace.Value.ToBig().Cmp(floorBidValue) < 1
+	isBidBelowFloor := floorBidValue != nil && opts.bidTrace.Value.ToBig().Cmp(floorBidValue) == -1
+	isBidAtOrBelowFloor := floorBidValue != nil && opts.bidTrace.Value.ToBig().Cmp(floorBidValue) < 1
 	if opts.cancellationsEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("submission below floor bid value, with cancellation")
-		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.submission.BidTrace.Slot, opts.submission.BidTrace.ParentHash.String(), opts.submission.BidTrace.ProposerPubkey.String(), opts.submission.BidTrace.BuilderPubkey.String())
+		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.bidTrace.Slot, opts.bidTrace.ParentHash.String(), opts.bidTrace.ProposerPubkey.String(), opts.bidTrace.BuilderPubkey.String())
 		if err != nil {
 			opts.log.WithError(err).Error("failed processing cancellable bid below floor")
 			api.RespondError(opts.w, http.StatusInternalServerError, "failed processing cancellable bid below floor")
@@ -1762,7 +1771,6 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 		api.Respond(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, false
 	} else if !opts.cancellationsEnabled && isBidAtOrBelowFloor { // without cancellations: if at or below floor -> ignore
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
 		opts.log.Info("submission at or below floor bid value, without cancellation")
 		api.RespondMsg(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, false
@@ -1777,45 +1785,37 @@ type redisUpdateBidOpts struct {
 	cancellationsEnabled bool
 	receivedAt           time.Time
 	floorBidValue        *big.Int
-	payload              *common.VersionedSubmitBlockRequest
+	block                *common.VersionedSubmitBlockRequest
+	header               *common.VersionedSubmitHeaderOptimistic
 }
 
 func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApi.VersionedSubmitBlindedBlockResponse, bool) {
 	// Prepare the response data
-	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.block, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
 		opts.log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 		return nil, nil, false
 	}
 
-	getPayloadResponse, err := common.BuildGetPayloadResponse(opts.payload)
+	getPayloadResponse, err := common.BuildGetPayloadResponse(opts.block)
 	if err != nil {
 		opts.log.WithError(err).Error("could not build getPayload response")
 		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 		return nil, nil, false
 	}
 
-	submission, err := common.GetBlockSubmissionInfo(opts.payload)
+	submission, err := common.GetBlockSubmissionInfo(opts.block)
 	if err != nil {
 		opts.log.WithError(err).Error("could not get block submission info")
 		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 		return nil, nil, false
 	}
 
-	bidTrace := common.BidTraceV2WithBlobFields{
-		BidTrace:      *submission.BidTrace,
-		BlockNumber:   submission.BlockNumber,
-		NumTx:         uint64(len(submission.Transactions)),
-		NumBlobs:      uint64(len(submission.Blobs)),
-		BlobGasUsed:   submission.BlobGasUsed,
-		ExcessBlobGas: submission.ExcessBlobGas,
-	}
-
 	//
 	// Save to Redis
 	//
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), opts.tx, &bidTrace, opts.payload, getPayloadResponse, getHeaderResponse, opts.receivedAt, opts.cancellationsEnabled, opts.floorBidValue)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), opts.tx, submission.BidTrace, submission, getPayloadResponse, getHeaderResponse, opts.receivedAt, opts.cancellationsEnabled, opts.floorBidValue)
 	if err != nil {
 		opts.log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
@@ -1824,8 +1824,36 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	return &updateBidResult, getPayloadResponse, true
 }
 
+func (api *RelayAPI) updateRedisBidForHeader(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, bool) {
+	// Prepare the response data
+	getHeaderResponse, err := common.BuildGetHeaderResponseOptimistic(opts.header, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	if err != nil {
+		opts.log.WithError(err).Error("could not sign builder bid")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+
+	submission, err := common.GetHeaderSubmissionInfo(opts.header)
+	if err != nil {
+		opts.log.WithError(err).Error("could not get header submission info")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+
+	//
+	// Save to Redis
+	//
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), opts.tx, submission.BidTrace, nil, nil, getHeaderResponse, opts.receivedAt, opts.cancellationsEnabled, opts.floorBidValue)
+	if err != nil {
+		opts.log.WithError(err).Error("could not save bid and update top bids")
+		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
+		return nil, false
+	}
+	return &updateBidResult, true
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
-	var pf common.Profile
+	var pf common.BlockSubmissionProfile
 	var prevTime, nextTime time.Time
 
 	headSlot := api.headSlot.Load()
@@ -1945,7 +1973,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 	}
 
-	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
+	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload.Version, submission.Timestamp, submission.BidTrace)
 	if !ok {
 		return
 	}
@@ -1978,7 +2006,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	attrs, ok := api.checkSubmissionPayloadAttrs(w, log, submission)
+	withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
+	if err != nil {
+		log.WithError(err).Warn("could not compute withdrawals root from payload")
+		api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
+		return
+	}
+
+	attrs, ok := api.checkSubmissionPayloadAttrs(w, log, submission.BidTrace, submission.PrevRandao, withdrawalsRoot)
 	if !ok {
 		return
 	}
@@ -2019,8 +2054,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		tx:                   tx,
 		log:                  log,
 		cancellationsEnabled: isCancellationEnabled,
-		simResultC:           simResultC,
-		submission:           submission,
+		bidTrace:             submission.BidTrace,
 	}
 	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
 	if !ok {
@@ -2159,7 +2193,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		cancellationsEnabled: isCancellationEnabled,
 		receivedAt:           receivedAt,
 		floorBidValue:        floorBidValue,
-		payload:              payload,
+		block:                payload,
 	}
 	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts)
 	if !ok {
@@ -2207,6 +2241,258 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"profileTotalUs":     pf.Total,
 	}).Info("received block from builder")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) handleSubmitNewHeader(w http.ResponseWriter, req *http.Request) {
+	var pf common.HeaderSubmissionProfile
+	var prevTime, nextTime time.Time
+
+	receivedAt := time.Now().UTC()
+	prevTime = receivedAt
+
+	headSlot := api.headSlot.Load()
+	args := req.URL.Query()
+	isCancellationEnabled := args.Get("cancellations") == "1"
+
+	log := api.log.WithFields(logrus.Fields{
+		"method":                "submitNewHeader",
+		"contentLength":         req.ContentLength,
+		"headSlot":              headSlot,
+		"cancellationEnabled":   isCancellationEnabled,
+		"timestampRequestStart": receivedAt.UnixMilli(),
+	})
+
+	// Log at start and end of request
+	log.Info("request initiated")
+	defer func() {
+		log.WithFields(logrus.Fields{
+			"timestampRequestFin": time.Now().UTC().UnixMilli(),
+			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+		}).Info("request finished")
+	}()
+
+	// If cancellations are disabled but builder requested it, return error
+	if isCancellationEnabled && !api.ffEnableCancellations {
+		log.Info("builder submitted with cancellations enabled, but feature flag is disabled")
+		api.RespondError(w, http.StatusBadRequest, "cancellations are disabled")
+		return
+	}
+
+	var err error
+	var r io.Reader = req.Body
+	isGzip := req.Header.Get("Content-Encoding") == "gzip"
+	log = log.WithField("reqIsGzip", isGzip)
+	if isGzip {
+		r, err = gzip.NewReader(req.Body)
+		if err != nil {
+			log.WithError(err).Warn("could not create gzip reader")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	requestPayloadBytes, err := io.ReadAll(r)
+	if err != nil {
+		log.WithError(err).Warn("could not read payload")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.PayloadLoad = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
+	payload := new(common.VersionedSubmitHeaderOptimistic)
+
+	// Check for SSZ encoding
+	contentType := req.Header.Get("Content-Type")
+	if contentType == "application/octet-stream" {
+		log = log.WithField("reqContentType", "ssz")
+		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
+			log.WithError(err).Warn("could not decode payload - SSZ")
+
+			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
+			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
+				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
+				api.RespondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			log = log.WithField("reqContentType", "json")
+		} else {
+			log.Debug("received ssz-encoded payload")
+		}
+	} else {
+		log = log.WithField("reqContentType", "json")
+		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
+			log.WithError(err).Warn("could not decode payload - JSON")
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	nextTime = time.Now().UTC()
+	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
+	submission, err := common.GetHeaderSubmissionInfo(payload)
+	if err != nil {
+		log.WithError(err).Warn("missing fields in submit header request")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"slot":           submission.BidTrace.Slot,
+		"builderPubkey":  submission.BidTrace.BuilderPubkey.String(),
+		"blockHash":      submission.BidTrace.BlockHash.String(),
+		"proposerPubkey": submission.BidTrace.ProposerPubkey.String(),
+		"parentHash":     submission.BidTrace.ParentHash.String(),
+		"value":          submission.BidTrace.Value.Dec(),
+		"payloadBytes":   len(requestPayloadBytes),
+	})
+
+	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload.Version, submission.Timestamp, submission.BidTrace)
+	if !ok {
+		return
+	}
+
+	builderPubkey := submission.BidTrace.BuilderPubkey
+	builderEntry, ok := api.checkBuilderEntry(w, log, builderPubkey)
+	if !ok {
+		return
+	}
+
+	log = log.WithField("builderIsHighPrio", builderEntry.status.IsHighPrio)
+
+	if !builderEntry.status.IsOptimistic {
+		log.Info("builder is not optimistic")
+		api.RespondError(w, http.StatusBadRequest, "builder is not optimistic")
+		return
+	}
+	ok = api.checkBuilderBid(w, log, submission.BidTrace, submission.TransactionsRoot, builderEntry)
+	if !ok {
+		return
+	}
+
+	_, ok = api.checkSubmissionFeeRecipient(w, log, submission.BidTrace)
+	if !ok {
+		return
+	}
+
+	_, ok = api.checkSubmissionPayloadAttrs(w, log, submission.BidTrace, submission.PrevRandao, submission.WithdrawalsRoot)
+	if !ok {
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
+	// Verify the signature
+	ok, err = ssz.VerifySignature(submission.BidTrace, api.opts.EthNetDetails.DomainBuilder, builderPubkey[:], submission.Signature[:])
+	if err != nil {
+		log.WithError(err).Warn("failed verifying builder signature")
+		api.RespondError(w, http.StatusBadRequest, "failed verifying builder signature")
+		return
+	} else if !ok {
+		log.Warn("invalid builder signature")
+		api.RespondError(w, http.StatusBadRequest, "invalid signature")
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.Signature = uint64(nextTime.Sub(prevTime).Microseconds())
+	prevTime = nextTime
+
+	// Create the redis pipeline tx
+	tx := api.redis.NewTxPipeline()
+
+	// If cancellations are enabled, then abort now if this submission is not the latest one
+	if isCancellationEnabled {
+		// Ensure this request is still the latest one. This logic intentionally ignores the value of the bids and makes the current active bid the one
+		// that arrived at the relay last. This allows for builders to reduce the value of their bid (effectively cancel a high bid) by ensuring a lower
+		// bid arrives later. Even if the higher bid takes longer to simulate, by checking the receivedAt timestamp, this logic ensures that the low bid
+		// is not overwritten by the high bid.
+		//
+		// NOTE: this can lead to a rather tricky race condition. If a builder submits two blocks to the relay concurrently, then the randomness of network
+		// latency will make it impossible to predict which arrives first. Thus a high bid could unintentionally be overwritten by a low bid that happened
+		// to arrive a few microseconds later. If builders are submitting blocks at a frequency where they cannot reliably predict which bid will arrive at
+		// the relay first, they should instead use multiple pubkeys to avoid uninitentionally overwriting their own bids.
+		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(context.Background(), tx, submission.BidTrace.Slot, submission.BidTrace.BuilderPubkey.String(), submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
+		if err != nil {
+			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
+		} else if receivedAt.UnixMilli() < latestPayloadReceivedAt {
+			log.Infof("already have a newer payload: now=%d / prev=%d", receivedAt.UnixMilli(), latestPayloadReceivedAt)
+			api.RespondError(w, http.StatusBadRequest, "already using a newer payload")
+			return
+		}
+	}
+
+	bfOpts := bidFloorOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		bidTrace:             submission.BidTrace,
+	}
+	floorBidValue, ok := api.checkFloorBidValue(bfOpts)
+	if !ok {
+		return
+	}
+
+	nextTime = time.Now().UTC()
+	pf.RedisChecks = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
+
+	redisOpts := redisUpdateBidOpts{
+		w:                    w,
+		tx:                   tx,
+		log:                  log,
+		cancellationsEnabled: isCancellationEnabled,
+		receivedAt:           receivedAt,
+		floorBidValue:        floorBidValue,
+		header:               payload,
+	}
+	updateBidResult, ok := api.updateRedisBidForHeader(redisOpts)
+	if !ok {
+		return
+	}
+
+	// Add fields to logs
+	log = log.WithFields(logrus.Fields{
+		"timestampAfterBidUpdate":    time.Now().UTC().UnixMilli(),
+		"wasBidSavedInRedis":         updateBidResult.WasBidSaved,
+		"wasTopBidUpdated":           updateBidResult.WasTopBidUpdated,
+		"topBidValue":                updateBidResult.TopBidValue,
+		"prevTopBidValue":            updateBidResult.PrevTopBidValue,
+		"profileRedisSavePayloadUs":  updateBidResult.TimeSavePayload.Microseconds(),
+		"profileRedisUpdateTopBidUs": updateBidResult.TimeUpdateTopBid.Microseconds(),
+		"profileRedisUpdateFloorUs":  updateBidResult.TimeUpdateFloor.Microseconds(),
+	})
+
+	var eligibleAt time.Time // will be set once the bid is ready
+	if updateBidResult.WasBidSaved {
+		// Bid is eligible to win the auction
+		eligibleAt = time.Now().UTC()
+		log = log.WithField("timestampEligibleAt", eligibleAt.UnixMilli())
+	}
+
+	nextTime = time.Now().UTC()
+	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
+
+	// All done, log with profiling information
+	log.WithFields(logrus.Fields{
+		"profileDecodeUs":      pf.Decode,
+		"profilePrechecksUs":   pf.Prechecks,
+		"profileSignatureUs":   pf.Signature,
+		"profileRedisUpdateUs": pf.RedisUpdate,
+		"profileRedisChecksUs": pf.RedisChecks,
+		"profileTotalUs":       pf.Total,
+	}).Info("received block from builder")
+	w.WriteHeader(http.StatusOK)
+
+	// TODO: Save header submission to db
 }
 
 // ---------------

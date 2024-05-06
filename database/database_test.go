@@ -39,7 +39,7 @@ var (
 	feeRecipient = bellatrix.ExecutionAddress{0x02}
 	blockHashStr = "0xa645370cc112c2e8e3cce121416c7dc849e773506d4b6fb9b752ada711355369"
 	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
-	profile      = common.Profile{
+	profile      = common.BlockSubmissionProfile{
 		Decode:      42,
 		Prechecks:   43,
 		Simulation:  44,
