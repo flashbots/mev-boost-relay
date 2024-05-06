@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -34,12 +35,13 @@ import (
 )
 
 const (
-	testGasLimit        = uint64(30000000)
-	testSlot            = uint64(42)
-	testParentHash      = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
-	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
-	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-	testBuilderPubkey   = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	testGasLimit         = uint64(30000000)
+	testSlot             = uint64(42)
+	testParentHash       = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
+	testWithdrawalsRoot  = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
+	testTransactionsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
+	testPrevRandao       = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
+	testBuilderPubkey    = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 )
 
 var (
@@ -218,11 +220,6 @@ func TestGetHeader(t *testing.T) {
 	proposerPubkey := "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 	bidValue := uint256.NewInt(99)
-	trace := &common.BidTraceV2WithBlobFields{
-		BidTrace: builderApiV1.BidTrace{
-			Value: bidValue,
-		},
-	}
 
 	// request path
 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, proposerPubkey)
@@ -235,7 +232,9 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	submission, err := common.GetBlockSubmissionInfo(payload)
+	require.NoError(t, err)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 1: regular capella request works and returns a bid
@@ -258,7 +257,9 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	submission, err = common.GetBlockSubmissionInfo(payload)
+	require.NoError(t, err)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), submission.BidTrace, submission, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 2: regular deneb request works and returns a bid
@@ -482,6 +483,154 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
 			default:
 				require.Fail(t, "unknown data version")
+			}
+
+			// Send JSON encoded request
+			reqJSONBytes, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
+			reqJSONBytes2, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ encoded request
+			reqSSZBytes, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+				"Content-Type": "application/octet-stream",
+			})
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send JSON+GZIP encoded request
+			headers := map[string]string{
+				"Content-Encoding": "gzip",
+			}
+			jsonGzip := gzipBytes(t, reqJSONBytes)
+			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ+GZIP encoded request
+			headers = map[string]string{
+				"Content-Type":     "application/octet-stream",
+				"Content-Encoding": "gzip",
+			}
+
+			sszGzip := gzipBytes(t, reqSSZBytes)
+			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+		})
+	}
+}
+
+func TestBuilderSubmitHeader(t *testing.T) {
+	type testHelper struct {
+		headSlot            uint64
+		submissionTimestamp int
+		parentHash          string
+		feeRecipient        string
+		withdrawalRoot      string
+		prevRandao          string
+		jsonReqSize         int
+		sszReqSize          int
+		jsonGzipReqSize     int
+		sszGzipReqSize      int
+	}
+
+	testCases := []struct {
+		name     string
+		filepath string
+		data     testHelper
+	}{
+		{
+			name:     "Deneb",
+			filepath: "../../testdata/submitHeaderPayloadDeneb_Goerli.json",
+			data: testHelper{
+				headSlot:            86,
+				submissionTimestamp: 1606825067,
+				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
+				feeRecipient:        "0x455E5AA18469bC6ccEF49594645666C587A3a71B",
+				withdrawalRoot:      "0x3cb816ccf6bb079b4f462e81db1262064f321a4afa4ff32c1f7e0a1c603836af",
+				prevRandao:          "0x6d414d3ffba7ba51155c3528739102c2889005940913b5d4c8031eed30764d4d",
+				jsonReqSize:         2859,
+				sszReqSize:          1243,
+				jsonGzipReqSize:     1461,
+				sszGzipReqSize:      1144,
+			},
+		},
+	}
+	path := "/relay/v1/builder/headers"
+	backend := newTestBackend(t, 1)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			headSlot := testCase.data.headSlot
+			submissionSlot := headSlot + 1
+			submissionTimestamp := testCase.data.submissionTimestamp
+
+			// Payload attributes
+			payloadJSONFilename := testCase.filepath
+			parentHash := testCase.data.parentHash
+			feeRec, err := utils.HexToAddress(testCase.data.feeRecipient)
+			require.NoError(t, err)
+			withdrawalsRoot, err := utils.HexToHash(testCase.data.withdrawalRoot)
+			require.NoError(t, err)
+			prevRandao := testCase.data.prevRandao
+
+			// Setup the test relay backend
+			backend.relay.headSlot.Store(headSlot)
+			backend.relay.denebEpoch = 2
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: headSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						FeeRecipient: feeRec,
+					},
+				},
+			}
+			backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
+			backend.relay.payloadAttributes[getPayloadAttributesKey(parentHash, submissionSlot)] = payloadAttributesHelper{
+				slot:       submissionSlot,
+				parentHash: parentHash,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: prevRandao,
+				},
+				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+			}
+
+			// Prepare the request payload
+			req := new(common.VersionedSubmitHeaderOptimistic)
+			requestPayloadJSONBytes, err := os.ReadFile(payloadJSONFilename)
+			require.NoError(t, err)
+			err = json.Unmarshal(requestPayloadJSONBytes, req)
+			require.NoError(t, err)
+			submission, err := common.GetHeaderSubmissionInfo(req)
+			require.NoError(t, err)
+
+			// Update
+			switch req.Version { //nolint:exhaustive
+			case spec.DataVersionDeneb:
+				req.Deneb.Message.Slot = submissionSlot
+				req.Deneb.ExecutionPayloadHeader.Timestamp = uint64(submissionTimestamp)
+			default:
+				require.Fail(t, "unknown data version")
+			}
+
+			backend.relay.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
+			backend.relay.blockBuildersCache[submission.BidTrace.BuilderPubkey.String()] = &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: submission.BidTrace.Value.ToBig(),
 			}
 
 			// Send JSON encoded request
@@ -788,7 +937,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 						Message: &builderApiV1.BidTrace{
 							Slot: testSlot + 1, // submission for a future slot
 						},
-						ExecutionPayload: &capella.ExecutionPayload{},
+						ExecutionPayload: &capella.ExecutionPayload{
+							Withdrawals: []*capella.Withdrawal{},
+						},
 					},
 				},
 			},
@@ -811,32 +962,8 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 							ParentHash: parentHash,
 						},
 						ExecutionPayload: &capella.ExecutionPayload{
-							PrevRandao: [32]byte(parentHash), // use a different hash to cause an error
-						},
-					},
-				},
-			},
-			expectOk: false,
-		},
-		{
-			description: "failure_nil_withdrawals",
-			attrs: payloadAttributesHelper{
-				slot: testSlot,
-				payloadAttributes: beaconclient.PayloadAttributes{
-					PrevRandao: testPrevRandao,
-				},
-			},
-			payload: &common.VersionedSubmitBlockRequest{
-				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
-					Version: spec.DataVersionCapella,
-					Capella: &builderApiCapella.SubmitBlockRequest{
-						Message: &builderApiV1.BidTrace{
-							Slot:       testSlot,
-							ParentHash: parentHash,
-						},
-						ExecutionPayload: &capella.ExecutionPayload{
-							PrevRandao:  [32]byte(prevRandao),
-							Withdrawals: nil, // set to nil to cause an error
+							PrevRandao:  [32]byte(parentHash), // use a different hash to cause an error
+							Withdrawals: []*capella.Withdrawal{},
 						},
 					},
 				},
@@ -887,7 +1014,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			_, ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission)
+			withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
+			require.NoError(t, err)
+			_, ok := backend.relay.checkSubmissionPayloadAttrs(w, log, submission.BidTrace, submission.PrevRandao, withdrawalsRoot)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -995,7 +1124,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
-			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
+			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload.Version, submission.Timestamp, submission.BidTrace)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -1058,6 +1187,93 @@ func TestCheckBuilderEntry(t *testing.T) {
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
 			_, ok := backend.relay.checkBuilderEntry(w, log, builderPubkey)
+			require.Equal(t, tc.expectOk, ok)
+		})
+	}
+}
+
+func TestCheckBuilderBid(t *testing.T) {
+	testTransactionsRoot, err := utils.HexToHash(testTransactionsRoot)
+	require.NoError(t, err)
+	transactionsRoot := phase0.Root(testTransactionsRoot)
+	emptyRoot, err := utils.HexToHash(common.EmptyTxRoot)
+	require.NoError(t, err)
+	emptyTxRoot := phase0.Root(emptyRoot)
+	cases := []struct {
+		description      string
+		bidTrace         *builderApiV1.BidTrace
+		transactionsRoot phase0.Root
+		entry            *blockBuilderCacheEntry
+		expectOk         bool
+	}{
+		{
+			description: "success",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: big.NewInt(100),
+			},
+			transactionsRoot: transactionsRoot,
+			bidTrace: &builderApiV1.BidTrace{
+				Slot:  testSlot,
+				Value: uint256.NewInt(100),
+			},
+			expectOk: true,
+		},
+		{
+			description: "failure_zero_value",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: big.NewInt(100),
+			},
+			transactionsRoot: transactionsRoot,
+			bidTrace: &builderApiV1.BidTrace{
+				Slot:  testSlot,
+				Value: uint256.NewInt(0),
+			},
+			expectOk: false,
+		},
+		{
+			description: "failure_empty_tx_root",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: big.NewInt(100),
+			},
+			transactionsRoot: emptyTxRoot,
+			bidTrace: &builderApiV1.BidTrace{
+				Slot:  testSlot,
+				Value: uint256.NewInt(100),
+			},
+			expectOk: false,
+		},
+		{
+			description: "failure_below_collateral",
+			entry: &blockBuilderCacheEntry{
+				status: common.BuilderStatus{
+					IsOptimistic: true,
+				},
+				collateral: big.NewInt(100),
+			},
+			transactionsRoot: transactionsRoot,
+			bidTrace: &builderApiV1.BidTrace{
+				Slot:  testSlot,
+				Value: uint256.NewInt(101),
+			},
+			expectOk: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			backend := newTestBackend(t, 1)
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			ok := backend.relay.checkBuilderBid(w, log, tc.bidTrace, tc.transactionsRoot, tc.entry)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}
@@ -1149,7 +1365,6 @@ func TestCheckFloorBidValue(t *testing.T) {
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
 			tx := backend.redis.NewTxPipeline()
-			simResultC := make(chan *blockSimResult, 1)
 			submission, err = common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
 			bfOpts := bidFloorOpts{
@@ -1157,8 +1372,7 @@ func TestCheckFloorBidValue(t *testing.T) {
 				tx:                   tx,
 				log:                  log,
 				cancellationsEnabled: tc.cancellationsEnabled,
-				simResultC:           simResultC,
-				submission:           submission,
+				bidTrace:             submission.BidTrace,
 			}
 			floor, ok := backend.relay.checkFloorBidValue(bfOpts)
 			require.Equal(t, tc.expectOk, ok)
@@ -1238,13 +1452,74 @@ func TestUpdateRedis(t *testing.T) {
 				log:                  log,
 				cancellationsEnabled: tc.cancellationsEnabled,
 				floorBidValue:        floorValue,
-				payload:              tc.payload,
+				block:                tc.payload,
 			}
 			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts)
 			require.Equal(t, tc.expectOk, ok)
 			if ok {
 				require.NotNil(t, updateResp)
 				require.NotNil(t, getPayloadResp)
+			}
+		})
+	}
+}
+
+func TestUpdateHeaderRedis(t *testing.T) {
+	cases := []struct {
+		description          string
+		cancellationsEnabled bool
+		floorValue           string
+		header               *common.VersionedSubmitHeaderOptimistic
+		expectOk             bool
+	}{
+		{
+			description: "success",
+			floorValue:  "10",
+			header: &common.VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionDeneb,
+				Deneb: &common.DenebSubmitHeaderOptimistic{
+					Message: &builderApiV1.BidTrace{
+						Slot:  testSlot,
+						Value: uint256.NewInt(1),
+					},
+					BlobKZGCommitments: make([]deneb.KZGCommitment, 0),
+					ExecutionPayloadHeader: &deneb.ExecutionPayloadHeader{
+						BaseFeePerGas: uint256.NewInt(1),
+					},
+				},
+			},
+			expectOk: true,
+		},
+		{
+			description: "failure_no_payload",
+			floorValue:  "10",
+			header:      nil,
+			expectOk:    false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, _, backend := startTestBackend(t)
+			w := httptest.NewRecorder()
+			logger := logrus.New()
+			log := logrus.NewEntry(logger)
+			tx := backend.redis.NewTxPipeline()
+
+			floorValue := new(big.Int)
+			floorValue, ok := floorValue.SetString(tc.floorValue, 10)
+			require.True(t, ok)
+			rOpts := redisUpdateBidOpts{
+				w:                    w,
+				tx:                   tx,
+				log:                  log,
+				cancellationsEnabled: tc.cancellationsEnabled,
+				floorBidValue:        floorValue,
+				header:               tc.header,
+			}
+			updateResp, ok := backend.relay.updateRedisBidForHeader(rOpts)
+			require.Equal(t, tc.expectOk, ok)
+			if ok {
+				require.NotNil(t, updateResp)
 			}
 		})
 	}
