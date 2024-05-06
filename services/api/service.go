@@ -34,10 +34,12 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/metrics"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/exp/slices"
@@ -225,6 +227,10 @@ type RelayAPI struct {
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
 func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
+	if err := metrics.Setup(context.Background()); err != nil {
+		return nil, err
+	}
+
 	if opts.Log == nil {
 		return nil, ErrMissingLogOpt
 	}
@@ -332,6 +338,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	r.HandleFunc("/", api.handleRoot).Methods(http.MethodGet)
 	r.HandleFunc("/livez", api.handleLivez).Methods(http.MethodGet)
 	r.HandleFunc("/readyz", api.handleReadyz).Methods(http.MethodGet)
+	r.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 
 	// Proposer API
 	if api.opts.ProposerAPI {
@@ -1252,6 +1259,11 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
 			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
 		}).Info("request finished")
+
+		metrics.GetPayloadLatencyHistogram.Record(
+			req.Context(),
+			float64(time.Since(receivedAt).Milliseconds()),
+		)
 	}()
 
 	// Read the body first, so we can decode it later
@@ -1552,6 +1564,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish)
 	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
 	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
+	metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(timeAfterPublish-timeBeforePublish))
 
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
