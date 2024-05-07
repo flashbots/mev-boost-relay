@@ -375,6 +375,8 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 
 func TestBuilderSubmitBlock(t *testing.T) {
 	type testHelper struct {
+		path                string
+		isOptimistic        bool
 		headSlot            uint64
 		submissionTimestamp int
 		parentHash          string
@@ -396,6 +398,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			name:     "Capella",
 			filepath: "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
 			data: testHelper{
+				path:                pathSubmitNewBlock,
+				isOptimistic:        false,
 				headSlot:            32,
 				submissionTimestamp: 1606824419,
 				parentHash:          "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6",
@@ -412,6 +416,26 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			name:     "Deneb",
 			filepath: "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
 			data: testHelper{
+				path:                pathSubmitNewBlock,
+				isOptimistic:        false,
+				headSlot:            86,
+				submissionTimestamp: 1606825067,
+				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
+				feeRecipient:        "0x455E5AA18469bC6ccEF49594645666C587A3a71B",
+				withdrawalRoot:      "0x3cb816ccf6bb079b4f462e81db1262064f321a4afa4ff32c1f7e0a1c603836af",
+				prevRandao:          "0x6d414d3ffba7ba51155c3528739102c2889005940913b5d4c8031eed30764d4d",
+				jsonReqSize:         1744002,
+				sszReqSize:          872081,
+				jsonGzipReqSize:     385043,
+				sszGzipReqSize:      363271,
+			},
+		},
+		{
+			name:     "Deneb Optimistic",
+			filepath: "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			data: testHelper{
+				path:                pathSubmitNewBlockOptimisticV2,
+				isOptimistic:        true,
 				headSlot:            86,
 				submissionTimestamp: 1606825067,
 				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
@@ -425,7 +449,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			},
 		},
 	}
-	path := "/relay/v1/builder/blocks"
+
 	backend := newTestBackend(t, 1)
 
 	for _, testCase := range testCases {
@@ -485,6 +509,19 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				require.Fail(t, "unknown data version")
 			}
 
+			if testCase.data.isOptimistic {
+				backend.relay.optimisticSlot.Store(submissionSlot)
+				bidTrace, err := req.BidTrace()
+				require.NoError(t, err)
+				backend.relay.blockBuildersCache = make(map[string]*blockBuilderCacheEntry)
+				backend.relay.blockBuildersCache[bidTrace.BuilderPubkey.String()] = &blockBuilderCacheEntry{
+					status: common.BuilderStatus{
+						IsOptimistic: true,
+					},
+					collateral: bidTrace.Value.ToBig(),
+				}
+			}
+
 			// Send JSON encoded request
 			reqJSONBytes, err := json.Marshal(req)
 			require.NoError(t, err)
@@ -492,7 +529,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.Equal(t, reqJSONBytes, reqJSONBytes2)
-			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			rr := backend.requestBytes(http.MethodPost, testCase.data.path, reqJSONBytes, nil)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -500,7 +537,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqSSZBytes, err := req.MarshalSSZ()
 			require.NoError(t, err)
 			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+			rr = backend.requestBytes(http.MethodPost, testCase.data.path, reqSSZBytes, map[string]string{
 				"Content-Type": "application/octet-stream",
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
@@ -512,7 +549,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			}
 			jsonGzip := gzipBytes(t, reqJSONBytes)
 			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, testCase.data.path, jsonGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -524,7 +561,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 
 			sszGzip := gzipBytes(t, reqSSZBytes)
 			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, testCase.data.path, sszGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 		})
@@ -567,14 +604,14 @@ func TestBuilderSubmitHeader(t *testing.T) {
 			},
 		},
 	}
-	path := "/relay/v1/builder/headers"
-	backend := newTestBackend(t, 1)
 
+	backend := newTestBackend(t, 1)
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			headSlot := testCase.data.headSlot
 			submissionSlot := headSlot + 1
 			submissionTimestamp := testCase.data.submissionTimestamp
+			backend.relay.optimisticSlot.Store(submissionSlot)
 
 			// Payload attributes
 			payloadJSONFilename := testCase.filepath
@@ -640,7 +677,7 @@ func TestBuilderSubmitHeader(t *testing.T) {
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.Equal(t, reqJSONBytes, reqJSONBytes2)
-			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			rr := backend.requestBytes(http.MethodPost, pathSubmitHeader, reqJSONBytes, nil)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -648,7 +685,7 @@ func TestBuilderSubmitHeader(t *testing.T) {
 			reqSSZBytes, err := req.MarshalSSZ()
 			require.NoError(t, err)
 			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+			rr = backend.requestBytes(http.MethodPost, pathSubmitHeader, reqSSZBytes, map[string]string{
 				"Content-Type": "application/octet-stream",
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
@@ -660,7 +697,7 @@ func TestBuilderSubmitHeader(t *testing.T) {
 			}
 			jsonGzip := gzipBytes(t, reqJSONBytes)
 			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, pathSubmitHeader, jsonGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -672,7 +709,7 @@ func TestBuilderSubmitHeader(t *testing.T) {
 
 			sszGzip := gzipBytes(t, reqSSZBytes)
 			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, pathSubmitHeader, sszGzip, headers)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 		})
@@ -1193,18 +1230,11 @@ func TestCheckBuilderEntry(t *testing.T) {
 }
 
 func TestCheckBuilderBid(t *testing.T) {
-	testTransactionsRoot, err := utils.HexToHash(testTransactionsRoot)
-	require.NoError(t, err)
-	transactionsRoot := phase0.Root(testTransactionsRoot)
-	emptyRoot, err := utils.HexToHash(common.EmptyTxRoot)
-	require.NoError(t, err)
-	emptyTxRoot := phase0.Root(emptyRoot)
 	cases := []struct {
-		description      string
-		bidTrace         *builderApiV1.BidTrace
-		transactionsRoot phase0.Root
-		entry            *blockBuilderCacheEntry
-		expectOk         bool
+		description string
+		bidTrace    *builderApiV1.BidTrace
+		entry       *blockBuilderCacheEntry
+		expectOk    bool
 	}{
 		{
 			description: "success",
@@ -1214,7 +1244,6 @@ func TestCheckBuilderBid(t *testing.T) {
 				},
 				collateral: big.NewInt(100),
 			},
-			transactionsRoot: transactionsRoot,
 			bidTrace: &builderApiV1.BidTrace{
 				Slot:  testSlot,
 				Value: uint256.NewInt(100),
@@ -1229,7 +1258,6 @@ func TestCheckBuilderBid(t *testing.T) {
 				},
 				collateral: big.NewInt(100),
 			},
-			transactionsRoot: transactionsRoot,
 			bidTrace: &builderApiV1.BidTrace{
 				Slot:  testSlot,
 				Value: uint256.NewInt(0),
@@ -1244,7 +1272,6 @@ func TestCheckBuilderBid(t *testing.T) {
 				},
 				collateral: big.NewInt(100),
 			},
-			transactionsRoot: emptyTxRoot,
 			bidTrace: &builderApiV1.BidTrace{
 				Slot:  testSlot,
 				Value: uint256.NewInt(100),
@@ -1259,7 +1286,6 @@ func TestCheckBuilderBid(t *testing.T) {
 				},
 				collateral: big.NewInt(100),
 			},
-			transactionsRoot: transactionsRoot,
 			bidTrace: &builderApiV1.BidTrace{
 				Slot:  testSlot,
 				Value: uint256.NewInt(101),
@@ -1273,7 +1299,7 @@ func TestCheckBuilderBid(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			ok := backend.relay.checkBuilderBid(w, log, tc.bidTrace, tc.transactionsRoot, tc.entry)
+			ok := backend.relay.checkOptimisticBuilderBid(w, log, tc.bidTrace, tc.entry)
 			require.Equal(t, tc.expectOk, ok)
 		})
 	}

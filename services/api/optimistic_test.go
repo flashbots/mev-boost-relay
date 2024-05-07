@@ -270,7 +270,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 				simulationError: tc.simulationError,
 			}
 			simResultC := make(chan *blockSimResult, 1)
-			backend.relay.processOptimisticBlock(blockSimOptions{
+			err := backend.relay.processOptimisticBlock(blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				builder: &blockBuilderCacheEntry{
@@ -283,6 +283,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 						secretkey, getTestBidTrace(*pubkey, collateral, slot), tc.version),
 				},
 			}, simResultC)
+			require.NoError(t, err)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
