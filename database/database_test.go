@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -46,7 +46,7 @@ var (
 		RedisUpdate: 45,
 		Total:       46,
 	}
-	errFoo = fmt.Errorf("fake simulation error")
+	errFoo = errors.New("fake simulation error")
 )
 
 func createValidatorRegistration(pubKey string) ValidatorRegistrationEntry {
