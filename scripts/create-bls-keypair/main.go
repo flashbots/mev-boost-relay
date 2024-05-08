@@ -1,5 +1,7 @@
 package main
 
+// See also https://github.com/dvush/bls-vanity for creating vanity BLS keys!
+
 import (
 	"fmt"
 	"log"
