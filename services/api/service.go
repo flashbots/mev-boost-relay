@@ -1245,6 +1245,7 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	}
 }
 
+//nolint:gocognit
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
