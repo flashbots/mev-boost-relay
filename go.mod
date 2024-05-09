@@ -5,13 +5,13 @@ go 1.21
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
-	github.com/attestantio/go-builder-client v0.4.3-0.20240124194555-d44db06f45fa
-	github.com/attestantio/go-eth2-client v0.21.1
+	github.com/attestantio/go-builder-client v0.4.6-0.20240508205504-2210689d2f24
+	github.com/attestantio/go-eth2-client v0.21.4-0.20240508205406-66fbb02e3c16
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.13.14
-	github.com/flashbots/go-boost-utils v1.8.0
+	github.com/flashbots/go-boost-utils v1.8.2-0.20240509132735-ee2810094e51
 	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.1
@@ -73,7 +73,7 @@ require (
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
-	golang.org/x/sync v0.5.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
@@ -105,7 +105,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -121,14 +121,5 @@ retract (
 	v1.0.0-alpha1
 )
 
-// git clone git@github.com:jtraglia/go-eth2-client.git -b electra
-replace github.com/attestantio/go-eth2-client => ../../jtraglia/go-eth2-client
-
-// git clone git@github.com:jtraglia/go-builder-client.git -b electra
-replace github.com/attestantio/go-builder-client => ../../jtraglia/go-builder-client
-
-// git clone git@github.com:flashbots/go-boost-utils.git -b electra
-replace github.com/flashbots/go-boost-utils => ../../flashbots/go-boost-utils
-
-// git clone git@github.com:jtraglia/go-ethereum.git -b electra
-replace github.com/ethereum/go-ethereum => ../../jtraglia/go-ethereum
+// This version points to Lightclient's prague-devnet-0 branch.
+replace github.com/ethereum/go-ethereum => github.com/lightclient/go-ethereum v1.10.10-0.20240429213339-9b7958ba0063
