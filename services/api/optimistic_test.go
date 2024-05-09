@@ -464,6 +464,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			backend.relay.optimisticSlot.Store(tc.slot)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			backend.relay.proposerDutiesMap[tc.slot] = backend.relay.proposerDutiesMap[slot]
 
 			randaoHash, err := utils.HexToHash(randao)

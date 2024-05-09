@@ -6,8 +6,10 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
+	eth2UtilElectra "github.com/attestantio/go-eth2-client/util/electra"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -18,11 +20,13 @@ var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
-	ErrUnsupportedPayload = errors.New("unsupported payload version")
-	ErrNoWithdrawals      = errors.New("no withdrawals")
-	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
-	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
-	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
+	ErrUnsupportedPayload   = errors.New("unsupported payload version")
+	ErrNoWithdrawals        = errors.New("no withdrawals")
+	ErrNoDepositReceipts    = errors.New("no deposit receipts")
+	ErrNoWithdrawalRequests = errors.New("no execution layer withdrawal requests")
+	ErrPayloadMismatch      = errors.New("beacon-block and payload version mismatch")
+	ErrHeaderHTRMismatch    = errors.New("beacon-block and payload header mismatch")
+	ErrBlobMismatch         = errors.New("beacon-block and payload blob contents mismatch")
 )
 
 func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
@@ -47,6 +51,22 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	}
 	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
+}
+
+func ComputeDepositReceiptsRoot(d []*electra.DepositReceipt) (phase0.Root, error) {
+	if d == nil {
+		return phase0.Root{}, ErrNoDepositReceipts
+	}
+	depositReceipts := eth2UtilElectra.DepositReceipts{DepositReceipts: d}
+	return depositReceipts.HashTreeRoot()
+}
+
+func ComputeWithdrawalRequestsRoot(e []*electra.ExecutionLayerWithdrawalRequest) (phase0.Root, error) {
+	if e == nil {
+		return phase0.Root{}, ErrNoWithdrawalRequests
+	}
+	exits := eth2UtilElectra.ExecutionPayloadWithdrawalRequests{WithdrawalRequests: e}
+	return exits.HashTreeRoot()
 }
 
 func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
@@ -106,6 +126,37 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 
 		for i, commitment := range bb.Deneb.Message.Body.BlobKZGCommitments {
 			if commitment != payload.Deneb.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+		}
+	case spec.DataVersionElectra:
+		block := bb.Electra.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Electra = payload.Electra.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Electra.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+
+		if len(bb.Electra.Message.Body.BlobKZGCommitments) != len(payload.Electra.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
+
+		for i, commitment := range bb.Electra.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Electra.BlobsBundle.Commitments[i] {
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
 			}
 		}

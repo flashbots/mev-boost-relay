@@ -7,14 +7,17 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	eth2ApiV1Electra "github.com/attestantio/go-eth2-client/api/v1/electra"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -74,6 +77,20 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 			Version: spec.DataVersionDeneb,
 			Deneb:   signedBuilderBid.Deneb,
 		}, nil
+	case spec.DataVersionElectra:
+		versionedPayload.Electra = payload.Electra.ExecutionPayload
+		header, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return nil, err
+		}
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		if err != nil {
+			return nil, err
+		}
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionElectra,
+			Electra: signedBuilderBid.Electra,
+		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrInvalidVersion
 	default:
@@ -94,6 +111,14 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 			Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: payload.Deneb.ExecutionPayload,
 				BlobsBundle:      payload.Deneb.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionElectra:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionElectra,
+			Electra: &builderApiElectra.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: payload.Electra.ExecutionPayload,
+				BlobsBundle:      payload.Electra.BlobsBundle,
 			},
 		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
@@ -148,6 +173,26 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 				Signature: sig,
 			},
 		}, nil
+	case spec.DataVersionElectra:
+		builderBid := builderApiElectra.BuilderBid{
+			Header:             header.Electra,
+			BlobKZGCommitments: payload.Electra.BlobsBundle.Commitments,
+			Value:              value,
+			Pubkey:             *pubkey,
+		}
+
+		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		if err != nil {
+			return nil, err
+		}
+
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionElectra,
+			Electra: &builderApiElectra.SignedBuilderBid{
+				Message:   &builderBid,
+				Signature: sig,
+			},
+		}, nil
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", payload.Version))
 	}
@@ -168,8 +213,13 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *VersionedSi
 		if len(denebBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Deneb.BlobsBundle.Blobs) {
 			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
 		}
-
 		signedBeaconBlock.Deneb = DenebUnblindSignedBlock(denebBlindedBlock, blockPayload.Deneb)
+	case spec.DataVersionElectra:
+		electraBlindedBlock := signedBlindedBeaconBlock.Electra
+		if len(electraBlindedBlock.Message.Body.BlobKZGCommitments) != len(blockPayload.Electra.BlobsBundle.Blobs) {
+			return nil, errors.New("number of blinded blobs does not match blobs bundle length")
+		}
+		signedBeaconBlock.Electra = ElectraUnblindSignedBlock(electraBlindedBlock, blockPayload.Electra)
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", signedBlindedBeaconBlock.Version))
 	}
@@ -231,6 +281,37 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 	}
 }
 
+func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
+	return &eth2ApiV1Electra.SignedBlockContents{
+		SignedBlock: &electra.SignedBeaconBlock{
+			Message: &electra.BeaconBlock{
+				Slot:          blindedBlock.Message.Slot,
+				ProposerIndex: blindedBlock.Message.ProposerIndex,
+				ParentRoot:    blindedBlock.Message.ParentRoot,
+				StateRoot:     blindedBlock.Message.StateRoot,
+				Body: &electra.BeaconBlockBody{
+					RANDAOReveal:          blindedBlock.Message.Body.RANDAOReveal,
+					ETH1Data:              blindedBlock.Message.Body.ETH1Data,
+					Graffiti:              blindedBlock.Message.Body.Graffiti,
+					ProposerSlashings:     blindedBlock.Message.Body.ProposerSlashings,
+					AttesterSlashings:     blindedBlock.Message.Body.AttesterSlashings,
+					Attestations:          blindedBlock.Message.Body.Attestations,
+					Deposits:              blindedBlock.Message.Body.Deposits,
+					VoluntaryExits:        blindedBlock.Message.Body.VoluntaryExits,
+					SyncAggregate:         blindedBlock.Message.Body.SyncAggregate,
+					ExecutionPayload:      blockPayload.ExecutionPayload,
+					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
+					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
+					Consolidations:        blindedBlock.Message.Body.Consolidations,
+				},
+			},
+			Signature: blindedBlock.Signature,
+		},
+		KZGProofs: blockPayload.BlobsBundle.Proofs,
+		Blobs:     blockPayload.BlobsBundle.Blobs,
+	}
+}
+
 type BuilderBlockValidationRequest struct {
 	*VersionedSubmitBlockRequest
 	RegisteredGasLimit    uint64
@@ -247,6 +328,15 @@ type capellaBuilderBlockValidationRequestJSON struct {
 type denebBuilderBlockValidationRequestJSON struct {
 	Message               *builderApiV1.BidTrace       `json:"message"`
 	ExecutionPayload      *deneb.ExecutionPayload      `json:"execution_payload"`
+	BlobsBundle           *builderApiDeneb.BlobsBundle `json:"blobs_bundle"`
+	Signature             string                       `json:"signature"`
+	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
+	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
+}
+
+type electraBuilderBlockValidationRequestJSON struct {
+	Message               *builderApiV1.BidTrace       `json:"message"`
+	ExecutionPayload      *electra.ExecutionPayload    `json:"execution_payload"`
 	BlobsBundle           *builderApiDeneb.BlobsBundle `json:"blobs_bundle"`
 	Signature             string                       `json:"signature"`
 	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
@@ -271,6 +361,15 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			RegisteredGasLimit:    r.RegisteredGasLimit,
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
 		})
+	case spec.DataVersionElectra:
+		return json.Marshal(&electraBuilderBlockValidationRequestJSON{
+			Message:               r.Electra.Message,
+			ExecutionPayload:      r.Electra.ExecutionPayload,
+			BlobsBundle:           r.Electra.BlobsBundle,
+			Signature:             r.Electra.Signature.String(),
+			RegisteredGasLimit:    r.RegisteredGasLimit,
+			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
+		})
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -286,6 +385,8 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 		return r.Capella.MarshalSSZ()
 	case spec.DataVersionDeneb:
 		return r.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		return r.Electra.MarshalSSZ()
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -293,14 +394,18 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
-
+	electraRequest := new(builderApiElectra.SubmitBlockRequest)
+	if err = electraRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraRequest
+		return nil
+	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebRequest
 		return nil
 	}
-
 	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
 	if err = capellaRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionCapella
@@ -316,6 +421,8 @@ func (r *VersionedSubmitBlockRequest) HashTreeRoot() (phase0.Root, error) {
 		return r.Capella.HashTreeRoot()
 	case spec.DataVersionDeneb:
 		return r.Deneb.HashTreeRoot()
+	case spec.DataVersionElectra:
+		return r.Electra.HashTreeRoot()
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		fallthrough
 	default:
@@ -329,6 +436,8 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
+	case spec.DataVersionElectra:
+		return json.Marshal(r.Electra)
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -336,13 +445,18 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
+	electraRequest := new(builderApiElectra.SubmitBlockRequest)
+	if err = json.Unmarshal(input, electraRequest); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraRequest
+		return nil
+	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = json.Unmarshal(input, denebRequest); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebRequest
 		return nil
 	}
-
 	capellaRequest := new(builderApiCapella.SubmitBlockRequest)
 	if err = json.Unmarshal(input, capellaRequest); err == nil {
 		r.Version = spec.DataVersionCapella
@@ -362,6 +476,8 @@ func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
 		return r.Capella.MarshalSSZ()
 	case spec.DataVersionDeneb:
 		return r.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		return r.Electra.MarshalSSZ()
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -369,13 +485,18 @@ func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 	var err error
+	electraRequest := new(eth2ApiV1Electra.SignedBlockContents)
+	if err = electraRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraRequest
+		return nil
+	}
 	denebRequest := new(eth2ApiV1Deneb.SignedBlockContents)
 	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebRequest
 		return nil
 	}
-
 	capellaRequest := new(capella.SignedBeaconBlock)
 	if err = capellaRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionCapella
@@ -391,6 +512,8 @@ func (r *VersionedSignedProposal) MarshalJSON() ([]byte, error) {
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
+	case spec.DataVersionElectra:
+		return json.Marshal(r.Electra)
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -398,14 +521,18 @@ func (r *VersionedSignedProposal) MarshalJSON() ([]byte, error) {
 
 func (r *VersionedSignedProposal) UnmarshalJSON(input []byte) error {
 	var err error
-
+	electraContents := new(eth2ApiV1Electra.SignedBlockContents)
+	if err = json.Unmarshal(input, electraContents); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraContents
+		return nil
+	}
 	denebContents := new(eth2ApiV1Deneb.SignedBlockContents)
 	if err = json.Unmarshal(input, denebContents); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebContents
 		return nil
 	}
-
 	capellaBlock := new(capella.SignedBeaconBlock)
 	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
@@ -425,6 +552,8 @@ func (r *VersionedSignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
 		return json.Marshal(r.Capella)
 	case spec.DataVersionDeneb:
 		return json.Marshal(r.Deneb)
+	case spec.DataVersionElectra:
+		return json.Marshal(r.Electra)
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
@@ -432,14 +561,18 @@ func (r *VersionedSignedBlindedBeaconBlock) MarshalJSON() ([]byte, error) {
 
 func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSON(input []byte) error {
 	var err error
-
+	electraBlock := new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+	if err = json.Unmarshal(input, electraBlock); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraBlock
+		return nil
+	}
 	denebBlock := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
 	if err = json.Unmarshal(input, denebBlock); err == nil {
 		r.Version = spec.DataVersionDeneb
 		r.Deneb = denebBlock
 		return nil
 	}
-
 	capellaBlock := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
 	if err = json.Unmarshal(input, capellaBlock); err == nil {
 		r.Version = spec.DataVersionCapella
