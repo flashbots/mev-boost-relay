@@ -121,3 +121,55 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 		return nil, ErrUnsupportedExecutionPayload
 	}
 }
+
+func BuilderSubmissionToBuilderDemotionEntry(submitBlockRequest *common.VersionedSubmitBlockRequest, simErr, demotionErr error) (builderDemotionEntry BuilderDemotionEntry, err error) {
+	_submitBlockRequest, err := json.Marshal(submitBlockRequest)
+	if err != nil {
+		return BuilderDemotionEntry{}, err
+	}
+
+	var _simErr string
+	if simErr != nil {
+		_simErr = simErr.Error()
+	}
+
+	submission, err := common.GetBlockSubmissionInfo(submitBlockRequest)
+	if err != nil {
+		return BuilderDemotionEntry{}, err
+	}
+	bidTrace := submission.BidTrace
+
+	builderDemotionEntry = BuilderDemotionEntry{
+		SubmitBlockRequest: NewNullString(string(_submitBlockRequest)),
+
+		Epoch: bidTrace.Slot / common.SlotsPerEpoch,
+		Slot:  bidTrace.Slot,
+
+		BuilderPubkey:  bidTrace.BuilderPubkey.String(),
+		ProposerPubkey: bidTrace.ProposerPubkey.String(),
+
+		Value:        bidTrace.Value.Dec(),
+		FeeRecipient: bidTrace.ProposerFeeRecipient.String(),
+
+		BlockHash: bidTrace.BlockHash.String(),
+		SimError:  _simErr,
+		Reason:    NewNullString(demotionErr.Error()),
+	}
+	return builderDemotionEntry, nil
+}
+
+func BuilderOptimisticSubmissionEntryToDemotionentry(submission *BuilderOptimisticSubmissionEntry, demotionErr error) BuilderDemotionEntry {
+	return BuilderDemotionEntry{
+		Epoch: submission.Slot / common.SlotsPerEpoch,
+		Slot:  submission.Slot,
+
+		BuilderPubkey:  submission.BuilderPubkey,
+		ProposerPubkey: submission.ProposerPubkey,
+
+		Value:        submission.Value,
+		FeeRecipient: submission.FeeRecipient,
+
+		BlockHash: submission.BlockHash,
+		Reason:    NewNullString(demotionErr.Error()),
+	}
+}

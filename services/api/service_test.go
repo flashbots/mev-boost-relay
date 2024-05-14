@@ -1231,10 +1231,11 @@ func TestCheckBuilderEntry(t *testing.T) {
 
 func TestCheckBuilderBid(t *testing.T) {
 	cases := []struct {
-		description string
-		bidTrace    *builderApiV1.BidTrace
-		entry       *blockBuilderCacheEntry
-		expectOk    bool
+		description    string
+		bidTrace       *builderApiV1.BidTrace
+		entry          *blockBuilderCacheEntry
+		optimisticSlot uint64
+		expectOk       bool
 	}{
 		{
 			description: "success",
@@ -1248,10 +1249,11 @@ func TestCheckBuilderBid(t *testing.T) {
 				Slot:  testSlot,
 				Value: uint256.NewInt(100),
 			},
-			expectOk: true,
+			optimisticSlot: testSlot,
+			expectOk:       true,
 		},
 		{
-			description: "failure_zero_value",
+			description: "failure_not_optimistic_slot",
 			entry: &blockBuilderCacheEntry{
 				status: common.BuilderStatus{
 					IsOptimistic: true,
@@ -1260,15 +1262,16 @@ func TestCheckBuilderBid(t *testing.T) {
 			},
 			bidTrace: &builderApiV1.BidTrace{
 				Slot:  testSlot,
-				Value: uint256.NewInt(0),
+				Value: uint256.NewInt(101),
 			},
-			expectOk: false,
+			optimisticSlot: testSlot + 1,
+			expectOk:       false,
 		},
 		{
-			description: "failure_empty_tx_root",
+			description: "failure_not_optimistic",
 			entry: &blockBuilderCacheEntry{
 				status: common.BuilderStatus{
-					IsOptimistic: true,
+					IsOptimistic: false,
 				},
 				collateral: big.NewInt(100),
 			},
@@ -1276,7 +1279,8 @@ func TestCheckBuilderBid(t *testing.T) {
 				Slot:  testSlot,
 				Value: uint256.NewInt(100),
 			},
-			expectOk: false,
+			optimisticSlot: testSlot,
+			expectOk:       false,
 		},
 		{
 			description: "failure_below_collateral",
@@ -1290,12 +1294,14 @@ func TestCheckBuilderBid(t *testing.T) {
 				Slot:  testSlot,
 				Value: uint256.NewInt(101),
 			},
-			expectOk: false,
+			optimisticSlot: testSlot,
+			expectOk:       false,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			backend := newTestBackend(t, 1)
+			backend.relay.optimisticSlot.Store(tc.optimisticSlot)
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)

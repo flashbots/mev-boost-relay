@@ -90,6 +90,11 @@ var (
 	getPayloadRequestCutoffMs = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
 	getPayloadResponseDelayMs = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
 
+	// optimistic v2: maximum wait time for a header without a block payload to be submitted before demotion
+	optimisticV2PayloadWaitTimeoutMs = cli.GetEnvInt("OPTIMISTIC_V2_PAYLOAD_WAIT_TIMEOUT_MS", 20_000)
+	// optimistic v2: maximum delay for a block to be submitted after a header is received
+	optimisticV2MaxSubmissionDelayMs = cli.GetEnvInt("OPTIMISTIC_V2_MAX_SUBMISSION_DELAY_MS", 2_000)
+
 	// api settings
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
@@ -596,7 +601,7 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 	return nil, nil
 }
 
-func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlockRequest, simError error) {
+func (api *RelayAPI) demoteBuilderStatus(pubkey string) {
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
@@ -611,17 +616,28 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlo
 	if err := api.db.SetBlockBuilderIDStatusIsOptimistic(pubkey, false); err != nil {
 		api.log.Error(fmt.Errorf("error setting builder: %v status: %w", pubkey, err))
 	}
+}
+
+func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlockRequest, simErr, demotionErr error) {
+	api.demoteBuilderStatus(pubkey)
 	// Write to demotions table.
-	api.log.WithFields(logrus.Fields{"builder_pubkey": pubkey}).Info("demoting builder")
+	api.log.WithFields(logrus.Fields{"builderPubkey": pubkey}).Info("demoting builder")
 	bidTrace, err := req.BidTrace()
 	if err != nil {
 		api.log.WithError(err).Warn("failed to get bid trace from submit block request")
+		return
 	}
-	if err := api.db.InsertBuilderDemotion(req, simError); err != nil {
+	entry, err := database.BuilderSubmissionToBuilderDemotionEntry(req, simErr, demotionErr)
+	if err != nil {
+		api.log.WithError(err).Warn("failed to convert builder submission to builder demotion entry")
+		return
+	}
+	if err := api.db.InsertBuilderDemotion(entry); err != nil {
 		api.log.WithError(err).WithFields(logrus.Fields{
 			"errorWritingDemotionToDB": true,
 			"bidTrace":                 bidTrace,
-			"simError":                 simError,
+			"simErr":                   simErr,
+			"demotionError":            demotionErr,
 		}).Error("failed to save demotion to database")
 	}
 }
@@ -663,7 +679,7 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 		}
 
 		// Demote the builder.
-		api.demoteBuilder(builderPubkey, opts.req.VersionedSubmitBlockRequest, demotionErr)
+		api.demoteBuilder(builderPubkey, opts.req.VersionedSubmitBlockRequest, simErr, demotionErr)
 	}
 	return demotionErr
 }
@@ -741,6 +757,63 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 		"randao":    payloadAttributes.Data.PayloadAttributes.PrevRandao,
 		"timestamp": payloadAttributes.Data.PayloadAttributes.Timestamp,
 	}).Info("updated payload attributes")
+}
+
+func (api *RelayAPI) demoteBuildersForExpiredSubmissions() error {
+	currentTime := time.Now()
+	demotedBuilders := make(map[string]bool)
+
+	optimisticSubmissions, err := api.db.GetBuilderOptimisticSubmissions()
+	if err != nil {
+		return err
+	}
+
+	for _, submission := range optimisticSubmissions {
+		if _, ok := demotedBuilders[submission.BuilderPubkey]; ok {
+			continue
+		}
+		if err = api.checkV2Submission(submission, currentTime); err != nil {
+			log := api.log.WithFields(logrus.Fields{
+				"builderPubkey": submission.BuilderPubkey,
+				"reason":        err,
+			})
+			log.Info("demoting builder")
+			api.demoteBuilderStatus(submission.BuilderPubkey)
+			builderDemotionEntry := database.BuilderOptimisticSubmissionEntryToDemotionentry(submission, err)
+			if err := api.db.InsertBuilderDemotion(builderDemotionEntry); err != nil {
+				log.WithError(err).Error("error writing builder demotion to db")
+				continue
+			}
+			demotedBuilders[submission.BuilderPubkey] = true
+		}
+	}
+
+	// Remove submissions that have been in the db for > 45s and thus expired
+	if err := api.db.DeleteExpiredBuilderOptimisticSubmissions(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (api *RelayAPI) checkV2Submission(entry *database.BuilderOptimisticSubmissionEntry, currentTime time.Time) error {
+	// received payload but no header, would not have updated the bid
+	if !entry.HeaderReceivedAt.Valid {
+		return nil
+	}
+
+	payloadWaitTimeout := time.Duration(optimisticV2PayloadWaitTimeoutMs)
+	maxSubmissionDelay := time.Duration(optimisticV2MaxSubmissionDelayMs)
+
+	// received header but no payload arrived
+	if !entry.PayloadReceivedAt.Valid && entry.HeaderReceivedAt.Time.Before(currentTime.Add(-payloadWaitTimeout)) {
+		return errors.New(fmt.Sprintf("header was received at %v but payload was not received", entry.HeaderReceivedAt.Time))
+	}
+
+	// received header but payload was late
+	if entry.PayloadReceivedAt.Valid && entry.PayloadReceivedAt.Time.After(entry.HeaderReceivedAt.Time.Add(maxSubmissionDelay)) {
+		return errors.New(fmt.Sprintf("header was received at %v but payload was received late at %v", entry.HeaderReceivedAt.Time, entry.PayloadReceivedAt.Time))
+	}
+	return nil
 }
 
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
@@ -835,6 +908,11 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 	// safely update the slot.
 	api.optimisticBlocksWG.Wait()
 	api.optimisticSlot.Store(headSlot + 1)
+
+	err := api.demoteBuildersForExpiredSubmissions()
+	if err != nil {
+		api.log.WithError(err).Error("error demoting builders for expired submissions")
+	}
 
 	builders, err := api.db.GetBlockBuilders()
 	if err != nil {
@@ -2085,7 +2163,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	// Sanity check the submission
-	err = SanityCheckBuilderBlockSubmission(payload)
+	err = SanityCheckBuilderBlockSubmission(submission)
 	if err != nil {
 		log.WithError(err).Info("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -2382,8 +2460,6 @@ func (api *RelayAPI) handleSubmitNewBlockOptimisticV2(w http.ResponseWriter, req
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
 
-	// TODO (optimistic): record payload was received for header submission
-
 	isLargeRequest := len(requestPayloadBytes) > fastTrackPayloadSizeLimit
 	// getting block submission info also validates bid trace and execution submission are not empty
 	submission, err := common.GetBlockSubmissionInfo(payload)
@@ -2412,6 +2488,13 @@ func (api *RelayAPI) handleSubmitNewBlockOptimisticV2(w http.ResponseWriter, req
 			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
+
+	go func() {
+		err := api.db.SaveBuilderOptimisticPayloadReceived(submission.BidTrace, receivedAt)
+		if err != nil {
+			log.WithError(err).Error("failed to save builder optimistic v2 block submission received")
+		}
+	}()
 
 	ok = api.checkSubmissionSlotDetails(w, log, headSlot, payload.Version, submission.Timestamp, submission.BidTrace)
 	if !ok {
@@ -2443,7 +2526,7 @@ func (api *RelayAPI) handleSubmitNewBlockOptimisticV2(w http.ResponseWriter, req
 	}
 
 	// Sanity check the submission
-	err = SanityCheckBuilderBlockSubmission(payload)
+	err = SanityCheckBuilderBlockSubmission(submission)
 	if err != nil {
 		log.WithError(err).Info("block submission sanity checks failed")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -2789,13 +2872,6 @@ func (api *RelayAPI) handleSubmitNewHeader(w http.ResponseWriter, req *http.Requ
 		"profileRedisUpdateFloorUs":  updateBidResult.TimeUpdateFloor.Microseconds(),
 	})
 
-	var eligibleAt time.Time // will be set once the bid is ready
-	if updateBidResult.WasBidSaved {
-		// Bid is eligible to win the auction
-		eligibleAt = time.Now().UTC()
-		log = log.WithField("timestampEligibleAt", eligibleAt.UnixMilli())
-	}
-
 	nextTime = time.Now().UTC()
 	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
 	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
@@ -2809,9 +2885,15 @@ func (api *RelayAPI) handleSubmitNewHeader(w http.ResponseWriter, req *http.Requ
 		"profileRedisChecksUs": pf.RedisChecks,
 		"profileTotalUs":       pf.Total,
 	}).Info("received block from builder")
-	w.WriteHeader(http.StatusOK)
 
-	// TODO (optimistic): Save header submission to db
+	go func() {
+		err = api.db.SaveBuilderHeaderSubmission(payload, receivedAt, pf)
+		if err != nil {
+			log.WithError(err).Error("failed to save builder header submission")
+		}
+	}()
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // ---------------

@@ -281,6 +281,18 @@ func GetHeaderSubmissionInfo(submission *VersionedSubmitHeaderOptimistic) (*Head
 	if err != nil {
 		return nil, err
 	}
+	gasUsed, err := submission.GasUsed()
+	if err != nil {
+		return nil, err
+	}
+	gasLimit, err := submission.GasLimit()
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, err := submission.BlockNumber()
+	if err != nil {
+		return nil, err
+	}
 	return &HeaderSubmissionInfo{
 		BidTrace:         bidTrace,
 		Signature:        signature,
@@ -288,6 +300,9 @@ func GetHeaderSubmissionInfo(submission *VersionedSubmitHeaderOptimistic) (*Head
 		PrevRandao:       prevRandao,
 		TransactionsRoot: transactionsRoot,
 		WithdrawalsRoot:  withdrawalsRoot,
+		GasUsed:          gasUsed,
+		GasLimit:         gasLimit,
+		BlockNumber:      blockNumber,
 	}, nil
 }
 

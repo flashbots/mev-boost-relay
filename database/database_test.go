@@ -327,7 +327,9 @@ func TestInsertBuilderDemotion(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			db := resetDatabase(t)
 
-			err = db.InsertBuilderDemotion(c.req, errFoo)
+			demotion, err := BuilderSubmissionToBuilderDemotionEntry(c.req, errFoo, errFoo)
+			require.NoError(t, err)
+			err = db.InsertBuilderDemotion(demotion)
 			require.NoError(t, err)
 
 			entry, err := db.GetBuilderDemotion(trace)
@@ -390,7 +392,9 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			require.Nil(t, demotion)
 
 			// Insert demotion
-			err = db.InsertBuilderDemotion(c.req, errFoo)
+			entry, err := BuilderSubmissionToBuilderDemotionEntry(c.req, errFoo, errFoo)
+			require.NoError(t, err)
+			err = db.InsertBuilderDemotion(entry)
 			require.NoError(t, err)
 
 			// Now demotion should show up.

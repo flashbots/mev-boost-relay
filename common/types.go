@@ -427,6 +427,9 @@ type HeaderSubmissionInfo struct {
 	PrevRandao       phase0.Hash32
 	TransactionsRoot phase0.Root
 	WithdrawalsRoot  phase0.Root
+	GasUsed          uint64
+	GasLimit         uint64
+	BlockNumber      uint64
 }
 
 // VersionedSubmitHeaderOptimistic is a versioned signed header to construct the builder bid.
@@ -574,6 +577,51 @@ func (h *VersionedSubmitHeaderOptimistic) WithdrawalsRoot() (phase0.Root, error)
 		return h.Deneb.ExecutionPayloadHeader.WithdrawalsRoot, nil
 	default:
 		return phase0.Root{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) GasUsed() (uint64, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return 0, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return 0, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.GasUsed, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) GasLimit() (uint64, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return 0, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return 0, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.GasLimit, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) BlockNumber() (uint64, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return 0, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return 0, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.BlockNumber, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
 	}
 }
 

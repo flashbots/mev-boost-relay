@@ -26,6 +26,10 @@ type IDatabaseService interface {
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
 	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.BlockSubmissionProfile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
+	SaveBuilderHeaderSubmission(payload *common.VersionedSubmitHeaderOptimistic, receivedAt time.Time, profile common.HeaderSubmissionProfile) error
+	SaveBuilderOptimisticPayloadReceived(bidTrace *builderApiV1.BidTrace, receivedAt time.Time) error
+	GetBuilderOptimisticSubmissions() (entries []*BuilderOptimisticSubmissionEntry, err error)
+	DeleteExpiredBuilderOptimisticSubmissions() error
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -47,7 +51,7 @@ type IDatabaseService interface {
 	UpsertBlockBuilderEntryAfterSubmission(lastSubmission *BuilderBlockSubmissionEntry, isError bool) error
 	IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 
-	InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error
+	InsertBuilderDemotion(builderDemotionEntry BuilderDemotionEntry) error
 	UpdateBuilderDemotion(trace *common.BidTraceV2WithBlobFields, signedBlock *common.VersionedSignedProposal, signedRegistration *builderApiV1.SignedValidatorRegistration) error
 	GetBuilderDemotion(trace *common.BidTraceV2WithBlobFields) (*BuilderDemotionEntry, error)
 
@@ -60,6 +64,7 @@ type DatabaseService struct {
 
 	nstmtInsertExecutionPayload       *sqlx.NamedStmt
 	nstmtInsertBlockBuilderSubmission *sqlx.NamedStmt
+	nstmtInsertHeaderSubmission       *sqlx.NamedStmt
 }
 
 func NewDatabaseService(dsn string) (*DatabaseService, error) {
@@ -103,6 +108,16 @@ func (s *DatabaseService) prepareNamedQueries() (err error) {
 	(:received_at, :eligible_at, :execution_payload_id, :was_simulated, :sim_success, :sim_error, :sim_req_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :decode_duration, :prechecks_duration, :simulation_duration, :redis_update_duration, :total_duration, :optimistic_submission)
 	RETURNING id`
 	s.nstmtInsertBlockBuilderSubmission, err = s.DB.PrepareNamed(query)
+	if err != nil {
+		return err
+	}
+
+	// Insert header submission
+	query = `INSERT INTO ` + vars.TableBuilderHeaderSubmission + `
+	(received_at, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, payload_load_duration, decode_duration, prechecks_duration, signature_duration, redis_checks_duration, redis_update_duration, total_duration) VALUES
+	(:received_at, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :payload_load_duration, :decode_duration, :prechecks_duration, :signature_duration, :redis_checks_duration, :redis_update_duration, :total_duration)
+	RETURNING id`
+	s.nstmtInsertHeaderSubmission, err = s.DB.PrepareNamed(query)
 	return err
 }
 
@@ -243,6 +258,112 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 	}
 	err = s.nstmtInsertBlockBuilderSubmission.QueryRow(blockSubmissionEntry).Scan(&blockSubmissionEntry.ID)
 	return blockSubmissionEntry, err
+}
+
+func (s *DatabaseService) SaveBuilderHeaderSubmission(payload *common.VersionedSubmitHeaderOptimistic, receivedAt time.Time, profile common.HeaderSubmissionProfile) error {
+	submission, err := common.GetHeaderSubmissionInfo(payload)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		return err
+	}
+
+	headerSubmissionEntry := &BuilderHeaderSubmissionEntry{
+		ReceivedAt: receivedAt,
+		Signature:  submission.Signature.String(),
+
+		Slot:       submission.BidTrace.Slot,
+		ParentHash: submission.BidTrace.ParentHash.String(),
+		BlockHash:  submission.BidTrace.BlockHash.String(),
+
+		BuilderPubkey:        submission.BidTrace.BuilderPubkey.String(),
+		ProposerPubkey:       submission.BidTrace.ProposerPubkey.String(),
+		ProposerFeeRecipient: submission.BidTrace.ProposerFeeRecipient.String(),
+
+		GasUsed:  submission.GasUsed,
+		GasLimit: submission.GasLimit,
+
+		Value: submission.BidTrace.Value.Dec(),
+
+		Epoch:       submission.BidTrace.Slot / common.SlotsPerEpoch,
+		BlockNumber: submission.BlockNumber,
+
+		PayloadLoadDuration: profile.PayloadLoad,
+		DecodeDuration:      profile.Decode,
+		PrechecksDuration:   profile.Prechecks,
+		SignatureDuration:   profile.Signature,
+		RedisChecksDuration: profile.RedisChecks,
+		RedisUpdateDuration: profile.RedisUpdate,
+		TotalDuration:       profile.Total,
+	}
+	err = tx.NamedStmt(s.nstmtInsertHeaderSubmission).QueryRow(headerSubmissionEntry).Scan(&headerSubmissionEntry.ID)
+	if err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("error saving header submission and rolling back: %w: %w", rollbackErr, err)
+		}
+		return err
+	}
+
+	optimisticSubmissionEntry := &BuilderOptimisticSubmissionEntry{
+		BlockHash:         submission.BidTrace.BlockHash.String(),
+		Slot:              submission.BidTrace.Slot,
+		BuilderPubkey:     submission.BidTrace.BuilderPubkey.String(),
+		HeaderReceivedAt:  NewNullTime(receivedAt),
+		PayloadReceivedAt: NewNullTime(time.Time{}),
+	}
+	query := `INSERT INTO ` + vars.TableBuilderOptimisticSubmission + `
+		(block_hash, slot, builder_pubkey, header_received_at, payload_received_at) VALUES
+		(:block_hash, :slot, :builder_pubkey, :header_received_at, :payload_received_at)
+		ON CONFLICT (block_hash)
+        DO UPDATE SET header_received_at = EXCLUDED.header_received_at;`
+	_, err = tx.NamedExec(query, optimisticSubmissionEntry)
+	if err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("error saving optimistic submission and rolling back: %w, %w", rollbackErr, err)
+		}
+		return err
+	}
+	err = tx.Commit()
+	return err
+}
+
+func (s *DatabaseService) SaveBuilderOptimisticPayloadReceived(bidTrace *builderApiV1.BidTrace, receivedAt time.Time) error {
+	optimisticSubmissionEntry := &BuilderOptimisticSubmissionEntry{
+		BlockHash:         bidTrace.BlockHash.String(),
+		Slot:              bidTrace.Slot,
+		BuilderPubkey:     bidTrace.BuilderPubkey.String(),
+		ProposerPubkey:    bidTrace.ProposerPubkey.String(),
+		Value:             bidTrace.Value.Dec(),
+		FeeRecipient:      bidTrace.ProposerFeeRecipient.String(),
+		HeaderReceivedAt:  NewNullTime(time.Time{}),
+		PayloadReceivedAt: NewNullTime(receivedAt),
+	}
+
+	query := `INSERT INTO ` + vars.TableBuilderOptimisticSubmission + `
+		(block_hash, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, header_received_at, payload_received_at) VALUES
+		(:block_hash, :slot, :builder_pubkey, :proposer_pubkey, :value, :fee_recipient, :header_received_at, :payload_received_at)
+		ON CONFLICT (block_hash)
+        DO UPDATE SET payload_received_at = EXCLUDED.payload_received_at;`
+	_, err := s.DB.NamedExec(query, optimisticSubmissionEntry)
+	return err
+}
+
+func (s *DatabaseService) GetBuilderOptimisticSubmissions() (entries []*BuilderOptimisticSubmissionEntry, err error) {
+	query := `SELECT inserted_at, block_hash, slot, builder_pubkey, header_received_at, payload_received_at
+	FROM ` + vars.TableBuilderOptimisticSubmission + `;`
+	err = s.DB.Select(&entries, query)
+	return entries, err
+}
+
+func (s *DatabaseService) DeleteExpiredBuilderOptimisticSubmissions() error {
+	expiryInterval := "1 minute"
+	query := `DELETE FROM ` + vars.TableBuilderOptimisticSubmission + `
+	WHERE NOW() - INTERVAL '` + expiryInterval + `' > inserted_at;`
+	_, err := s.DB.Exec(query)
+	return err
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
@@ -545,36 +666,12 @@ func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error 
 	return err
 }
 
-func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error {
-	_submitBlockRequest, err := json.Marshal(submitBlockRequest.Capella)
-	if err != nil {
-		return err
-	}
-	submission, err := common.GetBlockSubmissionInfo(submitBlockRequest)
-	if err != nil {
-		return err
-	}
-	builderDemotionEntry := BuilderDemotionEntry{
-		SubmitBlockRequest: NewNullString(string(_submitBlockRequest)),
-
-		Epoch: submission.BidTrace.Slot / common.SlotsPerEpoch,
-		Slot:  submission.BidTrace.Slot,
-
-		BuilderPubkey:  submission.BidTrace.BuilderPubkey.String(),
-		ProposerPubkey: submission.BidTrace.ProposerPubkey.String(),
-
-		Value:        submission.BidTrace.Value.Dec(),
-		FeeRecipient: submission.BidTrace.ProposerFeeRecipient.String(),
-
-		BlockHash: submission.BidTrace.BlockHash.String(),
-		SimError:  simError.Error(),
-	}
-
+func (s *DatabaseService) InsertBuilderDemotion(builderDemotionEntry BuilderDemotionEntry) error {
 	query := `INSERT INTO ` + vars.TableBuilderDemotions + `
-		(submit_block_request, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, sim_error) VALUES
-		(:submit_block_request, :epoch, :slot, :builder_pubkey, :proposer_pubkey, :value, :fee_recipient, :block_hash, :sim_error);
+		(submit_block_request, epoch, slot, builder_pubkey, proposer_pubkey, value, fee_recipient, block_hash, sim_error, reason) VALUES
+		(:submit_block_request, :epoch, :slot, :builder_pubkey, :proposer_pubkey, :value, :fee_recipient, :block_hash, :sim_error, :reason);
 	`
-	_, err = s.DB.NamedExec(query, builderDemotionEntry)
+	_, err := s.DB.NamedExec(query, builderDemotionEntry)
 	return err
 }
 

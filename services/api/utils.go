@@ -25,11 +25,7 @@ var (
 	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
 )
 
-func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
-	submission, err := common.GetBlockSubmissionInfo(payload)
-	if err != nil {
-		return err
-	}
+func SanityCheckBuilderBlockSubmission(submission *common.BlockSubmissionInfo) error {
 	if submission.BidTrace.BlockHash.String() != submission.ExecutionPayloadBlockHash.String() {
 		return ErrBlockHashMismatch
 	}
