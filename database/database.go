@@ -546,7 +546,7 @@ func (s *DatabaseService) DeleteExecutionPayloads(idFirst, idLast uint64) error 
 }
 
 func (s *DatabaseService) InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error {
-	_submitBlockRequest, err := json.Marshal(submitBlockRequest.Capella)
+	_submitBlockRequest, err := json.Marshal(submitBlockRequest)
 	if err != nil {
 		return err
 	}

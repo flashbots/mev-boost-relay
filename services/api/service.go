@@ -608,7 +608,12 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlo
 		api.log.Error(fmt.Errorf("error setting builder: %v status: %w", pubkey, err))
 	}
 	// Write to demotions table.
-	api.log.WithFields(logrus.Fields{"builder_pubkey": pubkey}).Info("demoting builder")
+	api.log.WithFields(logrus.Fields{
+		"builderPubkey": pubkey,
+		"slot":          req.Slot,
+		"blockHash":     req.BlockHash,
+		"demotionErr":   simError.Error(),
+	}).Info("demoting builder")
 	bidTrace, err := req.BidTrace()
 	if err != nil {
 		api.log.WithError(err).Warn("failed to get bid trace from submit block request")
