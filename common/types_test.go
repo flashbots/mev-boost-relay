@@ -5,15 +5,14 @@ import (
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
-func makeTestSubmitBlockRequestV2Optimistic(t *testing.T) *SubmitBlockRequestV2Optimistic {
+func makeTestVersionedSubmitHeaderOptimistic(t *testing.T) *VersionedSubmitHeaderOptimistic {
 	t.Helper()
 	testParentHash, err := utils.HexToHash("0xec51bd499a3fa0270f1446fbf05ff0b61157cfe4ec719bb4c3e834e339ee9c5c")
 	require.NoError(t, err)
@@ -35,51 +34,40 @@ func makeTestSubmitBlockRequestV2Optimistic(t *testing.T) *SubmitBlockRequestV2O
 	err = testValue.SetFromDecimal("100")
 	require.NoError(t, err)
 
-	return &SubmitBlockRequestV2Optimistic{
-		Message: &builderApiV1.BidTrace{
-			Slot:                 31,
-			ParentHash:           testParentHash,
-			BlockHash:            testBlockHash,
-			BuilderPubkey:        testBuilderPubkey,
-			ProposerPubkey:       testProposerPubkey,
-			ProposerFeeRecipient: testAddress,
-			GasLimit:             30_000_000,
-			GasUsed:              15_000_000,
-			Value:                testValue,
-		},
-		ExecutionPayloadHeader: &capella.ExecutionPayloadHeader{
-			ParentHash:       testParentHash,
-			FeeRecipient:     testAddress,
-			StateRoot:        [32]byte(testBlockHash),
-			ReceiptsRoot:     [32]byte(testBlockHash),
-			LogsBloom:        [256]byte{0xaa, 0xbb, 0xcc},
-			PrevRandao:       [32]byte(testRandao),
-			BlockNumber:      30,
-			GasLimit:         30_000_000,
-			GasUsed:          15_000_000,
-			Timestamp:        168318215,
-			ExtraData:        make([]byte, 32),
-			BaseFeePerGas:    [32]byte{0xaa, 0xbb},
-			BlockHash:        testBlockHash,
-			TransactionsRoot: phase0.Root(testRoot),
-			WithdrawalsRoot:  phase0.Root(testRoot),
-		},
-		Signature: testSignature,
-		Transactions: []bellatrix.Transaction{
-			[]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09},
-			[]byte{0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19},
-			[]byte{0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29},
-			[]byte{0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39},
-			[]byte{0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49},
-			[]byte{0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59},
-		},
-		Withdrawals: []*capella.Withdrawal{
-			{
-				Index:          capella.WithdrawalIndex(120),
-				ValidatorIndex: phase0.ValidatorIndex(121),
-				Address:        testAddress,
-				Amount:         phase0.Gwei(102412521125125),
+	return &VersionedSubmitHeaderOptimistic{
+		Version: spec.DataVersionDeneb,
+		Deneb: &DenebSubmitHeaderOptimistic{
+			Message: &builderApiV1.BidTrace{
+				Slot:                 31,
+				ParentHash:           testParentHash,
+				BlockHash:            testBlockHash,
+				BuilderPubkey:        testBuilderPubkey,
+				ProposerPubkey:       testProposerPubkey,
+				ProposerFeeRecipient: testAddress,
+				GasLimit:             30_000_000,
+				GasUsed:              15_000_000,
+				Value:                testValue,
 			},
+			ExecutionPayloadHeader: &deneb.ExecutionPayloadHeader{
+				ParentHash:       testParentHash,
+				FeeRecipient:     testAddress,
+				StateRoot:        [32]byte(testBlockHash),
+				ReceiptsRoot:     [32]byte(testBlockHash),
+				LogsBloom:        [256]byte{0xaa, 0xbb, 0xcc},
+				PrevRandao:       [32]byte(testRandao),
+				BlockNumber:      30,
+				GasLimit:         30_000_000,
+				GasUsed:          15_000_000,
+				Timestamp:        168318215,
+				ExtraData:        make([]byte, 32),
+				BaseFeePerGas:    uint256.NewInt(100),
+				BlockHash:        testBlockHash,
+				TransactionsRoot: phase0.Root(testRoot),
+				WithdrawalsRoot:  phase0.Root(testRoot),
+				BlobGasUsed:      15_000_000,
+				ExcessBlobGas:    30_000_000,
+			},
+			Signature: testSignature,
 		},
 	}
 }
@@ -90,45 +78,45 @@ func TestDataVersion(t *testing.T) {
 	require.Equal(t, ForkVersionStringDeneb, spec.DataVersionDeneb.String())
 }
 
-func compareV2RequestEquality(t *testing.T, src, targ *SubmitBlockRequestV2Optimistic) {
+func compareV2RequestEquality(t *testing.T, src, targ *VersionedSubmitHeaderOptimistic) {
 	t.Helper()
-	require.Equal(t, src.Message.String(), targ.Message.String())
-	require.Equal(t, src.ExecutionPayloadHeader.String(), targ.ExecutionPayloadHeader.String())
-	require.Equal(t, src.Signature, targ.Signature)
-	for i := 0; i < len(src.Transactions); i++ {
-		require.Equal(t, src.Transactions[i], targ.Transactions[i])
-	}
-	for i := 0; i < len(src.Withdrawals); i++ {
-		require.Equal(t, src.Withdrawals[i].String(), targ.Withdrawals[i].String())
-	}
+	srcBidTrace, err := src.BidTrace()
+	require.NoError(t, err)
+	targBidTrace, err := targ.BidTrace()
+	require.NoError(t, err)
+	require.Equal(t, srcBidTrace, targBidTrace)
+	srcBlockHash, err := src.ExecutionPayloadBlockHash()
+	require.NoError(t, err)
+	targBlockHash, err := targ.ExecutionPayloadBlockHash()
+	require.NoError(t, err)
+	require.Equal(t, srcBlockHash, targBlockHash)
+	srcSignature, err := src.Signature()
+	require.NoError(t, err)
+	targSignature, err := targ.Signature()
+	require.NoError(t, err)
+	require.Equal(t, srcSignature, targSignature)
 }
 
-func TestSubmitBlockRequestV2Optimistic(t *testing.T) {
-	obj := makeTestSubmitBlockRequestV2Optimistic(t)
+func TestSubmitBlockHeaderV2Optimistic(t *testing.T) {
+	obj := makeTestVersionedSubmitHeaderOptimistic(t)
 
 	// Encode the object.
 	sszObj, err := obj.MarshalSSZ()
 	require.NoError(t, err)
-	require.Len(t, sszObj, obj.SizeSSZ())
+	require.Len(t, sszObj, 956)
 
-	// Unmarshal the full object.
-	unmarshal := new(SubmitBlockRequestV2Optimistic)
+	// Unmarshal the header.
+	unmarshal := new(VersionedSubmitHeaderOptimistic)
 	err = unmarshal.UnmarshalSSZ(sszObj)
 	require.NoError(t, err)
 
 	compareV2RequestEquality(t, obj, unmarshal)
 
-	// Clear out non-header data.
-	obj.Transactions = []bellatrix.Transaction{}
-	obj.Withdrawals = []*capella.Withdrawal{}
-
-	// Unmarshal just the header.
-	unmarshalHeader := new(SubmitBlockRequestV2Optimistic)
-	err = unmarshalHeader.UnmarshalSSZHeaderOnly(sszObj)
+	// Add KZG data.
+	obj.Deneb.BlobKZGCommitments = make([]deneb.KZGCommitment, 1)
+	sszObj, err = obj.MarshalSSZ()
 	require.NoError(t, err)
 
-	compareV2RequestEquality(t, obj, unmarshalHeader)
-
-	// Make sure size is correct (must have 32 bytes of ExtraData).
-	require.Equal(t, 944, unmarshalHeader.SizeSSZ())
+	// Make sure size is correct (must have 48 extra bytes from KZG commitments).
+	require.Len(t, sszObj, 1004)
 }

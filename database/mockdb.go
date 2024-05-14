@@ -36,8 +36,24 @@ func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*Validat
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.BlockSubmissionProfile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
+}
+
+func (db MockDB) SaveBuilderHeaderSubmission(payload *common.VersionedSubmitHeaderOptimistic, receivedAt time.Time, profile common.HeaderSubmissionProfile) error {
+	return nil
+}
+
+func (db MockDB) SaveBuilderOptimisticPayloadReceived(bidTrace *builderApiV1.BidTrace, receivedAt time.Time) error {
+	return nil
+}
+
+func (db MockDB) GetBuilderOptimisticSubmissions() ([]*BuilderOptimisticSubmissionEntry, error) {
+	return []*BuilderOptimisticSubmissionEntry{}, nil
+}
+
+func (db MockDB) DeleteExpiredBuilderOptimisticSubmissions() error {
+	return nil
 }
 
 func (db MockDB) GetExecutionPayloadEntryByID(executionPayloadID int64) (entry *ExecutionPayloadEntry, err error) {
@@ -153,12 +169,8 @@ func (db MockDB) IncBlockBuilderStatsAfterGetPayload(builderPubkey string) error
 	return nil
 }
 
-func (db MockDB) InsertBuilderDemotion(submitBlockRequest *common.VersionedSubmitBlockRequest, simError error) error {
-	pubkey, err := submitBlockRequest.Builder()
-	if err != nil {
-		return err
-	}
-	db.Demotions[pubkey.String()] = true
+func (db MockDB) InsertBuilderDemotion(builderDemotionEntry BuilderDemotionEntry) error {
+	db.Demotions[builderDemotionEntry.BuilderPubkey] = true
 	return nil
 }
 

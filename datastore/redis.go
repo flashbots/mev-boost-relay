@@ -12,6 +12,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -496,31 +497,26 @@ type SaveBidAndUpdateTopBidResponse struct {
 	PrevTopBidValue *big.Int
 
 	TimePrep         time.Duration
-	TimeSavePayload  time.Duration
 	TimeSaveBid      time.Duration
 	TimeSaveTrace    time.Duration
+	TimeSavePayload  time.Duration
 	TimeUpdateTopBid time.Duration
 	TimeUpdateFloor  time.Duration
 }
 
-func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *common.BidTraceV2WithBlobFields, payload *common.VersionedSubmitBlockRequest, getPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse, getHeaderResponse *builderSpec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
+func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis.Pipeliner, trace *builderApiV1.BidTrace, blockSubmission *common.BlockSubmissionInfo, getPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse, getHeaderResponse *builderSpec.VersionedSignedBuilderBid, reqReceivedAt time.Time, isCancellationEnabled bool, floorValue *big.Int) (state SaveBidAndUpdateTopBidResponse, err error) {
 	var prevTime, nextTime time.Time
 	prevTime = time.Now()
 
-	submission, err := common.GetBlockSubmissionInfo(payload)
-	if err != nil {
-		return state, err
-	}
-
 	// Load latest bids for a given slot+parent+proposer
-	builderBids, err := NewBuilderBidsFromRedis(ctx, r, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
+	builderBids, err := NewBuilderBidsFromRedis(ctx, r, pipeliner, trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String())
 	if err != nil {
 		return state, err
 	}
 
 	// Load floor value (if not passed in already)
 	if floorValue == nil {
-		floorValue, err = r.GetFloorBidValue(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
+		floorValue, err = r.GetFloorBidValue(ctx, pipeliner, trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String())
 		if err != nil {
 			return state, err
 		}
@@ -534,7 +530,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	state.PrevTopBidValue = state.TopBidValue
 
 	// Abort now if non-cancellation bid is lower than floor value
-	isBidAboveFloor := submission.BidTrace.Value.ToBig().Cmp(floorValue) == 1
+	isBidAboveFloor := trace.Value.ToBig().Cmp(floorValue) == 1
 	if !isCancellationEnabled && !isBidAboveFloor {
 		return state, nil
 	}
@@ -547,49 +543,61 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	//
 	// Time to save things in Redis
 	//
-	// 1. Save the execution payload
-	switch payload.Version {
-	case spec.DataVersionCapella:
-		err = r.SaveExecutionPayloadCapella(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Capella)
-		if err != nil {
-			return state, err
-		}
-	case spec.DataVersionDeneb:
-		err = r.SavePayloadContentsDeneb(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Deneb)
-		if err != nil {
-			return state, err
-		}
-	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		return state, fmt.Errorf("unsupported payload version: %s", payload.Version) //nolint:goerr113
-	}
-
-	// Record time needed to save payload
-	nextTime = time.Now().UTC()
-	state.TimeSavePayload = nextTime.Sub(prevTime)
-	prevTime = nextTime
-
-	// 2. Save latest bid for this builder
-	err = r.SaveBuilderBid(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BuilderPubkey.String(), reqReceivedAt, getHeaderResponse)
+	// 1. Save latest bid for this builder
+	err = r.SaveBuilderBid(ctx, pipeliner, trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String(), trace.BuilderPubkey.String(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
 		return state, err
 	}
-	builderBids.bidValues[submission.BidTrace.BuilderPubkey.String()] = submission.BidTrace.Value.ToBig()
+	builderBids.bidValues[trace.BuilderPubkey.String()] = trace.Value.ToBig()
 
 	// Record time needed to save bid
 	nextTime = time.Now().UTC()
 	state.TimeSaveBid = nextTime.Sub(prevTime)
 	prevTime = nextTime
 
-	// 3. Save the bid trace
-	err = r.SaveBidTrace(ctx, pipeliner, trace)
-	if err != nil {
-		return state, err
+	// 2. Save the bid trace
+	if blockSubmission != nil {
+		bidTrace := common.BidTraceV2WithBlobFields{
+			BidTrace:      *trace,
+			BlockNumber:   blockSubmission.BlockNumber,
+			NumTx:         uint64(len(blockSubmission.Transactions)),
+			NumBlobs:      uint64(len(blockSubmission.Blobs)),
+			BlobGasUsed:   blockSubmission.BlobGasUsed,
+			ExcessBlobGas: blockSubmission.ExcessBlobGas,
+		}
+		err = r.SaveBidTrace(ctx, pipeliner, &bidTrace)
+		if err != nil {
+			return state, err
+		}
+
+		// Record time needed to save trace
+		nextTime = time.Now().UTC()
+		state.TimeSaveTrace = nextTime.Sub(prevTime)
+		prevTime = nextTime
 	}
 
-	// Record time needed to save trace
-	nextTime = time.Now().UTC()
-	state.TimeSaveTrace = nextTime.Sub(prevTime)
-	prevTime = nextTime
+	// 3. Save the execution payload
+	if getPayloadResponse != nil {
+		switch getPayloadResponse.Version {
+		case spec.DataVersionCapella:
+			err = r.SaveExecutionPayloadCapella(ctx, pipeliner, trace.Slot, trace.ProposerPubkey.String(), trace.BlockHash.String(), getPayloadResponse.Capella)
+			if err != nil {
+				return state, err
+			}
+		case spec.DataVersionDeneb:
+			err = r.SavePayloadContentsDeneb(ctx, pipeliner, trace.Slot, trace.ProposerPubkey.String(), trace.BlockHash.String(), getPayloadResponse.Deneb)
+			if err != nil {
+				return state, err
+			}
+		case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+			return state, fmt.Errorf("unsupported payload version: %s", getPayloadResponse.Version) //nolint:goerr113
+		}
+
+		// Record time needed to save payload
+		nextTime = time.Now().UTC()
+		state.TimeSavePayload = nextTime.Sub(prevTime)
+		prevTime = nextTime
+	}
 
 	// If top bid value hasn't change, abort now
 	_, state.TopBidValue = builderBids.getTopBid()
@@ -597,11 +605,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 		return state, nil
 	}
 
-	state, err = r._updateTopBid(ctx, pipeliner, state, builderBids, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), floorValue)
+	state, err = r._updateTopBid(ctx, pipeliner, state, builderBids, trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String(), floorValue)
 	if err != nil {
 		return state, err
 	}
-	state.IsNewTopBid = submission.BidTrace.Value.ToBig().Cmp(state.TopBidValue) == 0
+	state.IsNewTopBid = trace.Value.ToBig().Cmp(state.TopBidValue) == 0
 	// An Exec happens in _updateTopBid.
 	state.WasBidSaved = true
 
@@ -615,8 +623,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	}
 
 	// Non-cancellable bid above floor should set new floor
-	keyBidSource := r.keyLatestBidByBuilder(submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BuilderPubkey.String())
-	keyFloorBid := r.keyFloorBid(submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
+	keyBidSource := r.keyLatestBidByBuilder(trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String(), trace.BuilderPubkey.String())
+	keyFloorBid := r.keyFloorBid(trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String())
 	c := pipeliner.Copy(ctx, keyBidSource, keyFloorBid, 0, true)
 	_, err = pipeliner.Exec(ctx)
 	if err != nil {
@@ -634,8 +642,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 		return state, err
 	}
 
-	keyFloorBidValue := r.keyFloorBidValue(submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
-	err = pipeliner.Set(ctx, keyFloorBidValue, submission.BidTrace.Value.Dec(), expiryBidCache).Err()
+	keyFloorBidValue := r.keyFloorBidValue(trace.Slot, trace.ParentHash.String(), trace.ProposerPubkey.String())
+	err = pipeliner.Set(ctx, keyFloorBidValue, trace.Value.Dec(), expiryBidCache).Err()
 	if err != nil {
 		return state, err
 	}

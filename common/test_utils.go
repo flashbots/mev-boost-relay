@@ -186,9 +186,14 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 					Message: bidTrace,
 					ExecutionPayload: &deneb.ExecutionPayload{ //nolint:exhaustruct
 						BaseFeePerGas: uint256.NewInt(0),
+						ExtraData:     make([]byte, 32),
+						Transactions:  make([]bellatrix.Transaction, 0),
+						Withdrawals:   make([]*capella.Withdrawal, 0),
 					},
 					BlobsBundle: &builderApiDeneb.BlobsBundle{ //nolint:exhaustruct
 						Commitments: make([]deneb.KZGCommitment, 0),
+						Proofs:      make([]deneb.KZGProof, 0),
+						Blobs:       make([]deneb.Blob, 0),
 					},
 					Signature: phase0.BLSSignature{},
 				},

@@ -125,6 +125,56 @@ func (e *ExecutionPayloadEntry) ToCSVRecord() []string {
 	}
 }
 
+type BuilderOptimisticSubmissionEntry struct {
+	InsertedAt time.Time `db:"inserted_at"`
+
+	BlockHash      string `db:"block_hash"`
+	Slot           uint64 `db:"slot"`
+	BuilderPubkey  string `db:"builder_pubkey"`
+	ProposerPubkey string `db:"proposer_pubkey"`
+
+	Value        string `db:"value"`
+	FeeRecipient string `db:"fee_recipient"`
+
+	HeaderReceivedAt  sql.NullTime `db:"header_received_at"`
+	PayloadReceivedAt sql.NullTime `db:"payload_received_at"`
+}
+
+type BuilderHeaderSubmissionEntry struct {
+	ID         int64     `db:"id"`
+	InsertedAt time.Time `db:"inserted_at"`
+	ReceivedAt time.Time `db:"received_at"`
+
+	// BidTrace data
+	Signature string `db:"signature"`
+
+	Slot       uint64 `db:"slot"`
+	ParentHash string `db:"parent_hash"`
+	BlockHash  string `db:"block_hash"`
+
+	BuilderPubkey        string `db:"builder_pubkey"`
+	ProposerPubkey       string `db:"proposer_pubkey"`
+	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
+
+	GasUsed  uint64 `db:"gas_used"`
+	GasLimit uint64 `db:"gas_limit"`
+
+	Value string `db:"value"`
+
+	// Helpers
+	Epoch       uint64 `db:"epoch"`
+	BlockNumber uint64 `db:"block_number"`
+
+	// Profile data
+	PayloadLoadDuration uint64 `db:"payload_load_duration"`
+	DecodeDuration      uint64 `db:"decode_duration"`
+	PrechecksDuration   uint64 `db:"prechecks_duration"`
+	SignatureDuration   uint64 `db:"signature_duration"`
+	RedisChecksDuration uint64 `db:"redis_checks_duration"`
+	RedisUpdateDuration uint64 `db:"redis_update_duration"`
+	TotalDuration       uint64 `db:"total_duration"`
+}
+
 type BuilderBlockSubmissionEntry struct {
 	ID         int64        `db:"id"`
 	InsertedAt time.Time    `db:"inserted_at"`
@@ -229,6 +279,7 @@ type BuilderDemotionEntry struct {
 	InsertedAt time.Time `db:"inserted_at"`
 
 	SubmitBlockRequest          sql.NullString `db:"submit_block_request"`
+	SubmitHeaderRequest         sql.NullString `db:"submit_header_request"`
 	SignedBeaconBlock           sql.NullString `db:"signed_beacon_block"`
 	SignedValidatorRegistration sql.NullString `db:"signed_validator_registration"`
 
@@ -244,7 +295,8 @@ type BuilderDemotionEntry struct {
 
 	BlockHash string `db:"block_hash"`
 
-	SimError string `db:"sim_error"`
+	SimError string         `db:"sim_error"`
+	Reason   sql.NullString `db:"reason"`
 }
 
 type TooLateGetPayloadEntry struct {

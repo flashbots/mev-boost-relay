@@ -39,7 +39,7 @@ var (
 	feeRecipient = bellatrix.ExecutionAddress{0x02}
 	blockHashStr = "0xa645370cc112c2e8e3cce121416c7dc849e773506d4b6fb9b752ada711355369"
 	testDBDSN    = common.GetEnv("TEST_DB_DSN", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
-	profile      = common.Profile{
+	profile      = common.BlockSubmissionProfile{
 		Decode:      42,
 		Prechecks:   43,
 		Simulation:  44,
@@ -327,7 +327,9 @@ func TestInsertBuilderDemotion(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			db := resetDatabase(t)
 
-			err = db.InsertBuilderDemotion(c.req, errFoo)
+			demotion, err := BuilderSubmissionToBuilderDemotionEntry(c.req, errFoo, errFoo)
+			require.NoError(t, err)
+			err = db.InsertBuilderDemotion(demotion)
 			require.NoError(t, err)
 
 			entry, err := db.GetBuilderDemotion(trace)
@@ -390,7 +392,9 @@ func TestUpdateBuilderDemotion(t *testing.T) {
 			require.Nil(t, demotion)
 
 			// Insert demotion
-			err = db.InsertBuilderDemotion(c.req, errFoo)
+			entry, err := BuilderSubmissionToBuilderDemotionEntry(c.req, errFoo, errFoo)
+			require.NoError(t, err)
+			err = db.InsertBuilderDemotion(entry)
 			require.NoError(t, err)
 
 			// Now demotion should show up.

@@ -270,7 +270,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 				simulationError: tc.simulationError,
 			}
 			simResultC := make(chan *blockSimResult, 1)
-			backend.relay.processOptimisticBlock(blockSimOptions{
+			err := backend.relay.processOptimisticBlock(blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				builder: &blockBuilderCacheEntry{
@@ -283,6 +283,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 						secretkey, getTestBidTrace(*pubkey, collateral, slot), tc.version),
 				},
 			}, simResultC)
+			require.ErrorIs(t, err, tc.simulationError)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
@@ -337,7 +338,7 @@ func TestDemoteBuilder(t *testing.T) {
 			pubkey, secretkey, backend := startTestBackend(t)
 			pkStr := pubkey.String()
 			req := common.TestBuilderSubmitBlockRequest(secretkey, getTestBidTrace(*pubkey, collateral, slot), tc.version)
-			backend.relay.demoteBuilder(pkStr, req, errFake)
+			backend.relay.demoteBuilder(pkStr, req, nil, errFake)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)

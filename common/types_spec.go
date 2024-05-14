@@ -102,6 +102,43 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 	return nil, ErrEmptyPayload
 }
 
+func BuildGetHeaderResponseOptimistic(payload *VersionedSubmitHeaderOptimistic, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
+	if payload == nil {
+		return nil, ErrMissingRequest
+	}
+
+	if sk == nil {
+		return nil, ErrMissingSecretKey
+	}
+
+	switch payload.Version {
+	case spec.DataVersionDeneb:
+		builderBid := builderApiDeneb.BuilderBid{
+			Header:             payload.Deneb.ExecutionPayloadHeader,
+			BlobKZGCommitments: payload.Deneb.BlobKZGCommitments,
+			Value:              payload.Deneb.Message.Value,
+			Pubkey:             *pubkey,
+		}
+
+		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		if err != nil {
+			return nil, err
+		}
+
+		return &builderSpec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionDeneb,
+			Deneb: &builderApiDeneb.SignedBuilderBid{
+				Message:   &builderBid,
+				Signature: sig,
+			},
+		}, nil
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix, spec.DataVersionCapella:
+		return nil, ErrInvalidVersion
+	default:
+		return nil, ErrEmptyPayload
+	}
+}
+
 func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	value, err := payload.Value()
 	if err != nil {
