@@ -2958,14 +2958,14 @@ func (api *RelayAPI) handleInternalBuilderCollateral(w http.ResponseWriter, req 
 	if req.Method == http.MethodPost || req.Method == http.MethodPut {
 		args := req.URL.Query()
 		collateral := args.Get("collateral")
-		value := args.Get("value")
+		builderID := args.Get("builder_id")
 		log := api.log.WithFields(logrus.Fields{
 			"pubkey":     builderPubkey,
 			"collateral": collateral,
-			"value":      value,
+			"builderID":  builderID,
 		})
 		log.Infof("updating builder collateral")
-		if err := api.db.SetBlockBuilderCollateral(builderPubkey, collateral, value); err != nil {
+		if err := api.db.SetBlockBuilderCollateral(builderPubkey, builderID, collateral); err != nil {
 			fullErr := fmt.Errorf("unable to set collateral in db for pubkey: %v: %w", builderPubkey, err)
 			log.Error(fullErr.Error())
 			api.RespondError(w, http.StatusInternalServerError, fullErr.Error())
