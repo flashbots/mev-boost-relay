@@ -458,6 +458,9 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// start block-builder API specific things
 	if api.opts.BlockBuilderAPI {
+		// Initialize metrics
+		metrics.BuilderDemotionCount.Add(context.Background(), 0)
+
 		// Get current proposer duties blocking before starting, to have them ready
 		api.updateProposerDuties(syncStatus.HeadSlot)
 
@@ -600,6 +603,11 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 }
 
 func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlockRequest, simError error) {
+	metrics.BuilderDemotionCount.Add(
+		context.Background(),
+		1,
+	)
+
 	builderEntry, ok := api.blockBuildersCache[pubkey]
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)

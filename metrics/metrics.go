@@ -22,6 +22,8 @@ var (
 	GetPayloadLatencyHistogram   otelapi.Float64Histogram
 	PublishBlockLatencyHistogram otelapi.Float64Histogram
 
+	BuilderDemotionCount otelapi.Int64Counter
+
 	latencyBoundaries = otelapi.WithExplicitBucketBoundaries(func() []float64 {
 		base := math.Exp(math.Log(12.0) / 15.0)
 		res := make([]float64, 0, 31)
@@ -37,6 +39,7 @@ func Setup(ctx context.Context) error {
 		setupMeter, // must come first
 		setupGetPayloadLatency,
 		setupPublishBlockLatency,
+		setupBuilderDemotionCount,
 	} {
 		if err := setup(ctx); err != nil {
 			return err
@@ -93,6 +96,18 @@ func setupPublishBlockLatency(ctx context.Context) error {
 		latencyBoundaries,
 	)
 	PublishBlockLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupBuilderDemotionCount(ctx context.Context) error {
+	counter, err := meter.Int64Counter(
+		"builder_demotion_count",
+		otelapi.WithDescription("number of times a builder has been demoted"),
+	)
+	BuilderDemotionCount = counter
 	if err != nil {
 		return err
 	}
