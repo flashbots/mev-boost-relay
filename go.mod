@@ -6,7 +6,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
 	github.com/attestantio/go-builder-client v0.4.6-0.20240508205504-2210689d2f24
-	github.com/attestantio/go-eth2-client v0.21.4-0.20240508205406-66fbb02e3c16
+	github.com/attestantio/go-eth2-client v0.21.4-0.20240514220516-2646ce28c3e4
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
@@ -123,3 +123,6 @@ retract (
 
 // This version points to Lightclient's prague-devnet-0 branch.
 replace github.com/ethereum/go-ethereum => github.com/lightclient/go-ethereum v1.10.10-0.20240429213339-9b7958ba0063
+
+// Temporary replacement until Jim merges https://github.com/attestantio/go-eth2-client/pull/141
+replace github.com/attestantio/go-eth2-client => github.com/jtraglia/go-eth2-client v0.21.4-0.20240517074005-afe509204532

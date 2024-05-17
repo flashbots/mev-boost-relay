@@ -380,7 +380,7 @@ func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash s
 	return resp, err
 }
 
-func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) (err error) {
+func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) (err error) {
 	key := r.keyPayloadContentsElectra(slot, proposerPubkey, blockHash)
 	b, err := execPayload.MarshalSSZ()
 	if err != nil {
@@ -598,7 +598,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 			return state, err
 		}
 	case spec.DataVersionElectra:
-		err = r.SavePayloadContentsElectra(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Deneb)
+		err = r.SavePayloadContentsElectra(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Electra)
 		if err != nil {
 			return state, err
 		}

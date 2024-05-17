@@ -165,6 +165,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		BellatrixForkVersionHex:       bellatrixForkVersion,
 		CapellaForkVersionHex:         capellaForkVersion,
 		DenebForkVersionHex:           denebForkVersion,
+		ElectraForkVersionHex:         electraForkVersion,
 		DomainBuilder:                 domainBuilder,
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,

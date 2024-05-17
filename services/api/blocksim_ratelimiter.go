@@ -24,6 +24,7 @@ var (
 	ErrJSONDecodeFailed = errors.New("json error")
 	ErrNoCapellaPayload = errors.New("capella payload is nil")
 	ErrNoDenebPayload   = errors.New("deneb payload is nil")
+	ErrNoElectraPayload = errors.New("electra payload is nil")
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 10000)) * time.Millisecond
@@ -86,6 +87,10 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 		return ErrNoDenebPayload, nil
 	}
 
+	if payload.Version == spec.DataVersionElectra && payload.Electra == nil {
+		return ErrNoElectraPayload, nil
+	}
+
 	submission, err := common.GetBlockSubmissionInfo(payload.VersionedSubmitBlockRequest)
 	if err != nil {
 		return err, nil
@@ -102,7 +107,9 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}
 
 	// Create and fire off JSON-RPC request
-	if payload.Version == spec.DataVersionDeneb {
+	if payload.Version == spec.DataVersionElectra {
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV4", payload)
+	} else if payload.Version == spec.DataVersionDeneb {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
 	} else {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
