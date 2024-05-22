@@ -19,9 +19,22 @@ const (
 var (
 	meter otelapi.Meter
 
+	GetHeaderLatencyHistogram    otelapi.Float64Histogram
 	GetPayloadLatencyHistogram   otelapi.Float64Histogram
 	PublishBlockLatencyHistogram otelapi.Float64Histogram
 
+	SubmitNewBlockLatencyHistogram           otelapi.Float64Histogram
+	SubmitNewBlockReadLatencyHistogram       otelapi.Float64Histogram
+	SubmitNewBlockDecodeLatencyHistogram     otelapi.Float64Histogram
+	SubmitNewBlockPrechecksLatencyHistogram  otelapi.Float64Histogram
+	SubmitNewBlockSimulationLatencyHistogram otelapi.Float64Histogram
+	SubmitNewBlockRedisLatencyHistogram      otelapi.Float64Histogram
+
+	SubmitNewBlockRedisPayloadLatencyHistogram otelapi.Float64Histogram
+	SubmitNewBlockRedisTopBidLatencyHistogram  otelapi.Float64Histogram
+	SubmitNewBlockRedisFloorLatencyHistogram   otelapi.Float64Histogram
+
+	SubmitNewBlockCount  otelapi.Int64Counter
 	BuilderDemotionCount otelapi.Int64Counter
 
 	latencyBoundaries = otelapi.WithExplicitBucketBoundaries(func() []float64 {
@@ -37,8 +50,18 @@ var (
 func Setup(ctx context.Context) error {
 	for _, setup := range []func(context.Context) error{
 		setupMeter, // must come first
+		setupGetHeaderLatency,
 		setupGetPayloadLatency,
 		setupPublishBlockLatency,
+		setupSubmitNewBlockLatency,
+		setupSubmitNewBlockReadLatency,
+		setupSubmitNewBlockDecodeLatency,
+		setupSubmitNewBlockPrechecksLatency,
+		setupSubmitNewBlockSimulationLatency,
+		setupSubmitNewBlockRedisLatency,
+		setupSubmitNewBlockRedisPayloadLatency,
+		setupSubmitNewBlockRedisTopBidLatency,
+		setupSubmitNewBlockRedisFloorLatency,
 		setupBuilderDemotionCount,
 	} {
 		if err := setup(ctx); err != nil {
@@ -74,7 +97,21 @@ func setupMeter(ctx context.Context) error {
 	return nil
 }
 
-func setupGetPayloadLatency(ctx context.Context) error {
+func setupGetHeaderLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"get_header_latency",
+		otelapi.WithDescription("statistics on the duration of getHeader requests execution"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	GetHeaderLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupGetPayloadLatency(_ context.Context) error {
 	latency, err := meter.Float64Histogram(
 		"get_payload_latency",
 		otelapi.WithDescription("statistics on the duration of getPayload requests execution"),
@@ -88,7 +125,7 @@ func setupGetPayloadLatency(ctx context.Context) error {
 	return nil
 }
 
-func setupPublishBlockLatency(ctx context.Context) error {
+func setupPublishBlockLatency(_ context.Context) error {
 	latency, err := meter.Float64Histogram(
 		"publish_block_latency",
 		otelapi.WithDescription("statistics on the duration of publishBlock requests sent to beacon node"),
@@ -102,7 +139,133 @@ func setupPublishBlockLatency(ctx context.Context) error {
 	return nil
 }
 
-func setupBuilderDemotionCount(ctx context.Context) error {
+func setupSubmitNewBlockLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_latency",
+		otelapi.WithDescription("statistics on the duration of submitNewBlock requests execution"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockReadLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_read_latency",
+		otelapi.WithDescription("statistics on the duration of reading the payload of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockReadLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockDecodeLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_decode_latency",
+		otelapi.WithDescription("statistics on the duration of decoding the payload of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockDecodeLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockPrechecksLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_prechecks_latency",
+		otelapi.WithDescription("statistics on the duration of prechecks (floor bid, signature etc.) of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockPrechecksLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockSimulationLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_simulation_latency",
+		otelapi.WithDescription("statistics on the block simulation duration of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockSimulationLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockRedisLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_redis_latency",
+		otelapi.WithDescription("statistics on the redis update duration of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockRedisLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockRedisPayloadLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_redis_payload_latency",
+		otelapi.WithDescription("statistics on the redis save payload duration during redis updates of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockRedisPayloadLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockRedisTopBidLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_redis_top_bid_latency",
+		otelapi.WithDescription("statistics on the redis update top bid duration during redis updates of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockRedisTopBidLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockRedisFloorLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"submit_new_block_redis_floor_latency",
+		otelapi.WithDescription("statistics on the redis update floor bid duration during redis updates of submitNewBlock requests"),
+		otelapi.WithUnit("ms"),
+		latencyBoundaries,
+	)
+	SubmitNewBlockRedisFloorLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupBuilderDemotionCount(_ context.Context) error {
 	counter, err := meter.Int64Counter(
 		"builder_demotion_count",
 		otelapi.WithDescription("number of times a builder has been demoted"),
