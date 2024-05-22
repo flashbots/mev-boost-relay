@@ -586,8 +586,6 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 		"durationMs": time.Since(t).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
-	// TODO: Remove this when we update the builder.
-	goto success
 	if validationErr != nil {
 		if api.ffIgnorableValidationErrors {
 			// Operators chooses to ignore certain validation errors
@@ -604,7 +602,6 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 		log.WithError(requestErr).Warn("block validation failed: request error")
 		return requestErr, nil
 	}
-success:
 	log.Info("block validation successful")
 	return nil, nil
 }
