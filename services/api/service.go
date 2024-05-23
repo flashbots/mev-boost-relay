@@ -1182,6 +1182,25 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Debug("getHeader request received")
+	defer func() {
+		s, err := strconv.ParseInt(slotStr, 10, 64)
+		if err != nil {
+			log.WithError(err).Error("could not parse slot to int64")
+			return
+		}
+		metrics.GetHeaderLatencyHistogram.Record(
+			req.Context(),
+			float64(time.Since(requestTime).Milliseconds()),
+		)
+		metrics.GetHeaderCount.Add(
+			req.Context(),
+			1,
+			otelapi.WithAttributes(
+				attribute.Int64("slot", s),
+				attribute.Int64("floorSecIntoSlot", msIntoSlot/1000),
+			),
+		)
+	}()
 
 	if slices.Contains(apiNoHeaderUserAgents, ua) {
 		log.Info("rejecting getHeader by user agent")
@@ -1236,11 +1255,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
 
-	metrics.GetHeaderLatencyHistogram.Record(
-		req.Context(),
-		float64(time.Since(requestTime).Milliseconds()),
-	)
-
 	api.RespondOK(w, bid)
 }
 
@@ -1284,6 +1298,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		metrics.GetPayloadLatencyHistogram.Record(
 			req.Context(),
 			float64(time.Since(receivedAt).Milliseconds()),
+		)
+		metrics.GetPayloadCount.Add(
+			req.Context(),
+			1,
 		)
 	}()
 

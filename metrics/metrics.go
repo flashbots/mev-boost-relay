@@ -23,6 +23,9 @@ var (
 	GetPayloadLatencyHistogram   otelapi.Float64Histogram
 	PublishBlockLatencyHistogram otelapi.Float64Histogram
 
+	GetHeaderCount  otelapi.Int64Counter
+	GetPayloadCount otelapi.Int64Counter
+
 	SubmitNewBlockLatencyHistogram           otelapi.Float64Histogram
 	SubmitNewBlockReadLatencyHistogram       otelapi.Float64Histogram
 	SubmitNewBlockDecodeLatencyHistogram     otelapi.Float64Histogram
