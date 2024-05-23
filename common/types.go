@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -18,8 +19,11 @@ import (
 )
 
 var (
-	ErrUnknownNetwork = errors.New("unknown network")
-	ErrEmptyPayload   = errors.New("empty payload")
+	ErrUnknownNetwork      = errors.New("unknown network")
+	ErrEmptyPayload        = errors.New("empty payload")
+	ErrEmptyPayloadHeader  = errors.New("empty payload header")
+	ErrEmptyPayloadMessage = errors.New("empty payload message")
+	ErrVersionNotSupported = errors.New("version is not supported")
 
 	EthNetworkHolesky = "holesky"
 	EthNetworkSepolia = "sepolia"
@@ -416,269 +420,305 @@ type BlockSubmissionInfo struct {
 	ExcessBlobGas              uint64
 }
 
+type HeaderSubmissionInfo struct {
+	BidTrace         *builderApiV1.BidTrace
+	Signature        phase0.BLSSignature
+	Timestamp        uint64
+	PrevRandao       phase0.Hash32
+	TransactionsRoot phase0.Root
+	WithdrawalsRoot  phase0.Root
+}
+
+// VersionedSubmitHeaderOptimistic is a versioned signed header to construct the builder bid.
+type VersionedSubmitHeaderOptimistic struct {
+	Version spec.DataVersion
+	Deneb   *DenebSubmitHeaderOptimistic
+}
+
+func (h *VersionedSubmitHeaderOptimistic) MarshalSSZ() ([]byte, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		return h.Deneb.MarshalSSZ()
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) UnmarshalSSZ(data []byte) error {
+	var err error
+	denebHeader := &DenebSubmitHeaderOptimistic{}
+	if err = denebHeader.UnmarshalSSZ(data); err == nil {
+		h.Version = spec.DataVersionDeneb
+		h.Deneb = denebHeader
+		return nil
+	}
+	return err
+}
+
+func (h *VersionedSubmitHeaderOptimistic) MarshalJSON() ([]byte, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		return json.Marshal(h.Deneb)
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) UnmarshalJSON(data []byte) error {
+	var err error
+	denebHeader := &DenebSubmitHeaderOptimistic{}
+	if err = json.Unmarshal(data, denebHeader); err == nil {
+		h.Version = spec.DataVersionDeneb
+		h.Deneb = denebHeader
+		return nil
+	}
+	return err
+}
+
+func (h *VersionedSubmitHeaderOptimistic) BidTrace() (*builderApiV1.BidTrace, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return nil, ErrEmptyPayload
+		}
+		if h.Deneb.Message == nil {
+			return nil, ErrEmptyPayloadMessage
+		}
+		return h.Deneb.Message, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) ExecutionPayloadBlockHash() (phase0.Hash32, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Hash32{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Hash32{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.BlockHash, nil
+	default:
+		return phase0.Hash32{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) Signature() (phase0.BLSSignature, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.BLSSignature{}, ErrEmptyPayload
+		}
+		return h.Deneb.Signature, nil
+	default:
+		return phase0.BLSSignature{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) Timestamp() (uint64, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return 0, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return 0, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.Timestamp, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) PrevRandao() (phase0.Hash32, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Hash32{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Hash32{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.PrevRandao, nil
+	default:
+		return phase0.Hash32{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) TransactionsRoot() (phase0.Root, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Root{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Root{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.TransactionsRoot, nil
+	default:
+		return phase0.Root{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
+func (h *VersionedSubmitHeaderOptimistic) WithdrawalsRoot() (phase0.Root, error) {
+	switch h.Version { //nolint:exhaustive
+	case spec.DataVersionDeneb:
+		if h.Deneb == nil {
+			return phase0.Root{}, ErrEmptyPayload
+		}
+		if h.Deneb.ExecutionPayloadHeader == nil {
+			return phase0.Root{}, ErrEmptyPayloadHeader
+		}
+		return h.Deneb.ExecutionPayloadHeader.WithdrawalsRoot, nil
+	default:
+		return phase0.Root{}, fmt.Errorf("%w: %s", ErrVersionNotSupported, h.Version)
+	}
+}
+
 /*
-SubmitBlockRequestV2Optimistic is the v2 request from the builder to submit
-a block. The message must be SSZ encoded. The first three fields are at most
-944 bytes, which fit into a single 1500 MTU ethernet packet. The
-`UnmarshalSSZHeaderOnly` function just parses the first three fields,
-which is sufficient data to set the bid of the builder. The `Transactions`
-and `Withdrawals` fields are required to construct the full SignedBeaconBlock
-and are parsed asynchronously.
+DenebSubmitHeaderOptimistic is request from the builder to submit a Deneb header. At minimum
+without blobs, it is 956 bytes. With the current maximum of 6 blobs this adds another 288
+bytes for a total of 1244 bytes.
 
-Header only layout:
-[000-236) = Message   (236 bytes)
-[236-240) = offset1   (  4 bytes)
-[240-336) = Signature ( 96 bytes)
-[336-340) = offset2   (  4 bytes)
-[340-344) = offset3   (  4 bytes)
-[344-944) = EPH       (600 bytes)
+Layout:
+[000-236) = Message   				  (236 bytes)
+[236-240) = offset1   				  (  4 bytes) ExecutionPayloadHeader
+[240-244) = offset2   				  (  4 bytes) BlobKZGCommitments
+[244-340) = Signature 				  ( 96 bytes)
+[340-956) = EPH       				  (616 bytes)
+[956-?)   = len(KZGCommitments) * 48  ( variable)
 */
-type SubmitBlockRequestV2Optimistic struct {
-	Message                *builderApiV1.BidTrace
-	ExecutionPayloadHeader *capella.ExecutionPayloadHeader
-	Signature              phase0.BLSSignature     `ssz-size:"96"`
-	Transactions           []bellatrix.Transaction `ssz-max:"1048576,1073741824" ssz-size:"?,?"`
-	Withdrawals            []*capella.Withdrawal   `ssz-max:"16"`
+type DenebSubmitHeaderOptimistic struct {
+	Message                *builderApiV1.BidTrace        `json:"message"`
+	ExecutionPayloadHeader *deneb.ExecutionPayloadHeader `json:"header"`
+	BlobKZGCommitments     []deneb.KZGCommitment         `json:"blob_kzg_commitments" ssz-max:"4096" ssz-size:"?,48"`
+	Signature              phase0.BLSSignature           `json:"signature"            ssz-size:"96"`
 }
 
-// MarshalSSZ ssz marshals the SubmitBlockRequestV2Optimistic object
-func (s *SubmitBlockRequestV2Optimistic) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(s)
+// MarshalSSZ ssz marshals the DenebSubmitHeaderOptimistic object
+func (d *DenebSubmitHeaderOptimistic) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(d)
 }
 
-// UnmarshalSSZ ssz unmarshals the SubmitBlockRequestV2Optimistic object
-func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size < 344 {
-		return ssz.ErrSize
-	}
-
-	tail := buf
-	var o1, o3, o4 uint64
-
-	// Field (0) 'Message'
-	if s.Message == nil {
-		s.Message = new(builderApiV1.BidTrace)
-	}
-	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
-		return err
-	}
-
-	// Offset (1) 'ExecutionPayloadHeader'
-	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
-		return ssz.ErrOffset
-	}
-
-	if o1 < 344 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Field (2) 'Signature'
-	copy(s.Signature[:], buf[240:336])
-
-	// Offset (3) 'Transactions'
-	if o3 = ssz.ReadOffset(buf[336:340]); o3 > size || o1 > o3 {
-		return ssz.ErrOffset
-	}
-
-	// Offset (4) 'Withdrawals'
-	if o4 = ssz.ReadOffset(buf[340:344]); o4 > size || o3 > o4 {
-		return ssz.ErrOffset
-	}
-
-	// Field (1) 'ExecutionPayloadHeader'
-	{
-		buf = tail[o1:o3]
-		if s.ExecutionPayloadHeader == nil {
-			s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
-		}
-		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-
-	// Field (3) 'Transactions'
-	{
-		buf = tail[o3:o4]
-		num, err := ssz.DecodeDynamicLength(buf, 1073741824)
-		if err != nil {
-			return err
-		}
-		s.Transactions = make([]bellatrix.Transaction, num)
-		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 1073741824 {
-				return ssz.ErrBytesLength
-			}
-			if cap(s.Transactions[indx]) == 0 {
-				s.Transactions[indx] = bellatrix.Transaction(make([]byte, 0, len(buf)))
-			}
-			s.Transactions[indx] = append(s.Transactions[indx], buf...)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	// Field (4) 'Withdrawals'
-	{
-		buf = tail[o4:]
-		num, err := ssz.DivideInt2(len(buf), 44, 16)
-		if err != nil {
-			return err
-		}
-		s.Withdrawals = make([]*capella.Withdrawal, num)
-		for ii := 0; ii < num; ii++ {
-			if s.Withdrawals[ii] == nil {
-				s.Withdrawals[ii] = new(capella.Withdrawal)
-			}
-			if err = s.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
-				return err
-			}
-		}
-	}
-	return err
-}
-
-// UnmarshalSSZHeaderOnly ssz unmarshals the first 3 fields of the SubmitBlockRequestV2Optimistic object
-func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZHeaderOnly(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size < 344 {
-		return ssz.ErrSize
-	}
-
-	tail := buf
-	var o1, o3 uint64
-
-	// Field (0) 'Message'
-	if s.Message == nil {
-		s.Message = new(builderApiV1.BidTrace)
-	}
-	if err = s.Message.UnmarshalSSZ(buf[0:236]); err != nil {
-		return err
-	}
-
-	// Offset (1) 'ExecutionPayloadHeader'
-	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
-		return ssz.ErrOffset
-	}
-
-	if o1 < 344 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Field (2) 'Signature'
-	copy(s.Signature[:], buf[240:336])
-
-	// Offset (3) 'Transactions'
-	if o3 = ssz.ReadOffset(buf[336:340]); o3 > size || o1 > o3 {
-		return ssz.ErrOffset
-	}
-
-	// Field (1) 'ExecutionPayloadHeader'
-	{
-		buf = tail[o1:o3]
-		if s.ExecutionPayloadHeader == nil {
-			s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
-		}
-		if err = s.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-// MarshalSSZTo ssz marshals the SubmitBlockRequestV2Optimistic object to a target array
-func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the DenebSubmitHeaderOptimistic object to a target array
+func (d *DenebSubmitHeaderOptimistic) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(344)
+	offset := int(340)
 
 	// Field (0) 'Message'
-	if s.Message == nil {
-		s.Message = new(builderApiV1.BidTrace)
+	if d.Message == nil {
+		d.Message = new(builderApiV1.BidTrace)
 	}
-	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+	if dst, err = d.Message.MarshalSSZTo(dst); err != nil {
 		return nil, err
 	}
 
 	// Offset (1) 'ExecutionPayloadHeader'
 	dst = ssz.WriteOffset(dst, offset)
-	if s.ExecutionPayloadHeader == nil {
-		s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
+	if d.ExecutionPayloadHeader == nil {
+		d.ExecutionPayloadHeader = new(deneb.ExecutionPayloadHeader)
 	}
-	offset += s.ExecutionPayloadHeader.SizeSSZ()
+	offset += d.ExecutionPayloadHeader.SizeSSZ()
 
-	// Field (2) 'Signature'
-	dst = append(dst, s.Signature[:]...)
-
-	// Offset (3) 'Transactions'
+	// Offset (2) 'BlobKZGCommitments'
 	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(s.Transactions); ii++ {
-		offset += 4
-		offset += len(s.Transactions[ii])
-	}
 
-	// Offset (4) 'Withdrawals'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (3) 'Signature'
+	dst = append(dst, d.Signature[:]...)
 
 	// Field (1) 'ExecutionPayloadHeader'
-	if dst, err = s.ExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
+	if dst, err = d.ExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
 		return nil, err
 	}
 
-	// Field (3) 'Transactions'
-	if size := len(s.Transactions); size > 1073741824 {
-		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Transactions", size, 1073741824)
+	// Field (2) 'BlobKZGCommitments'
+	if size := len(d.BlobKZGCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("DenebSubmitHeaderOptimistic.BlobKZGCommitments", size, 4096)
 		return nil, err
 	}
-	{
-		offset = 4 * len(s.Transactions)
-		for ii := 0; ii < len(s.Transactions); ii++ {
-			dst = ssz.WriteOffset(dst, offset)
-			offset += len(s.Transactions[ii])
-		}
-	}
-	for ii := 0; ii < len(s.Transactions); ii++ {
-		if size := len(s.Transactions[ii]); size > 1073741824 {
-			err = ssz.ErrBytesLengthFn("SubmitBlockRequestV2Optimistic.Transactions[ii]", size, 1073741824)
-			return nil, err
-		}
-		dst = append(dst, s.Transactions[ii]...)
+	for ii := 0; ii < len(d.BlobKZGCommitments); ii++ {
+		dst = append(dst, d.BlobKZGCommitments[ii][:]...)
 	}
 
-	// Field (4) 'Withdrawals'
-	if size := len(s.Withdrawals); size > 16 {
-		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Withdrawals", size, 16)
-		return nil, err
-	}
-	for ii := 0; ii < len(s.Withdrawals); ii++ {
-		if dst, err = s.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
-			return nil, err
-		}
-	}
-	return dst, nil
+	return dst, err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the SubmitBlockRequestV2Optimistic object
-func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
-	size = 344
+// UnmarshalSSZ ssz unmarshals the DenebSubmitHeaderOptimistic object
+func (d *DenebSubmitHeaderOptimistic) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 340 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1, o2 uint64
+
+	// Field (0) 'Message'
+	if d.Message == nil {
+		d.Message = new(builderApiV1.BidTrace)
+	}
+	if err = d.Message.UnmarshalSSZ(buf[0:236]); err != nil {
+		return err
+	}
+
+	// Offset (1) 'ExecutionPayloadHeader'
+	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 < 340 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (2) 'BlobKZGCommitments'
+	if o2 = ssz.ReadOffset(buf[240:244]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (3) 'Signature'
+	copy(d.Signature[:], buf[244:340])
 
 	// Field (1) 'ExecutionPayloadHeader'
-	if s.ExecutionPayloadHeader == nil {
-		s.ExecutionPayloadHeader = new(capella.ExecutionPayloadHeader)
+	{
+		buf = tail[o1:o2]
+		if d.ExecutionPayloadHeader == nil {
+			d.ExecutionPayloadHeader = new(deneb.ExecutionPayloadHeader)
+		}
+		if err = d.ExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
 	}
-	size += s.ExecutionPayloadHeader.SizeSSZ()
 
-	// Field (3) 'Transactions'
-	for ii := 0; ii < len(s.Transactions); ii++ {
-		size += 4
-		size += len(s.Transactions[ii])
+	// Field (2) 'BlobKZGCommitments'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		d.BlobKZGCommitments = make([]deneb.KZGCommitment, num)
+		for ii := 0; ii < num; ii++ {
+			copy(d.BlobKZGCommitments[ii][:], buf[ii*48:(ii+1)*48])
+		}
 	}
+	return err
+}
 
-	// Field (4) 'Withdrawals'
-	size += len(s.Withdrawals) * 44
+// SizeSSZ returns the ssz encoded size in bytes for the DenebSubmitHeaderOptimistic object
+func (d *DenebSubmitHeaderOptimistic) SizeSSZ() (size int) {
+	size = 340
+
+	// Field (1) 'ExecutionPayloadHeader'
+	if d.ExecutionPayloadHeader == nil {
+		d.ExecutionPayloadHeader = new(deneb.ExecutionPayloadHeader)
+	}
+	size += d.ExecutionPayloadHeader.SizeSSZ()
+
+	// Field (2) 'BlobKZGCommitments'
+	size += len(d.BlobKZGCommitments) * 48
 
 	return
 }

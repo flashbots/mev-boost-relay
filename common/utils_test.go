@@ -14,6 +14,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/ethereum/go-ethereum/common"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
@@ -114,7 +115,7 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 		err      string
 	}{
 		{
-			name: "valid builderApiCapella",
+			name: "valid capella",
 			payload: &VersionedSubmitBlockRequest{
 				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
 					Version: spec.DataVersionCapella,
@@ -183,6 +184,79 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			submission, err := GetBlockSubmissionInfo(tc.payload)
+			require.Equal(t, tc.expected, submission)
+			if tc.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.err, err.Error())
+			}
+		})
+	}
+}
+
+func TestGetHeaderSubmissionInfo(t *testing.T) {
+	cases := []struct {
+		name     string
+		payload  *VersionedSubmitHeaderOptimistic
+		expected *HeaderSubmissionInfo
+		err      string
+	}{
+		{
+			name: "valid deneb",
+			payload: &VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionDeneb,
+				Deneb: &DenebSubmitHeaderOptimistic{
+					Message:                &builderApiV1.BidTrace{},
+					ExecutionPayloadHeader: &deneb.ExecutionPayloadHeader{},
+				},
+			},
+			expected: &HeaderSubmissionInfo{
+				BidTrace: &builderApiV1.BidTrace{},
+			},
+		},
+		{
+			name: "unsupported version",
+			payload: &VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionCapella,
+			},
+			expected: nil,
+			err:      "version is not supported: capella",
+		},
+		{
+			name: "missing data",
+			payload: &VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionDeneb,
+			},
+			expected: nil,
+			err:      "empty payload",
+		},
+		{
+			name: "missing message",
+			payload: &VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionDeneb,
+				Deneb: &DenebSubmitHeaderOptimistic{
+					ExecutionPayloadHeader: &deneb.ExecutionPayloadHeader{},
+				},
+			},
+			expected: nil,
+			err:      "empty payload message",
+		},
+		{
+			name: "missing execution payload",
+			payload: &VersionedSubmitHeaderOptimistic{
+				Version: spec.DataVersionDeneb,
+				Deneb: &DenebSubmitHeaderOptimistic{
+					Message: &builderApiV1.BidTrace{},
+				},
+			},
+			expected: nil,
+			err:      "empty payload header",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			submission, err := GetHeaderSubmissionInfo(tc.payload)
 			require.Equal(t, tc.expected, submission)
 			if tc.err == "" {
 				require.NoError(t, err)
