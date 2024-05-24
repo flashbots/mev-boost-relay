@@ -1183,22 +1183,9 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	log.Debug("getHeader request received")
 	defer func() {
-		s, err := strconv.ParseInt(slotStr, 10, 64)
-		if err != nil {
-			log.WithError(err).Error("could not parse slot to int64")
-			return
-		}
 		metrics.GetHeaderLatencyHistogram.Record(
 			req.Context(),
 			float64(time.Since(requestTime).Milliseconds()),
-		)
-		metrics.GetHeaderCount.Add(
-			req.Context(),
-			1,
-			otelapi.WithAttributes(
-				attribute.Int64("slot", s),
-				attribute.Int64("floorSecIntoSlot", msIntoSlot/1000),
-			),
 		)
 	}()
 
@@ -1298,10 +1285,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		metrics.GetPayloadLatencyHistogram.Record(
 			req.Context(),
 			float64(time.Since(receivedAt).Milliseconds()),
-		)
-		metrics.GetPayloadCount.Add(
-			req.Context(),
-			1,
 		)
 	}()
 
@@ -1904,7 +1887,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}).Info("request finished")
 
 		// metrics
-		api.saveBlockSubmissionMetrics(pf)
+		api.saveBlockSubmissionMetrics(pf, receivedAt)
 	}()
 
 	// If cancellations are disabled but builder requested it, return error
@@ -2269,20 +2252,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile) {
-	metrics.SubmitNewBlockCount.Add(
-		context.Background(),
-		1,
-		otelapi.WithAttributes(
-			attribute.String("contentType", pf.ContentType),
-			attribute.Bool("isGzip", pf.IsGzip),
-			attribute.Bool("aboveFloorBid", pf.AboveFloorBid),
-			attribute.Bool("simulationSuccess", pf.SimulationSuccess),
-			attribute.Bool("wasBidSaved", pf.WasBidSaved),
-			attribute.Bool("optimistic", pf.Optimistic),
-		),
-	)
-
+func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time) {
 	if pf.PayloadLoad > 0 {
 		metrics.SubmitNewBlockReadLatencyHistogram.Record(
 			context.Background(),
@@ -2341,6 +2311,19 @@ func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile) {
 			float64(pf.RedisUpdateFloor)/1000,
 		)
 	}
+
+	metrics.SubmitNewBlockLatencyHistogram.Record(
+		context.Background(),
+		float64(time.Since(receivedTime).Milliseconds()),
+		otelapi.WithAttributes(
+			attribute.String("contentType", pf.ContentType),
+			attribute.Bool("isGzip", pf.IsGzip),
+			attribute.Bool("aboveFloorBid", pf.AboveFloorBid),
+			attribute.Bool("simulationSuccess", pf.SimulationSuccess),
+			attribute.Bool("wasBidSaved", pf.WasBidSaved),
+			attribute.Bool("optimistic", pf.Optimistic),
+		),
+	)
 }
 
 // ---------------
