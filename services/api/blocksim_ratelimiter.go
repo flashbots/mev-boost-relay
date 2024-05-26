@@ -61,8 +61,9 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (requestErr, validationErr error) {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
-	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
+	for maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
 		b.cv.Wait()
+		cnt = atomic.LoadInt64(&b.counter)
 	}
 	b.cv.L.Unlock()
 
