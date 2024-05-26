@@ -2,6 +2,7 @@ package common
 
 import (
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -11,10 +12,13 @@ func LogSetup(json bool, logLevel string) *logrus.Entry {
 	log.Logger.SetOutput(os.Stdout)
 
 	if json {
-		log.Logger.SetFormatter(&logrus.JSONFormatter{})
+		log.Logger.SetFormatter(&logrus.JSONFormatter{
+			TimestampFormat: time.RFC3339Nano,
+		})
 	} else {
 		log.Logger.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp: true,
+			TimestampFormat: time.RFC3339Nano,
+			FullTimestamp:   true,
 		})
 	}
 
