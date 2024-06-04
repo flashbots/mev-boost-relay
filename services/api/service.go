@@ -41,6 +41,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	otelapi "go.opentelemetry.io/otel/metric"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/exp/slices"
 )
@@ -1180,6 +1182,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Debug("getHeader request received")
+	defer func() {
+		metrics.GetHeaderLatencyHistogram.Record(
+			req.Context(),
+			float64(time.Since(requestTime).Milliseconds()),
+		)
+	}()
 
 	if slices.Contains(apiNoHeaderUserAgents, ua) {
 		log.Info("rejecting getHeader by user agent")
@@ -1233,6 +1241,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"value":     value.String(),
 		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
+
 	api.RespondOK(w, bid)
 }
 
@@ -1876,6 +1885,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
 			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
 		}).Info("request finished")
+
+		// metrics
+		api.saveBlockSubmissionMetrics(pf, receivedAt)
 	}()
 
 	// If cancellations are disabled but builder requested it, return error
@@ -1888,6 +1900,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	var err error
 	var r io.Reader = req.Body
 	isGzip := req.Header.Get("Content-Encoding") == "gzip"
+	pf.IsGzip = isGzip
 	log = log.WithField("reqIsGzip", isGzip)
 	if isGzip {
 		r, err = gzip.NewReader(req.Body)
@@ -1916,6 +1929,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
 		log = log.WithField("reqContentType", "ssz")
+		pf.ContentType = "ssz"
 		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
 			log.WithError(err).Warn("could not decode payload - SSZ")
 
@@ -1926,11 +1940,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 				return
 			}
 			log = log.WithField("reqContentType", "json")
+			pf.ContentType = "json"
 		} else {
 			log.Debug("received ssz-encoded payload")
 		}
 	} else {
 		log = log.WithField("reqContentType", "json")
+		pf.ContentType = "json"
 		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
 			log.WithError(err).Warn("could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
@@ -2046,6 +2062,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	pf.AboveFloorBid = true
 	log = log.WithField("timestampAfterCheckingFloorBid", time.Now().UTC().UnixMilli())
 
 	// Deferred saving of the builder submission to database (whenever this function ends)
@@ -2118,9 +2135,11 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		},
 	}
 	// With sufficient collateral, process the block optimistically.
-	if builderEntry.status.IsOptimistic &&
+	optimistic := builderEntry.status.IsOptimistic &&
 		builderEntry.collateral.Cmp(submission.BidTrace.Value.ToBig()) >= 0 &&
-		submission.BidTrace.Slot == api.optimisticSlot.Load() {
+		submission.BidTrace.Slot == api.optimisticSlot.Load()
+	pf.Optimistic = optimistic
+	if optimistic {
 		go api.processOptimisticBlock(opts, simResultC)
 	} else {
 		// Simulate block (synchronously).
@@ -2148,6 +2167,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	nextTime = time.Now().UTC()
 	pf.Simulation = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.SimulationSuccess = true
 	prevTime = nextTime
 
 	// If cancellations are enabled, then abort now if this submission is not the latest one
@@ -2215,6 +2235,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 	nextTime = time.Now().UTC()
 	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.WasBidSaved = updateBidResult.WasBidSaved
+	pf.RedisSavePayload = uint64(updateBidResult.TimeSavePayload.Microseconds())
+	pf.RedisUpdateTopBid = uint64(updateBidResult.TimeUpdateTopBid.Microseconds())
+	pf.RedisUpdateFloor = uint64(updateBidResult.TimeUpdateFloor.Microseconds())
 	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
 
 	// All done, log with profiling information
@@ -2226,6 +2250,80 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"profileTotalUs":     pf.Total,
 	}).Info("received block from builder")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time) {
+	if pf.PayloadLoad > 0 {
+		metrics.SubmitNewBlockReadLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.PayloadLoad)/1000,
+			otelapi.WithAttributes(attribute.Bool("isGzip", pf.IsGzip)),
+		)
+	}
+	if pf.Decode > 0 {
+		metrics.SubmitNewBlockDecodeLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.Decode)/1000,
+			otelapi.WithAttributes(attribute.String("contentType", pf.ContentType)),
+		)
+	}
+
+	if pf.Prechecks > 0 {
+		metrics.SubmitNewBlockPrechecksLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.Prechecks)/1000,
+		)
+	}
+
+	if pf.Simulation > 0 {
+		metrics.SubmitNewBlockSimulationLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.Simulation)/1000,
+			otelapi.WithAttributes(attribute.Bool("simulationSuccess", pf.SimulationSuccess)),
+		)
+	}
+
+	if pf.RedisUpdate > 0 {
+		metrics.SubmitNewBlockRedisLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.RedisUpdate)/1000,
+			otelapi.WithAttributes(attribute.Bool("wasBidSaved", pf.WasBidSaved)),
+		)
+	}
+
+	if pf.RedisSavePayload > 0 {
+		metrics.SubmitNewBlockRedisPayloadLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.RedisSavePayload)/1000,
+		)
+	}
+
+	if pf.RedisUpdateTopBid > 0 {
+		metrics.SubmitNewBlockRedisTopBidLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.RedisUpdateTopBid)/1000,
+		)
+	}
+
+	if pf.RedisUpdateFloor > 0 {
+		metrics.SubmitNewBlockRedisFloorLatencyHistogram.Record(
+			context.Background(),
+			float64(pf.RedisUpdateFloor)/1000,
+		)
+	}
+
+	metrics.SubmitNewBlockLatencyHistogram.Record(
+		context.Background(),
+		float64(time.Since(receivedTime).Milliseconds()),
+		otelapi.WithAttributes(
+			attribute.String("contentType", pf.ContentType),
+			attribute.Bool("isGzip", pf.IsGzip),
+			attribute.Bool("aboveFloorBid", pf.AboveFloorBid),
+			attribute.Bool("simulationSuccess", pf.SimulationSuccess),
+			attribute.Bool("wasBidSaved", pf.WasBidSaved),
+			attribute.Bool("optimistic", pf.Optimistic),
+		),
+	)
 }
 
 // ---------------
