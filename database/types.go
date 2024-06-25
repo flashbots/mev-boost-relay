@@ -135,11 +135,11 @@ type BuilderBlockSubmissionEntry struct {
 	ExecutionPayloadID sql.NullInt64 `db:"execution_payload_id"`
 
 	// Sim Result
-	WasSimulated bool   `db:"was_simulated"`
-	SimSuccess   bool   `db:"sim_success"`
-	SimError     string `db:"sim_error"`
-	SimReqError  string `db:"sim_req_error"`
-	BlockValue   string `db:"block_value"`
+	WasSimulated bool           `db:"was_simulated"`
+	SimSuccess   bool           `db:"sim_success"`
+	SimError     string         `db:"sim_error"`
+	SimReqError  string         `db:"sim_req_error"`
+	BlockValue   sql.NullString `db:"block_value"`
 
 	// BidTrace data
 	Signature string `db:"signature"`

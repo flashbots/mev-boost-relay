@@ -100,8 +100,8 @@ func (s *DatabaseService) prepareNamedQueries() (err error) {
 
 	// Insert block builder submission
 	query = `INSERT INTO ` + vars.TableBuilderBlockSubmission + `
-	(received_at, eligible_at, execution_payload_id, was_simulated, sim_success, sim_error, sim_req_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission) VALUES
-	(:received_at, :eligible_at, :execution_payload_id, :was_simulated, :sim_success, :sim_error, :sim_req_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :decode_duration, :prechecks_duration, :simulation_duration, :redis_update_duration, :total_duration, :optimistic_submission)
+	(received_at, eligible_at, execution_payload_id, was_simulated, sim_success, sim_error, sim_req_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission, block_value) VALUES
+	(:received_at, :eligible_at, :execution_payload_id, :was_simulated, :sim_success, :sim_error, :sim_req_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :decode_duration, :prechecks_duration, :simulation_duration, :redis_update_duration, :total_duration, :optimistic_submission, :block_value)
 	RETURNING id`
 	s.nstmtInsertBlockBuilderSubmission, err = s.DB.PrepareNamed(query)
 	return err
@@ -205,7 +205,6 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 	if blockValue != nil {
 		blockValueStr = blockValue.Dec()
 	}
-
 	submission, err := common.GetBlockSubmissionInfo(payload)
 	if err != nil {
 		return nil, err
@@ -220,7 +219,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 		SimSuccess:   wasSimulated && validationError == nil,
 		SimError:     simErrStr,
 		SimReqError:  requestErrStr,
-		BlockValue:   blockValueStr,
+		BlockValue:   NewNullString(blockValueStr),
 
 		Signature: submission.Signature.String(),
 
@@ -410,7 +409,7 @@ func (s *DatabaseService) GetBuilderSubmissions(filters GetBuilderSubmissionsFil
 		"builder_pubkey": filters.BuilderPubkey,
 	}
 
-	fields := "id, inserted_at, received_at, eligible_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, optimistic_submission"
+	fields := "id, inserted_at, received_at, eligible_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit, optimistic_submission, block_value"
 	limit := "LIMIT :limit"
 
 	whereConds := []string{

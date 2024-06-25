@@ -29,6 +29,8 @@ const (
 	slot                 = uint64(42)
 	collateral           = 1000
 	collateralStr        = "1000"
+	blockValue           = 1234
+	blockValueStr        = "1234"
 	builderID            = "builder0x69"
 	randao               = "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
 	optimisticSubmission = true
@@ -88,7 +90,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			Value:                uint256.NewInt(collateral),
 		},
 	}, spec.DataVersionDeneb)
-	entry, err := db.SaveBuilderBlockSubmission(req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission, nil)
+	entry, err := db.SaveBuilderBlockSubmission(req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission, uint256.NewInt(blockValue))
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
@@ -450,6 +452,7 @@ func TestGetBuilderSubmissions(t *testing.T) {
 	require.Equal(t, pubkey, e.BuilderPubkey)
 	require.Equal(t, feeRecipient.String(), e.ProposerFeeRecipient)
 	require.Equal(t, strconv.Itoa(collateral), e.Value)
+	require.Equal(t, NewNullString(blockValueStr), e.BlockValue)
 }
 
 func TestUpsertTooLateGetPayload(t *testing.T) {
