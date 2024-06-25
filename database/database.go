@@ -13,6 +13,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/holiman/uint256"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
@@ -25,7 +26,7 @@ type IDatabaseService interface {
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
 
-	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error)
+	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool, blockValue *uint256.Int) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -175,7 +176,7 @@ func (s *DatabaseService) GetLatestValidatorRegistrations(timestampOnly bool) ([
 	return registrations, err
 }
 
-func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool, blockValue *uint256.Int) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -200,6 +201,11 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 		requestErrStr = requestError.Error()
 	}
 
+	blockValueStr := ""
+	if blockValue != nil {
+		blockValueStr = blockValue.Dec()
+	}
+
 	submission, err := common.GetBlockSubmissionInfo(payload)
 	if err != nil {
 		return nil, err
@@ -214,6 +220,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 		SimSuccess:   wasSimulated && validationError == nil,
 		SimError:     simErrStr,
 		SimReqError:  requestErrStr,
+		BlockValue:   blockValueStr,
 
 		Signature: submission.Signature.String(),
 

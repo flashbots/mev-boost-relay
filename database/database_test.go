@@ -88,7 +88,7 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 			Value:                uint256.NewInt(collateral),
 		},
 	}, spec.DataVersionDeneb)
-	entry, err := db.SaveBuilderBlockSubmission(req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission)
+	entry, err := db.SaveBuilderBlockSubmission(req, nil, nil, time.Now(), time.Now().Add(time.Second), true, true, profile, optimisticSubmission, nil)
 	require.NoError(t, err)
 	err = db.UpsertBlockBuilderEntryAfterSubmission(entry, false)
 	require.NoError(t, err)
