@@ -19,7 +19,7 @@ func NewNullInt64(i int64) sql.NullInt64 {
 func NewNullString(s string) sql.NullString {
 	return sql.NullString{
 		String: s,
-		Valid:  true,
+		Valid:  s != "",
 	}
 }
 
