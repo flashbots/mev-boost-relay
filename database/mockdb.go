@@ -7,6 +7,7 @@ import (
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/holiman/uint256"
 )
 
 type MockDB struct {
@@ -36,7 +37,7 @@ func (db MockDB) GetLatestValidatorRegistrations(timestampOnly bool) ([]*Validat
 	return nil, nil
 }
 
-func (db MockDB) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool) (entry *BuilderBlockSubmissionEntry, err error) {
+func (db MockDB) SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool, blockValue *uint256.Int) (entry *BuilderBlockSubmissionEntry, err error) {
 	return nil, nil
 }
 
