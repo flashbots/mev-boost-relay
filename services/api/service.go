@@ -2084,7 +2084,10 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission, simResult.blockValue)
 		if err != nil {
-			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
+			log.WithError(err).WithFields(logrus.Fields{
+				"payload":   payload,
+				"simResult": simResult,
+			}).Error("saving builder block submission to database failed")
 			return
 		}
 

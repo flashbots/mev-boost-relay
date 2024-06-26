@@ -3,6 +3,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -219,7 +220,10 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 		SimSuccess:   wasSimulated && validationError == nil,
 		SimError:     simErrStr,
 		SimReqError:  requestErrStr,
-		BlockValue:   NewNullString(blockValueStr),
+		BlockValue: sql.NullString{
+			String: blockValueStr,
+			Valid:  blockValue != nil,
+		},
 
 		Signature: submission.Signature.String(),
 
