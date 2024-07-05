@@ -202,6 +202,9 @@ type RelayAPI struct {
 
 	validatorRegC chan builderApiV1.SignedValidatorRegistration
 
+	// used to notify when a new validator has been registered
+	validatorUpdateCh chan struct{}
+
 	// used to wait on any active getPayload calls on shutdown
 	getPayloadCallsInFlight sync.WaitGroup
 
@@ -293,7 +296,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		proposerDutiesResponse: &[]byte{},
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
-		validatorRegC: make(chan builderApiV1.SignedValidatorRegistration, 450_000),
+		validatorRegC:     make(chan builderApiV1.SignedValidatorRegistration, 450_000),
+		validatorUpdateCh: make(chan struct{}),
 	}
 
 	if os.Getenv("FORCE_GET_HEADER_204") == "1" {
@@ -552,6 +556,10 @@ func (api *RelayAPI) StopServer() (err error) {
 
 	// shutdown
 	return api.srv.Shutdown(context.Background())
+}
+
+func (api *RelayAPI) ValidatorUpdateCh() chan struct{} {
+	return api.validatorUpdateCh
 }
 
 func (api *RelayAPI) isCapella(slot uint64) bool {
@@ -1113,6 +1121,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		case api.validatorRegC <- *signedValidatorRegistration:
 		default:
 			regLog.Error("validator registration channel full")
+		}
+
+		// notify of a new validator
+		select {
+		case api.validatorUpdateCh <- struct{}{}:
+		default:
 		}
 	})
 
