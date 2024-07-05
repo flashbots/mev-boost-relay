@@ -1122,12 +1122,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		default:
 			regLog.Error("validator registration channel full")
 		}
-
-		// notify of a new validator
-		select {
-		case api.validatorUpdateCh <- struct{}{}:
-		default:
-		}
 	})
 
 	log = log.WithFields(logrus.Fields{
@@ -1143,6 +1137,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		handleError(log, http.StatusBadRequest, "error in traversing json")
 		return
+	}
+
+	// notify that new registrations are available
+	select {
+	case api.validatorUpdateCh <- struct{}{}:
+	default:
 	}
 
 	log.Info("validator registrations call processed")
