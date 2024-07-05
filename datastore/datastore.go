@@ -107,6 +107,10 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 		time.Sleep(6 * time.Second)
 	}
 
+	ds.RefreshKnownValidatorsWithoutChecks(log, beaconClient, slot)
+}
+
+func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
 	log.Info("Querying validators from beacon node... (this may take a while)")
 	timeStartFetching := time.Now()
 	validators, err := beaconClient.GetStateValidators(beaconclient.StateIDHead) // head is fastest
