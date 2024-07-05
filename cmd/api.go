@@ -19,10 +19,11 @@ import (
 )
 
 var (
-	apiDefaultListenAddr = common.GetEnv("LISTEN_ADDR", "localhost:9062")
-	apiDefaultBlockSim   = common.GetEnv("BLOCKSIM_URI", "http://localhost:8545")
-	apiDefaultSecretKey  = common.GetEnv("SECRET_KEY", "")
-	apiDefaultLogTag     = os.Getenv("LOG_TAG")
+	apiDefaultListenAddr   = common.GetEnv("LISTEN_ADDR", "localhost:9062")
+	apiDefaultBlockSim     = common.GetEnv("BLOCKSIM_URI", "http://localhost:8545")
+	apiDefaultBlockSimHTTP = common.GetEnv("BLOCKSIM_HTTP_URI", "http://localhost:28546")
+	apiDefaultSecretKey    = common.GetEnv("SECRET_KEY", "")
+	apiDefaultLogTag       = os.Getenv("LOG_TAG")
 
 	apiDefaultPprofEnabled       = os.Getenv("PPROF") == "1"
 	apiDefaultInternalAPIEnabled = os.Getenv("ENABLE_INTERNAL_API") == "1"
@@ -32,16 +33,17 @@ var (
 	apiDefaultDataAPIEnabled     = os.Getenv("DISABLE_DATA_API") != "1"
 	apiDefaultProposerAPIEnabled = os.Getenv("DISABLE_PROPOSER_API") != "1"
 
-	apiListenAddr   string
-	apiPprofEnabled bool
-	apiSecretKey    string
-	apiBlockSimURL  string
-	apiDebug        bool
-	apiBuilderAPI   bool
-	apiDataAPI      bool
-	apiInternalAPI  bool
-	apiProposerAPI  bool
-	apiLogTag       string
+	apiListenAddr      string
+	apiPprofEnabled    bool
+	apiSecretKey       string
+	apiBlockSimURL     string
+	apiBlockSimHTTPURL string
+	apiDebug           bool
+	apiBuilderAPI      bool
+	apiDataAPI         bool
+	apiInternalAPI     bool
+	apiProposerAPI     bool
+	apiLogTag          string
 )
 
 func init() {
@@ -61,6 +63,7 @@ func init() {
 		"Enable memcached, typically used as secondary backup to Redis for redundancy")
 	apiCmd.Flags().StringVar(&apiSecretKey, "secret-key", apiDefaultSecretKey, "secret key for signing bids")
 	apiCmd.Flags().StringVar(&apiBlockSimURL, "blocksim", apiDefaultBlockSim, "URL for block simulator")
+	apiCmd.Flags().StringVar(&apiBlockSimHTTPURL, "blocksim-http", apiDefaultBlockSimHTTP, "HTTP URL for block simulator")
 	apiCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 
 	apiCmd.Flags().BoolVar(&apiPprofEnabled, "pprof", apiDefaultPprofEnabled, "enable pprof API")
@@ -155,15 +158,16 @@ var apiCmd = &cobra.Command{
 		}
 
 		opts := api.RelayAPIOpts{
-			Log:           log,
-			ListenAddr:    apiListenAddr,
-			BeaconClient:  beaconClient,
-			Datastore:     ds,
-			Redis:         redis,
-			Memcached:     mem,
-			DB:            db,
-			EthNetDetails: *networkInfo,
-			BlockSimURL:   apiBlockSimURL,
+			Log:             log,
+			ListenAddr:      apiListenAddr,
+			BeaconClient:    beaconClient,
+			Datastore:       ds,
+			Redis:           redis,
+			Memcached:       mem,
+			DB:              db,
+			EthNetDetails:   *networkInfo,
+			BlockSimURL:     apiBlockSimURL,
+			BlockSimHTTPURL: apiBlockSimHTTPURL,
 
 			BlockBuilderAPI: apiBuilderAPI,
 			DataAPI:         apiDataAPI,
