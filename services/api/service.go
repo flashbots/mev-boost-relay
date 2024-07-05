@@ -810,10 +810,10 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 		return
 	}
 
-	api.UpdateProposerDutiesBySlot(headSlot)
+	api.UpdateProposerDutiesWithoutChecks(headSlot)
 }
 
-func (api *RelayAPI) UpdateProposerDutiesBySlot(headSlot uint64) {
+func (api *RelayAPI) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	// Load upcoming proposer duties from Redis
 	duties, err := api.redis.GetProposerDuties()
 	if err != nil {

@@ -168,10 +168,10 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 		return
 	}
 
-	hk.UpdateProposerDutiesBySlot(headSlot)
+	hk.UpdateProposerDutiesWithoutChecks(headSlot)
 }
 
-func (hk *Housekeeper) UpdateProposerDutiesBySlot(headSlot uint64) {
+func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	epoch := headSlot / common.SlotsPerEpoch
 
 	log := hk.log.WithFields(logrus.Fields{
