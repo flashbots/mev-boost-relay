@@ -652,7 +652,7 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlo
 	}
 }
 
-// processOptimisticBlock is called on a new goroutine when a optimistic block
+// processOptimisticBlock is called on a new goroutine when an optimistic block
 // needs to be simulated.
 func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC chan *blockSimResult) {
 	api.optimisticBlocksInFlight.Add(1)
