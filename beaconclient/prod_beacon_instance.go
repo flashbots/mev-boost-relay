@@ -318,12 +318,19 @@ func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
 }
 
 type GetSpecResponse struct {
+	Data *Spec `json:"data"`
+}
+
+type Spec struct {
 	SecondsPerSlot                  uint64 `json:"SECONDS_PER_SLOT,string"`            //nolint:tagliatelle
 	DepositContractAddress          string `json:"DEPOSIT_CONTRACT_ADDRESS"`           //nolint:tagliatelle
 	DepositNetworkID                string `json:"DEPOSIT_NETWORK_ID"`                 //nolint:tagliatelle
 	DomainAggregateAndProof         string `json:"DOMAIN_AGGREGATE_AND_PROOF"`         //nolint:tagliatelle
 	InactivityPenaltyQuotient       string `json:"INACTIVITY_PENALTY_QUOTIENT"`        //nolint:tagliatelle
 	InactivityPenaltyQuotientAltair string `json:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"` //nolint:tagliatelle
+	BellatrixForkVersion            string `json:"BELLATRIX_FORK_VERSION"`             //nolint:tagliatelle
+	CapellaForkVersion              string `json:"CAPELLA_FORK_VERSION"`               //nolint:tagliatelle
+	DenebForkVersion                string `json:"DENEB_FORK_VERSION"`                 //nolint:tagliatelle
 }
 
 // GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
