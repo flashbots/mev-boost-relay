@@ -12,12 +12,10 @@ import (
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/mev-boost-relay/common"
-	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
 	"github.com/holiman/uint256"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	migrate "github.com/rubenv/sql-migrate"
 )
 
 type IDatabaseService interface {
@@ -57,8 +55,27 @@ type IDatabaseService interface {
 	InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, slotStart, requestTime, decodeTime, msIntoSlot uint64) error
 }
 
+type Geo string
+
+const (
+	UsEast Geo = "us-east"
+	RBX    Geo = "rbx"
+)
+
+func parseGeoFromEnv() (Geo, error) {
+	geo := os.Getenv("GEO")
+	switch geo {
+	case string(UsEast), string(RBX):
+		return Geo(geo), nil
+	default:
+		return "", fmt.Errorf("invalid GEO value: %s", geo)
+	}
+}
+
 type DatabaseService struct {
-	DB *sqlx.DB
+	// globaldb
+	DB  *sqlx.DB
+	geo Geo
 
 	nstmtInsertExecutionPayload       *sqlx.NamedStmt
 	nstmtInsertBlockBuilderSubmission *sqlx.NamedStmt
@@ -74,38 +91,13 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 	db.DB.SetMaxIdleConns(10)
 	db.DB.SetConnMaxIdleTime(0)
 
-	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
-		migrate.SetTable(vars.TableMigrations)
-		_, err := migrate.Exec(db.DB, "postgres", migrations.Migrations, migrate.Up)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	dbService := &DatabaseService{DB: db} //nolint:exhaustruct
-	err = dbService.prepareNamedQueries()
-	return dbService, err
-}
-
-func (s *DatabaseService) prepareNamedQueries() (err error) {
-	// Insert execution payload
-	query := `INSERT INTO ` + vars.TableExecutionPayload + `
-	(slot, proposer_pubkey, block_hash, version, payload) VALUES
-	(:slot, :proposer_pubkey, :block_hash, :version, :payload)
-	ON CONFLICT (slot, proposer_pubkey, block_hash) DO UPDATE SET slot=:slot
-	RETURNING id`
-	s.nstmtInsertExecutionPayload, err = s.DB.PrepareNamed(query)
+	geo, err := parseGeoFromEnv()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Insert block builder submission
-	query = `INSERT INTO ` + vars.TableBuilderBlockSubmission + `
-	(received_at, eligible_at, execution_payload_id, was_simulated, sim_success, sim_error, sim_req_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission, block_value) VALUES
-	(:received_at, :eligible_at, :execution_payload_id, :was_simulated, :sim_success, :sim_error, :sim_req_error, :signature, :slot, :parent_hash, :block_hash, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :gas_used, :gas_limit, :num_tx, :value, :epoch, :block_number, :decode_duration, :prechecks_duration, :simulation_duration, :redis_update_duration, :total_duration, :optimistic_submission, :block_value)
-	RETURNING id`
-	s.nstmtInsertBlockBuilderSubmission, err = s.DB.PrepareNamed(query)
-	return err
+	dbService := &DatabaseService{DB: db, geo: geo} //nolint:exhaustruct
+	return dbService, err
 }
 
 func (s *DatabaseService) Close() error {
@@ -128,11 +120,12 @@ func (s *DatabaseService) NumValidatorRegistrationRows() (count uint64, err erro
 }
 
 func (s *DatabaseService) SaveValidatorRegistration(entry ValidatorRegistrationEntry) error {
+	entry.Geo = s.geo
 	query := `WITH latest_registration AS (
 		SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature FROM ` + vars.TableValidatorRegistration + ` WHERE pubkey=:pubkey ORDER BY pubkey, timestamp DESC limit 1
 	)
-	INSERT INTO ` + vars.TableValidatorRegistration + ` (pubkey, fee_recipient, timestamp, gas_limit, signature)
-	SELECT :pubkey, :fee_recipient, :timestamp, :gas_limit, :signature
+	INSERT INTO ` + vars.TableValidatorRegistration + ` (geo, pubkey, fee_recipient, timestamp, gas_limit, signature)
+	SELECT :geo, :pubkey, :fee_recipient, :timestamp, :gas_limit, :signature
 	WHERE NOT EXISTS (
 		SELECT 1 from latest_registration WHERE pubkey=:pubkey AND :timestamp <= latest_registration.timestamp OR (:fee_recipient = latest_registration.fee_recipient AND :gas_limit = latest_registration.gas_limit)
 	);`
@@ -256,7 +249,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
-	query := `SELECT id, inserted_at, received_at, eligible_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission 
+	query := `SELECT id, inserted_at, received_at, eligible_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission
 	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
 	ORDER BY builder_pubkey ASC
@@ -289,6 +282,7 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2WithBl
 	}
 
 	deliveredPayloadEntry := DeliveredPayloadEntry{
+		Geo:                      s.geo,
 		SignedAt:                 NewNullTime(signedAt),
 		SignedBlindedBeaconBlock: NewNullString(string(_signedBlindedBeaconBlock)),
 
@@ -317,8 +311,8 @@ func (s *DatabaseService) SaveDeliveredPayload(bidTrace *common.BidTraceV2WithBl
 	}
 
 	query := `INSERT INTO ` + vars.TableDeliveredPayload + `
-		(signed_at, signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, publish_ms) VALUES
-		(:signed_at, :signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value, :num_blobs, :blob_gas_used, :excess_blob_gas, :publish_ms)
+		(geo, signed_at, signed_blinded_beacon_block, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, gas_used, gas_limit, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, publish_ms) VALUES
+		(:geo, :signed_at, :signed_blinded_beacon_block, :slot, :epoch, :builder_pubkey, :proposer_pubkey, :proposer_fee_recipient, :parent_hash, :block_hash, :block_number, :gas_used, :gas_limit, :num_tx, :value, :num_blobs, :blob_gas_used, :excess_blob_gas, :publish_ms)
 		ON CONFLICT DO NOTHING`
 	_, err = s.DB.NamedExec(query, deliveredPayloadEntry)
 	return err
@@ -389,7 +383,7 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 }
 
 func (s *DatabaseService) GetDeliveredPayloads(idFirst, idLast uint64) (entries []*DeliveredPayloadEntry, err error) {
-	query := `SELECT id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, gas_used, gas_limit, publish_ms
+	query := `SELECT geo, id, inserted_at, signed_at, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, num_blobs, blob_gas_used, excess_blob_gas, gas_used, gas_limit, publish_ms
 	FROM ` + vars.TableDeliveredPayload + `
 	WHERE id >= $1 AND id <= $2
 	ORDER BY slot ASC`
@@ -625,6 +619,7 @@ func (s *DatabaseService) GetTooLateGetPayload(slot uint64) (entries []*TooLateG
 
 func (s *DatabaseService) InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, slotStart, requestTime, decodeTime, msIntoSlot uint64) error {
 	entry := TooLateGetPayloadEntry{
+		Geo:                s.geo,
 		Slot:               slot,
 		SlotStartTimestamp: slotStart,
 		RequestTimestamp:   requestTime,
@@ -635,8 +630,8 @@ func (s *DatabaseService) InsertTooLateGetPayload(slot uint64, proposerPubkey, b
 	}
 
 	query := `INSERT INTO ` + vars.TableTooLateGetPayload + `
-		(slot, slot_start_timestamp, request_timestamp, decode_timestamp, proposer_pubkey, block_hash, ms_into_slot) VALUES
-		(:slot, :slot_start_timestamp, :request_timestamp, :decode_timestamp, :proposer_pubkey, :block_hash, :ms_into_slot)
+		(geo, slot, slot_start_timestamp, request_timestamp, decode_timestamp, proposer_pubkey, block_hash, ms_into_slot) VALUES
+		(:geo, :slot, :slot_start_timestamp, :request_timestamp, :decode_timestamp, :proposer_pubkey, :block_hash, :ms_into_slot)
 		ON CONFLICT (slot, proposer_pubkey, block_hash) DO NOTHING;`
 	_, err := s.DB.NamedExec(query, entry)
 	return err

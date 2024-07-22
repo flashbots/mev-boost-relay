@@ -58,6 +58,7 @@ type GetBuilderSubmissionsFilters struct {
 type ValidatorRegistrationEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
+	Geo        Geo       `db:"geo"`
 
 	Pubkey       string `db:"pubkey"`
 	FeeRecipient string `db:"fee_recipient"`
@@ -183,6 +184,7 @@ type DeliveredPayloadEntry struct {
 	ID         int64        `db:"id"`
 	InsertedAt time.Time    `db:"inserted_at"`
 	SignedAt   sql.NullTime `db:"signed_at"`
+	Geo        Geo          `db:"geo"`
 
 	SignedBlindedBeaconBlock sql.NullString `db:"signed_blinded_beacon_block"`
 
@@ -259,6 +261,7 @@ type BuilderDemotionEntry struct {
 type TooLateGetPayloadEntry struct {
 	ID         int64     `db:"id"`
 	InsertedAt time.Time `db:"inserted_at"`
+	Geo        Geo       `db:"geo"`
 
 	Slot uint64 `db:"slot"`
 
