@@ -164,6 +164,7 @@ type blockBuilderCacheEntry struct {
 
 type blockSimResult struct {
 	wasSimulated         bool
+	blockValue           *uint256.Int
 	optimisticSubmission bool
 	requestErr           error
 	validationErr        error
@@ -585,9 +586,9 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
-func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (requestErr, validationErr error) {
+func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (blockValue *uint256.Int, requestErr, validationErr error) {
 	t := time.Now()
-	requestErr, validationErr = api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
+	response, requestErr, validationErr := api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
 	log := opts.log.WithFields(logrus.Fields{
 		"durationMs": time.Since(t).Milliseconds(),
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
@@ -598,18 +599,23 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (r
 			ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
 			if ignoreError {
 				log.WithError(validationErr).Warn("block validation failed with ignorable error")
-				return nil, nil
+				return nil, nil, nil
 			}
 		}
 		log.WithError(validationErr).Warn("block validation failed")
-		return nil, validationErr
+		return nil, nil, validationErr
 	}
 	if requestErr != nil {
 		log.WithError(requestErr).Warn("block validation failed: request error")
-		return requestErr, nil
+		return nil, requestErr, nil
 	}
+
 	log.Info("block validation successful")
-	return nil, nil
+	if response == nil {
+		log.Warn("block validation response is nil")
+		return nil, nil, nil
+	}
+	return response.BlockValue, nil, nil
 }
 
 func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlockRequest, simError error) {
@@ -674,8 +680,8 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 		// it for logging, it is not atomic to avoid the performance impact.
 		"optBlocksInFlight": api.optimisticBlocksInFlight,
 	}).Infof("simulating optimistic block with hash: %v", submission.BidTrace.BlockHash.String())
-	reqErr, simErr := api.simulateBlock(ctx, opts)
-	simResultC <- &blockSimResult{reqErr == nil, true, reqErr, simErr}
+	blockValue, reqErr, simErr := api.simulateBlock(ctx, opts)
+	simResultC <- &blockSimResult{reqErr == nil, blockValue, true, reqErr, simErr}
 	if reqErr != nil || simErr != nil {
 		// Mark builder as non-optimistic.
 		opts.builder.status.IsOptimistic = false
@@ -1804,7 +1810,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 	isBidBelowFloor := floorBidValue != nil && opts.submission.BidTrace.Value.ToBig().Cmp(floorBidValue) == -1
 	isBidAtOrBelowFloor := floorBidValue != nil && opts.submission.BidTrace.Value.ToBig().Cmp(floorBidValue) < 1
 	if opts.cancellationsEnabled && isBidBelowFloor { // with cancellations: if below floor -> delete previous bid
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
+		opts.simResultC <- &blockSimResult{false, nil, false, nil, nil}
 		opts.log.Info("submission below floor bid value, with cancellation")
 		err := api.redis.DelBuilderBid(context.Background(), opts.tx, opts.submission.BidTrace.Slot, opts.submission.BidTrace.ParentHash.String(), opts.submission.BidTrace.ProposerPubkey.String(), opts.submission.BidTrace.BuilderPubkey.String())
 		if err != nil {
@@ -1815,7 +1821,7 @@ func (api *RelayAPI) checkFloorBidValue(opts bidFloorOpts) (*big.Int, bool) {
 		api.Respond(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, false
 	} else if !opts.cancellationsEnabled && isBidAtOrBelowFloor { // without cancellations: if at or below floor -> ignore
-		opts.simResultC <- &blockSimResult{false, false, nil, nil}
+		opts.simResultC <- &blockSimResult{false, nil, false, nil, nil}
 		opts.log.Info("submission at or below floor bid value, without cancellation")
 		api.RespondMsg(opts.w, http.StatusAccepted, "accepted bid below floor, skipped validation")
 		return nil, false
@@ -2091,12 +2097,15 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		case simResult = <-simResultC:
 		case <-time.After(10 * time.Second):
 			log.Warn("timed out waiting for simulation result")
-			simResult = &blockSimResult{false, false, nil, nil}
+			simResult = &blockSimResult{false, nil, false, nil, nil}
 		}
 
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission, simResult.blockValue)
 		if err != nil {
-			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
+			log.WithError(err).WithFields(logrus.Fields{
+				"payload":   payload,
+				"simResult": simResult,
+			}).Error("saving builder block submission to database failed")
 			return
 		}
 
@@ -2161,8 +2170,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		go api.processOptimisticBlock(opts, simResultC)
 	} else {
 		// Simulate block (synchronously).
-		requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
-		simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr}
+		blockValue, requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
+		simResultC <- &blockSimResult{requestErr == nil, blockValue, false, requestErr, validationErr}
 		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
 		log = log.WithFields(logrus.Fields{
 			"timestampAfterValidation": time.Now().UTC().UnixMilli(),
