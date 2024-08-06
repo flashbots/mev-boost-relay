@@ -251,6 +251,7 @@ func CapellaUnblindSignedBlock(blindedBlock *eth2ApiV1Capella.SignedBlindedBeaco
 	}
 }
 
+//nolint:dupl
 func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Deneb.SignedBlockContents {
 	return &eth2ApiV1Deneb.SignedBlockContents{
 		SignedBlock: &deneb.SignedBeaconBlock{
@@ -281,6 +282,7 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 	}
 }
 
+//nolint:dupl
 func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
 	return &eth2ApiV1Electra.SignedBlockContents{
 		SignedBlock: &electra.SignedBeaconBlock{
@@ -302,7 +304,6 @@ func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaco
 					ExecutionPayload:      blockPayload.ExecutionPayload,
 					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
-					Consolidations:        blindedBlock.Message.Body.Consolidations,
 				},
 			},
 			Signature: blindedBlock.Signature,

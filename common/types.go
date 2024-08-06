@@ -441,8 +441,9 @@ type BlockSubmissionInfo struct {
 	Blobs                      []deneb.Blob
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
-	DepositReceipts            []*electra.DepositReceipt
-	WithdrawalRequests         []*electra.ExecutionLayerWithdrawalRequest
+	DepositRequests            []*electra.DepositRequest
+	WithdrawalRequests         []*electra.WithdrawalRequest
+	ConsolidationRequests      []*electra.ConsolidationRequest
 }
 
 /*

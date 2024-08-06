@@ -1607,12 +1607,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 	if getPayloadResp.Version >= spec.DataVersionElectra {
-		depositReceipts, err := getPayloadResp.DepositReceipts()
+		depositRequests, err := getPayloadResp.DepositRequests()
 		if err != nil {
 			log.WithError(err).Info("failed to get deposit receipts")
 		}
 		log = log.WithFields(logrus.Fields{
-			"numDepositReceipts": len(depositReceipts),
+			"numDepositRequests": len(depositRequests),
 		})
 
 		withdrawalRequests, err := getPayloadResp.WithdrawalRequests()
@@ -1620,7 +1620,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			log.WithError(err).Info("failed to get withdrawal requests")
 		}
 		log = log.WithFields(logrus.Fields{
-			"numExecutionLayerWithdrawalRequests": len(withdrawalRequests),
+			"numWithdrawalRequests": len(withdrawalRequests),
 		})
 	}
 	log.Info("execution payload delivered")
@@ -2007,13 +2007,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		})
 	}
 	if payload.Version >= spec.DataVersionElectra {
-		depositReceipts, err := payload.DepositReceipts()
+		depositRequests, err := payload.DepositRequests()
 		if err != nil {
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		log = log.WithFields(logrus.Fields{
-			"numDepositReceipts": len(depositReceipts),
+			"numDepositRequests": len(depositRequests),
 		})
 
 		withdrawalRequests, err := payload.WithdrawalRequests()
@@ -2022,7 +2022,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			return
 		}
 		log = log.WithFields(logrus.Fields{
-			"numExecutionLayerWithdrawalRequests": len(withdrawalRequests),
+			"numWithdrawalRequests": len(withdrawalRequests),
 		})
 	}
 

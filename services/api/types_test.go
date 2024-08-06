@@ -140,8 +140,8 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							Transactions:       []bellatrix.Transaction{},
 							BlobGasUsed:        5005,
 							ExcessBlobGas:      5006,
-							DepositReceipts:    make([]*electra.DepositReceipt, 0),
-							WithdrawalRequests: make([]*electra.ExecutionLayerWithdrawalRequest, 0),
+							DepositRequests:    make([]*electra.DepositRequest, 0),
+							WithdrawalRequests: make([]*electra.WithdrawalRequest, 0),
 						},
 						BlobsBundle: &builderApiDeneb.BlobsBundle{
 							Commitments: []deneb.KZGCommitment{},

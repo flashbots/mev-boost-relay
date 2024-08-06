@@ -22,7 +22,7 @@ var (
 
 	ErrUnsupportedPayload   = errors.New("unsupported payload version")
 	ErrNoWithdrawals        = errors.New("no withdrawals")
-	ErrNoDepositReceipts    = errors.New("no deposit receipts")
+	ErrNoDepositRequests    = errors.New("no deposit receipts")
 	ErrNoWithdrawalRequests = errors.New("no execution layer withdrawal requests")
 	ErrPayloadMismatch      = errors.New("beacon-block and payload version mismatch")
 	ErrHeaderHTRMismatch    = errors.New("beacon-block and payload header mismatch")
@@ -53,20 +53,28 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	return withdrawals.HashTreeRoot()
 }
 
-func ComputeDepositReceiptsRoot(d []*electra.DepositReceipt) (phase0.Root, error) {
+func ComputeDepositRequestsRoot(d []*electra.DepositRequest) (phase0.Root, error) {
 	if d == nil {
-		return phase0.Root{}, ErrNoDepositReceipts
+		return phase0.Root{}, ErrNoDepositRequests
 	}
-	depositReceipts := eth2UtilElectra.DepositReceipts{DepositReceipts: d}
-	return depositReceipts.HashTreeRoot()
+	depositRequests := eth2UtilElectra.DepositRequests{DepositRequests: d}
+	return depositRequests.HashTreeRoot()
 }
 
-func ComputeWithdrawalRequestsRoot(e []*electra.ExecutionLayerWithdrawalRequest) (phase0.Root, error) {
+func ComputeWithdrawalRequestsRoot(e []*electra.WithdrawalRequest) (phase0.Root, error) {
 	if e == nil {
 		return phase0.Root{}, ErrNoWithdrawalRequests
 	}
-	exits := eth2UtilElectra.ExecutionPayloadWithdrawalRequests{WithdrawalRequests: e}
+	exits := eth2UtilElectra.WithdrawalRequests{WithdrawalRequests: e}
 	return exits.HashTreeRoot()
+}
+
+func ComputeConsolidationRequestsRoot(c []*electra.ConsolidationRequest) (phase0.Root, error) {
+	if c == nil {
+		return phase0.Root{}, nil
+	}
+	consolidations := eth2UtilElectra.ConsolidationRequests{ConsolidationRequests: c}
+	return consolidations.HashTreeRoot()
 }
 
 func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {
