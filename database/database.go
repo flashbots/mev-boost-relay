@@ -58,14 +58,14 @@ type IDatabaseService interface {
 type Geo string
 
 const (
-	UsEast Geo = "us-east"
-	RBX    Geo = "rbx"
+	VIN Geo = "vin"
+	RBX Geo = "rbx"
 )
 
 func parseGeoFromEnv() (Geo, error) {
 	geo := os.Getenv("GEO")
 	switch geo {
-	case string(UsEast), string(RBX):
+	case string(VIN), string(RBX):
 		return Geo(geo), nil
 	default:
 		return "", fmt.Errorf("invalid GEO value: %s", geo)
