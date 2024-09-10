@@ -1474,6 +1474,60 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	}
 }
 
+// getPayloadWithFallbacks tries to get the payload from local auction API, if not found, it tries to get it from remote auction API.
+// If still not found, it retries with Redis.
+// If still not found, it returns ErrExecutionPayloadNotFound if .
+// We may get asked for payloads we never served a bid for, in which case we return ErrExecutionPayloadNotFound. This is fine.
+// We may have failed to ask whether or not our stores have the payload, which is completely unaccepable.
+// Improvement: we could ask all three in parallel. Any payload found will do.
+func getPayloadWithFallbacks(log *logrus.Entry, datastoreRef *datastore.Datastore, slot uint64, proposerPubkey common.PubkeyHex, blockHash phase0.Hash32) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
+	getPayloadResp, err := datastoreRef.LocalPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
+	if getPayloadResp != nil {
+		return getPayloadResp, nil
+	}
+
+	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
+		log.WithError(err).Warn("payload not found in local auction API")
+	} else {
+		// We hit a bad error, this should never happen, but this is what our fallbacks are for.
+		log.WithError(err).Error("failed to get payload from local auction API")
+	}
+
+	// In case the local auction API has crashed after serving a header somehow, it may still have succeeded in storing the payload in Redis.
+	// Check there.
+	getPayloadResp, err = datastoreRef.RedisPayload(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+	if getPayloadResp != nil {
+		return getPayloadResp, nil
+	}
+
+	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
+		log.WithError(err).Warn("payload not found in Redis")
+	} else {
+		// We hit a bad error, this should never happen, but this is what our fallbacks are for.
+		log.WithError(err).Error("failed to get payload from Redis")
+	}
+
+	// If we're failing to check for payloads entirely, checking whether the other geo has the payload probably won't help.
+	// If payload stores are responding but simply don't have the payload, we probably didn't offer the bid either.
+	// Regardless, its possible the other geo does. Check it, so we may help out in publishing, even if it wasn't "our bid".
+	getPayloadResp, err = datastoreRef.RemotePayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
+	if getPayloadResp != nil {
+		return getPayloadResp, nil
+	}
+
+	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
+		log.WithError(err).Warn("payload not found in remote auction API")
+	} else {
+		// We hit a bad error, this should never happen, and we're out of fallbacks.
+		log.WithError(err).Error("failed to get payload from remote auction API")
+	}
+
+	return nil, err
+}
+
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
@@ -1640,9 +1694,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Save information about delivered payload
 	defer func() {
-		bidTrace, err := datastore.GetBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
+		bidTrace, err := api.datastore.LocalBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
+		if errors.Is(err, datastore.ErrBidTraceNotFound) {
+			bidTrace, err = api.datastore.RemoteBidTrace(uint64(slot), proposerPubkey.String(), blockHash.String())
+		}
 		if err != nil {
-			log.WithError(err).Info("failed to get bidTrace for delivered payload from redis")
+			log.WithError(err).Info("failed to get bidTrace for delivered payload")
 			return
 		}
 
@@ -1781,68 +1838,27 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		log.Debug(fmt.Sprintf("successfully archived payload request, block_hash: %s", blockHash.String()))
 	}()
 
-	// Get the response - from Redis, Memcache or DB
-	// note that recent mev-boost versions only send getPayload to relays that provided the bid, older versions send getPayload to all relays.
-	// Additionally, proposers may feel it's safer to ask for a bid from all relays and fork.
-	getPayloadResp, err = datastore.GetPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
-	if err != nil || getPayloadResp == nil {
-		log.WithError(err).Warn("failed first attempt to get execution payload")
-
-		// Wait, then try again (this time from Redis)
-		time.Sleep(time.Duration(timeoutGetPayloadRetryMs) * time.Millisecond)
-		getPayloadResp, err = api.datastore.GetGetPayloadResponse(log, uint64(slot), proposerPubkey.String(), blockHash.String())
-
-		if err != nil || getPayloadResp == nil {
-			// Still not found! Error out now.
-			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-				// Couldn't find the execution payload, three options:
-				// 1. We're storing all payloads in postgres, we never received
-				// or served the bid, but someone still asked us for it. We can
-				// check this.
-				// 2. We do not store all payloads in postgres. The bid was
-				// never the top bid, so we didn't store it in Redis or
-				// Memcached either. We received, but never served the bid, but
-				// someone still asked us for it.
-				// 3. The bid was accepted but the payload was lost in all
-				// active stores. This is a critical error! If this ever
-				// happens, we have work to do.
-				// Annoyingly, we can't currently distinguish between 2 and 3!
-
-				// Check for case 1 if possible.
-				if !api.ffDisablePayloadDBStorage {
-					bid, err := api.db.GetBlockSubmissionEntry(uint64(slot), proposerPubkey.String(), blockHash.String())
-					if errors.Is(err, sql.ErrNoRows) {
-						abortReason = "execution-payload-not-found"
-						log.Info("failed second attempt to get execution payload, discovered block was never submitted to this relay")
-						api.RespondError(w, http.StatusBadRequest, "no execution payload for this request, block was never seen by this relay")
-						return
-					}
-					if err != nil {
-						abortReason = "execution-payload-retrieval-error"
-						log.WithError(err).Error("failed second attempt to get execution payload, hit an error while checking if block was submitted to this relay")
-						api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request, hit an error while checking if block was submitted to this relay")
-						return
-					} else if bid.EligibleAt.Valid {
-						log.Error("failed getting execution payload not found, but found bid in database")
-					} else {
-						log.Info("found bid but payload was never saved as bid was ineligible being below floor value")
-					}
-				}
-
-				// Case 2 or 3, we don't know which.
-				abortReason = "execution-payload-not-found"
-				log.Warn("failed second attempt to get execution payload, not found case, block was never submitted to this relay or bid was accepted but payload was lost")
-				api.RespondError(w, http.StatusBadRequest, "no execution payload for this request, block was never seen by this relay or bid was accepted but payload was lost, if you got this bid from us, please contact the relay")
-				return
-			} else {
-				abortReason = "execution-payload-retrieval-error"
-				log.WithError(err).Error("failed second attempt to get execution payload, error case")
-				api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
-				return
-			}
-		}
-
-		// The second attempt succeeded. We may continue.
+	getPayloadResp, err = getPayloadWithFallbacks(log, api.datastore, uint64(slot), proposerPubkey, blockHash)
+	// This happens all the time and is acceptable.
+	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+		abortReason = "execution-payload-not-found"
+		log.Info("failed to get execution payload, discovered block was never submitted to this relay")
+		api.RespondError(w, http.StatusBadRequest, "no execution payload for this request, block was never seen by this relay")
+		return
+	}
+	// Should never happen. All methods of payload retrieval hit an unacceptable error.
+	if err != nil {
+		abortReason = "execution-payload-retrieval-error"
+		log.WithError(err).Error("failed second attempt to get execution payload, error case")
+		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
+		return
+	}
+	// Although getPayloadWithFallbacks should always return a payload or an err, this code is too critical to assume. We check it hasn't returned nil without err anyway.
+	if getPayloadResp == nil {
+		abortReason = "unexpected-nil-getpayloadresp"
+		log.Error("ended up with nil getPayloadResp, and no early return on error, this should be impossible")
+		api.RespondError(w, http.StatusInternalServerError, "no execution payload for this request")
+		return
 	}
 
 	// Now we know this relay also has the payload

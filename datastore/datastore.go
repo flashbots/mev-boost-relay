@@ -2,7 +2,7 @@
 package datastore
 
 import (
-	"database/sql"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,7 +10,6 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -49,15 +48,33 @@ type Datastore struct {
 
 	// Used for proposer-API readiness check
 	KnownValidatorsWasUpdated uberatomic.Bool
+
+	// Where we can find payloads for our local auction
+	// Should be protocol + hostname, e.g. http://turbo-auction-api, https://relay-builders-us.ultrasound.money
+	localAuctionHost  string
+	remoteAuctionHost string
+	// Token used to remotely authenticate to auction API.
+	auctionAuthToken string
 }
 
-func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
+func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService, localAuctionHost, remoteAuctionHost, auctionAuthToken string) (ds *Datastore, err error) {
 	ds = &Datastore{
 		db:                      db,
 		memcached:               memcached,
 		redis:                   redisCache,
 		knownValidatorsByPubkey: make(map[common.PubkeyHex]uint64),
 		knownValidatorsByIndex:  make(map[uint64]common.PubkeyHex),
+		localAuctionHost:        localAuctionHost,
+		remoteAuctionHost:       remoteAuctionHost,
+		auctionAuthToken:        auctionAuthToken,
+	}
+
+	if localAuctionHost == "" {
+		log.Fatal("LOCAL_AUCTION_HOST is not set")
+	}
+
+	if remoteAuctionHost == "" {
+		log.Fatal("REMOTE_AUCTION_HOST is not set")
 	}
 
 	return ds, err
@@ -203,47 +220,27 @@ func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidato
 	return nil
 }
 
-// GetGetPayloadResponse returns the getPayload response from memory or Redis or Database
-func (ds *Datastore) GetGetPayloadResponse(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
-	log = log.WithField("datastoreMethod", "GetGetPayloadResponse")
+// RedisPayload returns the getPayload response from Redis
+func (ds *Datastore) RedisPayload(log *logrus.Entry, slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
+	log = log.WithField("datastoreMethod", "RedisPayload")
 	_proposerPubkey := strings.ToLower(proposerPubkey)
 	_blockHash := strings.ToLower(blockHash)
 
-	// 1. try to get from Redis
+	// try to get from Redis
 	resp, err := ds.redis.GetPayloadContents(slot, _proposerPubkey, _blockHash)
+
+	// redis.Nil is a common error when the key is not found
+	// this may happen if we're asked for a payload we don't have.
 	if errors.Is(err, redis.Nil) {
 		log.WithError(err).Warn("execution payload not found in redis")
-	} else if err != nil {
-		log.WithError(err).Error("error getting execution payload from redis")
-	} else {
-		log.Debug("getPayload response from redis")
-		return resp, nil
-	}
-
-	// 2. try to get from Memcached
-	if ds.memcached != nil {
-		resp, err = ds.memcached.GetExecutionPayload(slot, _proposerPubkey, _blockHash)
-		if errors.Is(err, memcache.ErrCacheMiss) {
-			log.WithError(err).Warn("execution payload not found in memcached")
-		} else if err != nil {
-			log.WithError(err).Error("error getting execution payload from memcached")
-		} else if resp != nil {
-			log.Debug("getPayload response from memcached")
-			return resp, nil
-		}
-	}
-
-	// 3. try to get from database (should not happen, it's just a backup)
-	executionPayloadEntry, err := ds.db.GetExecutionPayloadEntryBySlotPkHash(slot, proposerPubkey, blockHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		log.WithError(err).Warn("execution payload not found in database")
 		return nil, ErrExecutionPayloadNotFound
-	} else if err != nil {
-		log.WithError(err).Error("error getting execution payload from database")
+	}
+
+	if err != nil {
+		log.WithError(err).Error("error getting execution payload from redis")
 		return nil, err
 	}
 
-	// Got it from database, now deserialize execution payload and compile full response
-	log.Warn("getPayload response from database, primary storage failed")
-	return database.ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry)
+	log.Debug("getPayload response from redis")
+	return resp, nil
 }

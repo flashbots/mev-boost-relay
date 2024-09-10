@@ -32,6 +32,10 @@ var (
 	apiDefaultDataAPIEnabled     = os.Getenv("DISABLE_DATA_API") != "1"
 	apiDefaultProposerAPIEnabled = os.Getenv("DISABLE_PROPOSER_API") != "1"
 
+	localAuctionHost  = os.Getenv("LOCAL_AUCTION_HOST")
+	remoteAuctionHost = os.Getenv("REMOTE_AUCTION_HOST")
+	auctionAuthToken  = os.Getenv("AUCTION_AUTH_TOKEN")
+
 	apiListenAddr   string
 	apiPprofEnabled bool
 	apiSecretKey    string
@@ -152,7 +156,7 @@ var apiCmd = &cobra.Command{
 		}
 
 		log.Info("Setting up datastore...")
-		ds, err := datastore.NewDatastore(redis, mem, db)
+		ds, err := datastore.NewDatastore(redis, mem, db, localAuctionHost, remoteAuctionHost, auctionAuthToken)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed setting up prod datastore")
 		}

@@ -18,7 +18,7 @@ func setupTestDatastore(t *testing.T, mockDB *database.MockDB) *Datastore {
 	redisDs, err := NewRedisCache("", redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 
-	ds, err := NewDatastore(redisDs, nil, mockDB)
+	ds, err := NewDatastore(redisDs, nil, mockDB, "", "")
 	require.NoError(t, err)
 
 	return ds
@@ -26,7 +26,7 @@ func setupTestDatastore(t *testing.T, mockDB *database.MockDB) *Datastore {
 
 func TestGetPayloadFailure(t *testing.T) {
 	ds := setupTestDatastore(t, &database.MockDB{})
-	_, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
+	_, err := ds.RedisPayload(common.TestLog, 1, "a", "b")
 	require.ErrorIs(t, ErrExecutionPayloadNotFound, err)
 }
 
@@ -65,7 +65,7 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 				},
 			}
 			ds := setupTestDatastore(t, mockDB)
-			payload, err := ds.GetGetPayloadResponse(common.TestLog, 1, "a", "b")
+			payload, err := ds.RedisPayload(common.TestLog, 1, "a", "b")
 			require.NoError(t, err)
 			blockHash, err := payload.BlockHash()
 			require.NoError(t, err)
