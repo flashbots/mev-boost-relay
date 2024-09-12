@@ -256,6 +256,41 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	}, nil
 }
 
+func GetHeaderSubmissionInfo(submission *VersionedSubmitHeaderOptimistic) (*HeaderSubmissionInfo, error) {
+	bidTrace, err := submission.BidTrace()
+	if err != nil {
+		return nil, err
+	}
+	signature, err := submission.Signature()
+	if err != nil {
+		return nil, err
+	}
+	timestamp, err := submission.Timestamp()
+	if err != nil {
+		return nil, err
+	}
+	prevRandao, err := submission.PrevRandao()
+	if err != nil {
+		return nil, err
+	}
+	transactionsRoot, err := submission.TransactionsRoot()
+	if err != nil {
+		return nil, err
+	}
+	withdrawalsRoot, err := submission.WithdrawalsRoot()
+	if err != nil {
+		return nil, err
+	}
+	return &HeaderSubmissionInfo{
+		BidTrace:         bidTrace,
+		Signature:        signature,
+		Timestamp:        timestamp,
+		PrevRandao:       prevRandao,
+		TransactionsRoot: transactionsRoot,
+		WithdrawalsRoot:  withdrawalsRoot,
+	}, nil
+}
+
 func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	switch submission.Version {
 	case spec.DataVersionCapella:
