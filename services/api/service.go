@@ -1483,6 +1483,7 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 func getPayloadWithFallbacks(log *logrus.Entry, datastoreRef *datastore.Datastore, slot uint64, proposerPubkey common.PubkeyHex, blockHash phase0.Hash32) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	getPayloadResp, err := datastoreRef.LocalPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
 	if getPayloadResp != nil {
+		log.Info("payload found locally")
 		return getPayloadResp, nil
 	}
 
@@ -1498,6 +1499,7 @@ func getPayloadWithFallbacks(log *logrus.Entry, datastoreRef *datastore.Datastor
 	// Check there.
 	getPayloadResp, err = datastoreRef.RedisPayload(log, uint64(slot), proposerPubkey.String(), blockHash.String())
 	if getPayloadResp != nil {
+		log.Info("payload found in redis")
 		return getPayloadResp, nil
 	}
 
@@ -1514,6 +1516,7 @@ func getPayloadWithFallbacks(log *logrus.Entry, datastoreRef *datastore.Datastor
 	// Regardless, its possible the other geo does. Check it, so we may help out in publishing, even if it wasn't "our bid".
 	getPayloadResp, err = datastoreRef.RemotePayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
 	if getPayloadResp != nil {
+		log.Info("payload found remotely")
 		return getPayloadResp, nil
 	}
 
