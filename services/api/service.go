@@ -360,6 +360,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.BlockBuilderAPI {
 		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
+		// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 	}
 
@@ -1733,6 +1734,14 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		return false
 	}
 
+	// Do a check in memchache for the slot being with a registered provider. If miss, go to redis. if miss again go to postgres.
+	api.beaconClient.GetProposerDuties(submission.BidTrace.Slot) // we want to cache this itself
+	if submission.BidTrace.BuilderPubkey == nil {
+		log.Info("submitNewBlock failed: builder pubkey is nil")
+		api.RespondError(w, http.StatusBadRequest, "builder pubkey is nil")
+		return false
+	}
+
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)
 	if submission.Timestamp != expectedTimestamp {
@@ -1883,6 +1892,7 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	return &updateBidResult, getPayloadResponse, true
 }
 
+// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -2010,7 +2020,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
-
+	// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
 	if !ok {
 		return
