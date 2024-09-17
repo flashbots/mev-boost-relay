@@ -1735,11 +1735,24 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	}
 
 	// Do a check in memchache for the slot being with a registered provider. If miss, go to redis. if miss again go to postgres.
-	api.beaconClient.GetProposerDuties(submission.BidTrace.Slot) // we want to cache this itself
-	if submission.BidTrace.BuilderPubkey == nil {
-		log.Info("submitNewBlock failed: builder pubkey is nil")
-		api.RespondError(w, http.StatusBadRequest, "builder pubkey is nil")
+	duties, err := api.beaconClient.GetProposerDuties(submission.BidTrace.Slot) // we want to cache this itself
+	if err != nil {
+		log.WithError(err).Error("failed to get proposer duties")
+		api.RespondError(w, http.StatusBadRequest, "failed to get proposer duties")
 		return false
+	}
+
+	// memcache this TODO
+	for _, duty := range duties.Data {
+		if duty.Slot == submission.BidTrace.Slot {
+			if api.MevCommitClient.IsValidatorRegistered(duty.Pubkey) {
+				if !api.MevCommitClient.IsBuilderRegistered(submission.BidTrace.BuilderPubkey.String()) {
+					api.RespondError(w, http.StatusBadRequest, "builder pubkey is not registered under mev-commit")
+					return false
+				}
+			}
+			break
+		}
 	}
 
 	// Timestamp check
