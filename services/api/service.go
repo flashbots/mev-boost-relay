@@ -1747,6 +1747,9 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		if duty.Slot == submission.BidTrace.Slot {
 			if api.MevCommitClient.IsValidatorRegistered(duty.Pubkey) {
 				if !api.MevCommitClient.IsBuilderRegistered(submission.BidTrace.BuilderPubkey.String()) {
+					// TODO: Need to add a check to retrieve if a builder is registered under mev-commit with a specific pubkey. This would slow things down, but hopefully with memcache this isn't too bad.
+					// One could also archietct to have a member node co-located to the relayer so it has access to the same cache. Or an alternate fast service that receives events from mev-commit and caches the results of provider inclusion.
+					// A technical decision that needs to be better understood.
 					api.RespondError(w, http.StatusBadRequest, "builder pubkey is not registered under mev-commit")
 					return false
 				}
