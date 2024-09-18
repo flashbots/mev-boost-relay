@@ -35,6 +35,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/metrics"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
@@ -182,11 +183,13 @@ type RelayAPI struct {
 	srvStarted  uberatomic.Bool
 	srvShutdown uberatomic.Bool
 
-	beaconClient beaconclient.IMultiBeaconClient
-	datastore    *datastore.Datastore
-	redis        *datastore.RedisCache
-	memcached    *datastore.Memcached
-	db           database.IDatabaseService
+	beaconClient    beaconclient.IMultiBeaconClient
+	mevCommitClient mevcommitclient.IMevCommitClient
+
+	datastore *datastore.Datastore
+	redis     *datastore.RedisCache
+	memcached *datastore.Memcached
+	db        database.IDatabaseService
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -200,8 +203,7 @@ type RelayAPI struct {
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter IBlockSimRateLimiter
-
-	validatorRegC chan builderApiV1.SignedValidatorRegistration
+	validatorRegC       chan builderApiV1.SignedValidatorRegistration
 
 	// used to notify when a new validator has been registered
 	validatorUpdateCh chan struct{}
@@ -1735,26 +1737,35 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	}
 
 	// Do a check in memchache for the slot being with a registered provider. If miss, go to redis. if miss again go to postgres.
-	duties, err := api.beaconClient.GetProposerDuties(submission.BidTrace.Slot) // we want to cache this itself
+
+	// Find the duty for the submission slot
+	duty := api.proposerDutiesMap[submission.BidTrace.Slot]
+	if duty == nil {
+		log.Info("no duty found for submission slot")
+		api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
+		return false
+	}
+	// Check if validator is registered
+	isValidatorRegistered, err := api.mevCommitClient.IsValidatorRegistered(duty.Entry.Message.Pubkey.String())
 	if err != nil {
-		log.WithError(err).Error("failed to get proposer duties")
-		api.RespondError(w, http.StatusBadRequest, "failed to get proposer duties")
+		log.WithError(err).Error("Failed to check validator registration")
+		api.RespondError(w, http.StatusInternalServerError, "Internal server error")
 		return false
 	}
 
-	// memcache this TODO
-	for _, duty := range duties.Data {
-		if duty.Slot == submission.BidTrace.Slot {
-			if api.MevCommitClient.IsValidatorRegistered(duty.Pubkey) {
-				if !api.MevCommitClient.IsBuilderRegistered(submission.BidTrace.BuilderPubkey.String()) {
-					// TODO: Need to add a check to retrieve if a builder is registered under mev-commit with a specific pubkey. This would slow things down, but hopefully with memcache this isn't too bad.
-					// One could also archietct to have a member node co-located to the relayer so it has access to the same cache. Or an alternate fast service that receives events from mev-commit and caches the results of provider inclusion.
-					// A technical decision that needs to be better understood.
-					api.RespondError(w, http.StatusBadRequest, "builder pubkey is not registered under mev-commit")
-					return false
-				}
-			}
-			break
+	if isValidatorRegistered {
+		// Check if builder is registered
+		isBuilderRegistered, err := api.mevCommitClient.IsBuilderRegistered(submission.BidTrace.BuilderPubkey.String())
+		if err != nil {
+			log.WithError(err).Error("Failed to check builder registration")
+			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
+			return false
+		}
+
+		if !isBuilderRegistered {
+			// TODO: Implement caching strategy for builder registration status
+			api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
+			return false
 		}
 	}
 
