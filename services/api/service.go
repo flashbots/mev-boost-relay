@@ -1475,6 +1475,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 
+		// TODO(@ckartik): We could do something similar for validator registrations with L1 mevcommit contract.
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 		if err != nil {
