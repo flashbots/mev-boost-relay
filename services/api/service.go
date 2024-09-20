@@ -139,6 +139,8 @@ type RelayAPIOpts struct {
 	DataAPI         bool
 	PprofAPI        bool
 	InternalAPI     bool
+
+	MevCommitEnabled bool
 }
 
 type payloadAttributesHelper struct {

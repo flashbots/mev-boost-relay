@@ -21,6 +21,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -52,6 +53,8 @@ type Housekeeper struct {
 	proposerDutiesSlot       uint64
 
 	headSlot uberatomic.Uint64
+
+	mevCommitClient mevcommitclient.IMevCommitClient
 
 	proposersAlreadySaved map[uint64]string // to avoid repeating redis writes
 }
@@ -142,6 +145,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
+	go hk.updatemevcommitvalidatorregistrations(headSlot)
 
 	// Set headSlot in redis (for the website)
 	err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
@@ -246,6 +250,23 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+func (hk *Housekeeper) updateMevCommitValidatorRegistrations(headSlot uint64) {
+	registeredValidators, err := hk.mevCommitClient.GetRegisteredValidators()
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get registered validators from MEV-Commit client")
+		return
+	}
+
+	// Store the registered validators in Redis
+	err = hk.redis.SetMevCommitRegisteredValidators(registeredValidators)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to store MEV-Commit registered validators in Redis")
+		return
+	}
+
+	hk.log.WithField("numValidators", len(registeredValidators)).Info("updated MEV-Commit registered validators in Redis")
 }
 
 // updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis
