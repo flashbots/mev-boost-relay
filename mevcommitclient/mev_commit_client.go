@@ -8,7 +8,7 @@ import (
 
 type IMevCommitClient interface {
 	// Need to provide some SLA's around response times here. Should be down to milliseconds with memcache.
-	IsValidatorRegistered(pubkey string) (bool, error)
+	GetOptInStatusForValidators(pubkeys [][]byte) (map[string]bool, error)
 	IsBuilderRegistered(pubkey string) (bool, error)
 	GetRegisteredValidators() ([]string, error)
 }
@@ -31,8 +31,17 @@ func NewMevCommitClient(apiUrl string, contractAddress string, client *ethclient
 	}, nil
 }
 
-func (m *MevCommitClient) IsValidatorRegistered(pubkey string) (bool, error) {
-	return false, nil
+func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) (map[string]bool, error) {
+	optedIn, err := m.validatorOptInRouterCaller.AreValidatorsOptedIn(nil, pubkeys)
+	if err != nil {
+		return nil, err
+	}
+
+	pubkeyMap := make(map[string]bool)
+	for i, pubkey := range pubkeys {
+		pubkeyMap[string(pubkey)] = optedIn[i]
+	}
+	return pubkeyMap, nil
 }
 
 func (m *MevCommitClient) IsBuilderRegistered(pubkey string) (bool, error) {
