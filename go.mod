@@ -130,10 +130,6 @@ retract (
 	v1.0.0-alpha1
 )
 
-// This version points to jtraglia's block-validation branch, which
-// is based off of lightclient's prague-devnet-0 branch.
-replace github.com/ethereum/go-ethereum => github.com/jtraglia/go-ethereum v1.10.10-0.20240522193628-e3b74dd6a9e2
-
 // Remove this when Jim merges pk910's PR.
 replace github.com/attestantio/go-eth2-client => github.com/pk910/go-eth2-client v0.0.0-20240923174943-8d64565c83ca
 
