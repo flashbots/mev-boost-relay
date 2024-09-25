@@ -24,7 +24,8 @@ var (
 	redisScheme = "redis://"
 	redisPrefix = "boost-relay"
 
-	expiryBidCache = 45 * time.Second
+	mevCommitValidatorRegistrationExpiry = 1 * time.Hour
+	expiryBidCache                       = 45 * time.Second
 
 	RedisConfigFieldPubkey         = "pubkey"
 	RedisStatsFieldLatestSlot      = "latest-slot"
@@ -94,7 +95,8 @@ type RedisCache struct {
 	prefixFloorBidValue               string
 
 	// keys
-	keyValidatorRegistrationTimestamp string
+	keyValidatorRegistrationTimestamp     string
+	keyMevCommitValidatorRegistrationHash string
 
 	keyRelayConfig        string
 	keyStats              string
@@ -134,8 +136,9 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixFloorBid:                    fmt.Sprintf("%s/%s:bid-floor", redisPrefix, prefix),                      // prefix:slot_parentHash_proposerPubkey
 		prefixFloorBidValue:               fmt.Sprintf("%s/%s:bid-floor-value", redisPrefix, prefix),                // prefix:slot_parentHash_proposerPubkey
 
-		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
-		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
+		keyValidatorRegistrationTimestamp:     fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
+		keyMevCommitValidatorRegistrationHash: fmt.Sprintf("%s/%s:mev-commit-validator-registration", redisPrefix, prefix),
+		keyRelayConfig:                        fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -239,6 +242,36 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.Pub
 		return 0, nil
 	}
 	return timestamp, err
+}
+
+// Add these methods to the existing RedisCache struct
+
+func (r *RedisCache) SetMevCommitValidatorRegistration(pubkey string) error {
+	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey, "1", mevCommitValidatorRegistrationExpiry).Err()
+	if err != nil {
+		return fmt.Errorf("failed to add validator to MEV-Commit registration: %w", err)
+	}
+	return nil
+}
+
+func (r *RedisCache) IsMevCommitValidatorRegistered(pubkey string) (bool, error) {
+	_, err := r.client.Get(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check MEV-Commit validator registration: %w", err)
+	}
+
+	return true, nil
+}
+
+func (r *RedisCache) DeleteMevCommitValidatorRegistration(pubkey string) error {
+	err := r.client.Del(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey).Err()
+	if err != nil {
+		return fmt.Errorf("failed to remove validator from MEV-Commit registration: %w", err)
+	}
+	return nil
 }
 
 func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey common.PubkeyHex, timestamp uint64) error {
