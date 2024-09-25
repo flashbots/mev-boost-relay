@@ -200,6 +200,28 @@ func TestRegisterValidator(t *testing.T) {
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
+
+	t.Run("known validator", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		// wait for the both channel notifications
+		select {
+		case val := <-backend.relay.validatorRegC:
+			require.Equal(t, val.Message.Pubkey, msg.Message.Pubkey)
+		default:
+		}
+
+		select {
+		case <-backend.relay.validatorUpdateCh:
+		default:
+		}
+	})
 }
 
 func TestGetHeader(t *testing.T) {

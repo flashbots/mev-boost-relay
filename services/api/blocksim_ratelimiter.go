@@ -31,7 +31,7 @@ var (
 )
 
 type IBlockSimRateLimiter interface {
-	Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (error, error)
+	Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (*common.BuilderBlockValidationResponse, error, error)
 	CurrentCounter() int64
 }
 
@@ -59,7 +59,12 @@ func NewBlockSimulationRateLimiter(blockSimURL string) *BlockSimulationRateLimit
 	}
 }
 
-func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (requestErr, validationErr error) {
+func (b *BlockSimulationRateLimiter) Send(
+	context context.Context,
+	payload *common.BuilderBlockValidationRequest,
+	isHighPrio,
+	fastTrack bool,
+) (response *common.BuilderBlockValidationResponse, requestErr, validationErr error) {
 	b.cv.L.Lock()
 	cnt := atomic.AddInt64(&b.counter, 1)
 	if maxConcurrentBlocks > 0 && cnt > maxConcurrentBlocks {
@@ -75,16 +80,16 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	}()
 
 	if err := context.Err(); err != nil {
-		return fmt.Errorf("%w, %w", ErrRequestClosed, err), nil
+		return nil, fmt.Errorf("%w, %w", ErrRequestClosed, err), nil
 	}
 
 	var simReq *jsonrpc.JSONRPCRequest
 	if payload.Version == spec.DataVersionCapella && payload.Capella == nil {
-		return ErrNoCapellaPayload, nil
+		return nil, ErrNoCapellaPayload, nil
 	}
 
 	if payload.Version == spec.DataVersionDeneb && payload.Deneb == nil {
-		return ErrNoDenebPayload, nil
+		return nil, ErrNoDenebPayload, nil
 	}
 
 	if payload.Version == spec.DataVersionElectra && payload.Electra == nil {
@@ -93,7 +98,7 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 
 	submission, err := common.GetBlockSubmissionInfo(payload.VersionedSubmitBlockRequest)
 	if err != nil {
-		return err, nil
+		return nil, err, nil
 	}
 
 	// Prepare headers
@@ -114,8 +119,14 @@ func (b *BlockSimulationRateLimiter) Send(context context.Context, payload *comm
 	} else {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
 	}
-	_, requestErr, validationErr = SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
-	return requestErr, validationErr
+	res, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
+	response = new(common.BuilderBlockValidationResponse)
+	if res != nil {
+		if err := json.Unmarshal(res.Result, response); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal response: %w", err), validationErr
+		}
+	}
+	return response, requestErr, validationErr
 }
 
 // CurrentCounter returns the number of waiting and active requests

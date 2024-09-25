@@ -107,6 +107,10 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 		time.Sleep(6 * time.Second)
 	}
 
+	ds.RefreshKnownValidatorsWithoutChecks(log, beaconClient, slot)
+}
+
+func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
 	log.Info("Querying validators from beacon node... (this may take a while)")
 	timeStartFetching := time.Now()
 	validators, err := beaconClient.GetStateValidators(beaconclient.StateIDHead) // head is fastest
@@ -170,6 +174,14 @@ func (ds *Datastore) NumKnownValidators() int {
 
 func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
 	return ds.db.NumRegisteredValidators()
+}
+
+func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64) {
+	ds.knownValidatorsLock.Lock()
+	defer ds.knownValidatorsLock.Unlock()
+
+	ds.knownValidatorsByPubkey[pubkeyHex] = index
+	ds.knownValidatorsByIndex[index] = pubkeyHex
 }
 
 // SaveValidatorRegistration saves a validator registration into both Redis and the database

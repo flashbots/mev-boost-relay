@@ -22,6 +22,7 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
+	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 )
 
@@ -374,6 +375,10 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
+}
+
+type BuilderBlockValidationResponse struct {
+	BlockValue *uint256.Int `json:"block_value"` // true block value calculated from simulation
 }
 
 type VersionedSubmitBlockRequest struct {
