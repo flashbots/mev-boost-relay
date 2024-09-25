@@ -12,7 +12,6 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -380,7 +379,7 @@ func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash s
 	return resp, err
 }
 
-func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) (err error) {
+func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) (err error) {
 	key := r.keyPayloadContentsElectra(slot, proposerPubkey, blockHash)
 	b, err := execPayload.MarshalSSZ()
 	if err != nil {
@@ -390,7 +389,7 @@ func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pi
 }
 
 func (r *RedisCache) GetPayloadContentsElectra(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
-	electraPayloadContents := new(builderApiElectra.ExecutionPayloadAndBlobsBundle)
+	electraPayloadContents := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 
 	key := r.keyPayloadContentsElectra(slot, proposerPubkey, blockHash)
 	val, err := r.client.Get(context.Background(), key).Result()

@@ -93,7 +93,7 @@ func (b *BlockSimulationRateLimiter) Send(
 	}
 
 	if payload.Version == spec.DataVersionElectra && payload.Electra == nil {
-		return ErrNoElectraPayload, nil
+		return nil, ErrNoElectraPayload, nil
 	}
 
 	submission, err := common.GetBlockSubmissionInfo(payload.VersionedSubmitBlockRequest)

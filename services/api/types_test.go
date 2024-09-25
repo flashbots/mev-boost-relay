@@ -5,14 +5,12 @@ import (
 
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
-	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -122,26 +120,24 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			reqPayload: &common.VersionedSubmitBlockRequest{
 				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
 					Version: spec.DataVersionElectra,
-					Electra: &builderApiElectra.SubmitBlockRequest{
-						ExecutionPayload: &electra.ExecutionPayload{
-							ParentHash:         phase0.Hash32{0x01},
-							FeeRecipient:       bellatrix.ExecutionAddress{0x02},
-							StateRoot:          phase0.Root{0x03},
-							ReceiptsRoot:       phase0.Root{0x04},
-							LogsBloom:          [256]byte{0x05},
-							PrevRandao:         phase0.Hash32{0x06},
-							BlockNumber:        5001,
-							GasLimit:           5002,
-							GasUsed:            5003,
-							Timestamp:          5004,
-							ExtraData:          []byte{0x07},
-							BaseFeePerGas:      uint256.NewInt(123),
-							BlockHash:          phase0.Hash32{0x09},
-							Transactions:       []bellatrix.Transaction{},
-							BlobGasUsed:        5005,
-							ExcessBlobGas:      5006,
-							DepositRequests:    make([]*electra.DepositRequest, 0),
-							WithdrawalRequests: make([]*electra.WithdrawalRequest, 0),
+					Electra: &builderApiDeneb.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
+							ParentHash:    phase0.Hash32{0x01},
+							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+							StateRoot:     phase0.Root{0x03},
+							ReceiptsRoot:  phase0.Root{0x04},
+							LogsBloom:     [256]byte{0x05},
+							PrevRandao:    phase0.Hash32{0x06},
+							BlockNumber:   5001,
+							GasLimit:      5002,
+							GasUsed:       5003,
+							Timestamp:     5004,
+							ExtraData:     []byte{0x07},
+							BaseFeePerGas: uint256.NewInt(123),
+							BlockHash:     phase0.Hash32{0x09},
+							Transactions:  []bellatrix.Transaction{},
+							BlobGasUsed:   5005,
+							ExcessBlobGas: 5006,
 						},
 						BlobsBundle: &builderApiDeneb.BlobsBundle{
 							Commitments: []deneb.KZGCommitment{},

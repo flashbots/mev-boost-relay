@@ -16,7 +16,6 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -239,18 +238,6 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 	if submission.Version >= spec.DataVersionDeneb && err != nil {
 		return nil, err
 	}
-	depositRequests, err := submission.DepositRequests()
-	if submission.Version >= spec.DataVersionElectra && err != nil {
-		return nil, err
-	}
-	withdrawalRequests, err := submission.WithdrawalRequests()
-	if submission.Version >= spec.DataVersionElectra && err != nil {
-		return nil, err
-	}
-	consolidationRequests, err := submission.ConsolidationRequests()
-	if submission.Version >= spec.DataVersionElectra && err != nil {
-		return nil, err
-	}
 	return &BlockSubmissionInfo{
 		BidTrace:                   bidTrace,
 		Signature:                  signature,
@@ -266,9 +253,6 @@ func GetBlockSubmissionInfo(submission *VersionedSubmitBlockRequest) (*BlockSubm
 		Blobs:                      blobs,
 		BlobGasUsed:                blobGasUsed,
 		ExcessBlobGas:              excessBlobGas,
-		DepositRequests:            depositRequests,
-		WithdrawalRequests:         withdrawalRequests,
-		ConsolidationRequests:      consolidationRequests,
 	}, nil
 }
 
@@ -290,7 +274,7 @@ func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest)
 	case spec.DataVersionElectra:
 		return &builderApi.VersionedSubmitBlindedBlockResponse{
 			Version: spec.DataVersionElectra,
-			Electra: &builderApiElectra.ExecutionPayloadAndBlobsBundle{
+			Electra: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: submission.Electra.ExecutionPayload,
 				BlobsBundle:      submission.Electra.BlobsBundle,
 			},

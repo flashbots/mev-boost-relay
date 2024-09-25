@@ -7,7 +7,6 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
@@ -117,7 +116,7 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 	case spec.DataVersionElectra:
 		return &builderApi.VersionedSubmitBlindedBlockResponse{
 			Version: spec.DataVersionElectra,
-			Electra: &builderApiElectra.ExecutionPayloadAndBlobsBundle{
+			Electra: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: payload.Electra.ExecutionPayload,
 				BlobsBundle:      payload.Electra.BlobsBundle,
 			},
@@ -175,7 +174,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			},
 		}, nil
 	case spec.DataVersionElectra:
-		builderBid := builderApiElectra.BuilderBid{
+		builderBid := builderApiDeneb.BuilderBid{
 			Header:             header.Electra,
 			BlobKZGCommitments: payload.Electra.BlobsBundle.Commitments,
 			Value:              value,
@@ -189,7 +188,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 
 		return &builderSpec.VersionedSignedBuilderBid{
 			Version: spec.DataVersionElectra,
-			Electra: &builderApiElectra.SignedBuilderBid{
+			Electra: &builderApiDeneb.SignedBuilderBid{
 				Message:   &builderBid,
 				Signature: sig,
 			},
@@ -284,7 +283,7 @@ func DenebUnblindSignedBlock(blindedBlock *eth2ApiV1Deneb.SignedBlindedBeaconBlo
 }
 
 //nolint:dupl
-func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiElectra.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
+func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
 	return &eth2ApiV1Electra.SignedBlockContents{
 		SignedBlock: &electra.SignedBeaconBlock{
 			Message: &electra.BeaconBlock{
@@ -336,15 +335,6 @@ type denebBuilderBlockValidationRequestJSON struct {
 	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
 }
 
-type electraBuilderBlockValidationRequestJSON struct {
-	Message               *builderApiV1.BidTrace       `json:"message"`
-	ExecutionPayload      *electra.ExecutionPayload    `json:"execution_payload"`
-	BlobsBundle           *builderApiDeneb.BlobsBundle `json:"blobs_bundle"`
-	Signature             string                       `json:"signature"`
-	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
-	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
-}
-
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
@@ -364,7 +354,8 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
 		})
 	case spec.DataVersionElectra:
-		return json.Marshal(&electraBuilderBlockValidationRequestJSON{
+		// Electra uses the same ExecutionPayload as Deneb
+		return json.Marshal(&denebBuilderBlockValidationRequestJSON{
 			Message:               r.Electra.Message,
 			ExecutionPayload:      r.Electra.ExecutionPayload,
 			BlobsBundle:           r.Electra.BlobsBundle,
@@ -400,12 +391,6 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
-	electraRequest := new(builderApiElectra.SubmitBlockRequest)
-	if err = electraRequest.UnmarshalSSZ(input); err == nil {
-		r.Version = spec.DataVersionElectra
-		r.Electra = electraRequest
-		return nil
-	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
@@ -451,12 +436,6 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
-	electraRequest := new(builderApiElectra.SubmitBlockRequest)
-	if err = json.Unmarshal(input, electraRequest); err == nil {
-		r.Version = spec.DataVersionElectra
-		r.Electra = electraRequest
-		return nil
-	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = json.Unmarshal(input, denebRequest); err == nil {
 		r.Version = spec.DataVersionDeneb
