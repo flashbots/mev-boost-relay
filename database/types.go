@@ -62,6 +62,13 @@ type ValidatorRegistrationEntry struct {
 	Signature    string `db:"signature"`
 }
 
+type MevCommitValidatorEntry struct {
+	ID        int64     `db:"id"`
+	Pubkey    string    `db:"pubkey"`
+	IsOptedIn bool      `db:"is_opted_in"`
+	Timestamp time.Time `db:"timestamp"`
+}
+
 func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*builderApiV1.SignedValidatorRegistration, error) {
 	pubkey, err := utils.HexToPubkey(reg.Pubkey)
 	if err != nil {

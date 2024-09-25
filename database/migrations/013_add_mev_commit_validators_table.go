@@ -10,7 +10,7 @@ var Migration013AddMevCommitValidatorsTable = &migrate.Migration{
 	Up: []string{`
 		CREATE TABLE IF NOT EXISTS ` + vars.TableMevCommitValidators + ` (
 			id SERIAL PRIMARY KEY,
-			bls_key VARCHAR(98) NOT NULL,
+			pubkey VARCHAR(98) NOT NULL,
 			is_opted_in BOOLEAN NOT NULL DEFAULT false,
 			timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);

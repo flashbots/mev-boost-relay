@@ -26,7 +26,8 @@ type IDatabaseService interface {
 	GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error)
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
-
+	GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error)
+	SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error
 	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool, blockValue *uint256.Int) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
@@ -140,12 +141,31 @@ func (s *DatabaseService) SaveValidatorRegistration(entry ValidatorRegistrationE
 	return err
 }
 
+func (s *DatabaseService) SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error {
+	// On conflict, set the correct opted in status
+	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, is_opted_in, timestamp)
+	VALUES (:pubkey, :is_opted_in, :timestamp)
+	ON CONFLICT (pubkey) DO UPDATE SET is_opted_in = EXCLUDED.is_opted_in, timestamp = EXCLUDED.timestamp;`
+	_, err := s.DB.NamedExec(query, entry)
+	return err
+}
+
 func (s *DatabaseService) GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error) {
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature
 		FROM ` + vars.TableValidatorRegistration + `
 		WHERE pubkey=$1
 		ORDER BY pubkey, timestamp DESC;`
 	entry := &ValidatorRegistrationEntry{}
+	err := s.DB.Get(entry, query, pubkey)
+	return entry, err
+}
+
+func (s *DatabaseService) GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error) {
+	query := `SELECT DISTINCT ON (pubkey) pubkey, is_opted_in, timestamp
+		FROM ` + vars.TableMevCommitValidators + `
+		WHERE pubkey=$1
+		ORDER BY pubkey, timestamp DESC;`
+	entry := &MevCommitValidatorEntry{}
 	err := s.DB.Get(entry, query, pubkey)
 	return entry, err
 }
