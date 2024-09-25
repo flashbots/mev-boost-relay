@@ -304,6 +304,7 @@ func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaco
 					ExecutionPayload:      blockPayload.ExecutionPayload,
 					BLSToExecutionChanges: blindedBlock.Message.Body.BLSToExecutionChanges,
 					BlobKZGCommitments:    blindedBlock.Message.Body.BlobKZGCommitments,
+					ExecutionRequests:     blindedBlock.Message.Body.ExecutionRequests,
 				},
 			},
 			Signature: blindedBlock.Signature,

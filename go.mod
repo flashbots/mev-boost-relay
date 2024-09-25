@@ -2,8 +2,6 @@ module github.com/flashbots/mev-boost-relay
 
 go 1.22
 
-toolchain go1.23.1
-
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
