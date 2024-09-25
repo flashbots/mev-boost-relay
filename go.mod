@@ -5,13 +5,13 @@ go 1.22
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
-	github.com/attestantio/go-builder-client v0.5.1-0.20240804084948-e06dcb494024
-	github.com/attestantio/go-eth2-client v0.21.11-0.20240803084815-07eba3e76a14
+	github.com/attestantio/go-builder-client v0.5.1-0.20240925223414-5da8987dd6f3
+	github.com/attestantio/go-eth2-client v0.21.12-0.20240925220056-393fff117304
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.14.9
-	github.com/flashbots/go-boost-utils v1.8.2-0.20240925192624-22f090f9547b
+	github.com/flashbots/go-boost-utils v1.8.2-0.20240925223941-58709124077d
 	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.1
@@ -127,9 +127,3 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
-
-// Remove this when Jim merges pk910's PR.
-replace github.com/attestantio/go-eth2-client => github.com/pk910/go-eth2-client v0.0.0-20240923174943-8d64565c83ca
-
-// Remove this when Jim merge's jtraglia's PR.
-replace github.com/attestantio/go-builder-client => github.com/jtraglia/go-builder-client v0.4.6-0.20240925183257-4d86495441b5
