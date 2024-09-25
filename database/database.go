@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -26,8 +27,10 @@ type IDatabaseService interface {
 	GetLatestValidatorRegistrations(timestampOnly bool) ([]*ValidatorRegistrationEntry, error)
 	GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error)
 	GetValidatorRegistrationsForPubkeys(pubkeys []string) ([]*ValidatorRegistrationEntry, error)
-	GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error)
-	SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error
+	IsMevCommitValidatorRegistered(pubkey string) (bool, error)
+	StoreMevCommitValidatorRegistration(pubkey string) error
+	RemoveMevCommitValidatorRegistration(pubkey string) error
+
 	SaveBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest, requestError, validationError error, receivedAt, eligibleAt time.Time, wasSimulated, saveExecPayload bool, profile common.Profile, optimisticSubmission bool, blockValue *uint256.Int) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
@@ -160,14 +163,51 @@ func (s *DatabaseService) GetValidatorRegistration(pubkey string) (*ValidatorReg
 	return entry, err
 }
 
+var ErrValidatorNotFound = errors.New("validator not found")
+
+func (s *DatabaseService) IsMevCommitValidatorRegistered(pubkey string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1)`
+	var exists bool
+	err := s.DB.Get(&exists, query, pubkey)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func (s *DatabaseService) RegisterMevCommitValidator(pubkey string) error {
+	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, timestamp) VALUES ($1, NOW())`
+	_, err := s.DB.Exec(query, pubkey)
+	return err
+}
+
+func (s *DatabaseService) UnregisterMevCommitValidator(pubkey string) error {
+	query := `DELETE FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
+	result, err := s.DB.Exec(query, pubkey)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrValidatorNotFound
+	}
+	return nil
+}
+
 func (s *DatabaseService) GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error) {
-	query := `SELECT DISTINCT ON (pubkey) pubkey, is_opted_in, timestamp
-		FROM ` + vars.TableMevCommitValidators + `
-		WHERE pubkey=$1
-		ORDER BY pubkey, timestamp DESC;`
-	entry := &MevCommitValidatorEntry{}
-	err := s.DB.Get(entry, query, pubkey)
-	return entry, err
+	query := `SELECT pubkey, timestamp FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
+	var entry MevCommitValidatorEntry
+	err := s.DB.Get(&entry, query, pubkey)
+	if err == sql.ErrNoRows {
+		return nil, ErrValidatorNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
 }
 
 func (s *DatabaseService) GetValidatorRegistrationsForPubkeys(pubkeys []string) (entries []*ValidatorRegistrationEntry, err error) {

@@ -65,7 +65,6 @@ type ValidatorRegistrationEntry struct {
 type MevCommitValidatorEntry struct {
 	ID        int64     `db:"id"`
 	Pubkey    string    `db:"pubkey"`
-	IsOptedIn bool      `db:"is_opted_in"`
 	Timestamp time.Time `db:"timestamp"`
 }
 
