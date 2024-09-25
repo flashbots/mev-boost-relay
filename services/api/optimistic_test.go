@@ -167,7 +167,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: errors.New(ErrBlockAlreadyKnown),
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_capella",
@@ -187,7 +187,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: errors.New(ErrBlockAlreadyKnown),
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_deneb",
