@@ -145,7 +145,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
-	go hk.updatemevcommitvalidatorregistrations(headSlot)
+	go hk.updateMevCommitValidatorRegistrations(headSlot)
 
 	// Set headSlot in redis (for the website)
 	err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
@@ -252,18 +252,43 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
+// When the update is triggered, we store registered validators in Redis for an the current and next epoch.
+// This allows us to maintain 1 epoch in advance, which is enough to check if a validator is registered for a given epoch.
 func (hk *Housekeeper) updateMevCommitValidatorRegistrations(headSlot uint64) {
-	registeredValidators, err := hk.mevCommitClient.GetRegisteredValidators()
+	// Only update once per epoch - at the epoch start of the epoch
+	if headSlot%common.SlotsPerEpoch == 0 {
+		return
+	}
+
+	epoch := headSlot / common.SlotsPerEpoch
+
+	duties, err := hk.beaconClient.GetProposerDuties(epoch)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get proposer duties for epoch")
+		return
+	}
+	nextDuties, err := hk.beaconClient.GetProposerDuties(epoch + 1)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get proposer duties for next epoch")
+		return
+	}
+	// Combine duties from current and next epoch into a single array
+	duties.Data = append(duties.Data, nextDuties.Data...)
+
+	pubkeys := [][]byte{}
+	for _, duty := range duties.Data {
+		pubkeys = append(pubkeys, []byte(duty.Pubkey))
+	}
+
+	registeredValidators, err := hk.mevCommitClient.GetOptInStatusForValidators(pubkeys)
 	if err != nil {
 		hk.log.WithError(err).Error("failed to get registered validators from MEV-Commit client")
 		return
 	}
-
-	// Store the registered validators in Redis
-	err = hk.redis.SetMevCommitRegisteredValidators(registeredValidators)
-	if err != nil {
-		hk.log.WithError(err).Error("failed to store MEV-Commit registered validators in Redis")
-		return
+	for i, registeredValidator := range registeredValidators {
+		if registeredValidator {
+			hk.redis.SetMevCommitValidatorRegistration(common.NewPubkeyHex(duties.Data[i].Pubkey))
+		}
 	}
 
 	hk.log.WithField("numValidators", len(registeredValidators)).Info("updated MEV-Commit registered validators in Redis")

@@ -246,16 +246,16 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.Pub
 
 // Add these methods to the existing RedisCache struct
 
-func (r *RedisCache) SetMevCommitValidatorRegistration(pubkey string) error {
-	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey, "1", mevCommitValidatorRegistrationExpiry).Err()
+func (r *RedisCache) SetMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
+	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String(), "1", mevCommitValidatorRegistrationExpiry).Err()
 	if err != nil {
 		return fmt.Errorf("failed to add validator to MEV-Commit registration: %w", err)
 	}
 	return nil
 }
 
-func (r *RedisCache) IsMevCommitValidatorRegistered(pubkey string) (bool, error) {
-	_, err := r.client.Get(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey).Result()
+func (r *RedisCache) IsMevCommitValidatorRegistered(proposerPubkey common.PubkeyHex) (bool, error) {
+	_, err := r.client.Get(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String()).Result()
 	if err == redis.Nil {
 		return false, nil
 	}
@@ -266,8 +266,8 @@ func (r *RedisCache) IsMevCommitValidatorRegistered(pubkey string) (bool, error)
 	return true, nil
 }
 
-func (r *RedisCache) DeleteMevCommitValidatorRegistration(pubkey string) error {
-	err := r.client.Del(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+pubkey).Err()
+func (r *RedisCache) DeleteMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
+	err := r.client.Del(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String()).Err()
 	if err != nil {
 		return fmt.Errorf("failed to remove validator from MEV-Commit registration: %w", err)
 	}

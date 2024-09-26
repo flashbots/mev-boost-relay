@@ -1,4 +1,4 @@
-package mevcommitclientz
+package mevcommitclient
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -8,7 +8,7 @@ import (
 
 type IMevCommitClient interface {
 	// Need to provide some SLA's around response times here. Should be down to milliseconds with memcache.
-	GetOptInStatusForValidators(pubkeys [][]byte) (map[string]bool, error)
+	GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error)
 	IsBuilderRegistered(pubkey string) (bool, error)
 	GetRegisteredValidators() ([]string, error)
 }
@@ -31,17 +31,13 @@ func NewMevCommitClient(apiUrl string, contractAddress string, client *ethclient
 	}, nil
 }
 
-func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) (map[string]bool, error) {
+func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error) {
 	optedIn, err := m.validatorOptInRouterCaller.AreValidatorsOptedIn(nil, pubkeys)
 	if err != nil {
 		return nil, err
 	}
 
-	pubkeyMap := make(map[string]bool)
-	for i, pubkey := range pubkeys {
-		pubkeyMap[string(pubkey)] = optedIn[i]
-	}
-	return pubkeyMap, nil
+	return optedIn, nil
 }
 
 func (m *MevCommitClient) IsBuilderRegistered(pubkey string) (bool, error) {
