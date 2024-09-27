@@ -1,16 +1,14 @@
 package mevcommitclient
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	builderRegistry "github.com/primev/mev-commit/contracts-abi/clients/ProviderRegistry"
 	validatoroptinrouter "github.com/primev/mev-commit/contracts-abi/clients/ValidatorOptInRouter"
@@ -38,6 +36,7 @@ type MevCommitClient struct {
 	BuilderRegistryAddress     common.Address
 	validatorOptInRouterCaller *validatoroptinrouter.ValidatoroptinrouterCaller
 	builderRegistryCaller      *builderRegistry.ProviderregistryCaller
+	builderRegistryFilterer    *builderRegistry.ProviderregistryFilterer
 	l1Client                   *ethclient.Client
 	mevCommitClient            *ethclient.Client
 	contractAbi                abi.ABI
@@ -68,6 +67,11 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 		return nil, fmt.Errorf("failed to create BuilderRegistry caller: %w", err)
 	}
 
+	builderRegistryFilterer, err := builderRegistry.NewProviderregistryFilterer(builderRegistryAddress, mevCommitClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create BuilderRegistry filterer: %w", err)
+	}
+
 	contractAbi, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse contract ABI: %w", err)
@@ -80,6 +84,7 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 		BuilderRegistryAddress:     builderRegistryAddress,
 		validatorOptInRouterCaller: validatorOptInRouter,
 		builderRegistryCaller:      builderRegistryCaller,
+		builderRegistryFilterer:    builderRegistryFilterer,
 		l1Client:                   l1Client,
 		mevCommitClient:            mevCommitClient,
 		contractAbi:                contractAbi,
@@ -89,57 +94,44 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error) {
 	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(nil, pubkeys)
 }
+
 func (m *MevCommitClient) GetActiveBuilders() ([]common.Address, error) {
-	latestBlock, err := m.mevCommitClient.BlockNumber(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest block number: %w", err)
+	opts := &bind.FilterOpts{
+		Start: 0,
+		End:   nil, // Latest block
 	}
 
-	query := ethereum.FilterQuery{
-		FromBlock: big.NewInt(0),
-		ToBlock:   big.NewInt(int64(latestBlock)),
-		Addresses: []common.Address{m.BuilderRegistryAddress},
-		Topics:    [][]common.Hash{{m.contractAbi.Events["BuilderRegistered"].ID}},
-	}
-
-	logs, err := m.mevCommitClient.FilterLogs(context.Background(), query)
+	iterator, err := m.builderRegistryFilterer.FilterProviderRegistered(opts, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to filter logs: %w", err)
+		return nil, fmt.Errorf("failed to filter ProviderRegistered events: %w", err)
 	}
+	defer iterator.Close()
 
 	activeBuilders := make([]common.Address, 0)
-	for _, vLog := range logs {
-		builderAddress := common.HexToAddress(vLog.Topics[1].Hex())
-		if m.isBuilderValid(builderAddress) {
-			activeBuilders = append(activeBuilders, builderAddress)
+	for iterator.Next() {
+		isValid, err := m.isBuilderValid(iterator.Event.Provider)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if builder is valid: %w", err)
 		}
+		if isValid {
+			activeBuilders = append(activeBuilders, iterator.Event.Provider)
+		}
+	}
+
+	if err := iterator.Error(); err != nil {
+		return nil, fmt.Errorf("error iterating over ProviderRegistered events: %w", err)
 	}
 
 	return activeBuilders, nil
 }
 
-func (m *MevCommitClient) parseBuilderRegisteredEvent(vLog types.Log) (BuilderRegisteredEvent, error) {
-	var event BuilderRegisteredEvent
-	err := m.contractAbi.UnpackIntoInterface(&event, "BuilderRegistered", vLog.Data)
-	if err != nil {
-		return event, err
-	}
-	event.Builder = common.HexToAddress(vLog.Topics[1].Hex())
-	event.BlockNumber = vLog.BlockNumber
-	event.TxHash = vLog.TxHash
-
-	block, err := m.mevCommitClient.BlockByNumber(context.Background(), big.NewInt(int64(vLog.BlockNumber)))
-	if err != nil {
-		return event, fmt.Errorf("failed to fetch block %d: %w", vLog.BlockNumber, err)
-	}
-
-	event.Timestamp = time.Unix(int64(block.Time()), 0)
-	event.IsValid = m.isBuilderValid(event.Builder)
-
-	return event, nil
-}
-
-func (m *MevCommitClient) isBuilderValid(builderAddress common.Address) bool {
+func (m *MevCommitClient) isBuilderValid(builderAddress common.Address) (bool, error) {
 	err := m.builderRegistryCaller.IsProviderValid(nil, builderAddress)
-	return err == nil
+	if err != nil {
+		if err.Error() == "execution reverted" {
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking if builder is valid: %w", err)
+	}
+	return true, nil
 }
