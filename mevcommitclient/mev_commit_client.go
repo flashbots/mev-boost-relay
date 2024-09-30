@@ -26,7 +26,7 @@ type BuilderRegisteredEvent struct {
 
 type IMevCommitClient interface {
 	GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error)
-	GetActiveBuilders() ([]common.Address, error)
+	GetActiveBuilders() ([][]byte, error)
 }
 
 type MevCommitClient struct {
@@ -94,8 +94,7 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error) {
 	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(nil, pubkeys)
 }
-
-func (m *MevCommitClient) GetActiveBuilders() ([]common.Address, error) {
+func (m *MevCommitClient) GetActiveBuilders() ([][]byte, error) {
 	opts := &bind.FilterOpts{
 		Start: 0,
 		End:   nil, // Latest block
@@ -107,14 +106,14 @@ func (m *MevCommitClient) GetActiveBuilders() ([]common.Address, error) {
 	}
 	defer iterator.Close()
 
-	activeBuilders := make([]common.Address, 0)
+	activeBuilderKeys := make([][]byte, 0)
 	for iterator.Next() {
 		isValid, err := m.isBuilderValid(iterator.Event.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if builder is valid: %w", err)
 		}
 		if isValid {
-			activeBuilders = append(activeBuilders, iterator.Event.Provider)
+			activeBuilderKeys = append(activeBuilderKeys, iterator.Event.BlsPublicKey)
 		}
 	}
 
@@ -122,7 +121,7 @@ func (m *MevCommitClient) GetActiveBuilders() ([]common.Address, error) {
 		return nil, fmt.Errorf("error iterating over ProviderRegistered events: %w", err)
 	}
 
-	return activeBuilders, nil
+	return activeBuilderKeys, nil
 }
 
 func (m *MevCommitClient) isBuilderValid(builderAddress common.Address) (bool, error) {

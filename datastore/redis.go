@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,6 +98,7 @@ type RedisCache struct {
 	// keys
 	keyValidatorRegistrationTimestamp     string
 	keyMevCommitValidatorRegistrationHash string
+	keyMevCommitBlockBuilder              string // New key for MEV-Commit block builder array
 
 	keyRelayConfig        string
 	keyStats              string
@@ -138,6 +140,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 
 		keyValidatorRegistrationTimestamp:     fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
 		keyMevCommitValidatorRegistrationHash: fmt.Sprintf("%s/%s:mev-commit-validator-registration", redisPrefix, prefix),
+		keyMevCommitBlockBuilder:              fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix), // New key for MEV-Commit block builder array
 		keyRelayConfig:                        fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
@@ -244,7 +247,56 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.Pub
 	return timestamp, err
 }
 
-// Add these methods to the existing RedisCache struct
+func (r *RedisCache) SetMevCommitBlockBuilders(builders [][]byte) error {
+	ctx := context.Background()
+	pipe := r.client.Pipeline()
+
+	// Clear existing set
+	pipe.Del(ctx, r.keyMevCommitBlockBuilder)
+
+	// Add all builders to the set
+	for _, builder := range builders {
+		pipe.SAdd(ctx, r.keyMevCommitBlockBuilder, hex.EncodeToString(builder))
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to set MEV-Commit block builders: %w", err)
+	}
+
+	return nil
+}
+
+func (r *RedisCache) GetMevCommitBlockBuilders() ([]common.PubkeyHex, error) {
+	ctx := context.Background()
+
+	// Retrieve all members of the set
+	members, err := r.client.SMembers(ctx, r.keyMevCommitBlockBuilder).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MEV-Commit block builders: %w", err)
+	}
+
+	// Convert string slice to PubkeyHex slice
+	builders := make([]common.PubkeyHex, len(members))
+	for i, member := range members {
+		builders[i] = common.PubkeyHex(member)
+	}
+
+	return builders, nil
+}
+
+func (r *RedisCache) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
+	ctx := context.Background()
+
+	// Check if the builder pubkey exists in the set
+	exists, err := r.client.SIsMember(ctx, r.keyMevCommitBlockBuilder, builderPubkey.String()).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check if builder is in MEV-Commit block builders set: %w", err)
+	}
+
+	return exists, nil
+}
 
 func (r *RedisCache) SetMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
 	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String(), "1", mevCommitValidatorRegistrationExpiry).Err()

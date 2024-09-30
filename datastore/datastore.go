@@ -198,6 +198,11 @@ func (ds *Datastore) IsMevCommitValidatorRegistered(pubkeyHex common.PubkeyHex) 
 	return ds.redis.IsMevCommitValidatorRegistered(pubkeyHex)
 }
 
+// IsMevCommitBlockBuilder checks if a builder is registered for MEV-Commit
+func (ds *Datastore) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
+	return ds.redis.IsMevCommitBlockBuilder(builderPubkey)
+}
+
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidatorRegistration) error {
 	// First save in the database

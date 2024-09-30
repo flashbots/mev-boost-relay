@@ -1748,8 +1748,8 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
 		return false
 	}
-
 	// Check if validator is registered
+	start := time.Now()
 	isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
 	if err != nil {
 		log.WithError(err).Error("Failed to check validator registration")
@@ -1759,7 +1759,7 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 
 	if isValidatorRegistered {
 		// Check if builder is registered TODO(@ckartik): Move this to datastore
-		isBuilderRegistered, err := api.mevCommitClient.IsBuilderRegistered(submission.BidTrace.BuilderPubkey.String())
+		isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
 		if err != nil {
 			log.WithError(err).Error("Failed to check builder registration")
 			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
@@ -1772,6 +1772,8 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 			return false
 		}
 	}
+	duration := time.Since(start)
+	log.WithField("duration", duration).Info("MEV-Commit check completed")
 
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)

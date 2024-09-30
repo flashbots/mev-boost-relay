@@ -175,6 +175,24 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	hk.UpdateProposerDutiesWithoutChecks(headSlot)
 }
 
+func (hk *Housekeeper) updateMevCommitBuilderRegistrations(headSlot uint64) {
+	log := hk.log.WithField("headSlot", headSlot)
+	log.Debug("updating MEV-Commit builder registrations...")
+
+	// Fetch all registered builders from the MEV-Commit contract
+	registeredBuilders, err := hk.mevCommitClient.GetActiveBuilders()
+	if err != nil {
+		log.WithError(err).Error("failed to get registered builders from MEV-Commit contract")
+		return
+	}
+	err = hk.redis.SetMevCommitBlockBuilders(registeredBuilders)
+	if err != nil {
+		log.WithError(err).Error("failed to set MEV-Commit builder registrations")
+		return
+	}
+	log.WithField("count", len(registeredBuilders)).Info("updated MEV-Commit builder registrations")
+}
+
 func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	epoch := headSlot / common.SlotsPerEpoch
 
