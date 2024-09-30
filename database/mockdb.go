@@ -195,3 +195,27 @@ func (db MockDB) GetTooLateGetPayload(slot uint64) (entries []*TooLateGetPayload
 func (db MockDB) InsertTooLateGetPayload(slot uint64, proposerPubkey, blockHash string, slotStart, requestTime, decodeTime, msIntoSlot uint64) error {
 	return nil
 }
+
+func (db MockDB) NumValidatorRegistrationRows() (count uint64, err error) {
+	return 0, nil
+}
+
+func (db MockDB) SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error {
+	return nil
+}
+
+func (db MockDB) IsMevCommitValidatorRegistered(pubkey string) (bool, error) {
+	return false, nil
+}
+
+func (db MockDB) RegisterMevCommitValidator(pubkey string) error {
+	return nil
+}
+
+func (db MockDB) UnregisterMevCommitValidator(pubkey string) error {
+	return nil
+}
+
+func (db MockDB) GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error) {
+	return nil, nil
+}
