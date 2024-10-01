@@ -146,6 +146,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
 	go hk.updateMevCommitValidatorRegistrations(headSlot)
+	go hk.updateMevCommitBuilderRegistrations(headSlot)
 
 	// Set headSlot in redis (for the website)
 	err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
