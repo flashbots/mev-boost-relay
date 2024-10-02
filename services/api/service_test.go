@@ -1009,6 +1009,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
+			builderPubKey, _ := utils.HexToPubkey(testBuilderPubkey)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			headSlot := testSlot - 1
@@ -1017,6 +1018,15 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[testSlot] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: testSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						Pubkey: builderPubKey,
+					},
+				},
+			}
 			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})
