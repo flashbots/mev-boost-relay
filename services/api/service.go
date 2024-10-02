@@ -1742,7 +1742,9 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	// Do a check in memchache for the slot being with a registered provider. If miss, go to redis. if miss again go to postgres.
 
 	// Find the duty for the submission slot
+	api.proposerDutiesLock.RLock()
 	duty := api.proposerDutiesMap[submission.BidTrace.Slot]
+	api.proposerDutiesLock.RUnlock()
 	if duty == nil {
 		log.Info("no duty found for submission slot")
 		api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
