@@ -146,14 +146,14 @@ func (s *DatabaseService) SaveValidatorRegistration(entry ValidatorRegistrationE
 	return err
 }
 
-func (s *DatabaseService) SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error {
-	// On conflict, set the correct opted in status
-	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, is_opted_in, timestamp)
-	VALUES (:pubkey, :is_opted_in, :timestamp)
-	ON CONFLICT (pubkey) DO UPDATE SET is_opted_in = EXCLUDED.is_opted_in, timestamp = EXCLUDED.timestamp;`
-	_, err := s.DB.NamedExec(query, entry)
-	return err
-}
+// func (s *DatabaseService) SaveMevCommitValidatorRegistration(entry MevCommitValidatorEntry) error {
+// 	// On conflict, set the correct opted in status
+// 	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, is_opted_in, timestamp)
+// 	VALUES (:pubkey, :is_opted_in, :timestamp)
+// 	ON CONFLICT (pubkey) DO UPDATE SET is_opted_in = EXCLUDED.is_opted_in, timestamp = EXCLUDED.timestamp;`
+// 	_, err := s.DB.NamedExec(query, entry)
+// 	return err
+// }
 
 func (s *DatabaseService) GetValidatorRegistration(pubkey string) (*ValidatorRegistrationEntry, error) {
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature
@@ -177,40 +177,40 @@ func (s *DatabaseService) IsMevCommitValidatorRegistered(pubkey string) (bool, e
 	return exists, nil
 }
 
-func (s *DatabaseService) RegisterMevCommitValidator(pubkey string) error {
-	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, timestamp) VALUES ($1, NOW())`
-	_, err := s.DB.Exec(query, pubkey)
-	return err
-}
+// func (s *DatabaseService) RegisterMevCommitValidator(pubkey string) error {
+// 	query := `INSERT INTO ` + vars.TableMevCommitValidators + ` (pubkey, timestamp) VALUES ($1, NOW())`
+// 	_, err := s.DB.Exec(query, pubkey)
+// 	return err
+// }
 
-func (s *DatabaseService) UnregisterMevCommitValidator(pubkey string) error {
-	query := `DELETE FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
-	result, err := s.DB.Exec(query, pubkey)
-	if err != nil {
-		return err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return ErrValidatorNotFound
-	}
-	return nil
-}
+// func (s *DatabaseService) UnregisterMevCommitValidator(pubkey string) error {
+// 	query := `DELETE FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
+// 	result, err := s.DB.Exec(query, pubkey)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	rowsAffected, err := result.RowsAffected()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if rowsAffected == 0 {
+// 		return ErrValidatorNotFound
+// 	}
+// 	return nil
+// }
 
-func (s *DatabaseService) GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error) {
-	query := `SELECT pubkey, timestamp FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
-	var entry MevCommitValidatorEntry
-	err := s.DB.Get(&entry, query, pubkey)
-	if err == sql.ErrNoRows {
-		return nil, ErrValidatorNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &entry, nil
-}
+// func (s *DatabaseService) GetMevCommitValidatorRegistration(pubkey string) (*MevCommitValidatorEntry, error) {
+// 	query := `SELECT pubkey, timestamp FROM ` + vars.TableMevCommitValidators + ` WHERE pubkey=$1`
+// 	var entry MevCommitValidatorEntry
+// 	err := s.DB.Get(&entry, query, pubkey)
+// 	if err == sql.ErrNoRows {
+// 		return nil, ErrValidatorNotFound
+// 	}
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &entry, nil
+// }
 
 func (s *DatabaseService) GetValidatorRegistrationsForPubkeys(pubkeys []string) (entries []*ValidatorRegistrationEntry, err error) {
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature

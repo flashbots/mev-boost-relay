@@ -1760,14 +1760,12 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	}
 
 	if isValidatorRegistered {
-		// Check if builder is registered TODO(@ckartik): Move this to datastore
 		isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
 		if err != nil {
 			log.WithError(err).Error("Failed to check builder registration")
 			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
 			return false
 		}
-
 		if !isBuilderRegistered {
 			// TODO: Implement caching strategy for builder registration status
 			api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
