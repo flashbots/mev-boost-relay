@@ -35,6 +35,8 @@ type HousekeeperOpts struct {
 
 	PprofAPI           bool
 	PprofListenAddress string
+
+	MevCommitClient mevcommitclient.IMevCommitClient
 }
 
 type Housekeeper struct {
