@@ -15,6 +15,8 @@ github.com/attestantio/go-builder-client v0.5.1-0.20240925223414-5da8987dd6f3 h1
 github.com/attestantio/go-builder-client v0.5.1-0.20240925223414-5da8987dd6f3/go.mod h1:qM91NvVG+fepPBN2/MDLpWJ9I/zZtpZAkXa8T9GFOvM=
 github.com/attestantio/go-eth2-client v0.21.12-0.20240925220056-393fff117304 h1:/79oRg0Lu0WQPMh+WjKE5d6cUnCdw6OsiYfqZut1URo=
 github.com/attestantio/go-eth2-client v0.21.12-0.20240925220056-393fff117304/go.mod h1:vy5jU/uDZ2+RcVzq5BfnG+bQ3/6uu9DGwCrGsPtjJ1A=
+github.com/attestantio/go-eth2-client v0.21.12-0.20241006200801-8fa702e3a895 h1:3uu4l7TK5PPVBvVUpwxftDpKFddEE3g196BYJbKYq4g=
+github.com/attestantio/go-eth2-client v0.21.12-0.20241006200801-8fa702e3a895/go.mod h1:vy5jU/uDZ2+RcVzq5BfnG+bQ3/6uu9DGwCrGsPtjJ1A=
 github.com/benbjohnson/clock v1.3.0 h1:ip6w0uFQkncKQ979AypyG0ER7mqUSBdKLOgAle/AT8A=
 github.com/benbjohnson/clock v1.3.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
