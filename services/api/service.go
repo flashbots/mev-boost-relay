@@ -140,7 +140,7 @@ type RelayAPIOpts struct {
 	PprofAPI        bool
 	InternalAPI     bool
 
-	MevCommitEnabled bool
+	MevCommitFiltering bool
 }
 
 type payloadAttributesHelper struct {
@@ -1750,30 +1750,33 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
 		return false
 	}
-	// Check if validator is registered
-	start := time.Now()
-	isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
-	if err != nil {
-		log.WithError(err).Error("Failed to check validator registration")
-		api.RespondError(w, http.StatusInternalServerError, "Internal server error")
-		return false
-	}
 
-	if isValidatorRegistered {
-		isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
+	if api.opts.MevCommitFiltering {
+		// Check if validator is registered
+		start := time.Now()
+		isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
 		if err != nil {
-			log.WithError(err).Error("Failed to check builder registration")
+			log.WithError(err).Error("Failed to check validator registration")
 			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
 			return false
 		}
-		if !isBuilderRegistered {
-			// TODO: Implement caching strategy for builder registration status
-			api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
-			return false
+
+		if isValidatorRegistered {
+			isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
+			if err != nil {
+				log.WithError(err).Error("Failed to check builder registration")
+				api.RespondError(w, http.StatusInternalServerError, "Internal server error")
+				return false
+			}
+			if !isBuilderRegistered {
+				// TODO: Implement caching strategy for builder registration status
+				api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
+				return false
+			}
 		}
+		duration := time.Since(start)
+		log.WithField("duration", duration).Info("MEV-Commit check completed")
 	}
-	duration := time.Since(start)
-	log.WithField("duration", duration).Info("MEV-Commit check completed")
 
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)
