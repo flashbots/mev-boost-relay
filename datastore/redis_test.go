@@ -444,6 +444,31 @@ func TestPipelineNilCheck(t *testing.T) {
 	require.Equal(t, big.NewInt(0), f)
 }
 
+func TestSetMevCommitBlockBuilders(t *testing.T) {
+	cache := setupTestRedis(t)
+
+	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	// Set a commit block builder
+	err := cache.SetMevCommitBlockBuilders([][]byte{[]byte(builderPubkey)})
+	require.NoError(t, err)
+	// Retrieve the list of MEV-Commit block builders
+	builders, err := cache.GetMevCommitBlockBuilders()
+	require.NoError(t, err)
+	require.Len(t, builders, 1)
+	require.Equal(t, common.PubkeyHex(builderPubkey), builders[0])
+
+	// Check if the commit block builder is set correctly
+	isSet, err := cache.IsMevCommitBlockBuilder(common.PubkeyHex(builderPubkey))
+	require.NoError(t, err)
+	require.True(t, isSet)
+
+	// Check if a non-existent commit block builder returns false
+	nonExistentBuilderPubkey := "0x2e02be2c9f9eccf9856478fdb7876598fed2da09f45c233969ba647a250231150ecf38bce5771adb6171c86b79a92f16"
+	isSet, err = cache.IsMevCommitBlockBuilder(common.PubkeyHex(nonExistentBuilderPubkey))
+	require.NoError(t, err)
+	require.False(t, isSet)
+}
+
 // func TestPipeline(t *testing.T) {
 // 	cache := setupTestRedis(t)
 

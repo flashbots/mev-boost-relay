@@ -277,7 +277,7 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 // This allows us to maintain 1 epoch in advance, which is enough to check if a validator is registered for a given epoch.
 func (hk *Housekeeper) updateMevCommitValidatorRegistrations(headSlot uint64) {
 	// Only update once per epoch - at the epoch start of the epoch
-	if headSlot%common.SlotsPerEpoch == 0 {
+	if headSlot%common.SlotsPerEpoch != 0 {
 		return
 	}
 

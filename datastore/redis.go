@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -256,9 +255,8 @@ func (r *RedisCache) SetMevCommitBlockBuilders(builders [][]byte) error {
 
 	// Add all builders to the set
 	for _, builder := range builders {
-		pipe.SAdd(ctx, r.keyMevCommitBlockBuilder, hex.EncodeToString(builder))
+		pipe.SAdd(ctx, r.keyMevCommitBlockBuilder, string(builder))
 	}
-
 	// Execute pipeline
 	_, err := pipe.Exec(ctx)
 	if err != nil {
