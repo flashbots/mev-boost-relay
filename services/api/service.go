@@ -1740,7 +1740,6 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	}
 
 	if api.opts.MevCommitFiltering {
-
 		// Find the duty for the submission slot
 		api.proposerDutiesLock.RLock()
 		duty := api.proposerDutiesMap[submission.BidTrace.Slot]

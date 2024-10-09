@@ -92,7 +92,18 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 }
 
 func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error) {
-	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(nil, pubkeys)
+	// Get the finalized block number
+	var finalizedBlockNumber *big.Int
+	err := m.l1Client.Client().Call(&finalizedBlockNumber, "eth_getBlockByNumber", "finalized", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get finalized block: %w", err)
+	}
+
+	opts := &bind.CallOpts{
+		BlockNumber: finalizedBlockNumber,
+	}
+
+	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(opts, pubkeys)
 }
 func (m *MevCommitClient) GetActiveBuilders() ([][]byte, error) {
 	opts := &bind.FilterOpts{
