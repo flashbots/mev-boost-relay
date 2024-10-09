@@ -31,7 +31,7 @@ func TestNewMevCommitClient(t *testing.T) {
 	assert.Equal(t, ethereumL1RPC, mevClient.L1Address)
 	assert.Equal(t, mevCommitRPC, mevClient.MevCommitAddress)
 	assert.Equal(t, common.HexToAddress(validatorOptInRouterAddr), mevClient.ValidatorRouterAddress)
-	assert.Equal(t, common.HexToAddress(providerRegistryAddr), mevClient.BuilderRegistryAddress)
+	assert.Equal(t, common.HexToAddress(providerRegistryAddr), mevClient.ProviderRegistryAddress)
 }
 
 func TestGetOptInStatusForValidators(t *testing.T) {

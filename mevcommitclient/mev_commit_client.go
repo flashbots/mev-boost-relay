@@ -33,7 +33,7 @@ type MevCommitClient struct {
 	L1Address                  string
 	MevCommitAddress           string
 	ValidatorRouterAddress     common.Address
-	BuilderRegistryAddress     common.Address
+	ProviderRegistryAddress    common.Address
 	validatorOptInRouterCaller *validatoroptinrouter.ValidatoroptinrouterCaller
 	builderRegistryCaller      *builderRegistry.ProviderregistryCaller
 	builderRegistryFilterer    *builderRegistry.ProviderregistryFilterer
@@ -46,7 +46,7 @@ const (
 	abiJSON = `[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"builder","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"},{"indexed":false,"internalType":"bytes","name":"blsPublicKey","type":"bytes"}],"name":"BuilderRegistered","type":"event"},{"inputs":[{"internalType":"address","name":"builder","type":"address"}],"name":"isBuilderValid","outputs":[],"stateMutability":"view","type":"function"}]`
 )
 
-func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddress, builderRegistryAddress common.Address) (IMevCommitClient, error) {
+func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddress, ProviderRegistryAddress common.Address) (IMevCommitClient, error) {
 	l1Client, err := ethclient.Dial(l1MainnetUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to L1 Mainnet: %w", err)
@@ -62,12 +62,12 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 		return nil, fmt.Errorf("failed to create ValidatorOptInRouter caller: %w", err)
 	}
 
-	builderRegistryCaller, err := builderRegistry.NewProviderregistryCaller(builderRegistryAddress, mevCommitClient)
+	builderRegistryCaller, err := builderRegistry.NewProviderregistryCaller(ProviderRegistryAddress, mevCommitClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create BuilderRegistry caller: %w", err)
 	}
 
-	builderRegistryFilterer, err := builderRegistry.NewProviderregistryFilterer(builderRegistryAddress, mevCommitClient)
+	builderRegistryFilterer, err := builderRegistry.NewProviderregistryFilterer(ProviderRegistryAddress, mevCommitClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create BuilderRegistry filterer: %w", err)
 	}
@@ -81,7 +81,7 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 		L1Address:                  l1MainnetUrl,
 		MevCommitAddress:           mevCommitUrl,
 		ValidatorRouterAddress:     validatorRouterAddress,
-		BuilderRegistryAddress:     builderRegistryAddress,
+		ProviderRegistryAddress:    ProviderRegistryAddress,
 		validatorOptInRouterCaller: validatorOptInRouter,
 		builderRegistryCaller:      builderRegistryCaller,
 		builderRegistryFilterer:    builderRegistryFilterer,
