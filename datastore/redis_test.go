@@ -15,7 +15,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -443,19 +445,24 @@ func TestPipelineNilCheck(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0), f)
 }
-
 func TestSetMevCommitBlockBuilders(t *testing.T) {
 	cache := setupTestRedis(t)
 
 	builderPubkey := "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
 	// Set a commit block builder
-	err := cache.SetMevCommitBlockBuilders([][]byte{[]byte(builderPubkey)})
+	builder := mevcommitclient.MevCommitProvider{
+		Pubkey:     []byte(builderPubkey),
+		EOAAddress: gethCommon.HexToAddress("0x0000000000000000000000000000000000000000"),
+	}
+	err := cache.SetMevCommitBlockBuilder(builder)
 	require.NoError(t, err)
+
 	// Retrieve the list of MEV-Commit block builders
 	builders, err := cache.GetMevCommitBlockBuilders()
 	require.NoError(t, err)
 	require.Len(t, builders, 1)
-	require.Equal(t, common.PubkeyHex(builderPubkey), builders[0])
+	require.Equal(t, builder, builders[0])
+	require.Equal(t, builderPubkey, string(builders[0].Pubkey))
 
 	// Check if the commit block builder is set correctly
 	isSet, err := cache.IsMevCommitBlockBuilder(common.PubkeyHex(builderPubkey))
