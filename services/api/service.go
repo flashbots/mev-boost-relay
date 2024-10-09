@@ -1739,19 +1739,18 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		return false
 	}
 
-	// Do a check in memchache for the slot being with a registered provider. If miss, go to redis. if miss again go to postgres.
-
-	// Find the duty for the submission slot
-	api.proposerDutiesLock.RLock()
-	duty := api.proposerDutiesMap[submission.BidTrace.Slot]
-	api.proposerDutiesLock.RUnlock()
-	if duty == nil {
-		log.Info("no duty found for submission slot")
-		api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
-		return false
-	}
-
 	if api.opts.MevCommitFiltering {
+
+		// Find the duty for the submission slot
+		api.proposerDutiesLock.RLock()
+		duty := api.proposerDutiesMap[submission.BidTrace.Slot]
+		api.proposerDutiesLock.RUnlock()
+		if duty == nil {
+			log.Info("no duty found for submission slot")
+			api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
+			return false
+		}
+
 		// Check if validator is registered
 		start := time.Now()
 		isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
