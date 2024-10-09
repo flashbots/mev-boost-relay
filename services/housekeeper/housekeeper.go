@@ -8,7 +8,6 @@
 package housekeeper
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	_ "net/http/pprof"
@@ -204,7 +203,6 @@ func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
 		return
 	}
 
-	pipe := hk.redis.NewPipeline()
 	for _, builder := range entries {
 		isRegistered, err := hk.mevCommitClient.IsBuilderValid(builder.EOAAddress)
 		if err != nil {
@@ -219,11 +217,6 @@ func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
 				hk.log.WithField("builder", builder.Pubkey).Info("deleted MEV-Commit validator registration for inactive builder")
 			}
 		}
-	}
-
-	_, err = pipe.Exec(context.Background())
-	if err != nil {
-		hk.log.WithError(err).Error("failed to execute Redis pipeline for cleanup")
 	}
 
 	hk.log.Info("completed cleanup of MEV-Commit builder registrations")
