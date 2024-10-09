@@ -8,6 +8,7 @@
 package housekeeper
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	_ "net/http/pprof"
@@ -98,6 +99,7 @@ func (hk *Housekeeper) Start() (err error) {
 
 	// Start initial tasks
 	go hk.updateValidatorRegistrationsInRedis()
+	go hk.monitorMevCommitBuilderRegistrations()
 
 	// Process the current slot
 	hk.processNewSlot(bestSyncStatus.HeadSlot)
@@ -148,7 +150,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
 	go hk.updateMevCommitValidatorRegistrations(headSlot)
-	go hk.updateMevCommitBuilderRegistrations(headSlot)
+	go hk.cleanupMevCommitBuilderRegistrations()
 
 	// Set headSlot in redis (for the website)
 	err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
@@ -176,6 +178,55 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	hk.UpdateProposerDutiesWithoutChecks(headSlot)
+}
+
+func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
+	newBuilderRegistered, err := hk.mevCommitClient.SubscribeToBuilderRegisteredEvents(context.Background())
+	if err != nil {
+		hk.log.WithError(err).Error("failed to subscribe to MEV-Commit builder registered events")
+		return
+	}
+
+	for {
+		builder := <-newBuilderRegistered
+		hk.log.WithField("builder", builder).Info("new builder registered")
+		err := hk.redis.SetMevCommitBlockBuilder(builder)
+		if err != nil {
+			hk.log.WithError(err).Error("failed to set MEV-Commit builder registration")
+		}
+	}
+}
+
+func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
+	entries, err := hk.redis.GetMevCommitBlockBuilders()
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get MEV-Commit block builders from Redis")
+		return
+	}
+
+	pipe := hk.redis.NewPipeline()
+	for _, builder := range entries {
+		isRegistered, err := hk.mevCommitClient.IsBuilderValid(builder.EOAAddress)
+		if err != nil {
+			hk.log.WithError(err).Errorf("failed to check if builder %s is registered", builder.Pubkey)
+			continue
+		}
+		if !isRegistered {
+			err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(builder.Pubkey))
+			if err != nil {
+				hk.log.WithError(err).Errorf("failed to delete MEV-Commit validator registration for builder %s", builder.Pubkey)
+			} else {
+				hk.log.WithField("builder", builder.Pubkey).Info("deleted MEV-Commit validator registration for inactive builder")
+			}
+		}
+	}
+
+	_, err = pipe.Exec(context.Background())
+	if err != nil {
+		hk.log.WithError(err).Error("failed to execute Redis pipeline for cleanup")
+	}
+
+	hk.log.Info("completed cleanup of MEV-Commit builder registrations")
 }
 
 func (hk *Housekeeper) updateMevCommitBuilderRegistrations(headSlot uint64) {

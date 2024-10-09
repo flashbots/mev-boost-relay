@@ -1,32 +1,29 @@
 package mevcommitclient
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	builderRegistry "github.com/primev/mev-commit/contracts-abi/clients/ProviderRegistry"
+	providerRegistry "github.com/primev/mev-commit/contracts-abi/clients/ProviderRegistry"
 	validatoroptinrouter "github.com/primev/mev-commit/contracts-abi/clients/ValidatorOptInRouter"
 )
 
-type BuilderRegisteredEvent struct {
-	Builder      common.Address
-	Value        *big.Int
-	BlsPublicKey []byte
-	BlockNumber  uint64
-	TxHash       common.Hash
-	Timestamp    time.Time
-	IsValid      bool
+type MevCommitProvider struct {
+	Pubkey     []byte
+	EOAAddress common.Address
 }
 
 type IMevCommitClient interface {
 	GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error)
-	GetActiveBuilders() ([][]byte, error)
+	GetActiveBuilders() ([]MevCommitProvider, error)
+	ListenForActiveBuildersEvents() (<-chan MevCommitProvider, error)
+	IsBuilderValid(builderAddress common.Address) (bool, error)
 }
 
 type MevCommitClient struct {
@@ -35,8 +32,8 @@ type MevCommitClient struct {
 	ValidatorRouterAddress     common.Address
 	ProviderRegistryAddress    common.Address
 	validatorOptInRouterCaller *validatoroptinrouter.ValidatoroptinrouterCaller
-	builderRegistryCaller      *builderRegistry.ProviderregistryCaller
-	builderRegistryFilterer    *builderRegistry.ProviderregistryFilterer
+	builderRegistryCaller      *providerRegistry.ProviderregistryCaller
+	builderRegistryFilterer    *providerRegistry.ProviderregistryFilterer
 	l1Client                   *ethclient.Client
 	mevCommitClient            *ethclient.Client
 	contractAbi                abi.ABI
@@ -62,12 +59,12 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 		return nil, fmt.Errorf("failed to create ValidatorOptInRouter caller: %w", err)
 	}
 
-	builderRegistryCaller, err := builderRegistry.NewProviderregistryCaller(ProviderRegistryAddress, mevCommitClient)
+	builderRegistryCaller, err := providerRegistry.NewProviderregistryCaller(ProviderRegistryAddress, mevCommitClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create BuilderRegistry caller: %w", err)
 	}
 
-	builderRegistryFilterer, err := builderRegistry.NewProviderregistryFilterer(ProviderRegistryAddress, mevCommitClient)
+	builderRegistryFilterer, err := providerRegistry.NewProviderregistryFilterer(ProviderRegistryAddress, mevCommitClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create BuilderRegistry filterer: %w", err)
 	}
@@ -105,7 +102,8 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool,
 
 	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(opts, pubkeys)
 }
-func (m *MevCommitClient) GetActiveBuilders() ([][]byte, error) {
+
+func (m *MevCommitClient) GetActiveBuilders() ([]MevCommitProvider, error) {
 	opts := &bind.FilterOpts{
 		Start: 0,
 		End:   nil, // Latest block
@@ -117,14 +115,17 @@ func (m *MevCommitClient) GetActiveBuilders() ([][]byte, error) {
 	}
 	defer iterator.Close()
 
-	activeBuilderKeys := make([][]byte, 0)
+	activeBuilders := make([]MevCommitProvider, 0)
 	for iterator.Next() {
-		isValid, err := m.isBuilderValid(iterator.Event.Provider)
+		isValid, err := m.IsBuilderValid(iterator.Event.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if builder is valid: %w", err)
 		}
 		if isValid {
-			activeBuilderKeys = append(activeBuilderKeys, iterator.Event.BlsPublicKey)
+			activeBuilders = append(activeBuilders, MevCommitProvider{
+				Pubkey:     iterator.Event.BlsPublicKey,
+				EOAAddress: iterator.Event.Provider,
+			})
 		}
 	}
 
@@ -132,10 +133,49 @@ func (m *MevCommitClient) GetActiveBuilders() ([][]byte, error) {
 		return nil, fmt.Errorf("error iterating over ProviderRegistered events: %w", err)
 	}
 
-	return activeBuilderKeys, nil
+	return activeBuilders, nil
+}
+func (m *MevCommitClient) ListenForActiveBuildersEvents() (<-chan MevCommitProvider, error) {
+	opts := &bind.WatchOpts{
+		Start:   nil, // Start from the latest block
+		Context: context.Background(),
+	}
+
+	buildersChan := make(chan MevCommitProvider)
+	eventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
+	sub, err := m.builderRegistryFilterer.WatchProviderRegistered(opts, eventCh, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to watch ProviderRegistered events: %w", err)
+	}
+
+	go func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case err := <-sub.Err():
+				fmt.Printf("error while watching ProviderRegistered events: %v\n", err)
+				close(eventCh)
+				return
+			case event := <-eventCh:
+				isValid, err := m.IsBuilderValid(event.Provider)
+				if err != nil {
+					fmt.Printf("failed to check if builder is valid: %v\n", err)
+					continue
+				}
+				if isValid {
+					buildersChan <- MevCommitProvider{
+						Pubkey:     event.BlsPublicKey,
+						EOAAddress: event.Provider,
+					}
+				}
+			}
+		}
+	}()
+
+	return buildersChan, nil
 }
 
-func (m *MevCommitClient) isBuilderValid(builderAddress common.Address) (bool, error) {
+func (m *MevCommitClient) IsBuilderValid(builderAddress common.Address) (bool, error) {
 	err := m.builderRegistryCaller.IsProviderValid(nil, builderAddress)
 	if err != nil {
 		if err.Error() == "execution reverted" {

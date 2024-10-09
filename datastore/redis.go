@@ -17,6 +17,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 )
 
@@ -246,39 +247,39 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.Pub
 	return timestamp, err
 }
 
-func (r *RedisCache) SetMevCommitBlockBuilders(builders [][]byte) error {
+func (r *RedisCache) SetMevCommitBlockBuilder(builder mevcommitclient.MevCommitProvider) error {
 	ctx := context.Background()
-	pipe := r.client.Pipeline()
 
-	// Clear existing set
-	pipe.Del(ctx, r.keyMevCommitBlockBuilder)
-
-	// Add all builders to the set
-	for _, builder := range builders {
-		pipe.SAdd(ctx, r.keyMevCommitBlockBuilder, string(builder))
-	}
-	// Execute pipeline
-	_, err := pipe.Exec(ctx)
+	jsonBuilder, err := json.Marshal(builder)
 	if err != nil {
-		return fmt.Errorf("failed to set MEV-Commit block builders: %w", err)
+		return fmt.Errorf("failed to marshal MevCommitProvider: %w", err)
+	}
+	err = r.client.HSet(ctx, r.keyMevCommitBlockBuilder, builder.Pubkey, string(jsonBuilder)).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set MEV-Commit block builder: %w", err)
 	}
 
 	return nil
 }
 
-func (r *RedisCache) GetMevCommitBlockBuilders() ([]common.PubkeyHex, error) {
+func (r *RedisCache) GetMevCommitBlockBuilders() ([]mevcommitclient.MevCommitProvider, error) {
 	ctx := context.Background()
 
-	// Retrieve all members of the set
-	members, err := r.client.SMembers(ctx, r.keyMevCommitBlockBuilder).Result()
+	// Retrieve all fields and values from the hash
+	entries, err := r.client.HGetAll(ctx, r.keyMevCommitBlockBuilder).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MEV-Commit block builders: %w", err)
 	}
 
-	// Convert string slice to PubkeyHex slice
-	builders := make([]common.PubkeyHex, len(members))
-	for i, member := range members {
-		builders[i] = common.PubkeyHex(member)
+	// Convert map to MevCommitProvider slice
+	builders := make([]mevcommitclient.MevCommitProvider, 0, len(entries))
+	for _, value := range entries {
+		var builder mevcommitclient.MevCommitProvider
+		err := json.Unmarshal([]byte(value), &builder)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal MevCommitProvider: %w", err)
+		}
+		builders = append(builders, builder)
 	}
 
 	return builders, nil
@@ -287,10 +288,10 @@ func (r *RedisCache) GetMevCommitBlockBuilders() ([]common.PubkeyHex, error) {
 func (r *RedisCache) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
 	ctx := context.Background()
 
-	// Check if the builder pubkey exists in the set
-	exists, err := r.client.SIsMember(ctx, r.keyMevCommitBlockBuilder, builderPubkey.String()).Result()
+	// Check if the builder pubkey exists in the hash
+	exists, err := r.client.HExists(ctx, r.keyMevCommitBlockBuilder, builderPubkey.String()).Result()
 	if err != nil {
-		return false, fmt.Errorf("failed to check if builder is in MEV-Commit block builders set: %w", err)
+		return false, fmt.Errorf("failed to check if builder is in MEV-Commit block builders hash: %w", err)
 	}
 
 	return exists, nil
