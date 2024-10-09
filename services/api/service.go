@@ -1740,6 +1740,7 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 	}
 
 	if api.opts.MevCommitFiltering {
+		start := time.Now()
 		// Find the duty for the submission slot
 		api.proposerDutiesLock.RLock()
 		duty := api.proposerDutiesMap[submission.BidTrace.Slot]
@@ -1750,8 +1751,6 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 			return false
 		}
 
-		// Check if validator is registered
-		start := time.Now()
 		isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
 		if err != nil {
 			log.WithError(err).Error("Failed to check validator registration")
