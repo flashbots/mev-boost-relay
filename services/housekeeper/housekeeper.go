@@ -181,7 +181,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 }
 
 func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
-	newBuilderRegistered, err := hk.mevCommitClient.SubscribeToBuilderRegisteredEvents(context.Background())
+	newBuilderRegistered, err := hk.mevCommitClient.ListenForActiveBuildersEvents()
 	if err != nil {
 		hk.log.WithError(err).Error("failed to subscribe to MEV-Commit builder registered events")
 		return
@@ -227,24 +227,6 @@ func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
 	}
 
 	hk.log.Info("completed cleanup of MEV-Commit builder registrations")
-}
-
-func (hk *Housekeeper) updateMevCommitBuilderRegistrations(headSlot uint64) {
-	log := hk.log.WithField("headSlot", headSlot)
-	log.Debug("updating MEV-Commit builder registrations...")
-
-	// Fetch all registered builders from the MEV-Commit contract
-	registeredBuilders, err := hk.mevCommitClient.GetActiveBuilders()
-	if err != nil {
-		log.WithError(err).Error("failed to get registered builders from MEV-Commit contract")
-		return
-	}
-	err = hk.redis.SetMevCommitBlockBuilders(registeredBuilders)
-	if err != nil {
-		log.WithError(err).Error("failed to set MEV-Commit builder registrations")
-		return
-	}
-	log.WithField("count", len(registeredBuilders)).Info("updated MEV-Commit builder registrations")
 }
 
 func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
