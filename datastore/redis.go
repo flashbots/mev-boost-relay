@@ -17,6 +17,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 )
 
@@ -24,7 +25,8 @@ var (
 	redisScheme = "redis://"
 	redisPrefix = "boost-relay"
 
-	expiryBidCache = 45 * time.Second
+	mevCommitValidatorRegistrationExpiry = 1 * time.Hour
+	expiryBidCache                       = 45 * time.Second
 
 	RedisConfigFieldPubkey         = "pubkey"
 	RedisStatsFieldLatestSlot      = "latest-slot"
@@ -94,7 +96,9 @@ type RedisCache struct {
 	prefixFloorBidValue               string
 
 	// keys
-	keyValidatorRegistrationTimestamp string
+	keyValidatorRegistrationTimestamp     string
+	keyMevCommitValidatorRegistrationHash string
+	keyMevCommitBlockBuilder              string // New key for mev-commit block builder array
 
 	keyRelayConfig        string
 	keyStats              string
@@ -134,8 +138,10 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixFloorBid:                    fmt.Sprintf("%s/%s:bid-floor", redisPrefix, prefix),                      // prefix:slot_parentHash_proposerPubkey
 		prefixFloorBidValue:               fmt.Sprintf("%s/%s:bid-floor-value", redisPrefix, prefix),                // prefix:slot_parentHash_proposerPubkey
 
-		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
-		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
+		keyValidatorRegistrationTimestamp:     fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
+		keyMevCommitValidatorRegistrationHash: fmt.Sprintf("%s/%s:mev-commit-validator-registration", redisPrefix, prefix),
+		keyMevCommitBlockBuilder:              fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix), // New key for mev-commit block builder array
+		keyRelayConfig:                        fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -239,6 +245,84 @@ func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.Pub
 		return 0, nil
 	}
 	return timestamp, err
+}
+
+func (r *RedisCache) SetMevCommitBlockBuilder(builder mevcommitclient.MevCommitProvider) error {
+	ctx := context.Background()
+
+	jsonBuilder, err := json.Marshal(builder)
+	if err != nil {
+		return fmt.Errorf("failed to marshal MevCommitProvider: %w", err)
+	}
+	err = r.client.HSet(ctx, r.keyMevCommitBlockBuilder, builder.Pubkey, string(jsonBuilder)).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set mev-commit block builder: %w", err)
+	}
+
+	return nil
+}
+
+func (r *RedisCache) GetMevCommitBlockBuilders() ([]mevcommitclient.MevCommitProvider, error) {
+	ctx := context.Background()
+
+	// Retrieve all fields and values from the hash
+	entries, err := r.client.HGetAll(ctx, r.keyMevCommitBlockBuilder).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get mev-commit block builders: %w", err)
+	}
+
+	// Convert map to MevCommitProvider slice
+	builders := make([]mevcommitclient.MevCommitProvider, 0, len(entries))
+	for _, value := range entries {
+		var builder mevcommitclient.MevCommitProvider
+		err := json.Unmarshal([]byte(value), &builder)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal MevCommitProvider: %w", err)
+		}
+		builders = append(builders, builder)
+	}
+
+	return builders, nil
+}
+
+func (r *RedisCache) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
+	ctx := context.Background()
+
+	// Check if the builder pubkey exists in the hash
+	exists, err := r.client.HExists(ctx, r.keyMevCommitBlockBuilder, builderPubkey.String()).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check if builder is in mev-commit block builders hash: %w", err)
+	}
+
+	return exists, nil
+}
+
+func (r *RedisCache) SetMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
+	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String(), "1", mevCommitValidatorRegistrationExpiry).Err()
+	if err != nil {
+		return fmt.Errorf("failed to add validator to mev-commit registration: %w", err)
+	}
+	return nil
+}
+
+func (r *RedisCache) IsMevCommitValidatorRegistered(proposerPubkey common.PubkeyHex) (bool, error) {
+	_, err := r.client.Get(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String()).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check mev-commit validator registration: %w", err)
+	}
+
+	return true, nil
+}
+
+func (r *RedisCache) DeleteMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
+	err := r.client.Del(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String()).Err()
+	if err != nil {
+		return fmt.Errorf("failed to remove validator from mev-commit registration: %w", err)
+	}
+	return nil
 }
 
 func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey common.PubkeyHex, timestamp uint64) error {

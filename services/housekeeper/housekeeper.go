@@ -21,6 +21,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -34,6 +35,8 @@ type HousekeeperOpts struct {
 
 	PprofAPI           bool
 	PprofListenAddress string
+
+	MevCommitClient mevcommitclient.IMevCommitClient
 }
 
 type Housekeeper struct {
@@ -52,6 +55,8 @@ type Housekeeper struct {
 	proposerDutiesSlot       uint64
 
 	headSlot uberatomic.Uint64
+
+	mevCommitClient mevcommitclient.IMevCommitClient
 
 	proposersAlreadySaved map[uint64]string // to avoid repeating redis writes
 }
@@ -93,6 +98,7 @@ func (hk *Housekeeper) Start() (err error) {
 
 	// Start initial tasks
 	go hk.updateValidatorRegistrationsInRedis()
+	go hk.monitorMevCommitBuilderRegistrations()
 
 	// Process the current slot
 	hk.processNewSlot(bestSyncStatus.HeadSlot)
@@ -142,6 +148,8 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 
 	// Update proposer duties
 	go hk.updateProposerDuties(headSlot)
+	go hk.updateMevCommitValidatorRegistrations(headSlot)
+	go hk.cleanupMevCommitBuilderRegistrations()
 
 	// Set headSlot in redis (for the website)
 	err := hk.redis.SetStats(datastore.RedisStatsFieldLatestSlot, headSlot)
@@ -169,6 +177,67 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	}
 
 	hk.UpdateProposerDutiesWithoutChecks(headSlot)
+}
+
+func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
+	newBuilderRegistered, builderUnregistered, err := hk.mevCommitClient.ListenForBuildersEvents()
+	if err != nil {
+		hk.log.WithError(err).Error("failed to subscribe to mev-commit builder registered events")
+		return
+	}
+
+	for {
+		select {
+		case builder := <-newBuilderRegistered:
+			hk.log.WithField("builder", builder).Info("new builder registered")
+			err := hk.redis.SetMevCommitBlockBuilder(builder)
+			if err != nil {
+				hk.log.WithError(err).Error("failed to set mev-commit builder registration")
+			}
+		case builderAddress := <-builderUnregistered:
+			entries, err := hk.redis.GetMevCommitBlockBuilders()
+			if err != nil {
+				hk.log.WithError(err).Error("failed to get mev-commit block builders from Redis")
+				return
+			}
+			for _, entry := range entries {
+				if entry.EOAAddress == builderAddress {
+					hk.log.WithField("builder", builderAddress).Info("builder unregistered")
+					err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(entry.Pubkey))
+					if err != nil {
+						hk.log.WithError(err).Errorf("failed to delete mev-commit block builder %s", builderAddress)
+					}
+					break
+				}
+			}
+		}
+	}
+}
+
+func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
+	entries, err := hk.redis.GetMevCommitBlockBuilders()
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get mev-commit block builders from Redis")
+		return
+	}
+
+	for _, builder := range entries {
+		isRegistered, err := hk.mevCommitClient.IsBuilderValid(builder.EOAAddress)
+		if err != nil {
+			hk.log.WithError(err).Errorf("failed to check if builder %s is registered", builder.Pubkey)
+			continue
+		}
+		if !isRegistered {
+			err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(builder.Pubkey))
+			if err != nil {
+				hk.log.WithError(err).Errorf("failed to delete mev-commit validator registration for builder %s", builder.Pubkey)
+			} else {
+				hk.log.WithField("builder", builder.Pubkey).Info("deleted mev-commit validator registration for inactive builder")
+			}
+		}
+	}
+
+	hk.log.Info("completed cleanup of mev-commit builder registrations")
 }
 
 func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
@@ -246,6 +315,48 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	}
 	sort.Strings(_duties)
 	log.WithField("numDuties", len(_duties)).Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
+}
+
+// When the update is triggered, we store registered validators in Redis for an the current and next epoch.
+// This allows us to maintain 1 epoch in advance, which is enough to check if a validator is registered for a given epoch.
+func (hk *Housekeeper) updateMevCommitValidatorRegistrations(headSlot uint64) {
+	// Only update once per epoch - at the epoch start of the epoch
+	if headSlot%common.SlotsPerEpoch != 0 {
+		return
+	}
+
+	epoch := headSlot / common.SlotsPerEpoch
+
+	duties, err := hk.beaconClient.GetProposerDuties(epoch)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get proposer duties for epoch")
+		return
+	}
+	nextDuties, err := hk.beaconClient.GetProposerDuties(epoch + 1)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get proposer duties for next epoch")
+		return
+	}
+	// Combine duties from current and next epoch into a single array
+	duties.Data = append(duties.Data, nextDuties.Data...)
+
+	pubkeys := [][]byte{}
+	for _, duty := range duties.Data {
+		pubkeys = append(pubkeys, []byte(duty.Pubkey))
+	}
+
+	registeredValidators, err := hk.mevCommitClient.GetOptInStatusForValidators(pubkeys)
+	if err != nil {
+		hk.log.WithError(err).Error("failed to get registered validators from mev-commit client")
+		return
+	}
+	for i, registeredValidator := range registeredValidators {
+		if registeredValidator {
+			hk.redis.SetMevCommitValidatorRegistration(common.NewPubkeyHex(duties.Data[i].Pubkey))
+		}
+	}
+
+	hk.log.WithField("numValidators", len(registeredValidators)).Info("updated mev-commit registered validators in Redis")
 }
 
 // updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis

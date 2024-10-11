@@ -184,6 +184,25 @@ func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64)
 	ds.knownValidatorsByIndex[index] = pubkeyHex
 }
 
+// SaveMevCommitValidatorRegistration saves a validator registration for mev-commit into Redis
+func (ds *Datastore) SaveMevCommitValidatorRegistration(pubkeyHex common.PubkeyHex) error {
+	err := ds.redis.SetMevCommitValidatorRegistration(pubkeyHex)
+	if err != nil {
+		return errors.Wrap(err, "failed saving mev-commit validator registration to redis")
+	}
+	return nil
+}
+
+// IsMevCommitRegisteredValidator checks if a validator is registered for mev-commit
+func (ds *Datastore) IsMevCommitValidatorRegistered(pubkeyHex common.PubkeyHex) (bool, error) {
+	return ds.redis.IsMevCommitValidatorRegistered(pubkeyHex)
+}
+
+// IsMevCommitBlockBuilder checks if a builder is registered for mev-commit
+func (ds *Datastore) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
+	return ds.redis.IsMevCommitBlockBuilder(builderPubkey)
+}
+
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
 func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidatorRegistration) error {
 	// First save in the database

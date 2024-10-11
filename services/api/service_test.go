@@ -40,6 +40,7 @@ const (
 	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
 	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
 	testBuilderPubkey   = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	validatorPubKey     = "0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792"
 )
 
 var (
@@ -1009,6 +1010,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
+			validatorPubKey, _ := utils.HexToPubkey(testBuilderPubkey)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			headSlot := testSlot - 1
@@ -1017,6 +1019,15 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			log := logrus.NewEntry(logger)
 			submission, err := common.GetBlockSubmissionInfo(tc.payload)
 			require.NoError(t, err)
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[testSlot] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: testSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						Pubkey: validatorPubKey,
+					},
+				},
+			}
 			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
 			require.Equal(t, tc.expectOk, ok)
 		})

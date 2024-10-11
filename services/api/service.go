@@ -35,6 +35,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/metrics"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
@@ -138,6 +139,8 @@ type RelayAPIOpts struct {
 	DataAPI         bool
 	PprofAPI        bool
 	InternalAPI     bool
+
+	MevCommitFiltering bool
 }
 
 type payloadAttributesHelper struct {
@@ -182,11 +185,13 @@ type RelayAPI struct {
 	srvStarted  uberatomic.Bool
 	srvShutdown uberatomic.Bool
 
-	beaconClient beaconclient.IMultiBeaconClient
-	datastore    *datastore.Datastore
-	redis        *datastore.RedisCache
-	memcached    *datastore.Memcached
-	db           database.IDatabaseService
+	beaconClient    beaconclient.IMultiBeaconClient
+	mevCommitClient mevcommitclient.IMevCommitClient
+
+	datastore *datastore.Datastore
+	redis     *datastore.RedisCache
+	memcached *datastore.Memcached
+	db        database.IDatabaseService
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -200,8 +205,7 @@ type RelayAPI struct {
 	isUpdatingProposerDuties uberatomic.Bool
 
 	blockSimRateLimiter IBlockSimRateLimiter
-
-	validatorRegC chan builderApiV1.SignedValidatorRegistration
+	validatorRegC       chan builderApiV1.SignedValidatorRegistration
 
 	// used to notify when a new validator has been registered
 	validatorUpdateCh chan struct{}
@@ -360,6 +364,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 	if api.opts.BlockBuilderAPI {
 		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
+		// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 	}
 
@@ -1472,6 +1477,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 
+		// TODO(@ckartik): We could do something similar for validator registrations with L1 mevcommit contract.
 		// Get registration entry from the DB.
 		registrationEntry, err := api.db.GetValidatorRegistration(proposerPubkey.String())
 		if err != nil {
@@ -1733,6 +1739,42 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 		return false
 	}
 
+	if api.opts.MevCommitFiltering {
+		start := time.Now()
+		// Find the duty for the submission slot
+		api.proposerDutiesLock.RLock()
+		duty := api.proposerDutiesMap[submission.BidTrace.Slot]
+		api.proposerDutiesLock.RUnlock()
+		if duty == nil {
+			log.Info("no duty found for submission slot")
+			api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
+			return false
+		}
+
+		isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
+		if err != nil {
+			log.WithError(err).Error("Failed to check validator registration")
+			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
+			return false
+		}
+
+		if isValidatorRegistered {
+			isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
+			if err != nil {
+				log.WithError(err).Error("Failed to check builder registration")
+				api.RespondError(w, http.StatusInternalServerError, "Internal server error")
+				return false
+			}
+			if !isBuilderRegistered {
+				// TODO: Implement caching strategy for builder registration status
+				api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
+				return false
+			}
+		}
+		duration := time.Since(start)
+		log.WithField("duration", duration).Trace("mev-commit check completed")
+	}
+
 	// Timestamp check
 	expectedTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)
 	if submission.Timestamp != expectedTimestamp {
@@ -1883,6 +1925,7 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	return &updateBidResult, getPayloadResponse, true
 }
 
+// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -2010,7 +2053,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
-
+	// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
 	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
 	if !ok {
 		return
