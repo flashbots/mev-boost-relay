@@ -1772,7 +1772,7 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 			}
 		}
 		duration := time.Since(start)
-		log.WithField("duration", duration).Trace("MEV-Commit check completed")
+		log.WithField("duration", duration).Trace("mev-commit check completed")
 	}
 
 	// Timestamp check

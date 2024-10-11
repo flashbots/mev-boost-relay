@@ -40,8 +40,8 @@ func init() {
 
 	housekeeperCmd.Flags().StringVar(&mevCommitRPC, "mev-commit-rpc", defaultMevCommitRPC, "mev-commit-chain RPC endpoint")
 	housekeeperCmd.Flags().StringVar(&ethereumL1RPC, "ethereum-l1-rpc", defaultEthereumL1RPC, "Ethereum L1 RPC endpoint")
-	housekeeperCmd.Flags().StringVar(&providerRegistryAddr, "provider-registry-addr", defaultProviderRegistryAddr, "MEV-Commit provider registry contract address")
-	housekeeperCmd.Flags().StringVar(&validatorOptInRouterAddr, "validator-optin-router-addr", defaultValidatorOptInRouterAddr, "MEV-Commit validator opt-in router contract address")
+	housekeeperCmd.Flags().StringVar(&providerRegistryAddr, "provider-registry-addr", defaultProviderRegistryAddr, "mev-commit provider registry contract address")
+	housekeeperCmd.Flags().StringVar(&validatorOptInRouterAddr, "validator-optin-router-addr", defaultValidatorOptInRouterAddr, "mev-commit validator opt-in router contract address")
 }
 
 var housekeeperCmd = &cobra.Command{
@@ -98,7 +98,7 @@ var housekeeperCmd = &cobra.Command{
 			gethCommon.HexToAddress(providerRegistryAddr),
 		)
 		if err != nil {
-			log.WithError(err).Fatal("Failed to create MEV-Commit client")
+			log.WithError(err).Fatal("Failed to create mev-commit client")
 		}
 
 		opts := &housekeeper.HousekeeperOpts{

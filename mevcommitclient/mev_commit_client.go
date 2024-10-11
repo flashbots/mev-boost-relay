@@ -50,7 +50,7 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 
 	mevCommitClient, err := ethclient.Dial(mevCommitUrl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MEV-Commit EVM: %w", err)
+		return nil, fmt.Errorf("failed to connect to mev-commit EVM: %w", err)
 	}
 
 	validatorOptInRouter, err := validatoroptinrouter.NewValidatoroptinrouterCaller(validatorRouterAddress, l1Client)

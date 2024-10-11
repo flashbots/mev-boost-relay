@@ -457,7 +457,7 @@ func TestSetMevCommitBlockBuilders(t *testing.T) {
 	err := cache.SetMevCommitBlockBuilder(builder)
 	require.NoError(t, err)
 
-	// Retrieve the list of MEV-Commit block builders
+	// Retrieve the list of mev-commit block builders
 	builders, err := cache.GetMevCommitBlockBuilders()
 	require.NoError(t, err)
 	require.Len(t, builders, 1)
