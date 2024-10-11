@@ -21,7 +21,7 @@ type MevCommitProvider struct {
 
 type IMevCommitClient interface {
 	GetOptInStatusForValidators(pubkeys [][]byte) ([]bool, error)
-	ListenForActiveBuildersEvents() (<-chan MevCommitProvider, error)
+	ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error)
 	IsBuilderValid(builderAddress common.Address) (bool, error)
 }
 
@@ -102,35 +102,44 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool,
 	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(opts, pubkeys)
 }
 
-func (m *MevCommitClient) ListenForActiveBuildersEvents() (<-chan MevCommitProvider, error) {
+func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error) {
 	opts := &bind.WatchOpts{
 		Start:   nil, // Start from the latest block
 		Context: context.Background(),
 	}
+	builderRegistryEventCh := make(chan MevCommitProvider)
+	builderUnregisteredEventCh := make(chan common.Address)
 
-	buildersChan := make(chan MevCommitProvider)
-	eventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
-	sub, err := m.builderRegistryFilterer.WatchProviderRegistered(opts, eventCh, nil)
+	providerRegisteredEventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
+	providerSlashedEventCh := make(chan *providerRegistry.ProviderregistryFundsSlashed)
+
+	providerRegisteredSub, err := m.builderRegistryFilterer.WatchProviderRegistered(opts, providerRegisteredEventCh, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to watch ProviderRegistered events: %w", err)
+		return nil, nil, fmt.Errorf("failed to watch ProviderRegistered events: %w", err)
+	}
+
+	providerSlashedSub, err := m.builderRegistryFilterer.WatchFundsSlashed(opts, providerSlashedEventCh, nil)
+	if err != nil {
+		providerRegisteredSub.Unsubscribe()
+		return nil, nil, fmt.Errorf("failed to watch ProviderSlashed events: %w", err)
 	}
 
 	go func() {
-		defer sub.Unsubscribe()
+		defer providerRegisteredSub.Unsubscribe()
 		for {
 			select {
-			case err := <-sub.Err():
+			case err := <-providerRegisteredSub.Err():
 				fmt.Printf("error while watching ProviderRegistered events: %v\n", err)
-				close(eventCh)
+				close(builderRegistryEventCh)
 				return
-			case event := <-eventCh:
+			case event := <-providerRegisteredEventCh:
 				isValid, err := m.IsBuilderValid(event.Provider)
 				if err != nil {
 					fmt.Printf("failed to check if builder is valid: %v\n", err)
 					continue
 				}
 				if isValid {
-					buildersChan <- MevCommitProvider{
+					builderRegistryEventCh <- MevCommitProvider{
 						Pubkey:     event.BlsPublicKey,
 						EOAAddress: event.Provider,
 					}
@@ -139,7 +148,28 @@ func (m *MevCommitClient) ListenForActiveBuildersEvents() (<-chan MevCommitProvi
 		}
 	}()
 
-	return buildersChan, nil
+	go func() {
+		defer providerSlashedSub.Unsubscribe()
+		for {
+			select {
+			case err := <-providerSlashedSub.Err():
+				fmt.Printf("error while watching ProviderSlashed events: %v\n", err)
+				close(builderUnregisteredEventCh)
+				return
+			case event := <-providerSlashedEventCh:
+				isValid, err := m.IsBuilderValid(event.Provider)
+				if err != nil {
+					fmt.Printf("failed to check if builder is valid: %v\n", err)
+					continue
+				}
+				if !isValid {
+					builderUnregisteredEventCh <- event.Provider
+				}
+			}
+		}
+	}()
+
+	return builderRegistryEventCh, builderUnregisteredEventCh, nil
 }
 
 func (m *MevCommitClient) IsBuilderValid(builderAddress common.Address) (bool, error) {

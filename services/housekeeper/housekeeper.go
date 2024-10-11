@@ -180,17 +180,36 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 }
 
 func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
-	newBuilderRegistered, err := hk.mevCommitClient.ListenForActiveBuildersEvents()
+	newBuilderRegistered, builderUnregistered, err := hk.mevCommitClient.ListenForBuildersEvents()
 	if err != nil {
 		hk.log.WithError(err).Error("failed to subscribe to mev-commit builder registered events")
 		return
 	}
 
-	for builder := range newBuilderRegistered {
-		hk.log.WithField("builder", builder).Info("new builder registered")
-		err := hk.redis.SetMevCommitBlockBuilder(builder)
-		if err != nil {
-			hk.log.WithError(err).Error("failed to set mev-commit builder registration")
+	for {
+		select {
+		case builder := <-newBuilderRegistered:
+			hk.log.WithField("builder", builder).Info("new builder registered")
+			err := hk.redis.SetMevCommitBlockBuilder(builder)
+			if err != nil {
+				hk.log.WithError(err).Error("failed to set mev-commit builder registration")
+			}
+		case builderAddress := <-builderUnregistered:
+			entries, err := hk.redis.GetMevCommitBlockBuilders()
+			if err != nil {
+				hk.log.WithError(err).Error("failed to get mev-commit block builders from Redis")
+				return
+			}
+			for _, entry := range entries {
+				if entry.EOAAddress == builderAddress {
+					hk.log.WithField("builder", builderAddress).Info("builder unregistered")
+					err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(entry.Pubkey))
+					if err != nil {
+						hk.log.WithError(err).Errorf("failed to delete mev-commit block builder %s", builderAddress)
+					}
+					break
+				}
+			}
 		}
 	}
 
