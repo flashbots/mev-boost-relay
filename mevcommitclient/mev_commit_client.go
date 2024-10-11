@@ -103,8 +103,9 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool,
 }
 
 func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error) {
+	startBlock := uint64(0)
 	opts := &bind.WatchOpts{
-		Start:   nil, // Start from the latest block
+		Start:   &startBlock, // Start from the latest block
 		Context: context.Background(),
 	}
 	builderRegistryEventCh := make(chan MevCommitProvider)
@@ -133,16 +134,9 @@ func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <
 				close(builderRegistryEventCh)
 				return
 			case event := <-providerRegisteredEventCh:
-				isValid, err := m.IsBuilderValid(event.Provider)
-				if err != nil {
-					fmt.Printf("failed to check if builder is valid: %v\n", err)
-					continue
-				}
-				if isValid {
-					builderRegistryEventCh <- MevCommitProvider{
-						Pubkey:     event.BlsPublicKey,
-						EOAAddress: event.Provider,
-					}
+				builderRegistryEventCh <- MevCommitProvider{
+					Pubkey:     event.BlsPublicKey,
+					EOAAddress: event.Provider,
 				}
 			}
 		}

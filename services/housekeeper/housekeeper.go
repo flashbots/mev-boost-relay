@@ -212,8 +212,6 @@ func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
 			}
 		}
 	}
-
-	hk.log.Info("mev-commit builder registration monitoring stopped")
 }
 
 func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
