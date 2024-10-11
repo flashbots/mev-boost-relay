@@ -59,23 +59,3 @@ func TestGetOptInStatusForValidators(t *testing.T) {
 		assert.IsType(t, bool(true), status)
 	}
 }
-
-func TestGetActiveBuilders(t *testing.T) {
-	client, err := NewMevCommitClient(
-		ethereumL1RPC,
-		mevCommitRPC,
-		common.HexToAddress(validatorOptInRouterAddr),
-		common.HexToAddress(providerRegistryAddr),
-	)
-	require.NoError(t, err)
-
-	builders, err := client.GetActiveBuilders()
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, builders, "There should be at least one active builder")
-	for _, builder := range builders {
-		assert.Len(t, builder, 48, "Builder BLS public key should be 48 bytes long")
-	}
-
-	assert.IsType(t, [][]byte{}, builders)
-}
