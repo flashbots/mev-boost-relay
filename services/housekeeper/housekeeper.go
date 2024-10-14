@@ -203,7 +203,7 @@ func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
 			for _, entry := range entries {
 				if entry.EOAAddress == builderAddress {
 					hk.log.WithField("builder", builderAddress).Info("builder unregistered")
-					err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(entry.Pubkey))
+					err := hk.redis.DeleteMevCommitBlockBuilder(common.PubkeyHex(entry.Pubkey))
 					if err != nil {
 						hk.log.WithError(err).Errorf("failed to delete mev-commit block builder %s", builderAddress)
 					}
@@ -228,7 +228,7 @@ func (hk *Housekeeper) cleanupMevCommitBuilderRegistrations() {
 			continue
 		}
 		if !isRegistered {
-			err := hk.redis.DeleteMevCommitValidatorRegistration(common.PubkeyHex(builder.Pubkey))
+			err := hk.redis.DeleteMevCommitBlockBuilder(common.PubkeyHex(builder.Pubkey))
 			if err != nil {
 				hk.log.WithError(err).Errorf("failed to delete mev-commit validator registration for builder %s", builder.Pubkey)
 			} else {
