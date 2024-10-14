@@ -1,3 +1,6 @@
+// Package mevcommitclient provides functionality for interacting with the mev-commit protocol.
+// It includes interfaces and implementations for querying validator opt-in status,
+// monitoring builder events, and validating builder registrations.
 package mevcommitclient
 
 import (
@@ -42,13 +45,13 @@ const (
 	abiJSON = `[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"builder","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"},{"indexed":false,"internalType":"bytes","name":"blsPublicKey","type":"bytes"}],"name":"BuilderRegistered","type":"event"},{"inputs":[{"internalType":"address","name":"builder","type":"address"}],"name":"isBuilderValid","outputs":[],"stateMutability":"view","type":"function"}]`
 )
 
-func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddress, ProviderRegistryAddress common.Address) (IMevCommitClient, error) {
-	l1Client, err := ethclient.Dial(l1MainnetUrl)
+func NewMevCommitClient(l1MainnetURL, mevCommitURL string, validatorRouterAddress, ProviderRegistryAddress common.Address) (IMevCommitClient, error) {
+	l1Client, err := ethclient.Dial(l1MainnetURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to L1 Mainnet: %w", err)
 	}
 
-	mevCommitClient, err := ethclient.Dial(mevCommitUrl)
+	mevCommitClient, err := ethclient.Dial(mevCommitURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to mev-commit EVM: %w", err)
 	}
@@ -74,8 +77,8 @@ func NewMevCommitClient(l1MainnetUrl, mevCommitUrl string, validatorRouterAddres
 	}
 
 	return &MevCommitClient{
-		L1Address:                  l1MainnetUrl,
-		MevCommitAddress:           mevCommitUrl,
+		L1Address:                  l1MainnetURL,
+		MevCommitAddress:           mevCommitURL,
 		ValidatorRouterAddress:     validatorRouterAddress,
 		ProviderRegistryAddress:    ProviderRegistryAddress,
 		validatorOptInRouterCaller: validatorOptInRouter,

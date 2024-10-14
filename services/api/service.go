@@ -35,7 +35,6 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/metrics"
-	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
@@ -185,8 +184,7 @@ type RelayAPI struct {
 	srvStarted  uberatomic.Bool
 	srvShutdown uberatomic.Bool
 
-	beaconClient    beaconclient.IMultiBeaconClient
-	mevCommitClient mevcommitclient.IMevCommitClient
+	beaconClient beaconclient.IMultiBeaconClient
 
 	datastore *datastore.Datastore
 	redis     *datastore.RedisCache

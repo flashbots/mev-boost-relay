@@ -193,7 +193,7 @@ func (ds *Datastore) SaveMevCommitValidatorRegistration(pubkeyHex common.PubkeyH
 	return nil
 }
 
-// IsMevCommitRegisteredValidator checks if a validator is registered for mev-commit
+// IsMevCommitValidatorRegistered checks if a validator is registered for mev-commit
 func (ds *Datastore) IsMevCommitValidatorRegistered(pubkeyHex common.PubkeyHex) (bool, error) {
 	return ds.redis.IsMevCommitValidatorRegistered(pubkeyHex)
 }
