@@ -475,6 +475,20 @@ func TestSetMevCommitBlockBuilders(t *testing.T) {
 	isSet, err = cache.IsMevCommitBlockBuilder(common.PubkeyHex(nonExistentBuilderPubkey))
 	require.NoError(t, err)
 	require.False(t, isSet)
+
+	// Test removing a registered block builder
+	err = cache.DeleteMevCommitBlockBuilder(common.PubkeyHex(builderPubkey))
+	require.NoError(t, err)
+
+	// Check if the removed builder is no longer registered
+	isSet, err = cache.IsMevCommitBlockBuilder(common.PubkeyHex(builderPubkey))
+	require.NoError(t, err)
+	require.False(t, isSet)
+
+	// Verify the list of mev-commit block builders is now empty
+	builders, err = cache.GetMevCommitBlockBuilders()
+	require.NoError(t, err)
+	require.Empty(t, builders)
 }
 
 // func TestPipeline(t *testing.T) {
