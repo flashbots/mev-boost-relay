@@ -72,7 +72,6 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 				},
 			},
 		},
-		//nolint:dupl
 		{
 			name: "Deneb",
 			reqPayload: &common.VersionedSubmitBlockRequest{
@@ -118,7 +117,6 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 				},
 			},
 		},
-		//nolint:dupl
 		{
 			name: "Electra",
 			reqPayload: &common.VersionedSubmitBlockRequest{
