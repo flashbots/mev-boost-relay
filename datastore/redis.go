@@ -98,7 +98,7 @@ type RedisCache struct {
 	// keys
 	keyValidatorRegistrationTimestamp     string
 	keyMevCommitValidatorRegistrationHash string
-	keyMevCommitBlockBuilder              string // New key for mev-commit block builder array
+	keyMevCommitBlockBuilder              string
 
 	keyRelayConfig        string
 	keyStats              string
@@ -140,7 +140,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 
 		keyValidatorRegistrationTimestamp:     fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
 		keyMevCommitValidatorRegistrationHash: fmt.Sprintf("%s/%s:mev-commit-validator-registration", redisPrefix, prefix),
-		keyMevCommitBlockBuilder:              fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix), // New key for mev-commit block builder array
+		keyMevCommitBlockBuilder:              fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix),
 		keyRelayConfig:                        fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
