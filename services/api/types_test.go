@@ -5,12 +5,14 @@ import (
 
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -122,7 +124,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			reqPayload: &common.VersionedSubmitBlockRequest{
 				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
 					Version: spec.DataVersionElectra,
-					Electra: &builderApiDeneb.SubmitBlockRequest{
+					Electra: &builderApiElectra.SubmitBlockRequest{
 						ExecutionPayload: &deneb.ExecutionPayload{
 							ParentHash:    phase0.Hash32{0x01},
 							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
@@ -145,6 +147,11 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							Commitments: []deneb.KZGCommitment{},
 							Proofs:      []deneb.KZGProof{},
 							Blobs:       []deneb.Blob{},
+						},
+						ExecutionRequests: &electra.ExecutionRequests{
+							Deposits:       []*electra.DepositRequest{},
+							Withdrawals:    []*electra.WithdrawalRequest{},
+							Consolidations: []*electra.ConsolidationRequest{},
 						},
 						Message: &builderApiV1.BidTrace{
 							Slot:                 1,

@@ -6,10 +6,8 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
-	eth2UtilElectra "github.com/attestantio/go-eth2-client/util/electra"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -51,30 +49,6 @@ func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
 	}
 	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: w}
 	return withdrawals.HashTreeRoot()
-}
-
-func ComputeDepositRequestsRoot(d []*electra.DepositRequest) (phase0.Root, error) {
-	if d == nil {
-		return phase0.Root{}, ErrNoDepositRequests
-	}
-	depositRequests := eth2UtilElectra.DepositRequests{DepositRequests: d}
-	return depositRequests.HashTreeRoot()
-}
-
-func ComputeWithdrawalRequestsRoot(e []*electra.WithdrawalRequest) (phase0.Root, error) {
-	if e == nil {
-		return phase0.Root{}, ErrNoWithdrawalRequests
-	}
-	exits := eth2UtilElectra.WithdrawalRequests{WithdrawalRequests: e}
-	return exits.HashTreeRoot()
-}
-
-func ComputeConsolidationRequestsRoot(c []*electra.ConsolidationRequest) (phase0.Root, error) {
-	if c == nil {
-		return phase0.Root{}, nil
-	}
-	consolidations := eth2UtilElectra.ConsolidationRequests{ConsolidationRequests: c}
-	return consolidations.HashTreeRoot()
 }
 
 func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeaconBlock, payload *builderApi.VersionedSubmitBlindedBlockResponse) error {

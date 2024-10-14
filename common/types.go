@@ -12,6 +12,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
@@ -176,16 +177,16 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 func (e *EthNetworkDetails) String() string {
 	return fmt.Sprintf(
 		`EthNetworkDetails{
-	Name: %s, 
-	GenesisForkVersionHex: %s, 
+	Name: %s,
+	GenesisForkVersionHex: %s,
 	GenesisValidatorsRootHex: %s,
-	BellatrixForkVersionHex: %s, 
-	CapellaForkVersionHex: %s, 
+	BellatrixForkVersionHex: %s,
+	CapellaForkVersionHex: %s,
 	DenebForkVersionHex: %s,
 	ElectraForkVersionHex: %s,
-	DomainBuilder: %x, 
-	DomainBeaconProposerBellatrix: %x, 
-	DomainBeaconProposerCapella: %x, 
+	DomainBuilder: %x,
+	DomainBeaconProposerBellatrix: %x,
+	DomainBeaconProposerCapella: %x,
 	DomainBeaconProposerDeneb: %x
 	DomainBeaconProposerElectra: %x
 }`,
@@ -440,6 +441,9 @@ type BlockSubmissionInfo struct {
 	Blobs                      []deneb.Blob
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
+	DepositRequests            []*electra.DepositRequest
+	WithdrawalRequests         []*electra.WithdrawalRequest
+	ConsolidationRequests      []*electra.ConsolidationRequest
 }
 
 /*

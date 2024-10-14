@@ -7,6 +7,7 @@ import (
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
@@ -174,9 +175,10 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			},
 		}, nil
 	case spec.DataVersionElectra:
-		builderBid := builderApiDeneb.BuilderBid{
+		builderBid := builderApiElectra.BuilderBid{
 			Header:             header.Electra,
 			BlobKZGCommitments: payload.Electra.BlobsBundle.Commitments,
+			ExecutionRequests:  payload.Electra.ExecutionRequests,
 			Value:              value,
 			Pubkey:             *pubkey,
 		}
@@ -188,7 +190,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 
 		return &builderSpec.VersionedSignedBuilderBid{
 			Version: spec.DataVersionElectra,
-			Electra: &builderApiDeneb.SignedBuilderBid{
+			Electra: &builderApiElectra.SignedBuilderBid{
 				Message:   &builderBid,
 				Signature: sig,
 			},

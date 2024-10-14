@@ -127,3 +127,6 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
+
+// Remove when go-builder-client is updated.
+replace github.com/attestantio/go-builder-client => github.com/jtraglia/go-builder-client v0.4.6-0.20241014193815-df58bba2ab54
