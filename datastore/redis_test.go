@@ -445,6 +445,7 @@ func TestPipelineNilCheck(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(0), f)
 }
+
 func TestSetMevCommitBlockBuilders(t *testing.T) {
 	cache := setupTestRedis(t)
 
