@@ -2053,7 +2053,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
 		})
 	}
-	// TODO: Need to update this endpoint to reject requests with a unregistered builder pubkey for a target slot
+
 	ok := api.checkSubmissionSlotDetails(w, log, headSlot, payload, submission)
 	if !ok {
 		return
