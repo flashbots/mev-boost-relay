@@ -5,12 +5,14 @@ import (
 
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -22,7 +24,7 @@ import (
 )
 
 func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
-	builderPk, err := utils.HexToPubkey("0xf9716c94aab536227804e859d15207aa7eaaacd839f39dcbdb5adc942842a8d2fb730f9f49fc719fdb86f1873e0ed1c2")
+	builderPk, err := utils.HexToPubkey("0xb872a4f5f596ea7dfd695e45afbe4551b405b10dafba98b2d897c58a5047fc288ef2c1bc4216f906ea05d7fdbed61116")
 	require.NoError(t, err)
 
 	builderSk, err := utils.HexToSignature("0x8209b5391cd69f392b1f02dbc03bab61f574bb6bb54bf87b59e2a85bdc0756f7db6a71ce1b41b727a1f46ccc77b213bf0df1426177b5b29926b39956114421eaa36ec4602969f6f6370a44de44a6bce6dae2136e5fb594cce2a476354264d1ea")
@@ -98,6 +100,56 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 							Commitments: []deneb.KZGCommitment{},
 							Proofs:      []deneb.KZGProof{},
 							Blobs:       []deneb.Blob{},
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot:                 1,
+							ParentHash:           phase0.Hash32{0x01},
+							BlockHash:            phase0.Hash32{0x09},
+							BuilderPubkey:        builderPk,
+							ProposerPubkey:       phase0.BLSPubKey{0x03},
+							ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+							Value:                uint256.NewInt(123),
+							GasLimit:             5002,
+							GasUsed:              5003,
+						},
+						Signature: builderSk,
+					},
+				},
+			},
+		},
+		{
+			name: "Electra",
+			reqPayload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionElectra,
+					Electra: &builderApiElectra.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
+							ParentHash:    phase0.Hash32{0x01},
+							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+							StateRoot:     phase0.Root{0x03},
+							ReceiptsRoot:  phase0.Root{0x04},
+							LogsBloom:     [256]byte{0x05},
+							PrevRandao:    phase0.Hash32{0x06},
+							BlockNumber:   5001,
+							GasLimit:      5002,
+							GasUsed:       5003,
+							Timestamp:     5004,
+							ExtraData:     []byte{0x07},
+							BaseFeePerGas: uint256.NewInt(123),
+							BlockHash:     phase0.Hash32{0x09},
+							Transactions:  []bellatrix.Transaction{},
+							BlobGasUsed:   5005,
+							ExcessBlobGas: 5006,
+						},
+						BlobsBundle: &builderApiDeneb.BlobsBundle{
+							Commitments: []deneb.KZGCommitment{},
+							Proofs:      []deneb.KZGProof{},
+							Blobs:       []deneb.Blob{},
+						},
+						ExecutionRequests: &electra.ExecutionRequests{
+							Deposits:       []*electra.DepositRequest{},
+							Withdrawals:    []*electra.WithdrawalRequest{},
+							Consolidations: []*electra.ConsolidationRequest{},
 						},
 						Message: &builderApiV1.BidTrace{
 							Slot:                 1,

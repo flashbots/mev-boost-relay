@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -166,7 +167,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: fmt.Errorf(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_capella",
@@ -186,7 +187,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: fmt.Errorf(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_deneb",
@@ -464,6 +465,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			backend.relay.optimisticSlot.Store(tc.slot)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			backend.relay.proposerDutiesMap[tc.slot] = backend.relay.proposerDutiesMap[slot]
 
 			randaoHash, err := utils.HexToHash(randao)

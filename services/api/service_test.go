@@ -39,7 +39,7 @@ const (
 	testParentHash      = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
 	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-	testBuilderPubkey   = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	testBuilderPubkey   = "0xb872a4f5f596ea7dfd695e45afbe4551b405b10dafba98b2d897c58a5047fc288ef2c1bc4216f906ea05d7fdbed61116"
 )
 
 var (
@@ -468,6 +468,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			backend.relay.headSlot.Store(headSlot)
 			backend.relay.capellaEpoch = 0
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 5
 			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 				Slot: headSlot,
@@ -900,6 +901,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
+			backend.relay.capellaEpoch = 1
+			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
@@ -1011,6 +1015,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()
