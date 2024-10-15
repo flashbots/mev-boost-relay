@@ -15,6 +15,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/go-redis/redis/v9"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -40,6 +41,8 @@ type Datastore struct {
 	memcached *Memcached
 	db        database.IDatabaseService
 
+	isMevCommitValidatorRegistered *lru.Cache
+
 	knownValidatorsByPubkey   map[common.PubkeyHex]uint64
 	knownValidatorsByIndex    map[uint64]common.PubkeyHex
 	knownValidatorsLock       sync.RWMutex
@@ -51,12 +54,17 @@ type Datastore struct {
 }
 
 func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
+	mevCommitValidatorRegistrationCache, err := lru.New(5)
+	if err != nil {
+		return nil, err
+	}
 	ds = &Datastore{
-		db:                      db,
-		memcached:               memcached,
-		redis:                   redisCache,
-		knownValidatorsByPubkey: make(map[common.PubkeyHex]uint64),
-		knownValidatorsByIndex:  make(map[uint64]common.PubkeyHex),
+		db:                             db,
+		memcached:                      memcached,
+		redis:                          redisCache,
+		knownValidatorsByPubkey:        make(map[common.PubkeyHex]uint64),
+		knownValidatorsByIndex:         make(map[uint64]common.PubkeyHex),
+		isMevCommitValidatorRegistered: mevCommitValidatorRegistrationCache,
 	}
 
 	return ds, err
@@ -195,7 +203,21 @@ func (ds *Datastore) SaveMevCommitValidatorRegistration(pubkeyHex common.PubkeyH
 
 // IsMevCommitValidatorRegistered checks if a validator is registered for mev-commit
 func (ds *Datastore) IsMevCommitValidatorRegistered(pubkeyHex common.PubkeyHex) (bool, error) {
-	return ds.redis.IsMevCommitValidatorRegistered(pubkeyHex)
+	// Check the LRU cache first
+	if registered, ok := ds.isMevCommitValidatorRegistered.Get(pubkeyHex); ok {
+		return registered.(bool), nil
+	}
+
+	// If not in cache, check Redis
+	registered, err := ds.redis.IsMevCommitValidatorRegistered(pubkeyHex)
+	if err != nil {
+		return false, err
+	}
+
+	// Update the LRU cache with the result
+	ds.isMevCommitValidatorRegistered.Add(pubkeyHex, registered)
+
+	return registered, nil
 }
 
 // IsMevCommitBlockBuilder checks if a builder is registered for mev-commit
