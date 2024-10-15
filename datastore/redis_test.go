@@ -453,7 +453,7 @@ func TestSetMevCommitBlockBuilders(t *testing.T) {
 	// Set a commit block builder
 	builder := mevcommitclient.MevCommitProvider{
 		Pubkey:     []byte(builderPubkey),
-		EOAAddress: gethCommon.HexToAddress("0x0000000000000000000000000000000000000000"),
+		EOAAddress: gethCommon.HexToAddress("0x0000000000000000000000000000000000000001"),
 	}
 	err := cache.SetMevCommitBlockBuilder(builder)
 	require.NoError(t, err)
@@ -464,6 +464,7 @@ func TestSetMevCommitBlockBuilders(t *testing.T) {
 	require.Len(t, builders, 1)
 	require.Equal(t, builder, builders[0])
 	require.Equal(t, builderPubkey, string(builders[0].Pubkey))
+	require.Equal(t, gethCommon.HexToAddress("0x0000000000000000000000000000000000000001"), builders[0].EOAAddress)
 
 	// Check if the commit block builder is set correctly
 	isSet, err := cache.IsMevCommitBlockBuilder(common.PubkeyHex(builderPubkey))

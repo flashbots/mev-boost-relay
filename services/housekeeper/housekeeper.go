@@ -73,6 +73,7 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		pprofAPI:              opts.PprofAPI,
 		pprofListenAddress:    opts.PprofListenAddress,
 		proposersAlreadySaved: make(map[uint64]string),
+		mevCommitClient:       opts.MevCommitClient,
 	}
 
 	return server

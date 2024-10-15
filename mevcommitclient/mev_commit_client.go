@@ -105,34 +105,70 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool,
 }
 
 func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error) {
-	startBlock := uint64(0)
-	opts := &bind.WatchOpts{
-		Start:   &startBlock, // Start from the latest block
+	// Get the latest block number from mev-commit-geth
+	latestBlock, err := m.mevCommitClient.BlockNumber(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get latest block number from mev-commit-geth: %w", err)
+	}
+	filterOpts := &bind.FilterOpts{
+		Start:   0,
+		End:     &latestBlock, // Latest block
+		Context: context.Background(),
+	}
+	watchOpts := &bind.WatchOpts{
+		Start:   &latestBlock,
 		Context: context.Background(),
 	}
 	builderRegistryEventCh := make(chan MevCommitProvider)
 	builderUnregisteredEventCh := make(chan common.Address)
 
-	providerRegisteredEventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
-	providerSlashedEventCh := make(chan *providerRegistry.ProviderregistryFundsSlashed)
-
-	providerRegisteredSub, err := m.builderRegistryFilterer.WatchProviderRegistered(opts, providerRegisteredEventCh, nil)
+	providerRegisteredIterator, err := m.builderRegistryFilterer.FilterProviderRegistered(filterOpts, nil)
 	if err != nil {
+		return nil, nil, fmt.Errorf("failed to filter ProviderRegistered events: %w", err)
+	}
+
+	providerRegisteredEventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
+	providerRegisteredSub, err := m.builderRegistryFilterer.WatchProviderRegistered(watchOpts, providerRegisteredEventCh, nil)
+	if err != nil {
+		providerRegisteredIterator.Close()
 		return nil, nil, fmt.Errorf("failed to watch ProviderRegistered events: %w", err)
 	}
 
-	providerSlashedSub, err := m.builderRegistryFilterer.WatchFundsSlashed(opts, providerSlashedEventCh, nil)
+	providerSlashedIterator, err := m.builderRegistryFilterer.FilterFundsSlashed(filterOpts, nil)
 	if err != nil {
+		providerRegisteredIterator.Close()
+		providerRegisteredSub.Unsubscribe()
+		return nil, nil, fmt.Errorf("failed to filter FundsSlashed events: %w", err)
+	}
+
+	providerSlashedEventCh := make(chan *providerRegistry.ProviderregistryFundsSlashed)
+	providerSlashedSub, err := m.builderRegistryFilterer.WatchFundsSlashed(watchOpts, providerSlashedEventCh, nil)
+	if err != nil {
+		providerRegisteredIterator.Close()
+		providerSlashedIterator.Close()
 		providerRegisteredSub.Unsubscribe()
 		return nil, nil, fmt.Errorf("failed to watch ProviderSlashed events: %w", err)
 	}
 
 	go func() {
+		defer providerRegisteredIterator.Close()
 		defer providerRegisteredSub.Unsubscribe()
+
+		for providerRegisteredIterator.Next() {
+			event := providerRegisteredIterator.Event
+			builderRegistryEventCh <- MevCommitProvider{
+				Pubkey:     event.BlsPublicKey,
+				EOAAddress: event.Provider,
+			}
+		}
+		if err := providerRegisteredIterator.Error(); err != nil {
+			fmt.Printf("error while iterating ProviderRegistered events: %v\n", err)
+		}
+
 		for {
 			select {
 			case err := <-providerRegisteredSub.Err():
-				fmt.Printf("error while watching ProviderRegistered events: %v\n", err)
+				fmt.Printf("error in ProviderRegistered subscription: %v\n", err)
 				close(builderRegistryEventCh)
 				return
 			case event := <-providerRegisteredEventCh:
@@ -146,6 +182,23 @@ func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <
 
 	go func() {
 		defer providerSlashedSub.Unsubscribe()
+		defer providerSlashedIterator.Close()
+
+		for providerSlashedIterator.Next() {
+			event := providerSlashedIterator.Event
+			isValid, err := m.IsBuilderValid(event.Provider)
+			if err != nil {
+				fmt.Printf("failed to check if builder is valid: %v\n", err)
+				continue
+			}
+			if !isValid {
+				builderUnregisteredEventCh <- event.Provider
+			}
+		}
+		if err := providerSlashedIterator.Error(); err != nil {
+			fmt.Printf("error while iterating FundsSlashed events: %v\n", err)
+		}
+
 		for {
 			select {
 			case err := <-providerSlashedSub.Err():

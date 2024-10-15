@@ -2,6 +2,7 @@ package mevcommitclient
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -58,4 +59,31 @@ func TestGetOptInStatusForValidators(t *testing.T) {
 	for _, status := range statuses {
 		assert.IsType(t, bool(true), status)
 	}
+}
+
+func TestListenForBuildersEvents(t *testing.T) {
+	client, err := NewMevCommitClient(
+		ethereumL1RPC,
+		"wss://chainrpc-wss.testnet.mev-commit.xyz",
+		common.HexToAddress(validatorOptInRouterAddr),
+		common.HexToAddress(providerRegistryAddr),
+	)
+	require.NoError(t, err)
+
+	builderRegisteredCh, _, err := client.ListenForBuildersEvents()
+	require.NoError(t, err)
+
+	// Start a goroutine to listen for events
+	go func() {
+		select {
+		case _ = <-builderRegisteredCh:
+
+		case <-time.After(10 * time.Second):
+			t.Log("No events received after 10 seconds")
+			t.Fail() // Add this line to fail the test if no events are received
+		}
+	}()
+
+	time.Sleep(15 * time.Second)
+
 }
