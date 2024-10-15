@@ -75,7 +75,7 @@ func TestListenForBuildersEvents(t *testing.T) {
 
 	go func() {
 		select {
-		case _ = <-builderRegisteredCh:
+		case <-builderRegisteredCh:
 		case <-time.After(10 * time.Second):
 			t.Log("No events received after 10 seconds")
 			t.Fail()
