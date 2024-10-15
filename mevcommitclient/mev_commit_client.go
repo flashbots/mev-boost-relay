@@ -105,14 +105,13 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys [][]byte) ([]bool,
 }
 
 func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error) {
-	// Get the latest block number from mev-commit-geth
 	latestBlock, err := m.mevCommitClient.BlockNumber(context.Background())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get latest block number from mev-commit-geth: %w", err)
 	}
 	filterOpts := &bind.FilterOpts{
 		Start:   0,
-		End:     &latestBlock, // Latest block
+		End:     &latestBlock,
 		Context: context.Background(),
 	}
 	watchOpts := &bind.WatchOpts{
