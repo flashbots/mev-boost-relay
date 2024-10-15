@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	mevCommitRPC             = "https://chainrpc.testnet.mev-commit.xyz/"
+	mevCommitRPC             = "wss://chainrpc-wss.testnet.mev-commit.xyz"
 	ethereumL1RPC            = "https://ethereum-holesky-rpc.publicnode.com"
 	providerRegistryAddr     = "0xf4F10e18244d836311508917A3B04694D88999Dd"
 	validatorOptInRouterAddr = "0xCae46e1013D33587180Db5933Abd75D977c2d7ab"
@@ -64,7 +64,7 @@ func TestGetOptInStatusForValidators(t *testing.T) {
 func TestListenForBuildersEvents(t *testing.T) {
 	client, err := NewMevCommitClient(
 		ethereumL1RPC,
-		"wss://chainrpc-wss.testnet.mev-commit.xyz",
+		mevCommitRPC,
 		common.HexToAddress(validatorOptInRouterAddr),
 		common.HexToAddress(providerRegistryAddr),
 	)
@@ -73,7 +73,6 @@ func TestListenForBuildersEvents(t *testing.T) {
 	builderRegisteredCh, _, err := client.ListenForBuildersEvents()
 	require.NoError(t, err)
 
-	// Start a goroutine to listen for events
 	go func() {
 		select {
 		case _ = <-builderRegisteredCh:
