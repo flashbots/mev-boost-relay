@@ -1749,14 +1749,7 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 			return false
 		}
 
-		isValidatorRegistered, err := api.datastore.IsMevCommitValidatorRegistered(common.NewPubkeyHex(duty.Entry.Message.Pubkey.String()))
-		if err != nil {
-			log.WithError(err).Error("Failed to check validator registration")
-			api.RespondError(w, http.StatusInternalServerError, "Internal server error")
-			return false
-		}
-
-		if isValidatorRegistered {
+		if duty.IsMevCommitValidator {
 			isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
 			if err != nil {
 				log.WithError(err).Error("Failed to check builder registration")

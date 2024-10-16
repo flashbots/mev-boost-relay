@@ -25,8 +25,7 @@ var (
 	redisScheme = "redis://"
 	redisPrefix = "boost-relay"
 
-	mevCommitValidatorRegistrationExpiry = 1 * time.Hour
-	expiryBidCache                       = 45 * time.Second
+	expiryBidCache = 45 * time.Second
 
 	RedisConfigFieldPubkey         = "pubkey"
 	RedisStatsFieldLatestSlot      = "latest-slot"
@@ -96,9 +95,8 @@ type RedisCache struct {
 	prefixFloorBidValue               string
 
 	// keys
-	keyValidatorRegistrationTimestamp     string
-	keyMevCommitValidatorRegistrationHash string
-	keyMevCommitBlockBuilder              string
+	keyValidatorRegistrationTimestamp string
+	keyMevCommitBlockBuilder          string
 
 	keyRelayConfig        string
 	keyStats              string
@@ -138,10 +136,9 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixFloorBid:                    fmt.Sprintf("%s/%s:bid-floor", redisPrefix, prefix),                      // prefix:slot_parentHash_proposerPubkey
 		prefixFloorBidValue:               fmt.Sprintf("%s/%s:bid-floor-value", redisPrefix, prefix),                // prefix:slot_parentHash_proposerPubkey
 
-		keyValidatorRegistrationTimestamp:     fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
-		keyMevCommitValidatorRegistrationHash: fmt.Sprintf("%s/%s:mev-commit-validator-registration", redisPrefix, prefix),
-		keyMevCommitBlockBuilder:              fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix),
-		keyRelayConfig:                        fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
+		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
+		keyMevCommitBlockBuilder:          fmt.Sprintf("%s/%s:mev-commit-block-builder", redisPrefix, prefix),
+		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -301,26 +298,6 @@ func (r *RedisCache) DeleteMevCommitBlockBuilder(builderPubkey common.PubkeyHex)
 	ctx := context.Background()
 
 	return r.client.HDel(ctx, r.keyMevCommitBlockBuilder, builderPubkey.String()).Err()
-}
-
-func (r *RedisCache) SetMevCommitValidatorRegistration(proposerPubkey common.PubkeyHex) error {
-	err := r.client.Set(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String(), "1", mevCommitValidatorRegistrationExpiry).Err()
-	if err != nil {
-		return fmt.Errorf("failed to add validator to mev-commit registration: %w", err)
-	}
-	return nil
-}
-
-func (r *RedisCache) IsMevCommitValidatorRegistered(proposerPubkey common.PubkeyHex) (bool, error) {
-	_, err := r.client.Get(context.Background(), r.keyMevCommitValidatorRegistrationHash+":"+proposerPubkey.String()).Result()
-	if err == redis.Nil {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to check mev-commit validator registration: %w", err)
-	}
-
-	return true, nil
 }
 
 func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey common.PubkeyHex, timestamp uint64) error {

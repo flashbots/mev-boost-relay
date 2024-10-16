@@ -73,38 +73,3 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 		})
 	}
 }
-
-func TestMevCommitValidatorRegistration(t *testing.T) {
-	mockDB := &database.MockDB{}
-	ds := setupTestDatastore(t, mockDB)
-	pubkeys := []common.PubkeyHex{
-		common.NewPubkeyHex("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
-		common.NewPubkeyHex("0x2345678901abcdef2345678901abcdef2345678901abcdef2345678901abcdef"),
-		common.NewPubkeyHex("0x3456789012abcdef3456789012abcdef3456789012abcdef3456789012abcdef"),
-		common.NewPubkeyHex("0x4567890123abcdef4567890123abcdef4567890123abcdef4567890123abcdef"),
-		common.NewPubkeyHex("0x5678901234abcdef5678901234abcdef5678901234abcdef5678901234abcdef"),
-		common.NewPubkeyHex("0x6789012345abcdef6789012345abcdef6789012345abcdef6789012345abcdef"),
-	}
-
-	isRegistered, _ := ds.IsMevCommitValidatorRegistered(pubkeys[0])
-	require.False(t, isRegistered)
-
-	// Test saving a validator registration
-	err := ds.SaveMevCommitValidatorRegistration(pubkeys[0])
-	require.NoError(t, err)
-
-	isRegistered, err = ds.IsMevCommitValidatorRegistered(pubkeys[0])
-	require.NoError(t, err)
-	// Stale check should fail since we recently cached the value
-	require.False(t, isRegistered)
-
-	// Add all pubkeys to the cache - this will evict the stale value
-	for _, pubkey := range pubkeys {
-		ds.isMevCommitValidatorRegistered.Add(pubkey.String(), true)
-	}
-
-	// Make sure it's coming from recently cached value
-	isRegistered, err = ds.IsMevCommitValidatorRegistered(pubkeys[0])
-	require.NoError(t, err)
-	require.True(t, isRegistered)
-}

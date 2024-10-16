@@ -103,6 +103,7 @@ func TestRedisProposerDuties(t *testing.T) {
 					Pubkey:       phase0.BLSPubKey{},
 				},
 			},
+			IsMevCommitValidator: true,
 		},
 	}
 	err := cache.SetProposerDuties(duties)
@@ -113,6 +114,9 @@ func TestRedisProposerDuties(t *testing.T) {
 
 	require.Len(t, duties2, 1)
 	require.Equal(t, duties[0].Entry.Message.FeeRecipient, duties2[0].Entry.Message.FeeRecipient)
+	require.Equal(t, duties[0].IsMevCommitValidator, duties2[0].IsMevCommitValidator)
+	require.Equal(t, duties[0].IsMevCommitValidator, true)
+
 }
 
 func TestBuilderBids(t *testing.T) {
