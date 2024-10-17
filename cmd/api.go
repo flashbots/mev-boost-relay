@@ -28,20 +28,22 @@ var (
 	apiDefaultInternalAPIEnabled = os.Getenv("ENABLE_INTERNAL_API") == "1"
 
 	// Default Builder, Data, and Proposer API as true.
-	apiDefaultBuilderAPIEnabled  = os.Getenv("DISABLE_BUILDER_API") != "1"
-	apiDefaultDataAPIEnabled     = os.Getenv("DISABLE_DATA_API") != "1"
-	apiDefaultProposerAPIEnabled = os.Getenv("DISABLE_PROPOSER_API") != "1"
+	apiDefaultBuilderAPIEnabled         = os.Getenv("DISABLE_BUILDER_API") != "1"
+	apiDefaultDataAPIEnabled            = os.Getenv("DISABLE_DATA_API") != "1"
+	apiDefaultProposerAPIEnabled        = os.Getenv("DISABLE_PROPOSER_API") != "1"
+	apiDefaultMevCommitFilteringEnabled = os.Getenv("DISABLE_MEV_COMMIT_FILTERING") != "1"
 
-	apiListenAddr   string
-	apiPprofEnabled bool
-	apiSecretKey    string
-	apiBlockSimURL  string
-	apiDebug        bool
-	apiBuilderAPI   bool
-	apiDataAPI      bool
-	apiInternalAPI  bool
-	apiProposerAPI  bool
-	apiLogTag       string
+	apiMevCommitFiltering bool
+	apiListenAddr         string
+	apiPprofEnabled       bool
+	apiSecretKey          string
+	apiBlockSimURL        string
+	apiDebug              bool
+	apiBuilderAPI         bool
+	apiDataAPI            bool
+	apiInternalAPI        bool
+	apiProposerAPI        bool
+	apiLogTag             string
 )
 
 func init() {
@@ -68,6 +70,7 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiDataAPI, "data-api", apiDefaultDataAPIEnabled, "enable data API (/data/...)")
 	apiCmd.Flags().BoolVar(&apiInternalAPI, "internal-api", apiDefaultInternalAPIEnabled, "enable internal API (/internal/...)")
 	apiCmd.Flags().BoolVar(&apiProposerAPI, "proposer-api", apiDefaultProposerAPIEnabled, "enable proposer API (/proposer/...)")
+	apiCmd.Flags().BoolVar(&apiMevCommitFiltering, "mev-commit-filtering", apiDefaultMevCommitFilteringEnabled, "enable mev-commit-filtering")
 }
 
 var apiCmd = &cobra.Command{
@@ -155,21 +158,21 @@ var apiCmd = &cobra.Command{
 		}
 
 		opts := api.RelayAPIOpts{
-			Log:           log,
-			ListenAddr:    apiListenAddr,
-			BeaconClient:  beaconClient,
-			Datastore:     ds,
-			Redis:         redis,
-			Memcached:     mem,
-			DB:            db,
-			EthNetDetails: *networkInfo,
-			BlockSimURL:   apiBlockSimURL,
-
-			BlockBuilderAPI: apiBuilderAPI,
-			DataAPI:         apiDataAPI,
-			InternalAPI:     apiInternalAPI,
-			ProposerAPI:     apiProposerAPI,
-			PprofAPI:        apiPprofEnabled,
+			Log:                log,
+			ListenAddr:         apiListenAddr,
+			BeaconClient:       beaconClient,
+			Datastore:          ds,
+			Redis:              redis,
+			Memcached:          mem,
+			DB:                 db,
+			EthNetDetails:      *networkInfo,
+			BlockSimURL:        apiBlockSimURL,
+			MevCommitFiltering: apiMevCommitFiltering,
+			BlockBuilderAPI:    apiBuilderAPI,
+			DataAPI:            apiDataAPI,
+			InternalAPI:        apiInternalAPI,
+			ProposerAPI:        apiProposerAPI,
+			PprofAPI:           apiPprofEnabled,
 		}
 
 		// Decode the private key

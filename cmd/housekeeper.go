@@ -5,10 +5,12 @@ import (
 	"os"
 	"strings"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/mevcommitclient"
 	"github.com/flashbots/mev-boost-relay/services/housekeeper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -35,6 +37,11 @@ func init() {
 
 	housekeeperCmd.Flags().BoolVar(&hkPprofEnabled, "pprof", hkDefaultPprofEnabled, "enable pprof API")
 	housekeeperCmd.Flags().StringVar(&hkPprofListenAddr, "pprof-listen-addr", hkDefaultPprofListenAddr, "listen address for pprof server")
+
+	housekeeperCmd.Flags().StringVar(&mevCommitRPC, "mev-commit-rpc", defaultMevCommitRPC, "mev-commit-chain RPC endpoint")
+	housekeeperCmd.Flags().StringVar(&ethereumL1RPC, "ethereum-l1-rpc", defaultEthereumL1RPC, "Ethereum L1 RPC endpoint")
+	housekeeperCmd.Flags().StringVar(&providerRegistryAddr, "provider-registry-addr", defaultProviderRegistryAddr, "mev-commit provider registry contract address")
+	housekeeperCmd.Flags().StringVar(&validatorOptInRouterAddr, "validator-optin-router-addr", defaultValidatorOptInRouterAddr, "mev-commit validator opt-in router contract address")
 }
 
 var housekeeperCmd = &cobra.Command{
@@ -84,6 +91,16 @@ var housekeeperCmd = &cobra.Command{
 			log.WithError(err).Fatalf("Failed to connect to Postgres database at %s%s", dbURL.Host, dbURL.Path)
 		}
 
+		mevCommitClient, err := mevcommitclient.NewMevCommitClient(
+			ethereumL1RPC,
+			mevCommitRPC,
+			gethCommon.HexToAddress(validatorOptInRouterAddr),
+			gethCommon.HexToAddress(providerRegistryAddr),
+		)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to create mev-commit client")
+		}
+
 		opts := &housekeeper.HousekeeperOpts{
 			Log:          log,
 			Redis:        redis,
@@ -92,6 +109,8 @@ var housekeeperCmd = &cobra.Command{
 
 			PprofAPI:           hkPprofEnabled,
 			PprofListenAddress: hkPprofListenAddr,
+
+			MevCommitClient: mevCommitClient,
 		}
 		service := housekeeper.NewHousekeeper(opts)
 		log.Info("Starting housekeeper service...")

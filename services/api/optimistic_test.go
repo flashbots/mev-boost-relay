@@ -90,6 +90,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 		},
 	}
 	backend.relay.opts.BlockBuilderAPI = true
+	backend.relay.opts.MevCommitFiltering = true
 	backend.relay.beaconClient = beaconclient.NewMockMultiBeaconClient()
 	backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{}
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{
@@ -119,6 +120,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	redisTestServer, err := miniredis.Run()
 	require.NoError(t, err)
 	mockRedis, err := datastore.NewRedisCache("", redisTestServer.Addr(), "")
+
 	require.NoError(t, err)
 	mockDS, err := datastore.NewDatastore(mockRedis, nil, mockDB)
 	require.NoError(t, err)

@@ -51,6 +51,7 @@ type Datastore struct {
 }
 
 func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
+
 	ds = &Datastore{
 		db:                      db,
 		memcached:               memcached,
@@ -182,6 +183,11 @@ func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64)
 
 	ds.knownValidatorsByPubkey[pubkeyHex] = index
 	ds.knownValidatorsByIndex[index] = pubkeyHex
+}
+
+// IsMevCommitBlockBuilder checks if a builder is registered for mev-commit
+func (ds *Datastore) IsMevCommitBlockBuilder(builderPubkey common.PubkeyHex) (bool, error) {
+	return ds.redis.IsMevCommitBlockBuilder(builderPubkey)
 }
 
 // SaveValidatorRegistration saves a validator registration into both Redis and the database
