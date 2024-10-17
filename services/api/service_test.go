@@ -904,6 +904,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
+			backend.relay.blockBuildersCache[testBuilderPubkey] = &blockBuilderCacheEntry{
+				mevCommitOptInStatus: true,
+			}
 
 			w := httptest.NewRecorder()
 			logger := logrus.New()
@@ -917,10 +920,13 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 }
 
 func TestCheckSubmissionSlotDetails(t *testing.T) {
+	builderPubkey, err := utils.HexToPubkey(testBuilderPubkey)
+	require.NoError(t, err)
 	cases := []struct {
-		description string
-		payload     *common.VersionedSubmitBlockRequest
-		expectOk    bool
+		description          string
+		payload              *common.VersionedSubmitBlockRequest
+		expectOk             bool
+		mevCommitOptInStatus bool
 	}{
 		{
 			description: "success",
@@ -932,12 +938,14 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 							Timestamp: testSlot * common.SecondsPerSlot,
 						},
 						Message: &builderApiV1.BidTrace{
-							Slot: testSlot,
+							Slot:          testSlot,
+							BuilderPubkey: builderPubkey,
 						},
 					},
 				},
 			},
-			expectOk: true,
+			expectOk:             true,
+			mevCommitOptInStatus: true,
 		},
 		{
 			description: "non_capella_slot",
@@ -1027,6 +1035,10 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 						Pubkey: validatorPubKey,
 					},
 				},
+				IsMevCommitValidator: tc.mevCommitOptInStatus,
+			}
+			backend.relay.blockBuildersCache[testBuilderPubkey] = &blockBuilderCacheEntry{
+				mevCommitOptInStatus: tc.mevCommitOptInStatus,
 			}
 			ok := backend.relay.checkSubmissionSlotDetails(w, log, headSlot, tc.payload, submission)
 			require.Equal(t, tc.expectOk, ok)
@@ -1051,6 +1063,7 @@ func TestCheckBuilderEntry(t *testing.T) {
 				status: common.BuilderStatus{
 					IsHighPrio: true,
 				},
+				mevCommitOptInStatus: true,
 			},
 			pk:       builderPubkey,
 			expectOk: true,
@@ -1090,8 +1103,11 @@ func TestCheckBuilderEntry(t *testing.T) {
 			w := httptest.NewRecorder()
 			logger := logrus.New()
 			log := logrus.NewEntry(logger)
-			_, ok := backend.relay.checkBuilderEntry(w, log, builderPubkey)
+			entry, ok := backend.relay.checkBuilderEntry(w, log, builderPubkey)
 			require.Equal(t, tc.expectOk, ok)
+			if ok {
+				require.Equal(t, tc.entry.mevCommitOptInStatus, entry.mevCommitOptInStatus)
+			}
 		})
 	}
 }

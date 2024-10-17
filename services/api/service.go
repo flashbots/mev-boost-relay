@@ -160,8 +160,9 @@ type blockSimOptions struct {
 }
 
 type blockBuilderCacheEntry struct {
-	status     common.BuilderStatus
-	collateral *big.Int
+	status               common.BuilderStatus
+	collateral           *big.Int
+	mevCommitOptInStatus bool
 }
 
 type blockSimResult struct {
@@ -883,12 +884,17 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 
 	newCache := make(map[string]*blockBuilderCacheEntry)
 	for _, v := range builders {
+		isOptedIntoMevCommit, err := api.datastore.IsMevCommitBlockBuilder(common.PubkeyHex(v.BuilderPubkey))
+		if err != nil {
+			api.log.WithError(err).Errorf("error getting mev-commit opt-in status for builder %s", v.BuilderPubkey)
+		}
 		entry := &blockBuilderCacheEntry{ //nolint:exhaustruct
 			status: common.BuilderStatus{
 				IsHighPrio:    v.IsHighPrio,
 				IsBlacklisted: v.IsBlacklisted,
 				IsOptimistic:  v.IsOptimistic,
 			},
+			mevCommitOptInStatus: isOptedIntoMevCommit,
 		}
 		// Try to parse builder collateral string to big int.
 		builderCollateral, ok := big.NewInt(0).SetString(v.Collateral, 10)
@@ -1748,17 +1754,21 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 			api.RespondError(w, http.StatusBadRequest, "no duty found for submission slot")
 			return false
 		}
-
 		if duty.IsMevCommitValidator {
-			isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
-			if err != nil {
-				log.WithError(err).Error("Failed to check builder registration")
-				api.RespondError(w, http.StatusInternalServerError, "Internal server error")
-				return false
-			}
-			if !isBuilderRegistered {
-				// TODO: Implement caching strategy for builder registration status
-				api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
+			builderCacheEntry, ok := api.blockBuildersCache[submission.BidTrace.BuilderPubkey.String()]
+			if !ok {
+				isBuilderRegistered, err := api.datastore.IsMevCommitBlockBuilder(common.NewPubkeyHex(submission.BidTrace.BuilderPubkey.String()))
+				if err != nil {
+					log.WithError(err).Error("Failed to check builder registration")
+					api.RespondError(w, http.StatusInternalServerError, "Internal server error")
+					return false
+				}
+				if !isBuilderRegistered {
+					api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not registered under mev-commit")
+					return false
+				}
+			} else if !builderCacheEntry.mevCommitOptInStatus {
+				api.RespondError(w, http.StatusBadRequest, "Builder pubkey is not opted into mev-commit")
 				return false
 			}
 		}
