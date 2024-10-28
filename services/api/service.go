@@ -1104,15 +1104,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Ensure a valid timestamp (not too early, and not too far in the future)
 		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
 		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) {
-
-			// TODO: Remove this log after figuring out Lodestar issue
-			regLog = regLog.WithFields(logrus.Fields{
-				"registrationTimestamp": registrationTimestamp,
-				"genesisTime":           int64(api.genesisInfo.Data.GenesisTime),
-				"genesisTimePreCast":    api.genesisInfo.Data.GenesisTime,
-			})
-			regLog.Warn("XXX: timestamp too early")
-
 			handleError(regLog, http.StatusBadRequest, "timestamp too early")
 			return
 		} else if registrationTimestamp > registrationTimestampUpperBound {
