@@ -159,6 +159,7 @@ func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <
 
 		for providerRegisteredIterator.Next() {
 			event := providerRegisteredIterator.Event
+			// TODO: when event.BLSPublicKey becomes array of public keys do a for loop here
 			builderRegistryEventCh <- MevCommitProvider{
 				Pubkey:     event.BlsPublicKey,
 				EOAAddress: event.Provider,
@@ -175,6 +176,9 @@ func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <
 				close(builderRegistryEventCh)
 				return
 			case event := <-providerRegisteredEventCh:
+				// TODO: when event.BLSPublicKey becomes array of public keys do a for loop here
+				// for now, we only have one public key per builder
+				// and the event.Provider is the EOA address
 				builderRegistryEventCh <- MevCommitProvider{
 					Pubkey:     event.BlsPublicKey,
 					EOAAddress: event.Provider,
