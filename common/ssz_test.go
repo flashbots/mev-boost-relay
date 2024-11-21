@@ -3,7 +3,6 @@ package common
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"testing"
 
@@ -36,7 +35,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// json matches marshalled SSZ
-			jsonBytes := LoadGzippedBytes(t, fmt.Sprintf("%s.json.gz", testCase.filepath))
+			jsonBytes := LoadGzippedBytes(t, testCase.filepath+".json.gz")
 
 			submitBlockData := new(VersionedSubmitBlockRequest)
 			err := json.Unmarshal(jsonBytes, &submitBlockData)
@@ -46,7 +45,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 			marshalledSszBytes, err := submitBlockData.MarshalSSZ()
 			require.NoError(t, err)
 
-			sszBytes := LoadGzippedBytes(t, fmt.Sprintf("%s.ssz.gz", testCase.filepath))
+			sszBytes := LoadGzippedBytes(t, testCase.filepath+".ssz.gz")
 			require.Equal(t, sszBytes, marshalledSszBytes)
 
 			htr, err := submitBlockData.HashTreeRoot()
@@ -91,7 +90,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			// json -> marshalled ssz -> matches expected ssz
 			payload := new(builderSpec.VersionedSignedBuilderBid)
 
-			jsonBytes, err := os.ReadFile(fmt.Sprintf("%s.json", testCase.filepath))
+			jsonBytes, err := os.ReadFile(testCase.filepath + ".json")
 			require.NoError(t, err)
 
 			err = json.Unmarshal(jsonBytes, &payload)
@@ -109,7 +108,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 				require.Fail(t, "unknown version")
 			}
 
-			sszExpectedBytes, err := os.ReadFile(fmt.Sprintf("%s.ssz", testCase.filepath))
+			sszExpectedBytes, err := os.ReadFile(testCase.filepath + ".ssz")
 			require.NoError(t, err)
 			require.Equal(t, sszExpectedBytes, ssz)
 
