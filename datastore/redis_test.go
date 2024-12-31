@@ -335,7 +335,7 @@ func Test_CheckAndSetLastSlotAndHashDeliveredForTesting(t *testing.T) {
 	syncWG := sync.WaitGroup{}
 
 	// Kick off goroutines, that will all try to set the same slot
-	for i := 0; i < n; i++ {
+	for range n {
 		syncWG.Add(1)
 		go func() {
 			errC <- _CheckAndSetLastSlotAndHashDeliveredForTesting(cache, waitC, &syncWG, newSlot, hash)

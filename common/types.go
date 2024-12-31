@@ -529,7 +529,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 			return err
 		}
 		s.Withdrawals = make([]*capella.Withdrawal, num)
-		for ii := 0; ii < num; ii++ {
+		for ii := range num {
 			if s.Withdrawals[ii] == nil {
 				s.Withdrawals[ii] = new(capella.Withdrawal)
 			}
@@ -615,7 +615,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 
 	// Offset (3) 'Transactions'
 	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		offset += 4
 		offset += len(s.Transactions[ii])
 	}
@@ -635,12 +635,12 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 	}
 	{
 		offset = 4 * len(s.Transactions)
-		for ii := 0; ii < len(s.Transactions); ii++ {
+		for ii := range s.Transactions {
 			dst = ssz.WriteOffset(dst, offset)
 			offset += len(s.Transactions[ii])
 		}
 	}
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		if size := len(s.Transactions[ii]); size > 1073741824 {
 			err = ssz.ErrBytesLengthFn("SubmitBlockRequestV2Optimistic.Transactions[ii]", size, 1073741824)
 			return nil, err
@@ -653,7 +653,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Withdrawals", size, 16)
 		return nil, err
 	}
-	for ii := 0; ii < len(s.Withdrawals); ii++ {
+	for ii := range s.Withdrawals {
 		if dst, err = s.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
 			return nil, err
 		}
@@ -672,7 +672,7 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 	size += s.ExecutionPayloadHeader.SizeSSZ()
 
 	// Field (3) 'Transactions'
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		size += 4
 		size += len(s.Transactions[ii])
 	}
