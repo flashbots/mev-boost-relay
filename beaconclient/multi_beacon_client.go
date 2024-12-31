@@ -237,7 +237,7 @@ func (c *MultiBeaconClient) beaconInstancesByLastResponse() []IBeaconInstance {
 func (c *MultiBeaconClient) beaconInstancesByLeastUsed() []IBeaconInstance {
 	beaconInstances := c.beaconInstancesByLastResponse()
 	instances := make([]IBeaconInstance, len(c.beaconInstances))
-	for i := 0; i < len(beaconInstances); i++ {
+	for i := range beaconInstances {
 		instances[i] = beaconInstances[len(beaconInstances)-i-1]
 	}
 	return instances
@@ -285,7 +285,7 @@ func (c *MultiBeaconClient) PublishBlock(block *common.VersionedSignedProposal) 
 	}
 
 	var lastErrPublishResp publishResp
-	for i := 0; i < len(clients); i++ {
+	for range clients {
 		res := <-resChans
 		log = log.WithField("beacon", clients[res.index].GetPublishURI())
 		if res.err != nil {
