@@ -206,7 +206,6 @@ func (hk *Housekeeper) monitorMevCommitBuilderRegistrations() {
 					if err != nil {
 						hk.log.WithError(err).Errorf("failed to delete mev-commit block builder %s", builderAddress)
 					}
-					break
 				}
 			}
 		}

@@ -105,7 +105,17 @@ func (m *MevCommitClient) GetOptInStatusForValidators(pubkeys []string) ([]bool,
 		pubkeysBytes[i] = common.Hex2Bytes(strings.TrimPrefix(pubkey, "0x"))
 	}
 
-	return m.validatorOptInRouterCaller.AreValidatorsOptedIn(opts, pubkeysBytes)
+	optInStatuses, err := m.validatorOptInRouterCaller.AreValidatorsOptedIn(opts, pubkeysBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get opt-in status: %w", err)
+	}
+
+	isOptedIn := make([]bool, len(optInStatuses))
+	for i, status := range optInStatuses {
+		isOptedIn[i] = status.IsAvsOptedIn || status.IsVanillaOptedIn || status.IsMiddlewareOptedIn
+	}
+
+	return isOptedIn, nil
 }
 
 func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <-chan common.Address, error) {
@@ -125,13 +135,13 @@ func (m *MevCommitClient) ListenForBuildersEvents() (<-chan MevCommitProvider, <
 	builderRegistryEventCh := make(chan MevCommitProvider)
 	builderUnregisteredEventCh := make(chan common.Address)
 
-	providerRegisteredIterator, err := m.builderRegistryFilterer.FilterProviderRegistered(filterOpts, nil)
+	providerRegisteredIterator, err := m.builderRegistryFilterer.FilterBLSKeyAdded(filterOpts, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to filter ProviderRegistered events: %w", err)
 	}
 
-	providerRegisteredEventCh := make(chan *providerRegistry.ProviderregistryProviderRegistered)
-	providerRegisteredSub, err := m.builderRegistryFilterer.WatchProviderRegistered(watchOpts, providerRegisteredEventCh, nil)
+	providerRegisteredEventCh := make(chan *providerRegistry.ProviderregistryBLSKeyAdded)
+	providerRegisteredSub, err := m.builderRegistryFilterer.WatchBLSKeyAdded(watchOpts, providerRegisteredEventCh, nil)
 	if err != nil {
 		providerRegisteredIterator.Close()
 		return nil, nil, fmt.Errorf("failed to watch ProviderRegistered events: %w", err)
