@@ -12,8 +12,8 @@ import (
 const (
 	mevCommitRPC             = "wss://chainrpc-wss.testnet.mev-commit.xyz"
 	ethereumL1RPC            = "https://ethereum-holesky-rpc.publicnode.com"
-	providerRegistryAddr     = "0xf4F10e18244d836311508917A3B04694D88999Dd"
-	validatorOptInRouterAddr = "0xCae46e1013D33587180Db5933Abd75D977c2d7ab"
+	providerRegistryAddr     = "0x1C2a592950E5dAd49c0E2F3A402DCF496bdf7b67"
+	validatorOptInRouterAddr = "0x251Fbc993f58cBfDA8Ad7b0278084F915aCE7fc3"
 )
 
 func TestNewMevCommitClient(t *testing.T) {
