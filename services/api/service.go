@@ -602,11 +602,6 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
 func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (blockValue *uint256.Int, requestErr, validationErr error) {
 	t := time.Now()
-
-	// TODO: Remove when Reth adds validateBuilderSubmissionV4
-	opts.log.Warn("skipping block simulation")
-	return nil, nil, nil
-
 	response, requestErr, validationErr := api.blockSimRateLimiter.Send(ctx, opts.req, opts.isHighPrio, opts.fastTrack)
 	log := opts.log.WithFields(logrus.Fields{
 		"durationMs": time.Since(t).Milliseconds(),
