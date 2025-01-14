@@ -1,10 +1,12 @@
 package mevcommitclient
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,12 +18,20 @@ const (
 	validatorOptInRouterAddr = "0x251Fbc993f58cBfDA8Ad7b0278084F915aCE7fc3"
 )
 
+func setupTestLogger() *logrus.Entry {
+	logger := logrus.New()
+	logger.SetLevel(logrus.DebugLevel)
+	return logger.WithField("test", true)
+}
+
 func TestNewMevCommitClient(t *testing.T) {
+	log := setupTestLogger()
 	client, err := NewMevCommitClient(
 		ethereumL1RPC,
 		mevCommitRPC,
 		common.HexToAddress(validatorOptInRouterAddr),
 		common.HexToAddress(providerRegistryAddr),
+		log,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, client)
@@ -33,14 +43,17 @@ func TestNewMevCommitClient(t *testing.T) {
 	assert.Equal(t, mevCommitRPC, mevClient.MevCommitAddress)
 	assert.Equal(t, common.HexToAddress(validatorOptInRouterAddr), mevClient.ValidatorRouterAddress)
 	assert.Equal(t, common.HexToAddress(providerRegistryAddr), mevClient.ProviderRegistryAddress)
+	assert.NotNil(t, mevClient.log)
 }
 
 func TestGetOptInStatusForValidators(t *testing.T) {
+	log := setupTestLogger()
 	client, err := NewMevCommitClient(
 		ethereumL1RPC,
 		mevCommitRPC,
 		common.HexToAddress(validatorOptInRouterAddr),
 		common.HexToAddress(providerRegistryAddr),
+		log,
 	)
 	require.NoError(t, err)
 	// Test with some sample public keys
@@ -60,37 +73,98 @@ func TestGetOptInStatusForValidators(t *testing.T) {
 	}
 }
 
-func TestListenForBuildersEvents(t *testing.T) {
+func TestListenForBuildersEventsForever(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test in short mode")
+	}
+
+	log := setupTestLogger()
 	client, err := NewMevCommitClient(
 		ethereumL1RPC,
 		mevCommitRPC,
 		common.HexToAddress(validatorOptInRouterAddr),
 		common.HexToAddress(providerRegistryAddr),
+		log,
 	)
 	require.NoError(t, err)
 
-	builderRegisteredCh, _, err := client.ListenForBuildersEvents()
+	builderRegisteredCh, builderUnregisteredCh, err := client.ListenForBuildersEvents()
 	require.NoError(t, err)
 
+	// Create a context with cancel to allow clean shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create channels to track events
+	registeredBuilders := make(map[common.Address][]byte)
+	unregisteredBuilders := make(map[common.Address]bool)
+
+	// Start goroutine to handle events
 	go func() {
-		select {
-		case <-builderRegisteredCh:
-		case <-time.After(10 * time.Second):
-			t.Log("No events received after 10 seconds")
-			t.Fail()
+		for {
+			select {
+			case builder := <-builderRegisteredCh:
+				t.Logf("Builder registered - Address: %v, BLS Key: %x", builder.EOAAddress, builder.Pubkey)
+				registeredBuilders[builder.EOAAddress] = builder.Pubkey
+			case address := <-builderUnregisteredCh:
+				t.Logf("Builder unregistered - Address: %v", address)
+				unregisteredBuilders[address] = true
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
-	time.Sleep(15 * time.Second)
+	// Let it run for a while
+	time.Sleep(1200 * time.Second)
 
+	t.Logf("Total registered builders: %d", len(registeredBuilders))
+	t.Logf("Total unregistered builders: %d", len(unregisteredBuilders))
 }
 
-func TestGetOptInStatusForSpecificValidator(t *testing.T) {
+func TestListenForBuildersEvents(t *testing.T) {
+	log := setupTestLogger()
 	client, err := NewMevCommitClient(
 		ethereumL1RPC,
 		mevCommitRPC,
 		common.HexToAddress(validatorOptInRouterAddr),
 		common.HexToAddress(providerRegistryAddr),
+		log,
+	)
+	require.NoError(t, err)
+
+	builderRegisteredCh, builderUnregisteredCh, err := client.ListenForBuildersEvents()
+	require.NoError(t, err)
+
+	// Create a channel to signal when we receive an event
+	eventReceived := make(chan struct{})
+
+	go func() {
+		select {
+		case builder := <-builderRegisteredCh:
+			t.Logf("Builder registered - Address: %v", builder)
+			eventReceived <- struct{}{}
+		case address := <-builderUnregisteredCh:
+			t.Logf("Builder unregistered - Address: %v", address)
+			eventReceived <- struct{}{}
+		case <-time.After(10 * time.Second):
+			t.Error("Timeout waiting for builder event")
+			eventReceived <- struct{}{}
+		}
+	}()
+
+	// Wait for one event
+	<-eventReceived
+}
+
+func TestGetOptInStatusForSpecificValidator(t *testing.T) {
+	log := setupTestLogger()
+	client, err := NewMevCommitClient(
+		ethereumL1RPC,
+		mevCommitRPC,
+		common.HexToAddress(validatorOptInRouterAddr),
+		common.HexToAddress(providerRegistryAddr),
+		log,
 	)
 	require.NoError(t, err)
 

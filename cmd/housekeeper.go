@@ -96,6 +96,7 @@ var housekeeperCmd = &cobra.Command{
 			mevCommitRPC,
 			gethCommon.HexToAddress(validatorOptInRouterAddr),
 			gethCommon.HexToAddress(providerRegistryAddr),
+			log,
 		)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to create mev-commit client")
