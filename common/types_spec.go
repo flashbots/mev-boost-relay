@@ -365,7 +365,6 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
 		})
 	case spec.DataVersionElectra:
-		// Electra uses the same ExecutionPayload as Deneb
 		return json.Marshal(&electraBuilderBlockValidationRequestJSON{
 			Message:               r.Electra.Message,
 			ExecutionPayload:      r.Electra.ExecutionPayload,
@@ -403,6 +402,12 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
+	electraRequest := new(builderApiElectra.SubmitBlockRequest)
+	if err = electraRequest.UnmarshalSSZ(input); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraRequest
+		return nil
+	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = denebRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionDeneb
