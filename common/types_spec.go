@@ -336,6 +336,16 @@ type denebBuilderBlockValidationRequestJSON struct {
 	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
 }
 
+type electraBuilderBlockValidationRequestJSON struct {
+	Message               *builderApiV1.BidTrace       `json:"message"`
+	ExecutionPayload      *deneb.ExecutionPayload      `json:"execution_payload"`
+	BlobsBundle           *builderApiDeneb.BlobsBundle `json:"blobs_bundle"`
+	ExecutionRequests     *electra.ExecutionRequests   `json:"execution_requests"`
+	Signature             string                       `json:"signature"`
+	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
+	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
+}
+
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 	switch r.Version { //nolint:exhaustive
 	case spec.DataVersionCapella:
@@ -356,10 +366,11 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 		})
 	case spec.DataVersionElectra:
 		// Electra uses the same ExecutionPayload as Deneb
-		return json.Marshal(&denebBuilderBlockValidationRequestJSON{
+		return json.Marshal(&electraBuilderBlockValidationRequestJSON{
 			Message:               r.Electra.Message,
 			ExecutionPayload:      r.Electra.ExecutionPayload,
 			BlobsBundle:           r.Electra.BlobsBundle,
+			ExecutionRequests:     r.Electra.ExecutionRequests,
 			Signature:             r.Electra.Signature.String(),
 			RegisteredGasLimit:    r.RegisteredGasLimit,
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
