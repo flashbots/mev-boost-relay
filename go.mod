@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
-	github.com/attestantio/go-builder-client v0.5.1-0.20241014215920-ba44f1de4249
+	github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb
 	github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
@@ -127,7 +127,3 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
-
-// TODO: Remove when this PR has been merged:
-// https://github.com/attestantio/go-builder-client/pull/35
-replace github.com/attestantio/go-builder-client => github.com/jtraglia/go-builder-client v0.4.6-0.20250120191512-f314deb5dcc8
