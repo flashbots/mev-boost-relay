@@ -437,6 +437,12 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
+	electraRequest := new(builderApiElectra.SubmitBlockRequest)
+	if err = json.Unmarshal(input, electraRequest); err == nil {
+		r.Version = spec.DataVersionElectra
+		r.Electra = electraRequest
+		return nil
+	}
 	denebRequest := new(builderApiDeneb.SubmitBlockRequest)
 	if err = json.Unmarshal(input, denebRequest); err == nil {
 		r.Version = spec.DataVersionDeneb

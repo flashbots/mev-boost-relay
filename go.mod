@@ -127,3 +127,7 @@ retract (
 	v1.0.0-alpha2
 	v1.0.0-alpha1
 )
+
+// TODO: Remove when this PR has been merged:
+// https://github.com/attestantio/go-builder-client/pull/35
+replace github.com/attestantio/go-builder-client => github.com/jtraglia/go-builder-client v0.4.6-0.20250120191512-f314deb5dcc8
