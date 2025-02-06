@@ -83,7 +83,7 @@ type PayloadAttributes struct {
 }
 
 func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", c.beaconURI)
+	eventsURL := c.beaconURI + "/eth/v1/events?topics=head"
 	log := c.log.WithField("url", eventsURL)
 	log.Info("subscribing to head events")
 
@@ -109,7 +109,7 @@ func (c *ProdBeaconInstance) SubscribeToHeadEvents(slotC chan HeadEventData) {
 }
 
 func (c *ProdBeaconInstance) SubscribeToPayloadAttributesEvents(payloadAttributesC chan PayloadAttributesEvent) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", c.beaconURI)
+	eventsURL := c.beaconURI + "/eth/v1/events?topics=payload_attributes"
 	log := c.log.WithField("url", eventsURL)
 	log.Info("subscribing to payload_attributes events")
 
@@ -235,7 +235,7 @@ type GetHeaderResponseMessage struct {
 
 // GetHeader returns the latest header - https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockHeader
 func (c *ProdBeaconInstance) GetHeader() (*GetHeaderResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v1/beacon/headers/head", c.beaconURI)
+	uri := c.beaconURI + "/eth/v1/beacon/headers/head"
 	resp := new(GetHeaderResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
 	return resp, err
@@ -260,7 +260,7 @@ func (c *ProdBeaconInstance) GetPublishURI() string {
 func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error) {
 	var uri string
 	if c.ffUseV1PublishBlockEndpoint {
-		uri = fmt.Sprintf("%s/eth/v1/beacon/blocks", c.beaconPublishURI)
+		uri = c.beaconPublishURI + "/eth/v1/beacon/blocks"
 	} else {
 		uri = fmt.Sprintf("%s/eth/v2/beacon/blocks?broadcast_validation=%s", c.beaconPublishURI, broadcastMode)
 	}
@@ -311,7 +311,7 @@ type GetGenesisResponseData struct {
 
 // GetGenesis returns the genesis info - https://ethereum.github.io/beacon-APIs/#/Beacon/getGenesis
 func (c *ProdBeaconInstance) GetGenesis() (*GetGenesisResponse, error) {
-	uri := fmt.Sprintf("%s/eth/v1/beacon/genesis", c.beaconURI)
+	uri := c.beaconURI + "/eth/v1/beacon/genesis"
 	resp := new(GetGenesisResponse)
 	_, err := fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
 	return resp, err
@@ -328,7 +328,7 @@ type GetSpecResponse struct {
 
 // GetSpec - https://ethereum.github.io/beacon-APIs/#/Config/getSpec
 func (c *ProdBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
-	uri := fmt.Sprintf("%s/eth/v1/config/spec", c.beaconURI)
+	uri := c.beaconURI + "/eth/v1/config/spec"
 	resp := new(GetSpecResponse)
 	_, err = fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
 	return resp, err
@@ -344,7 +344,7 @@ type GetForkScheduleResponse struct {
 
 // GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
 func (c *ProdBeaconInstance) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
-	uri := fmt.Sprintf("%s/eth/v1/config/fork_schedule", c.beaconURI)
+	uri := c.beaconURI + "/eth/v1/config/fork_schedule"
 	resp := new(GetForkScheduleResponse)
 	_, err = fetchBeacon(http.MethodGet, uri, nil, resp, nil, http.Header{}, false)
 	return resp, err

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +39,7 @@ const (
 
 var (
 	feeRecipient = bellatrix.ExecutionAddress{0x02}
-	errFake      = fmt.Errorf("foo error")
+	errFake      = errors.New("foo error")
 )
 
 func getTestBidTrace(pubkey phase0.BLSPubKey, value, slot uint64) *common.BidTraceV2WithBlobFields {
@@ -172,7 +171,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "missing_trie_node_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
 		},
 		{
 			description: "success_deneb",
@@ -192,7 +191,7 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "missing_trie_node_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
 		},
 	}
 	for _, tc := range cases {

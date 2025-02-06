@@ -52,7 +52,7 @@ func fetchBeacon(method, url string, payload []byte, dst any, httpClient *http.C
 	for k, v := range headers {
 		req.Header.Add(k, v[0])
 	}
-	req.Header.Set("accept", "application/json")
+	req.Header.Set("Accept", "application/json")
 
 	client := http.DefaultClient
 	if httpClient != nil {

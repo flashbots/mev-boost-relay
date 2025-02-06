@@ -468,7 +468,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 		// Start the validator registration db-save processor
 		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
-		for i := 0; i < numValidatorRegProcessors; i++ {
+		for range numValidatorRegProcessors {
 			go api.startValidatorRegistrationDBProcessor()
 		}
 	}
@@ -1132,7 +1132,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			if api.ffRegValContinueOnInvalidSig {
 				return
 			} else {
-				handleError(regLog, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String())
 				return
 			}
 		}

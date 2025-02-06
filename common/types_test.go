@@ -95,10 +95,10 @@ func compareV2RequestEquality(t *testing.T, src, targ *SubmitBlockRequestV2Optim
 	require.Equal(t, src.Message.String(), targ.Message.String())
 	require.Equal(t, src.ExecutionPayloadHeader.String(), targ.ExecutionPayloadHeader.String())
 	require.Equal(t, src.Signature, targ.Signature)
-	for i := 0; i < len(src.Transactions); i++ {
+	for i := range src.Transactions {
 		require.Equal(t, src.Transactions[i], targ.Transactions[i])
 	}
-	for i := 0; i < len(src.Withdrawals); i++ {
+	for i := range src.Withdrawals {
 		require.Equal(t, src.Withdrawals[i].String(), targ.Withdrawals[i].String())
 	}
 }

@@ -8,7 +8,7 @@ require (
 	github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb
 	github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
-	github.com/btcsuite/btcd/btcutil v1.1.2
+	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.14.9
 	github.com/flashbots/go-boost-utils v1.8.2-0.20240925223941-58709124077d
@@ -32,7 +32,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.25.0
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
-	golang.org/x/text v0.15.0
+	golang.org/x/text v0.21.0
 )
 
 require (
@@ -80,7 +80,7 @@ require (
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	go.opentelemetry.io/otel/trace v1.25.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
@@ -88,9 +88,9 @@ require (
 
 require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
-	github.com/btcsuite/btcd v0.23.0 // indirect
+	github.com/btcsuite/btcd v0.24.2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 // indirect
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
@@ -111,9 +111,9 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -14,12 +14,12 @@ linters:
     - gomnd
     - lll
     - musttag
+    - mnd
     - nestif
     - nilnil
     - nlreturn
     - noctx
     - nonamedreturns
-    - nosnakecase
     - paralleltest
     - revive
     - testpackage
@@ -27,8 +27,6 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-    - deadcode
-    - varcheck
     - interfacebloat
     - exhaustruct
 
@@ -38,18 +36,12 @@ linters:
     - contextcheck
     - rowserrcheck
     - sqlclosecheck
-    - structcheck
     - wastedassign
 
     #
     # Disabled because deprecated:
     #
-    - exhaustivestruct
-    - golint
-    - ifshort
-    - interfacer
-    - maligned
-    - scopelint
+    - execinquery
 
 linters-settings:
   #
