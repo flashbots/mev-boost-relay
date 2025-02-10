@@ -1358,15 +1358,16 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
-
+	
 	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
 	if !RequestAcceptsJSON(req) {
 		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
 		return
 	}
 
-	// future updates will allow SSZ but for now we only
-	// allow JSON request bodies.
+	// If the Content-Type header is included, for now only allow JSON.
+	// TODO: support Content-Type: application/octet-stream and allow SSZ
+	// request bodies.
 	if ct := req.Header.Get("Content-Type"); ct != "" {
 		switch ct {
 		case "application/json":
