@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/aohorodnyk/mimeheader"
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -930,6 +931,46 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+const (
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
+)
+
+// RequestAcceptsJSON returns true if the Accept header is empty (defaults to JSON)
+// or application/json can be negotiated.
+func RequestAcceptsJSON(req *http.Request) bool {
+	ah := req.Header.Get("Accept")
+	if ah == "" {
+		return true
+	}
+	mh := mimeheader.ParseAcceptHeader(ah)
+	_, _, matched := mh.Negotiate(
+		[]string{ApplicationJSON},
+		ApplicationJSON,
+	)
+	return matched
+}
+
+// NegotiateRequestResponseType returns whether the request accepts
+// JSON (application/json) or SSZ (application/octet-stream) responses.
+// If accepted is false, no mime type could be negotiated and the server
+// should respond with http.StatusNotAcceptable.
+func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
+	ah := req.Header.Get("Accept")
+	if ah == "" {
+		return ApplicationJSON, nil
+	}
+	mh := mimeheader.ParseAcceptHeader(ah)
+	_, mimeType, matched := mh.Negotiate(
+		[]string{ApplicationJSON, ApplicationOctetStream},
+		ApplicationJSON,
+	)
+	if !matched {
+		return "", ErrNotAcceptable
+	}
+	return mimeType, nil
+}
+
 // ---------------
 //  PROPOSER APIS
 // ---------------
@@ -1205,6 +1246,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
+	if !RequestAcceptsJSON(req) {
+		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
+		return
+	}
+
 	log.Debug("getHeader request received")
 	defer func() {
 		metrics.GetHeaderLatencyHistogram.Record(
@@ -1311,6 +1358,24 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
+
+	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
+	if !RequestAcceptsJSON(req) {
+		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
+		return
+	}
+
+	// future updates will allow SSZ but for now we only
+	// allow JSON request bodies.
+	if ct := req.Header.Get("Content-Type"); ct != "" {
+		switch ct {
+		case "application/json":
+			break
+		default:
+			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
+			return
+		}
+	}
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
