@@ -1358,7 +1358,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
-	
+
 	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
 	if !RequestAcceptsJSON(req) {
 		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
