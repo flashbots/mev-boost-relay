@@ -218,6 +218,7 @@ type RelayAPI struct {
 	ffEnableCancellations        bool // whether to enable block builder cancellations
 	ffRegValContinueOnInvalidSig bool // whether to continue processing further validators if one fails
 	ffIgnorableValidationErrors  bool // whether to enable ignorable validation errors
+	ffIgnoreAllValidationErrors  bool // whether to ignore all validation errors
 
 	payloadAttributes     map[string]payloadAttributesHelper // key:parentBlockHash
 	payloadAttributesLock sync.RWMutex
@@ -335,6 +336,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	if os.Getenv("ENABLE_IGNORABLE_VALIDATION_ERRORS") == "1" {
 		api.log.Warn("env: ENABLE_IGNORABLE_VALIDATION_ERRORS - some validation errors will be ignored")
 		api.ffIgnorableValidationErrors = true
+	}
+
+	if os.Getenv("ENABLE_IGNORE_ALL_VALIDATION_ERRORS") == "1" {
+		api.log.Warn("env: ENABLE_IGNORE_ALL_VALIDATION_ERRORS - all validation errors will be ignored")
+		api.ffIgnoreAllValidationErrors = true
 	}
 
 	return api, nil
@@ -608,10 +614,10 @@ func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (b
 		"numWaiting": api.blockSimRateLimiter.CurrentCounter(),
 	})
 	if validationErr != nil {
-		if api.ffIgnorableValidationErrors {
+		if api.ffIgnorableValidationErrors || api.ffIgnoreAllValidationErrors {
 			// Operators chooses to ignore certain validation errors
 			ignoreError := validationErr.Error() == ErrBlockAlreadyKnown || validationErr.Error() == ErrBlockRequiresReorg || strings.Contains(validationErr.Error(), ErrMissingTrieNode)
-			if ignoreError {
+			if ignoreError || api.ffIgnoreAllValidationErrors {
 				log.WithError(validationErr).Warn("block validation failed with ignorable error")
 				return nil, nil, nil
 			}
