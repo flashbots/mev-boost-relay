@@ -1252,6 +1252,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Debug("Requesting best bid for slot: %v, parentHash: %v, proposerPubkey: %v", slot, parentHashHex, proposerPubkeyHex)
 	bid, err := api.redis.GetBestBid(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
@@ -1260,6 +1261,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.IsEmpty() {
+		log.Debug("Ignoring nil/empty bid", bid)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1277,6 +1279,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	// Error on bid without value
 	if value.Cmp(uint256.NewInt(0)) == 0 {
+		log.Debug("Ignoring zero value bid")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -2150,6 +2153,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			simResult = &blockSimResult{false, nil, false, nil, nil}
 		}
 
+		log.Debug("Saving builder block submission")
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission, simResult.blockValue)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
@@ -2257,7 +2261,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		// NOTE: this can lead to a rather tricky race condition. If a builder submits two blocks to the relay concurrently, then the randomness of network
 		// latency will make it impossible to predict which arrives first. Thus a high bid could unintentionally be overwritten by a low bid that happened
 		// to arrive a few microseconds later. If builders are submitting blocks at a frequency where they cannot reliably predict which bid will arrive at
-		// the relay first, they should instead use multiple pubkeys to avoid uninitentionally overwriting their own bids.
+		// the relay first, they should instead use multiple pubkeys to avoid unintentionally overwriting their own bids.
 		latestPayloadReceivedAt, err := api.redis.GetBuilderLatestPayloadReceivedAt(context.Background(), tx, submission.BidTrace.Slot, submission.BidTrace.BuilderPubkey.String(), submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String())
 		if err != nil {
 			log.WithError(err).Error("failed getting latest payload receivedAt from redis")
