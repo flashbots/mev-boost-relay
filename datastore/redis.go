@@ -360,6 +360,7 @@ func (r *RedisCache) GetRelayConfig(field string) (string, error) {
 
 func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) (*builderSpec.VersionedSignedBuilderBid, error) {
 	key := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
+	fmt.Println("getting best bid, key:", key)
 	resp := new(builderSpec.VersionedSignedBuilderBid)
 	err := r.GetObj(key, resp)
 	if errors.Is(err, redis.Nil) {
@@ -381,6 +382,7 @@ func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash s
 
 func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) (err error) {
 	key := r.keyPayloadContentsElectra(slot, proposerPubkey, blockHash)
+	fmt.Printf("Saving payload contents, key: %v\n", key)
 	b, err := execPayload.MarshalSSZ()
 	if err != nil {
 		return err
@@ -611,6 +613,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	prevTime = nextTime
 
 	// 2. Save latest bid for this builder
+	fmt.Println("Saving latest bid")
+	fmt.Println("bid:", getHeaderResponse)
 	err = r.SaveBuilderBid(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ParentHash.String(), submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BuilderPubkey.String(), reqReceivedAt, getHeaderResponse)
 	if err != nil {
 		return state, err
@@ -718,12 +722,16 @@ func (r *RedisCache) _updateTopBid(ctx context.Context, pipeliner redis.Pipeline
 
 	// If floor value is higher than this bid, use floor bid instead
 	if floorValue.Cmp(state.TopBidValue) == 1 {
+		fmt.Println("floor value is higher than this bid, use floor bid instead", floorValue, state.TopBidValue)
 		state.TopBidValue = floorValue
 		keyBidSource = r.keyFloorBid(slot, parentHash, proposerPubkey)
 	}
 
 	// Copy winning bid to top bid cache
+	fmt.Println("Copying get header response to redis cache")
+	fmt.Println("keyBidSource:", keyBidSource)
 	keyTopBid := r.keyCacheGetHeaderResponse(slot, parentHash, proposerPubkey)
+	fmt.Println("keyTopBid:", keyTopBid)
 	c := pipeliner.Copy(context.Background(), keyBidSource, keyTopBid, 0, true)
 	_, err = pipeliner.Exec(ctx)
 	if err != nil {
@@ -743,6 +751,7 @@ func (r *RedisCache) _updateTopBid(ctx context.Context, pipeliner redis.Pipeline
 	state.WasTopBidUpdated = state.PrevTopBidValue == nil || state.PrevTopBidValue.Cmp(state.TopBidValue) != 0
 
 	// 6. Finally, update the global top bid value
+	fmt.Println("Updating top bid value")
 	keyTopBidValue := r.keyTopBidValue(slot, parentHash, proposerPubkey)
 	err = pipeliner.Set(context.Background(), keyTopBidValue, state.TopBidValue.String(), expiryBidCache).Err()
 	if err != nil {

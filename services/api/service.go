@@ -1252,7 +1252,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Debug("Requesting best bid for slot: %v, parentHash: %v, proposerPubkey: %v", slot, parentHashHex, proposerPubkeyHex)
+	log.Debugf("Requesting best bid for slot: %v, parentHash: %v, proposerPubkey: %v\n", slot, parentHashHex, proposerPubkeyHex)
 	bid, err := api.redis.GetBestBid(slot, parentHashHex, proposerPubkeyHex)
 	if err != nil {
 		log.WithError(err).Error("could not get bid")
@@ -1261,7 +1261,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.IsEmpty() {
-		log.Debug("Ignoring nil/empty bid", bid)
+		log.Debugf("Ignoring nil/empty bid: %v\n", bid)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
