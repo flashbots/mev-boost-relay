@@ -2021,6 +2021,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
 
+	fmt.Println("versionedSubmitBlockRequest:", payload)
 	isLargeRequest := len(requestPayloadBytes) > fastTrackPayloadSizeLimit
 	// getting block submission info also validates bid trace and execution submission are not empty
 	submission, err := common.GetBlockSubmissionInfo(payload)
