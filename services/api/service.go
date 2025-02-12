@@ -1370,7 +1370,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// request bodies.
 	if ct := req.Header.Get("Content-Type"); ct != "" {
 		switch ct {
-		case "application/json":
+		case ApplicationJSON:
 			break
 		default:
 			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
