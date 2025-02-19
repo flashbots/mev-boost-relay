@@ -16,8 +16,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/mev-boost-relay/common"
-	"github.com/go-redis/redis/v9"
 	"github.com/holiman/uint256"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 

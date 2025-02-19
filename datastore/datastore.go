@@ -14,8 +14,8 @@ import (
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
-	"github.com/go-redis/redis/v9"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
