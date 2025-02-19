@@ -489,7 +489,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			}, tc.simulationError, backend)
 
 			// Check http code.
-			require.Equal(t, uint64(rr.Code), tc.httpCode)
+			require.EqualValues(t, rr.Code, tc.httpCode)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)

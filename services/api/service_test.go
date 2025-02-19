@@ -229,7 +229,7 @@ func TestGetHeader(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
 		Data: beaconclient.GetGenesisResponseData{
-			GenesisTime: uint64(time.Now().UTC().Unix()),
+			GenesisTime: uint64(time.Now().UTC().Unix()), //nolint:gosec
 		},
 	}
 
@@ -499,10 +499,10 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			switch req.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				req.Capella.Message.Slot = submissionSlot
-				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			case spec.DataVersionDeneb:
 				req.Deneb.Message.Slot = submissionSlot
-				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			default:
 				require.Fail(t, "unknown data version")
 			}

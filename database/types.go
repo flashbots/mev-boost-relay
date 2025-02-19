@@ -99,7 +99,7 @@ func SignedValidatorRegistrationToEntry(valReg builderApiV1.SignedValidatorRegis
 	return ValidatorRegistrationEntry{
 		Pubkey:       valReg.Message.Pubkey.String(),
 		FeeRecipient: valReg.Message.FeeRecipient.String(),
-		Timestamp:    uint64(valReg.Message.Timestamp.Unix()),
+		Timestamp:    uint64(valReg.Message.Timestamp.Unix()), //nolint:gosec
 		GasLimit:     valReg.Message.GasLimit,
 		Signature:    valReg.Signature.String(),
 	}
