@@ -29,6 +29,7 @@ linters:
     - interfacebloat
     - exhaustruct
     - tenv
+    - gocognit
 
     #
     # Disabled because of generics:

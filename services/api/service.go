@@ -1004,6 +1004,19 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"contentLength": req.ContentLength,
 	})
 
+	// If the Content-Type header is included, for now only allow JSON.
+	// TODO: support Content-Type: application/octet-stream and allow SSZ
+	// request bodies.
+	if ct := req.Header.Get("Content-Type"); ct != "" {
+		switch ct {
+		case ApplicationJSON:
+			break
+		default:
+			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
+			return
+		}
+	}
+
 	start := time.Now().UTC()
 	registrationTimestampUpperBound := start.Unix() + 10 // 10 seconds from now
 
