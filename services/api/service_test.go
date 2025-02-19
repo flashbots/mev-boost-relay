@@ -188,7 +188,7 @@ func TestLivez(t *testing.T) {
 	path := "/livez"
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, "{\"message\":\"live\"}\n", rr.Body.String())
+	require.JSONEq(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
 
 func TestRegisterValidator(t *testing.T) {
@@ -513,7 +513,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
-			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
 			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)

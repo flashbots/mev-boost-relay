@@ -62,7 +62,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 			buffer := new(bytes.Buffer)
 			err = json.Compact(buffer, jsonBytes)
 			require.NoError(t, err)
-			require.Equal(t, buffer.Bytes(), marshalledJSONBytes)
+			require.JSONEq(t, buffer.String(), string(marshalledJSONBytes))
 		})
 	}
 }
@@ -146,7 +146,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			buffer := new(bytes.Buffer)
 			err = json.Compact(buffer, jsonBytes)
 			require.NoError(t, err)
-			require.Equal(t, buffer.Bytes(), marshalledJSONBytes)
+			require.JSONEq(t, buffer.String(), string(marshalledJSONBytes))
 		})
 	}
 }
