@@ -728,3 +728,14 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 
 	return
 }
+
+func ConvertToBidTraceV2WithBlobFields(bidTrace *BidTraceV2) *BidTraceV2WithBlobFields {
+	return &BidTraceV2WithBlobFields{
+		BidTrace:      bidTrace.BidTrace,
+		BlockNumber:   bidTrace.BlockNumber,
+		NumTx:         bidTrace.NumTx,
+		NumBlobs:      0, // TODO: Update this when auction API provides the value
+		BlobGasUsed:   0, // TODO: Update this when auction API provides the value
+		ExcessBlobGas: 0, // TODO: Update this when auction API provides the value
+	}
+}
