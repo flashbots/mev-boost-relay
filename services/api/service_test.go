@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -257,7 +256,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err := backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 1: regular capella request works and returns a bid
@@ -280,7 +279,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 2: regular deneb request works and returns a bid
