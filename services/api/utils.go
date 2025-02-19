@@ -25,6 +25,7 @@ var (
 	ErrPayloadMismatch      = errors.New("beacon-block and payload version mismatch")
 	ErrHeaderHTRMismatch    = errors.New("beacon-block and payload header mismatch")
 	ErrBlobMismatch         = errors.New("beacon-block and payload blob contents mismatch")
+	ErrNotAcceptable        = errors.New("not acceptable")
 )
 
 func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {

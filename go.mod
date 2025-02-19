@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.32.1
+	github.com/aohorodnyk/mimeheader v0.0.6
 	github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb
 	github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746

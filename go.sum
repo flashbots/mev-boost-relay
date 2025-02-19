@@ -9,6 +9,8 @@ github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a h1:HbKu58rmZp
 github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis/v2 v2.32.1 h1:Bz7CciDnYSaa0mX5xODh6GUITRSx+cVhjNoOR4JssBo=
 github.com/alicebob/miniredis/v2 v2.32.1/go.mod h1:AqkLNAfUm0K07J28hnAyyQKf/x0YkCY/g5DCtuL01Mw=
+github.com/aohorodnyk/mimeheader v0.0.6 h1:WCV4NQjtbqnd2N3FT5MEPesan/lfvaLYmt5v4xSaX/M=
+github.com/aohorodnyk/mimeheader v0.0.6/go.mod h1:/Gd3t3vszyZYwjNJo2qDxoftZjjVzMdkQZxkiINp3vM=
 github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb h1:J4Dpih8da/kACBsY104/mKzDv42a3O5TXTElY5ZkN80=
 github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb/go.mod h1:X31JAUL4q6cY/OGClpBQcwFN7FBixt6Wjrqy7RrlhEc=
 github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43 h1:lORlCOleRXvVt3H7fan64UaYAK4FJDHdy19uYfe7FKQ=
