@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb
 	github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43
-	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
+	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.2
