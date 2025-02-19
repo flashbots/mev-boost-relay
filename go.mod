@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
-	github.com/alicebob/miniredis/v2 v2.32.1
+	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/attestantio/go-builder-client v0.5.1-0.20250120215322-c65b220a98eb
 	github.com/attestantio/go-eth2-client v0.22.1-0.20250106164842-07b6ce39bb43
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
@@ -73,7 +73,7 @@ require (
 )
 
 require (
-	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
+	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/btcsuite/btcd v0.24.2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
