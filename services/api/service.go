@@ -13,6 +13,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,7 +45,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
 	uberatomic "go.uber.org/atomic"
-	"golang.org/x/exp/slices"
 )
 
 const (
