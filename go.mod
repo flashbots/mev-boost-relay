@@ -1,6 +1,6 @@
 module github.com/flashbots/mev-boost-relay
 
-go 1.22.0
+go 1.24.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
