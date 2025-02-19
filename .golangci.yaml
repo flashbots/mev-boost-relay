@@ -28,6 +28,7 @@ linters:
     - wsl
     - interfacebloat
     - exhaustruct
+    - tenv
 
     #
     # Disabled because of generics:
