@@ -160,14 +160,14 @@ func BenchmarkDecoding(b *testing.B) {
 
 	payload := new(builderSpec.VersionedSignedBuilderBid)
 	b.Run("capella json", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = json.Unmarshal(jsonBytes, &payload)
 			require.NoError(b, err)
 		}
 	})
 	payload.Capella = new(builderApiCapella.SignedBuilderBid)
 	b.Run("capella ssz", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = payload.Capella.UnmarshalSSZ(sszBytes)
 			require.NoError(b, err)
 		}
@@ -180,14 +180,14 @@ func BenchmarkDecoding(b *testing.B) {
 	require.NoError(b, err)
 	payload = new(builderSpec.VersionedSignedBuilderBid)
 	b.Run("deneb json", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = json.Unmarshal(jsonBytes, &payload)
 			require.NoError(b, err)
 		}
 	})
 	payload.Deneb = new(builderApiDeneb.SignedBuilderBid)
 	b.Run("deneb ssz", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = payload.Deneb.UnmarshalSSZ(sszBytes)
 			require.NoError(b, err)
 		}
