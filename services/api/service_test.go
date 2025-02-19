@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -188,7 +187,7 @@ func TestLivez(t *testing.T) {
 	path := "/livez"
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, "{\"message\":\"live\"}\n", rr.Body.String())
+	require.JSONEq(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
 
 func TestRegisterValidator(t *testing.T) {
@@ -229,7 +228,7 @@ func TestGetHeader(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
 		Data: beaconclient.GetGenesisResponseData{
-			GenesisTime: uint64(time.Now().UTC().Unix()),
+			GenesisTime: uint64(time.Now().UTC().Unix()), //nolint:gosec
 		},
 	}
 
@@ -257,7 +256,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err := backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 1: regular capella request works and returns a bid
@@ -280,7 +279,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 2: regular deneb request works and returns a bid
@@ -499,10 +498,10 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			switch req.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				req.Capella.Message.Slot = submissionSlot
-				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			case spec.DataVersionDeneb:
 				req.Deneb.Message.Slot = submissionSlot
-				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			default:
 				require.Fail(t, "unknown data version")
 			}
@@ -513,7 +512,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
-			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
 			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)

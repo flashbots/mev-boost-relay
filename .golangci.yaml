@@ -11,7 +11,6 @@ linters:
     - gocritic
     - godot
     - godox
-    - gomnd
     - lll
     - musttag
     - mnd
@@ -29,6 +28,7 @@ linters:
     - wsl
     - interfacebloat
     - exhaustruct
+    - tenv
 
     #
     # Disabled because of generics:
@@ -37,11 +37,6 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - wastedassign
-
-    #
-    # Disabled because deprecated:
-    #
-    - execinquery
 
 linters-settings:
   #

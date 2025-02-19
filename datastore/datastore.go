@@ -194,7 +194,7 @@ func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidato
 
 	// then save in redis
 	pk := common.NewPubkeyHex(entry.Message.Pubkey.String())
-	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, uint64(entry.Message.Timestamp.Unix()))
+	err = ds.redis.SetValidatorRegistrationTimestampIfNewer(pk, uint64(entry.Message.Timestamp.Unix())) //nolint:gosec
 	if err != nil {
 		return errors.Wrap(err, "failed saving validator registration to redis")
 	}
