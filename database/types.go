@@ -2,6 +2,8 @@ package database
 
 import (
 	"database/sql"
+	"errors"
+	"math"
 	"strconv"
 	"time"
 
@@ -76,6 +78,10 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*builderA
 	sig, err := utils.HexToSignature(reg.Signature)
 	if err != nil {
 		return nil, err
+	}
+
+	if reg.Timestamp > uint64(math.MaxInt64) {
+		return nil, errors.New("timestamp overflow")
 	}
 
 	return &builderApiV1.SignedValidatorRegistration{
