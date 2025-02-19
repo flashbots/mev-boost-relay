@@ -2,12 +2,16 @@ package database
 
 import (
 	"database/sql"
+	"errors"
+	"math"
 	"strconv"
 	"time"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/flashbots/go-boost-utils/utils"
 )
+
+var errTimestampOverflow = errors.New("timestamp overflow")
 
 func NewNullInt64(i int64) sql.NullInt64 {
 	return sql.NullInt64{
@@ -78,6 +82,10 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*builderA
 		return nil, err
 	}
 
+	if reg.Timestamp > uint64(math.MaxInt64) {
+		return nil, errTimestampOverflow
+	}
+
 	return &builderApiV1.SignedValidatorRegistration{
 		Message: &builderApiV1.ValidatorRegistration{
 			Pubkey:       pubkey,
@@ -93,7 +101,7 @@ func SignedValidatorRegistrationToEntry(valReg builderApiV1.SignedValidatorRegis
 	return ValidatorRegistrationEntry{
 		Pubkey:       valReg.Message.Pubkey.String(),
 		FeeRecipient: valReg.Message.FeeRecipient.String(),
-		Timestamp:    uint64(valReg.Message.Timestamp.Unix()),
+		Timestamp:    uint64(valReg.Message.Timestamp.Unix()), //nolint:gosec
 		GasLimit:     valReg.Message.GasLimit,
 		Signature:    valReg.Signature.String(),
 	}

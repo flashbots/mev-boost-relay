@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -200,7 +199,7 @@ func TestSimulateBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
-			_, _, simErr := backend.relay.simulateBlock(context.Background(), blockSimOptions{
+			_, _, simErr := backend.relay.simulateBlock(t.Context(), blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				builder: &blockBuilderCacheEntry{
@@ -489,7 +488,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			}, tc.simulationError, backend)
 
 			// Check http code.
-			require.Equal(t, uint64(rr.Code), tc.httpCode)
+			require.EqualValues(t, rr.Code, tc.httpCode)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
