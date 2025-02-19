@@ -11,6 +11,8 @@ import (
 	"github.com/flashbots/go-boost-utils/utils"
 )
 
+var errTimestampOverflow = errors.New("timestamp overflow")
+
 func NewNullInt64(i int64) sql.NullInt64 {
 	return sql.NullInt64{
 		Int64: i,
@@ -81,7 +83,7 @@ func (reg ValidatorRegistrationEntry) ToSignedValidatorRegistration() (*builderA
 	}
 
 	if reg.Timestamp > uint64(math.MaxInt64) {
-		return nil, errors.New("timestamp overflow")
+		return nil, errTimestampOverflow
 	}
 
 	return &builderApiV1.SignedValidatorRegistration{
