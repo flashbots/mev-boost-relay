@@ -18,7 +18,7 @@ func setupTestDatastore(t *testing.T, mockDB *database.MockDB) *Datastore {
 	redisDs, err := NewRedisCache("", redisTestServer.Addr(), "", "")
 	require.NoError(t, err)
 
-	ds, err := NewDatastore(redisDs, nil, mockDB, "", "")
+	ds, err := NewDatastore(redisDs, nil, mockDB, "", "", "")
 	require.NoError(t, err)
 
 	return ds

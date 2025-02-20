@@ -19,8 +19,10 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
-var ErrExecutionPayloadNotFound = errors.New("execution payload not found")
-var ErrBidTraceNotFound = errors.New("bidtrace not found")
+var (
+	ErrExecutionPayloadNotFound = errors.New("execution payload not found")
+	ErrBidTraceNotFound         = errors.New("bidtrace not found")
+)
 
 type GetHeaderResponseKey struct {
 	Slot           uint64

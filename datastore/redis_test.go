@@ -272,7 +272,7 @@ func TestRedisURIs(t *testing.T) {
 	password := "pass"
 	redisTestServer.RequireUserAuth(username, password)
 	fullURL := "redis://" + username + ":" + password + "@" + redisTestServer.Addr()
-	_, err = NewRedisCache("", fullURL, "")
+	_, err = NewRedisCache("", fullURL, "", "")
 	require.NoError(t, err)
 
 	// ensure malformed URL throws error
