@@ -11,8 +11,8 @@ github.com/alicebob/miniredis/v2 v2.34.0 h1:mBFWMaJSNL9RwdGRyEDoAAv8OQc5UlEhLDQg
 github.com/alicebob/miniredis/v2 v2.34.0/go.mod h1:kWShP4b58T1CW0Y5dViCd5ztzrDqRWqM3nksiyXk5s8=
 github.com/aohorodnyk/mimeheader v0.0.6 h1:WCV4NQjtbqnd2N3FT5MEPesan/lfvaLYmt5v4xSaX/M=
 github.com/aohorodnyk/mimeheader v0.0.6/go.mod h1:/Gd3t3vszyZYwjNJo2qDxoftZjjVzMdkQZxkiINp3vM=
-github.com/attestantio/go-builder-client v0.6.1-0.20250218155713-9f16ff484247 h1:LH5DPQKlxn5AmRmWEdUiPtkymXouNSU7gjrldGlbvcc=
-github.com/attestantio/go-builder-client v0.6.1-0.20250218155713-9f16ff484247/go.mod h1:f8wi3HzuPxfJoi2PirpJK3yZhte4SavDgKJbRrKoB1Q=
+github.com/attestantio/go-builder-client v0.6.1 h1:fn6PC8aDWx2YbptstR1JKP8NyakiNJJTiOE5f9N0z5Q=
+github.com/attestantio/go-builder-client v0.6.1/go.mod h1:f8wi3HzuPxfJoi2PirpJK3yZhte4SavDgKJbRrKoB1Q=
 github.com/attestantio/go-eth2-client v0.24.0 h1:lGVbcnhlBwRglt1Zs56JOCgXVyLWKFZOmZN8jKhE7Ws=
 github.com/attestantio/go-eth2-client v0.24.0/go.mod h1:/KTLN3WuH1xrJL7ZZrpBoWM1xCCihnFbzequD5L+83o=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
