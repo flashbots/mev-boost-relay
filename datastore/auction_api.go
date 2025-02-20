@@ -85,7 +85,7 @@ func (ds *Datastore) RemotePayloadContents(slot uint64, proposerPubkey, blockHas
 	return getPayloadContents(slot, proposerPubkey, blockHash, ds.remoteAuctionHost, "private", ds.auctionAuthToken, 1*time.Second)
 }
 
-func getBidTrace(slot uint64, proposerPubkey, blockHash, auctionHost, basePath, authToken string) (*common.BidTraceV2, error) {
+func getBidTrace(slot uint64, proposerPubkey, blockHash, auctionHost, basePath, authToken string) (*common.BidTraceV2WithBlobFields, error) {
 	client := &http.Client{}
 
 	queryParams := url.Values{}
@@ -118,7 +118,7 @@ func getBidTrace(slot uint64, proposerPubkey, blockHash, auctionHost, basePath, 
 		return nil, errors.Wrap(err, "failed to read bit trace response body")
 	}
 
-	bidtrace := new(common.BidTraceV2)
+	bidtrace := new(common.BidTraceV2WithBlobFields)
 	err = json.Unmarshal(body, &bidtrace)
 	if err != nil {
 		return nil, err
@@ -127,10 +127,10 @@ func getBidTrace(slot uint64, proposerPubkey, blockHash, auctionHost, basePath, 
 	return bidtrace, nil
 }
 
-func (ds *Datastore) LocalBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
+func (ds *Datastore) LocalBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2WithBlobFields, error) {
 	return getBidTrace(slot, proposerPubkey, blockHash, ds.localAuctionHost, "internal", "")
 }
 
-func (ds *Datastore) RemoteBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2, error) {
+func (ds *Datastore) RemoteBidTrace(slot uint64, proposerPubkey, blockHash string) (*common.BidTraceV2WithBlobFields, error) {
 	return getBidTrace(slot, proposerPubkey, blockHash, ds.remoteAuctionHost, "private", ds.auctionAuthToken)
 }
