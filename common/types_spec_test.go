@@ -23,7 +23,7 @@ func TestSubmitBuilderBlockJSON(t *testing.T) {
 	require.NoError(t, err)
 	expectedJSONBytes := buffer.Bytes()
 
-	require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
+	require.JSONEq(t, string(expectedJSONBytes), string(marshalledJSONBytes))
 }
 
 func TestSignedBeaconBlockJSON(t *testing.T) {
@@ -56,7 +56,7 @@ func TestSignedBeaconBlockJSON(t *testing.T) {
 			marshalledJSONBytes, err := json.Marshal(blockRequest)
 			require.NoError(t, err)
 
-			require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
+			require.JSONEq(t, string(expectedJSONBytes), string(marshalledJSONBytes))
 		})
 	}
 }
@@ -91,7 +91,7 @@ func TestSignedBlindedBlockJSON(t *testing.T) {
 			marshalledJSONBytes, err := json.Marshal(blockRequest)
 			require.NoError(t, err)
 
-			require.Equal(t, expectedJSONBytes, marshalledJSONBytes)
+			require.JSONEq(t, string(expectedJSONBytes), string(marshalledJSONBytes))
 		})
 	}
 }

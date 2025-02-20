@@ -11,15 +11,14 @@ linters:
     - gocritic
     - godot
     - godox
-    - gomnd
     - lll
     - musttag
+    - mnd
     - nestif
     - nilnil
     - nlreturn
     - noctx
     - nonamedreturns
-    - nosnakecase
     - paralleltest
     - revive
     - testpackage
@@ -27,10 +26,10 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-    - deadcode
-    - varcheck
     - interfacebloat
     - exhaustruct
+    - tenv
+    - gocognit
 
     #
     # Disabled because of generics:
@@ -38,18 +37,7 @@ linters:
     - contextcheck
     - rowserrcheck
     - sqlclosecheck
-    - structcheck
     - wastedassign
-
-    #
-    # Disabled because deprecated:
-    #
-    - exhaustivestruct
-    - golint
-    - ifshort
-    - interfacer
-    - maligned
-    - scopelint
 
 linters-settings:
   #
@@ -73,6 +61,7 @@ linters-settings:
     replace-allow-list:
       - github.com/attestantio/go-builder-client
       - github.com/attestantio/go-eth2-client
+      - github.com/ethereum/go-ethereum
 
   maintidx:
     under: 5

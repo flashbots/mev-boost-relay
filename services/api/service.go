@@ -13,6 +13,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/aohorodnyk/mimeheader"
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -35,16 +37,15 @@ import (
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/metrics"
-	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
 	uberatomic "go.uber.org/atomic"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -192,6 +193,7 @@ type RelayAPI struct {
 	genesisInfo  *beaconclient.GetGenesisResponse
 	capellaEpoch int64
 	denebEpoch   int64
+	electraEpoch int64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -426,15 +428,18 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 
-	api.denebEpoch = -1
 	api.capellaEpoch = -1
+	api.denebEpoch = -1
+	api.electraEpoch = -1
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
 		case api.opts.EthNetDetails.CapellaForkVersionHex:
-			api.capellaEpoch = int64(fork.Epoch)
+			api.capellaEpoch = int64(fork.Epoch) //nolint:gosec
 		case api.opts.EthNetDetails.DenebForkVersionHex:
-			api.denebEpoch = int64(fork.Epoch)
+			api.denebEpoch = int64(fork.Epoch) //nolint:gosec
+		case api.opts.EthNetDetails.ElectraForkVersionHex:
+			api.electraEpoch = int64(fork.Epoch) //nolint:gosec
 		}
 	}
 
@@ -442,9 +447,15 @@ func (api *RelayAPI) StartServer() (err error) {
 		// log warning that deneb epoch was not found in CL fork schedule, suggest CL upgrade
 		log.Info("Deneb epoch not found in fork schedule")
 	}
+	if api.electraEpoch == -1 {
+		// log warning that electra epoch was not found in CL fork schedule, suggest CL upgrade
+		log.Info("Electra epoch not found in fork schedule")
+	}
 
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.denebEpoch) {
+	if hasReachedFork(currentSlot, api.electraEpoch) {
+		log.Infof("electra fork detected (currentEpoch: %d / electraEpoch: %d)", common.SlotToEpoch(currentSlot), api.electraEpoch)
+	} else if hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
@@ -458,7 +469,7 @@ func (api *RelayAPI) StartServer() (err error) {
 
 		// Start the validator registration db-save processor
 		api.log.Infof("starting %d validator registration processors", numValidatorRegProcessors)
-		for i := 0; i < numValidatorRegProcessors; i++ {
+		for range numValidatorRegProcessors {
 			go api.startValidatorRegistrationDBProcessor()
 		}
 	}
@@ -568,7 +579,11 @@ func (api *RelayAPI) isCapella(slot uint64) bool {
 }
 
 func (api *RelayAPI) isDeneb(slot uint64) bool {
-	return hasReachedFork(slot, api.denebEpoch)
+	return hasReachedFork(slot, api.denebEpoch) && !hasReachedFork(slot, api.electraEpoch)
+}
+
+func (api *RelayAPI) isElectra(slot uint64) bool {
+	return hasReachedFork(slot, api.electraEpoch)
 }
 
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
@@ -930,6 +945,46 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+const (
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
+)
+
+// RequestAcceptsJSON returns true if the Accept header is empty (defaults to JSON)
+// or application/json can be negotiated.
+func RequestAcceptsJSON(req *http.Request) bool {
+	ah := req.Header.Get("Accept")
+	if ah == "" {
+		return true
+	}
+	mh := mimeheader.ParseAcceptHeader(ah)
+	_, _, matched := mh.Negotiate(
+		[]string{ApplicationJSON},
+		ApplicationJSON,
+	)
+	return matched
+}
+
+// NegotiateRequestResponseType returns whether the request accepts
+// JSON (application/json) or SSZ (application/octet-stream) responses.
+// If accepted is false, no mime type could be negotiated and the server
+// should respond with http.StatusNotAcceptable.
+func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
+	ah := req.Header.Get("Accept")
+	if ah == "" {
+		return ApplicationJSON, nil
+	}
+	mh := mimeheader.ParseAcceptHeader(ah)
+	_, mimeType, matched := mh.Negotiate(
+		[]string{ApplicationJSON, ApplicationOctetStream},
+		ApplicationJSON,
+	)
+	if !matched {
+		return "", ErrNotAcceptable
+	}
+	return mimeType, nil
+}
+
 // ---------------
 //  PROPOSER APIS
 // ---------------
@@ -948,6 +1003,19 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"headSlot":      api.headSlot.Load(),
 		"contentLength": req.ContentLength,
 	})
+
+	// If the Content-Type header is included, for now only allow JSON.
+	// TODO: support Content-Type: application/octet-stream and allow SSZ
+	// request bodies.
+	if ct := req.Header.Get("Content-Type"); ct != "" {
+		switch ct {
+		case ApplicationJSON:
+			break
+		default:
+			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
+			return
+		}
+	}
 
 	start := time.Now().UTC()
 	registrationTimestampUpperBound := start.Unix() + 10 // 10 seconds from now
@@ -1084,7 +1152,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Ensure a valid timestamp (not too early, and not too far in the future)
 		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
-		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) {
+		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
 			handleError(regLog, http.StatusBadRequest, "timestamp too early")
 			return
 		} else if registrationTimestamp > registrationTimestampUpperBound {
@@ -1103,7 +1171,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
 		if err != nil {
 			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) {
+		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) { //nolint:gosec
 			// abort if the current registration timestamp is older or equal to the last known one
 			return
 		}
@@ -1118,7 +1186,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			if api.ffRegValContinueOnInvalidSig {
 				return
 			} else {
-				handleError(regLog, http.StatusBadRequest, fmt.Sprintf("failed to verify validator signature for %s", signedValidatorRegistration.Message.Pubkey.String()))
+				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String())
 				return
 			}
 		}
@@ -1175,7 +1243,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	requestTime := time.Now().UTC()
 	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (slot * common.SecondsPerSlot)
-	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
+	msIntoSlot := requestTime.UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
 
 	log := api.log.WithFields(logrus.Fields{
 		"method":           "getHeader",
@@ -1202,6 +1270,12 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	if slot < headSlot {
 		api.RespondError(w, http.StatusBadRequest, "slot is too old")
+		return
+	}
+
+	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
+	if !RequestAcceptsJSON(req) {
+		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
 		return
 	}
 
@@ -1275,6 +1349,8 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerCapella, pubKey)
 	case spec.DataVersionDeneb:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey)
+	case spec.DataVersionElectra:
+		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerElectra, pubKey)
 	default:
 		return false, errors.New("unsupported consensus data version")
 	}
@@ -1311,6 +1387,25 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
+
+	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
+	if !RequestAcceptsJSON(req) {
+		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
+		return
+	}
+
+	// If the Content-Type header is included, for now only allow JSON.
+	// TODO: support Content-Type: application/octet-stream and allow SSZ
+	// request bodies.
+	if ct := req.Header.Get("Content-Type"); ct != "" {
+		switch ct {
+		case ApplicationJSON:
+			break
+		default:
+			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
+			return
+		}
+	}
 
 	// Read the body first, so we can decode it later
 	body, err := io.ReadAll(req.Body)
@@ -1355,7 +1450,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (uint64(slot) * common.SecondsPerSlot)
-	msIntoSlot := decodeTime.UnixMilli() - int64((slotStartTimestamp * 1000))
+	msIntoSlot := decodeTime.UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
 	log = log.WithFields(logrus.Fields{
 		"slot":                 slot,
 		"slotEpochPos":         (uint64(slot) % common.SlotsPerEpoch) + 1,
@@ -1561,7 +1656,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Handle early/late requests
 	if msIntoSlot < 0 {
 		// Wait until slot start (t=0) if still in the future
-		_msSinceSlotStart := time.Now().UTC().UnixMilli() - int64((slotStartTimestamp * 1000))
+		_msSinceSlotStart := time.Now().UTC().UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
 		if _msSinceSlotStart < 0 {
 			delayMillis := _msSinceSlotStart * -1
 			log = log.WithField("delayMillis", delayMillis)
@@ -1574,7 +1669,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("sent too late - %d ms into slot", msIntoSlot))
 
 		go func() {
-			err := api.db.InsertTooLateGetPayload(uint64(slot), proposerPubkey.String(), blockHash.String(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), uint64(msIntoSlot))
+			err := api.db.InsertTooLateGetPayload(uint64(slot), proposerPubkey.String(), blockHash.String(), slotStartTimestamp, uint64(receivedAt.UnixMilli()), uint64(decodeTime.UnixMilli()), uint64(msIntoSlot)) //nolint:gosec
 			if err != nil {
 				log.WithError(err).Error("failed to insert payload too late into db")
 			}
@@ -1607,7 +1702,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	timeAfterPublish := time.Now().UTC().UnixMilli()
-	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish)
+	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
 	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
 	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
 	metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(msNeededForPublishing))
@@ -1629,12 +1724,23 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"numTx":       len(txs),
 		"blockNumber": blockNumber,
 	})
-	// deneb specific logging
-	if getPayloadResp.Deneb != nil {
+	if getPayloadResp.Version >= spec.DataVersionDeneb {
+		blobs, err := getPayloadResp.Blobs()
+		if err != nil {
+			log.WithError(err).Info("failed to get blobs")
+		}
+		blobGasUsed, err := getPayloadResp.BlobGasUsed()
+		if err != nil {
+			log.WithError(err).Info("failed to get blobGasUsed")
+		}
+		excessBlobGas, err := getPayloadResp.ExcessBlobGas()
+		if err != nil {
+			log.WithError(err).Info("failed to get excessBlobGas")
+		}
 		log = log.WithFields(logrus.Fields{
-			"numBlobs":      len(getPayloadResp.Deneb.BlobsBundle.Blobs),
-			"blobGasUsed":   getPayloadResp.Deneb.ExecutionPayload.BlobGasUsed,
-			"excessBlobGas": getPayloadResp.Deneb.ExecutionPayload.ExcessBlobGas,
+			"numBlobs":      len(blobs),
+			"blobGasUsed":   blobGasUsed,
+			"excessBlobGas": excessBlobGas,
 		})
 	}
 	log.Info("execution payload delivered")
@@ -1695,14 +1801,13 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 		return attrs, false
 	}
 
-	if hasReachedFork(submission.BidTrace.Slot, api.capellaEpoch) { // Capella requires correct withdrawals
+	if hasReachedFork(submission.BidTrace.Slot, api.capellaEpoch) {
 		withdrawalsRoot, err := ComputeWithdrawalsRoot(submission.Withdrawals)
 		if err != nil {
 			log.WithError(err).Warn("could not compute withdrawals root from payload")
 			api.RespondError(w, http.StatusBadRequest, "could not compute withdrawals root")
 			return attrs, false
 		}
-
 		if withdrawalsRoot != attrs.withdrawalsRoot {
 			msg := fmt.Sprintf("incorrect withdrawals root - got: %s, expected: %s", withdrawalsRoot.String(), attrs.withdrawalsRoot.String())
 			log.Info(msg)
@@ -1715,12 +1820,16 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
+	if api.isElectra(submission.BidTrace.Slot) && payload.Electra == nil {
+		log.Info("rejecting submission - non electra payload for electra fork")
+		api.RespondError(w, http.StatusBadRequest, "not electra payload")
+		return false
+	}
 	if api.isDeneb(submission.BidTrace.Slot) && payload.Deneb == nil {
 		log.Info("rejecting submission - non deneb payload for deneb fork")
 		api.RespondError(w, http.StatusBadRequest, "not deneb payload")
 		return false
 	}
-
 	if api.isCapella(submission.BidTrace.Slot) && payload.Capella == nil {
 		log.Info("rejecting submission - non capella payload for capella fork")
 		api.RespondError(w, http.StatusBadRequest, "not capella payload")
@@ -1944,7 +2053,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	nextTime = time.Now().UTC()
-	pf.PayloadLoad = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.PayloadLoad = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	prevTime = nextTime
 
 	payload := new(common.VersionedSubmitBlockRequest)
@@ -1979,7 +2088,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	nextTime = time.Now().UTC()
-	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	prevTime = nextTime
 
 	isLargeRequest := len(requestPayloadBytes) > fastTrackPayloadSizeLimit
@@ -2002,12 +2111,26 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"payloadBytes":           len(requestPayloadBytes),
 		"isLargeRequest":         isLargeRequest,
 	})
-	// deneb specific logging
-	if payload.Deneb != nil {
+	if payload.Version >= spec.DataVersionDeneb {
+		blobs, err := payload.Blobs()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		blobGasUsed, err := payload.BlobGasUsed()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		excessBlobGas, err := payload.ExcessBlobGas()
+		if err != nil {
+			api.RespondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		log = log.WithFields(logrus.Fields{
-			"numBlobs":      len(payload.Deneb.BlobsBundle.Blobs),
-			"blobGasUsed":   payload.Deneb.ExecutionPayload.BlobGasUsed,
-			"excessBlobGas": payload.Deneb.ExecutionPayload.ExcessBlobGas,
+			"numBlobs":      len(blobs),
+			"blobGasUsed":   blobGasUsed,
+			"excessBlobGas": excessBlobGas,
 		})
 	}
 
@@ -2137,7 +2260,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	log = log.WithField("timestampAfterCheckingTopBid", time.Now().UTC().UnixMilli())
 
 	nextTime = time.Now().UTC()
-	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.Prechecks = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	prevTime = nextTime
 
 	// Simulate the block submission and save to db
@@ -2193,7 +2316,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	nextTime = time.Now().UTC()
-	pf.Simulation = uint64(nextTime.Sub(prevTime).Microseconds())
+	pf.Simulation = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	pf.SimulationSuccess = true
 	prevTime = nextTime
 
@@ -2261,12 +2384,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	}
 
 	nextTime = time.Now().UTC()
-	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())
 	pf.WasBidSaved = updateBidResult.WasBidSaved
-	pf.RedisSavePayload = uint64(updateBidResult.TimeSavePayload.Microseconds())
-	pf.RedisUpdateTopBid = uint64(updateBidResult.TimeUpdateTopBid.Microseconds())
-	pf.RedisUpdateFloor = uint64(updateBidResult.TimeUpdateFloor.Microseconds())
-	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())
+	pf.RedisUpdate = uint64(nextTime.Sub(prevTime).Microseconds())                 //nolint:gosec
+	pf.RedisSavePayload = uint64(updateBidResult.TimeSavePayload.Microseconds())   //nolint:gosec
+	pf.RedisUpdateTopBid = uint64(updateBidResult.TimeUpdateTopBid.Microseconds()) //nolint:gosec
+	pf.RedisUpdateFloor = uint64(updateBidResult.TimeUpdateFloor.Microseconds())   //nolint:gosec
+	pf.Total = uint64(nextTime.Sub(receivedAt).Microseconds())                     //nolint:gosec
 
 	// All done, log with profiling information
 	log.WithFields(logrus.Fields{

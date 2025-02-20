@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -39,7 +38,7 @@ const (
 	testParentHash      = "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6"
 	testWithdrawalsRoot = "0x7f6d156912a4cb1e74ee37e492ad883f7f7ac856d987b3228b517e490aa0189e"
 	testPrevRandao      = "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4"
-	testBuilderPubkey   = "0xfa1ed37c3553d0ce1e9349b2c5063cf6e394d231c8d3e0df75e9462257c081543086109ffddaacc0aa76f33dc9661c83"
+	testBuilderPubkey   = "0xb872a4f5f596ea7dfd695e45afbe4551b405b10dafba98b2d897c58a5047fc288ef2c1bc4216f906ea05d7fdbed61116"
 )
 
 var (
@@ -188,7 +187,7 @@ func TestLivez(t *testing.T) {
 	path := "/livez"
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, "{\"message\":\"live\"}\n", rr.Body.String())
+	require.JSONEq(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
 
 func TestRegisterValidator(t *testing.T) {
@@ -229,7 +228,7 @@ func TestGetHeader(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
 		Data: beaconclient.GetGenesisResponseData{
-			GenesisTime: uint64(time.Now().UTC().Unix()),
+			GenesisTime: uint64(time.Now().UTC().Unix()), //nolint:gosec
 		},
 	}
 
@@ -257,7 +256,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err := backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 1: regular capella request works and returns a bid
@@ -280,7 +279,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
 	// Check 2: regular deneb request works and returns a bid
@@ -468,6 +467,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			backend.relay.headSlot.Store(headSlot)
 			backend.relay.capellaEpoch = 0
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 5
 			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 				Slot: headSlot,
@@ -498,10 +498,10 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			switch req.Version { //nolint:exhaustive
 			case spec.DataVersionCapella:
 				req.Capella.Message.Slot = submissionSlot
-				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			case spec.DataVersionDeneb:
 				req.Deneb.Message.Slot = submissionSlot
-				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			default:
 				require.Fail(t, "unknown data version")
 			}
@@ -512,7 +512,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
-			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
 			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -900,6 +900,9 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
+			backend.relay.capellaEpoch = 1
+			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
@@ -1011,6 +1014,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()
@@ -1378,4 +1382,62 @@ func gzipBytes(t *testing.T, b []byte) []byte {
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 	return buf.Bytes()
+}
+
+func TestRequestAcceptsJSON(t *testing.T) {
+	for _, tc := range []struct {
+		Header   string
+		Expected bool
+	}{
+		{Header: "", Expected: true},
+		{Header: "application/json", Expected: true},
+		{Header: "application/octet-stream", Expected: false},
+		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: true},
+		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: false},
+		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: true},
+		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: true},
+		{Header: "application/*;q=0.9", Expected: true},
+		{Header: "application/*", Expected: true},
+	} {
+		t.Run(tc.Header, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, "/eth/v1/builder/header/1/0x00/0xaa", nil)
+			require.NoError(t, err)
+			req.Header.Set("Accept", tc.Header)
+			actual := RequestAcceptsJSON(req)
+			require.Equal(t, tc.Expected, actual)
+		})
+	}
+}
+
+func TestNegotiateRequestResponseType(t *testing.T) {
+	for _, tc := range []struct {
+		Header   string
+		Expected string
+		Error    error
+	}{
+		{Header: "", Expected: ApplicationJSON},
+		{Header: "application/json", Expected: ApplicationJSON},
+		{Header: "application/octet-stream", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=0.9,*/*;q=1.0", Expected: ApplicationJSON},
+		{Header: "application/*;q=0.9", Expected: ApplicationJSON, Error: nil},
+		{Header: "application/*", Expected: ApplicationJSON, Error: nil},
+		{Header: "text/html", Error: ErrNotAcceptable},
+	} {
+		t.Run(tc.Header, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, "/eth/v1/builder/header/1/0x00/0xaa", nil)
+			require.NoError(t, err)
+			req.Header.Set("Accept", tc.Header)
+			negotiated, err := NegotiateRequestResponseType(req)
+			if tc.Error != nil {
+				require.Equal(t, tc.Error, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.Expected, negotiated)
+			}
+		})
+	}
 }

@@ -25,7 +25,7 @@ func makeTestSubmitBlockRequestV2Optimistic(t *testing.T) *SubmitBlockRequestV2O
 	require.NoError(t, err)
 	testBuilderPubkey, err := utils.HexToPubkey("0xae7bde4839fa905b7d8125fd84cfdcd0c32cd74e1be3fa24263d71b520fc78113326ce0a90b95d73f19e6d8150a2f73b")
 	require.NoError(t, err)
-	testProposerPubkey, err := utils.HexToPubkey("0xbb8e223239fa905b7d8125fd84cfdcd0c32cd74e1be3fa24263d71b520fc78113326ce0a90b95d73f19e6d8150a2f73b")
+	testProposerPubkey, err := utils.HexToPubkey("0xb872a4f5f596ea7dfd695e45afbe4551b405b10dafba98b2d897c58a5047fc288ef2c1bc4216f906ea05d7fdbed61116")
 	require.NoError(t, err)
 	testAddress, err := utils.HexToAddress("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")
 	require.NoError(t, err)
@@ -95,10 +95,10 @@ func compareV2RequestEquality(t *testing.T, src, targ *SubmitBlockRequestV2Optim
 	require.Equal(t, src.Message.String(), targ.Message.String())
 	require.Equal(t, src.ExecutionPayloadHeader.String(), targ.ExecutionPayloadHeader.String())
 	require.Equal(t, src.Signature, targ.Signature)
-	for i := 0; i < len(src.Transactions); i++ {
+	for i := range src.Transactions {
 		require.Equal(t, src.Transactions[i], targ.Transactions[i])
 	}
-	for i := 0; i < len(src.Withdrawals); i++ {
+	for i := range src.Withdrawals {
 		require.Equal(t, src.Withdrawals[i].String(), targ.Withdrawals[i].String())
 	}
 }

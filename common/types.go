@@ -12,6 +12,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
@@ -52,9 +53,15 @@ var (
 	DenebForkVersionGoerli  = "0x04001020"
 	DenebForkVersionMainnet = "0x04000000"
 
+	ElectraForkVersionHolesky = "0x06017000"
+	ElectraForkVersionSepolia = "0x90000074"
+	ElectraForkVersionGoerli  = "0x05001020"
+	ElectraForkVersionMainnet = "0x05000000"
+
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
 	ForkVersionStringDeneb     = "deneb"
+	ForkVersionStringElectra   = "electra"
 )
 
 type EthNetworkDetails struct {
@@ -64,11 +71,13 @@ type EthNetworkDetails struct {
 	BellatrixForkVersionHex  string
 	CapellaForkVersionHex    string
 	DenebForkVersionHex      string
+	ElectraForkVersionHex    string
 
 	DomainBuilder                 phase0.Domain
 	DomainBeaconProposerBellatrix phase0.Domain
 	DomainBeaconProposerCapella   phase0.Domain
 	DomainBeaconProposerDeneb     phase0.Domain
+	DomainBeaconProposerElectra   phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -77,10 +86,12 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var bellatrixForkVersion string
 	var capellaForkVersion string
 	var denebForkVersion string
+	var electraForkVersion string
 	var domainBuilder phase0.Domain
 	var domainBeaconProposerBellatrix phase0.Domain
 	var domainBeaconProposerCapella phase0.Domain
 	var domainBeaconProposerDeneb phase0.Domain
+	var domainBeaconProposerElectra phase0.Domain
 
 	switch networkName {
 	case EthNetworkHolesky:
@@ -89,30 +100,35 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		bellatrixForkVersion = BellatrixForkVersionHolesky
 		capellaForkVersion = CapellaForkVersionHolesky
 		denebForkVersion = DenebForkVersionHolesky
+		electraForkVersion = ElectraForkVersionHolesky
 	case EthNetworkSepolia:
 		genesisForkVersion = GenesisForkVersionSepolia
 		genesisValidatorsRoot = GenesisValidatorsRootSepolia
 		bellatrixForkVersion = BellatrixForkVersionSepolia
 		capellaForkVersion = CapellaForkVersionSepolia
 		denebForkVersion = DenebForkVersionSepolia
+		electraForkVersion = ElectraForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = GenesisForkVersionGoerli
 		genesisValidatorsRoot = GenesisValidatorsRootGoerli
 		bellatrixForkVersion = BellatrixForkVersionGoerli
 		capellaForkVersion = CapellaForkVersionGoerli
 		denebForkVersion = DenebForkVersionGoerli
+		electraForkVersion = ElectraForkVersionGoerli
 	case EthNetworkMainnet:
 		genesisForkVersion = GenesisForkVersionMainnet
 		genesisValidatorsRoot = GenesisValidatorsRootMainnet
 		bellatrixForkVersion = BellatrixForkVersionMainnet
 		capellaForkVersion = CapellaForkVersionMainnet
 		denebForkVersion = DenebForkVersionMainnet
+		electraForkVersion = ElectraForkVersionMainnet
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
 		bellatrixForkVersion = os.Getenv("BELLATRIX_FORK_VERSION")
 		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
 		denebForkVersion = os.Getenv("DENEB_FORK_VERSION")
+		electraForkVersion = os.Getenv("ELECTRA_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
@@ -137,6 +153,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBeaconProposerElectra, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, electraForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
@@ -144,26 +165,30 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		BellatrixForkVersionHex:       bellatrixForkVersion,
 		CapellaForkVersionHex:         capellaForkVersion,
 		DenebForkVersionHex:           denebForkVersion,
+		ElectraForkVersionHex:         electraForkVersion,
 		DomainBuilder:                 domainBuilder,
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
+		DomainBeaconProposerElectra:   domainBeaconProposerElectra,
 	}, nil
 }
 
 func (e *EthNetworkDetails) String() string {
 	return fmt.Sprintf(
 		`EthNetworkDetails{
-	Name: %s, 
-	GenesisForkVersionHex: %s, 
+	Name: %s,
+	GenesisForkVersionHex: %s,
 	GenesisValidatorsRootHex: %s,
-	BellatrixForkVersionHex: %s, 
-	CapellaForkVersionHex: %s, 
+	BellatrixForkVersionHex: %s,
+	CapellaForkVersionHex: %s,
 	DenebForkVersionHex: %s,
-	DomainBuilder: %x, 
-	DomainBeaconProposerBellatrix: %x, 
-	DomainBeaconProposerCapella: %x, 
+	ElectraForkVersionHex: %s,
+	DomainBuilder: %x,
+	DomainBeaconProposerBellatrix: %x,
+	DomainBeaconProposerCapella: %x,
 	DomainBeaconProposerDeneb: %x
+	DomainBeaconProposerElectra: %x
 }`,
 		e.Name,
 		e.GenesisForkVersionHex,
@@ -171,10 +196,12 @@ func (e *EthNetworkDetails) String() string {
 		e.BellatrixForkVersionHex,
 		e.CapellaForkVersionHex,
 		e.DenebForkVersionHex,
+		e.ElectraForkVersionHex,
 		e.DomainBuilder,
 		e.DomainBeaconProposerBellatrix,
 		e.DomainBeaconProposerCapella,
-		e.DomainBeaconProposerDeneb)
+		e.DomainBeaconProposerDeneb,
+		e.DomainBeaconProposerElectra)
 }
 
 type PubkeyHex string
@@ -414,6 +441,9 @@ type BlockSubmissionInfo struct {
 	Blobs                      []deneb.Blob
 	BlobGasUsed                uint64
 	ExcessBlobGas              uint64
+	DepositRequests            []*electra.DepositRequest
+	WithdrawalRequests         []*electra.WithdrawalRequest
+	ConsolidationRequests      []*electra.ConsolidationRequest
 }
 
 /*
@@ -424,6 +454,8 @@ a block. The message must be SSZ encoded. The first three fields are at most
 which is sufficient data to set the bid of the builder. The `Transactions`
 and `Withdrawals` fields are required to construct the full SignedBeaconBlock
 and are parsed asynchronously.
+
+TODO(JWT): Does this need to be updated? It hasn't been updated for Deneb.
 
 Header only layout:
 [000-236) = Message   (236 bytes)
@@ -529,7 +561,7 @@ func (s *SubmitBlockRequestV2Optimistic) UnmarshalSSZ(buf []byte) error {
 			return err
 		}
 		s.Withdrawals = make([]*capella.Withdrawal, num)
-		for ii := 0; ii < num; ii++ {
+		for ii := range num {
 			if s.Withdrawals[ii] == nil {
 				s.Withdrawals[ii] = new(capella.Withdrawal)
 			}
@@ -615,7 +647,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 
 	// Offset (3) 'Transactions'
 	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		offset += 4
 		offset += len(s.Transactions[ii])
 	}
@@ -635,12 +667,12 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 	}
 	{
 		offset = 4 * len(s.Transactions)
-		for ii := 0; ii < len(s.Transactions); ii++ {
+		for ii := range s.Transactions {
 			dst = ssz.WriteOffset(dst, offset)
 			offset += len(s.Transactions[ii])
 		}
 	}
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		if size := len(s.Transactions[ii]); size > 1073741824 {
 			err = ssz.ErrBytesLengthFn("SubmitBlockRequestV2Optimistic.Transactions[ii]", size, 1073741824)
 			return nil, err
@@ -653,7 +685,7 @@ func (s *SubmitBlockRequestV2Optimistic) MarshalSSZTo(buf []byte) (dst []byte, e
 		err = ssz.ErrListTooBigFn("SubmitBlockRequestV2Optimistic.Withdrawals", size, 16)
 		return nil, err
 	}
-	for ii := 0; ii < len(s.Withdrawals); ii++ {
+	for ii := range s.Withdrawals {
 		if dst, err = s.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
 			return nil, err
 		}
@@ -672,7 +704,7 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 	size += s.ExecutionPayloadHeader.SizeSSZ()
 
 	// Field (3) 'Transactions'
-	for ii := 0; ii < len(s.Transactions); ii++ {
+	for ii := range s.Transactions {
 		size += 4
 		size += len(s.Transactions[ii])
 	}

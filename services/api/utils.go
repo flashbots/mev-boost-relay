@@ -18,11 +18,14 @@ var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
-	ErrUnsupportedPayload = errors.New("unsupported payload version")
-	ErrNoWithdrawals      = errors.New("no withdrawals")
-	ErrPayloadMismatch    = errors.New("beacon-block and payload version mismatch")
-	ErrHeaderHTRMismatch  = errors.New("beacon-block and payload header mismatch")
-	ErrBlobMismatch       = errors.New("beacon-block and payload blob contents mismatch")
+	ErrUnsupportedPayload   = errors.New("unsupported payload version")
+	ErrNoWithdrawals        = errors.New("no withdrawals")
+	ErrNoDepositRequests    = errors.New("no deposit receipts")
+	ErrNoWithdrawalRequests = errors.New("no execution layer withdrawal requests")
+	ErrPayloadMismatch      = errors.New("beacon-block and payload version mismatch")
+	ErrHeaderHTRMismatch    = errors.New("beacon-block and payload header mismatch")
+	ErrBlobMismatch         = errors.New("beacon-block and payload blob contents mismatch")
+	ErrNotAcceptable        = errors.New("not acceptable")
 )
 
 func SanityCheckBuilderBlockSubmission(payload *common.VersionedSubmitBlockRequest) error {
@@ -106,6 +109,37 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 
 		for i, commitment := range bb.Deneb.Message.Body.BlobKZGCommitments {
 			if commitment != payload.Deneb.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+		}
+	case spec.DataVersionElectra:
+		block := bb.Electra.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Electra = payload.Electra.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Electra.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+
+		if len(bb.Electra.Message.Body.BlobKZGCommitments) != len(payload.Electra.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
+
+		for i, commitment := range bb.Electra.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Electra.BlobsBundle.Commitments[i] {
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
 			}
 		}

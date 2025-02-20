@@ -3,7 +3,6 @@ package common
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"testing"
 
@@ -36,7 +35,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// json matches marshalled SSZ
-			jsonBytes := LoadGzippedBytes(t, fmt.Sprintf("%s.json.gz", testCase.filepath))
+			jsonBytes := LoadGzippedBytes(t, testCase.filepath+".json.gz")
 
 			submitBlockData := new(VersionedSubmitBlockRequest)
 			err := json.Unmarshal(jsonBytes, &submitBlockData)
@@ -46,7 +45,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 			marshalledSszBytes, err := submitBlockData.MarshalSSZ()
 			require.NoError(t, err)
 
-			sszBytes := LoadGzippedBytes(t, fmt.Sprintf("%s.ssz.gz", testCase.filepath))
+			sszBytes := LoadGzippedBytes(t, testCase.filepath+".ssz.gz")
 			require.Equal(t, sszBytes, marshalledSszBytes)
 
 			htr, err := submitBlockData.HashTreeRoot()
@@ -63,7 +62,7 @@ func TestSSZBuilderSubmission(t *testing.T) {
 			buffer := new(bytes.Buffer)
 			err = json.Compact(buffer, jsonBytes)
 			require.NoError(t, err)
-			require.Equal(t, buffer.Bytes(), marshalledJSONBytes)
+			require.JSONEq(t, buffer.String(), string(marshalledJSONBytes))
 		})
 	}
 }
@@ -91,7 +90,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			// json -> marshalled ssz -> matches expected ssz
 			payload := new(builderSpec.VersionedSignedBuilderBid)
 
-			jsonBytes, err := os.ReadFile(fmt.Sprintf("%s.json", testCase.filepath))
+			jsonBytes, err := os.ReadFile(testCase.filepath + ".json")
 			require.NoError(t, err)
 
 			err = json.Unmarshal(jsonBytes, &payload)
@@ -109,7 +108,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 				require.Fail(t, "unknown version")
 			}
 
-			sszExpectedBytes, err := os.ReadFile(fmt.Sprintf("%s.ssz", testCase.filepath))
+			sszExpectedBytes, err := os.ReadFile(testCase.filepath + ".ssz")
 			require.NoError(t, err)
 			require.Equal(t, sszExpectedBytes, ssz)
 
@@ -147,7 +146,7 @@ func TestSSZGetHeaderResponse(t *testing.T) {
 			buffer := new(bytes.Buffer)
 			err = json.Compact(buffer, jsonBytes)
 			require.NoError(t, err)
-			require.Equal(t, buffer.Bytes(), marshalledJSONBytes)
+			require.JSONEq(t, buffer.String(), string(marshalledJSONBytes))
 		})
 	}
 }
@@ -161,14 +160,14 @@ func BenchmarkDecoding(b *testing.B) {
 
 	payload := new(builderSpec.VersionedSignedBuilderBid)
 	b.Run("capella json", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = json.Unmarshal(jsonBytes, &payload)
 			require.NoError(b, err)
 		}
 	})
 	payload.Capella = new(builderApiCapella.SignedBuilderBid)
 	b.Run("capella ssz", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = payload.Capella.UnmarshalSSZ(sszBytes)
 			require.NoError(b, err)
 		}
@@ -181,14 +180,14 @@ func BenchmarkDecoding(b *testing.B) {
 	require.NoError(b, err)
 	payload = new(builderSpec.VersionedSignedBuilderBid)
 	b.Run("deneb json", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = json.Unmarshal(jsonBytes, &payload)
 			require.NoError(b, err)
 		}
 	})
 	payload.Deneb = new(builderApiDeneb.SignedBuilderBid)
 	b.Run("deneb ssz", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			err = payload.Deneb.UnmarshalSSZ(sszBytes)
 			require.NoError(b, err)
 		}

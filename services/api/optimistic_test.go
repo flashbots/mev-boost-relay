@@ -1,9 +1,8 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +38,7 @@ const (
 
 var (
 	feeRecipient = bellatrix.ExecutionAddress{0x02}
-	errFake      = fmt.Errorf("foo error")
+	errFake      = errors.New("foo error")
 )
 
 func getTestBidTrace(pubkey phase0.BLSPubKey, value, slot uint64) *common.BidTraceV2WithBlobFields {
@@ -166,12 +165,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: fmt.Errorf(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
 		},
 		{
 			description: "success_deneb",
@@ -186,12 +185,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: fmt.Errorf(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
 		},
 		{
 			description:     "missing_trie_node_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: fmt.Errorf(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
 		},
 	}
 	for _, tc := range cases {
@@ -200,7 +199,7 @@ func TestSimulateBlock(t *testing.T) {
 			backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{
 				simulationError: tc.simulationError,
 			}
-			_, _, simErr := backend.relay.simulateBlock(context.Background(), blockSimOptions{
+			_, _, simErr := backend.relay.simulateBlock(t.Context(), blockSimOptions{
 				isHighPrio: true,
 				log:        backend.relay.log,
 				builder: &blockBuilderCacheEntry{
@@ -464,6 +463,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			backend.relay.optimisticSlot.Store(tc.slot)
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
+			backend.relay.electraEpoch = 3
 			backend.relay.proposerDutiesMap[tc.slot] = backend.relay.proposerDutiesMap[slot]
 
 			randaoHash, err := utils.HexToHash(randao)
@@ -488,7 +488,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			}, tc.simulationError, backend)
 
 			// Check http code.
-			require.Equal(t, uint64(rr.Code), tc.httpCode)
+			require.EqualValues(t, rr.Code, tc.httpCode)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)

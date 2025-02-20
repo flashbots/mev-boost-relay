@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 // BuilderBids supports redis.SaveBidAndUpdateTopBid
