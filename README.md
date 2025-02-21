@@ -123,6 +123,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 
 * `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: `3`)
 * `API_MAX_HEADER_BYTES` - http maximum header bytes (default: `60_000`)
+* `API_MAX_PAYLOAD_BYTES` - http maximum payload bytes (default: `15_728_640`)
 * `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: `1_500`)
 * `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: `600`)
 * `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: `10_000`)
