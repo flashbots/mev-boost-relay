@@ -10,7 +10,6 @@ require (
 	github.com/attestantio/go-eth2-client v0.24.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/btcsuite/btcd/btcutil v1.1.6
-	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.2
 	github.com/flashbots/go-boost-utils v1.8.2-0.20240925223941-58709124077d
 	github.com/flashbots/go-utils v0.8.3
