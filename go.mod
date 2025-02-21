@@ -6,7 +6,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/aohorodnyk/mimeheader v0.0.6
-	github.com/attestantio/go-builder-client v0.6.1-0.20250218155713-9f16ff484247
+	github.com/attestantio/go-builder-client v0.6.1
 	github.com/attestantio/go-eth2-client v0.24.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/btcsuite/btcd/btcutil v1.1.6
