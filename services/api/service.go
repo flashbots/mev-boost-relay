@@ -1031,9 +1031,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	log = log.WithField("proposerContentType", proposerContentType)
 
 	// Read the encoded validator registrations
-	body, err := io.ReadAll(req.Body)
 	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
-	body, err := io.ReadAll(limitReader)
+	regBytes, err := io.ReadAll(limitReader)
 	if err != nil {
 		log.WithError(err).Warn("failed to read request body")
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
@@ -1046,10 +1045,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	switch proposerContentType {
 	case ApplicationOctetStream:
 		log.Debug("Parsing registrations as SSZ")
-		err = signedValidatorRegistrations.UnmarshalSSZ(body)
+		err = signedValidatorRegistrations.UnmarshalSSZ(regBytes)
 	default:
 		log.Debug("Parsing registrations as JSON")
-		err = json.Unmarshal(body, signedValidatorRegistrations)
+		err = json.Unmarshal(regBytes, signedValidatorRegistrations)
 	}
 	if err != nil {
 		handleError(log, http.StatusBadRequest, err.Error())
