@@ -354,7 +354,7 @@ func TestGetHeader(t *testing.T) {
 	_, err := backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 1: regular capella request works and returns a bid
+	// Check: JSON capella request works and returns a bid
 	rr := backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := builderSpec.VersionedSignedBuilderBid{}
@@ -363,6 +363,22 @@ func TestGetHeader(t *testing.T) {
 	value, err := resp.Value()
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionCapella, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check: SSZ capella request works and returns a bid
+	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
+		"Accept": []string{"application/octet-stream"},
+	})
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, EthConsensusVersionCapella, rr.Header().Get("Eth-Consensus-Version"))
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	resp.Version = spec.DataVersionCapella
+	resp.Capella = new(builderApiCapella.SignedBuilderBid)
+	err = resp.Capella.UnmarshalSSZ(rr.Body.Bytes())
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
 	require.Equal(t, bidValue.String(), value.String())
 
 	// Create a deneb bid
@@ -377,7 +393,7 @@ func TestGetHeader(t *testing.T) {
 	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 2: regular deneb request works and returns a bid
+	// Check: JSON deneb request works and returns a bid
 	rr = backend.request(http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp = builderSpec.VersionedSignedBuilderBid{}
@@ -388,7 +404,23 @@ func TestGetHeader(t *testing.T) {
 	require.Equal(t, spec.DataVersionDeneb, resp.Version)
 	require.Equal(t, bidValue.String(), value.String())
 
-	// Check 3: Request returns 204 if sending a filtered user agent
+	// Check: SSZ deneb request works and returns a bid
+	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
+		"Accept": []string{"application/octet-stream"},
+	})
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, EthConsensusVersionDeneb, rr.Header().Get("Eth-Consensus-Version"))
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	resp.Version = spec.DataVersionDeneb
+	resp.Deneb = new(builderApiDeneb.SignedBuilderBid)
+	err = resp.Deneb.UnmarshalSSZ(rr.Body.Bytes())
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
 	require.Equal(t, http.StatusNoContent, rr.Code)
 }
