@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -11,6 +12,7 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2Api "github.com/attestantio/go-eth2-client/api"
+	eth2ApiV1Bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	eth2ApiV1Electra "github.com/attestantio/go-eth2-client/api/v1/electra"
@@ -588,4 +590,37 @@ func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSON(input []byte) error {
 		return nil
 	}
 	return errors.Wrap(err, "failed to unmarshal SignedBlindedBeaconBlock")
+}
+
+func (r *VersionedSignedBlindedBeaconBlock) Unmarshal(input []byte, contentType, ethConsensusVersion string) error {
+	switch contentType {
+	case "application/octet-stream":
+		if ethConsensusVersion != "" {
+			switch ethConsensusVersion {
+			case EthConsensusVersionBellatrix:
+				r.Version = spec.DataVersionBellatrix
+				r.Bellatrix = new(eth2ApiV1Bellatrix.SignedBlindedBeaconBlock)
+				return r.Bellatrix.UnmarshalSSZ(input)
+			case EthConsensusVersionCapella:
+				r.Version = spec.DataVersionCapella
+				r.Capella = new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+				return r.Capella.UnmarshalSSZ(input)
+			case EthConsensusVersionDeneb:
+				r.Version = spec.DataVersionDeneb
+				r.Deneb = new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
+				return r.Deneb.UnmarshalSSZ(input)
+			case EthConsensusVersionElectra:
+				r.Version = spec.DataVersionElectra
+				r.Electra = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+				return r.Electra.UnmarshalSSZ(input)
+			default:
+				return ErrInvalidForkVersion
+			}
+		} else {
+			return ErrMissingEthConsensusVersion
+		}
+	case "application/json":
+		return json.NewDecoder(bytes.NewReader(input)).Decode(r)
+	}
+	return ErrInvalidContentType
 }

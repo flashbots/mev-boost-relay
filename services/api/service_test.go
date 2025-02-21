@@ -371,7 +371,7 @@ func TestGetHeader(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
-	require.Equal(t, EthConsensusVersionCapella, rr.Header().Get("Eth-Consensus-Version"))
+	require.Equal(t, common.EthConsensusVersionCapella, rr.Header().Get("Eth-Consensus-Version"))
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	resp.Version = spec.DataVersionCapella
 	resp.Capella = new(builderApiCapella.SignedBuilderBid)
@@ -410,7 +410,7 @@ func TestGetHeader(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
-	require.Equal(t, EthConsensusVersionDeneb, rr.Header().Get("Eth-Consensus-Version"))
+	require.Equal(t, common.EthConsensusVersionDeneb, rr.Header().Get("Eth-Consensus-Version"))
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	resp.Version = spec.DataVersionDeneb
 	resp.Deneb = new(builderApiDeneb.SignedBuilderBid)

@@ -26,9 +26,11 @@ import (
 )
 
 var (
-	ErrInvalidForkVersion = errors.New("invalid fork version")
-	ErrHTTPErrorResponse  = errors.New("got an HTTP error response")
-	ErrIncorrectLength    = errors.New("incorrect length")
+	ErrInvalidForkVersion         = errors.New("invalid fork version")
+	ErrHTTPErrorResponse          = errors.New("got an HTTP error response")
+	ErrIncorrectLength            = errors.New("incorrect length")
+	ErrMissingEthConsensusVersion = errors.New("missing eth-consensus-version")
+	ErrInvalidContentType         = errors.New("invalid content type")
 )
 
 // SlotPos returns the slot's position in the epoch (1-based, i.e. 1..32)

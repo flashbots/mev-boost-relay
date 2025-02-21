@@ -2,7 +2,6 @@
 package api
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -10,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -55,11 +55,6 @@ const (
 
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
-
-	EthConsensusVersionBellatrix = "bellatrix"
-	EthConsensusVersionCapella   = "capella"
-	EthConsensusVersionDeneb     = "deneb"
-	EthConsensusVersionElectra   = "electra"
 )
 
 var (
@@ -1295,16 +1290,16 @@ func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec
 	var sszData []byte
 	switch bid.Version {
 	case spec.DataVersionBellatrix:
-		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionBellatrix)
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionBellatrix)
 		sszData, err = bid.Bellatrix.MarshalSSZ()
 	case spec.DataVersionCapella:
-		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionCapella)
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionCapella)
 		sszData, err = bid.Capella.MarshalSSZ()
 	case spec.DataVersionDeneb:
-		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionDeneb)
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionDeneb)
 		sszData, err = bid.Deneb.MarshalSSZ()
 	case spec.DataVersionElectra:
-		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionElectra)
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
 		sszData, err = bid.Electra.MarshalSSZ()
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
 		err = ErrInvalidForkVersion
@@ -1343,18 +1338,39 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
 
+	// Negotiate the response media type
+	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
+	if err != nil {
+		api.RespondError(w, http.StatusNotAcceptable, err.Error())
+		return
+	}
+
+	// Determine what encoding the proposer sent
+	proposerContentType := req.Header.Get("Content-Type")
+	parsedProposerContentType, _, err := mime.ParseMediaType(proposerContentType)
+	if err != nil {
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+
+	// Get the optional consensus version
+	proposerEthConsensusVersion := req.Header.Get("Eth-Consensus-Version")
+
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	log := api.log.WithFields(logrus.Fields{
-		"method":                "getPayload",
-		"ua":                    ua,
-		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
-		"contentLength":         req.ContentLength,
-		"headSlot":              headSlot,
-		"headSlotEpochPos":      (headSlot % common.SlotsPerEpoch) + 1,
-		"idArg":                 req.URL.Query().Get("id"),
-		"timestampRequestStart": receivedAt.UnixMilli(),
+		"method":                      "getPayload",
+		"ua":                          ua,
+		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
+		"contentLength":               req.ContentLength,
+		"headSlot":                    headSlot,
+		"headSlotEpochPos":            (headSlot % common.SlotsPerEpoch) + 1,
+		"idArg":                       req.URL.Query().Get("id"),
+		"timestampRequestStart":       receivedAt.UnixMilli(),
+		"negotiatedResponseMediaType": negotiatedResponseMediaType,
+		"parsedProposerContentType":   parsedProposerContentType,
+		"proposerEthConsensusVersion": proposerEthConsensusVersion,
 	})
 
 	// Log at start and end of request
@@ -1370,25 +1386,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
-
-	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
-	if !RequestAcceptsJSON(req) {
-		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
-		return
-	}
-
-	// If the Content-Type header is included, for now only allow JSON.
-	// TODO: support Content-Type: application/octet-stream and allow SSZ
-	// request bodies.
-	if ct := req.Header.Get("Content-Type"); ct != "" {
-		switch ct {
-		case ApplicationJSON:
-			break
-		default:
-			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
-			return
-		}
-	}
 
 	// Read the body first, so we can decode it later
 	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
@@ -1407,7 +1404,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.VersionedSignedBlindedBeaconBlock)
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
+	err = payload.Unmarshal(body, parsedProposerContentType, proposerEthConsensusVersion)
+	if err != nil {
 		log.WithError(err).Warn("failed to decode getPayload request")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
 		return
@@ -1694,8 +1692,13 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
-	// respond to the HTTP request
-	api.RespondOK(w, getPayloadResp)
+	// Respond appropriately
+	switch negotiatedResponseMediaType {
+	case ApplicationOctetStream:
+		api.respondGetPayloadSSZ(w, getPayloadResp)
+	default:
+		api.RespondOK(w, getPayloadResp)
+	}
 	blockNumber, err := payload.ExecutionBlockNumber()
 	if err != nil {
 		log.WithError(err).Info("failed to get block number")
@@ -1728,6 +1731,44 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 	log.Info("execution payload delivered")
+}
+
+// respondGetPayloadSSZ responds to the proposer in SSZ
+func (api *RelayAPI) respondGetPayloadSSZ(w http.ResponseWriter, result *builderApi.VersionedSubmitBlindedBlockResponse) {
+	// Serialize the response
+	var err error
+	var sszData []byte
+	switch result.Version {
+	case spec.DataVersionBellatrix:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionBellatrix)
+		sszData, err = result.Bellatrix.MarshalSSZ()
+	case spec.DataVersionCapella:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionCapella)
+		sszData, err = result.Capella.MarshalSSZ()
+	case spec.DataVersionDeneb:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionDeneb)
+		sszData, err = result.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
+		sszData, err = result.Electra.MarshalSSZ()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
+		err = ErrInvalidForkVersion
+	}
+	if err != nil {
+		api.log.WithError(err).Error("error serializing response as SSZ")
+		http.Error(w, "failed to serialize response", http.StatusInternalServerError)
+		return
+	}
+
+	// Write the header
+	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.WriteHeader(http.StatusOK)
+
+	// Write SSZ data
+	if _, err := w.Write(sszData); err != nil {
+		api.log.WithError(err).Error("error writing SSZ response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+	}
 }
 
 // --------------------
