@@ -24,6 +24,7 @@ import (
 	"github.com/aohorodnyk/mimeheader"
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -51,6 +52,14 @@ const (
 	ErrBlockAlreadyKnown  = "simulation failed: block already known"
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode    = "missing trie node"
+
+	HeaderContentType         = "Content-Type"
+	HeaderEthConsensusVersion = "Eth-Consensus-Version"
+
+	EthConsensusVersionBellatrix = "bellatrix"
+	EthConsensusVersionCapella   = "capella"
+	EthConsensusVersionDeneb     = "deneb"
+	EthConsensusVersionElectra   = "electra"
 )
 
 var (
@@ -60,6 +69,7 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
+	ErrInvalidForkVersion         = errors.New("invalid fork version")
 )
 
 var (
@@ -1163,6 +1173,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 
+	// Negotiate the response media type
+	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
+	if err != nil {
+		api.RespondError(w, http.StatusNotAcceptable, err.Error())
+		return
+	}
+
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
 		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
@@ -1174,16 +1191,17 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	msIntoSlot := requestTime.UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
 
 	log := api.log.WithFields(logrus.Fields{
-		"method":           "getHeader",
-		"headSlot":         headSlot,
-		"slot":             slotStr,
-		"parentHash":       parentHashHex,
-		"pubkey":           proposerPubkeyHex,
-		"ua":               ua,
-		"mevBoostV":        common.GetMevBoostVersionFromUserAgent(ua),
-		"requestTimestamp": requestTime.Unix(),
-		"slotStartSec":     slotStartTimestamp,
-		"msIntoSlot":       msIntoSlot,
+		"method":                      "getHeader",
+		"headSlot":                    headSlot,
+		"slot":                        slotStr,
+		"parentHash":                  parentHashHex,
+		"pubkey":                      proposerPubkeyHex,
+		"ua":                          ua,
+		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
+		"requestTimestamp":            requestTime.Unix(),
+		"slotStartSec":                slotStartTimestamp,
+		"msIntoSlot":                  msIntoSlot,
+		"negotiatedResponseMediaType": negotiatedResponseMediaType,
 	})
 
 	if len(proposerPubkeyHex) != 98 {
@@ -1198,12 +1216,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	if slot < headSlot {
 		api.RespondError(w, http.StatusBadRequest, "slot is too old")
-		return
-	}
-
-	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
-	if !RequestAcceptsJSON(req) {
-		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
 		return
 	}
 
@@ -1268,7 +1280,50 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
 
-	api.RespondOK(w, bid)
+	switch negotiatedResponseMediaType {
+	case ApplicationOctetStream:
+		api.respondGetHeaderSSZ(w, bid)
+	default:
+		api.RespondOK(w, bid)
+	}
+}
+
+// respondGetHeaderSSZ responds to the proposer in SSZ
+func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec.VersionedSignedBuilderBid) {
+	// Serialize the response
+	var err error
+	var sszData []byte
+	switch bid.Version {
+	case spec.DataVersionBellatrix:
+		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionBellatrix)
+		sszData, err = bid.Bellatrix.MarshalSSZ()
+	case spec.DataVersionCapella:
+		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionCapella)
+		sszData, err = bid.Capella.MarshalSSZ()
+	case spec.DataVersionDeneb:
+		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionDeneb)
+		sszData, err = bid.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		w.Header().Set(HeaderEthConsensusVersion, EthConsensusVersionElectra)
+		sszData, err = bid.Electra.MarshalSSZ()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
+		err = ErrInvalidForkVersion
+	}
+	if err != nil {
+		api.log.WithError(err).Error("error serializing response as SSZ")
+		http.Error(w, "failed to serialize response", http.StatusInternalServerError)
+		return
+	}
+
+	// Write the header
+	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.WriteHeader(http.StatusOK)
+
+	// Write SSZ data
+	if _, err := w.Write(sszData); err != nil {
+		api.log.WithError(err).Error("error writing SSZ response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+	}
 }
 
 func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBeaconBlock, pubKey []byte) (bool, error) {
