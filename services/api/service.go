@@ -1155,6 +1155,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	// Negotiate the response media type
 	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
 	if err != nil {
+		api.log.WithError(err).Error("failed to negotiate response type")
 		api.RespondError(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
@@ -1261,8 +1262,10 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	switch negotiatedResponseMediaType {
 	case ApplicationOctetStream:
+		log.Debug("responding with SSZ")
 		api.respondGetHeaderSSZ(w, bid)
 	default:
+		log.Debug("responding with JSON")
 		api.RespondOK(w, bid)
 	}
 }
@@ -1325,6 +1328,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Negotiate the response media type
 	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
 	if err != nil {
+		api.log.WithError(err).Error("failed to negotiate response type")
 		api.RespondError(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
@@ -1333,6 +1337,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	proposerContentType := req.Header.Get(HeaderContentType)
 	parsedProposerContentType, _, err := mime.ParseMediaType(proposerContentType)
 	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
 		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
 		return
 	}
@@ -1679,8 +1684,10 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Respond appropriately
 	switch negotiatedResponseMediaType {
 	case ApplicationOctetStream:
+		log.Debug("responding with SSZ")
 		api.respondGetPayloadSSZ(w, getPayloadResp)
 	default:
+		log.Debug("responding with JSON")
 		api.RespondOK(w, getPayloadResp)
 	}
 	blockNumber, err := payload.ExecutionBlockNumber()
