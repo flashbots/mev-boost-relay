@@ -53,6 +53,10 @@ const (
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode    = "missing trie node"
 
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
+
+	HeaderAccept              = "Accept"
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
 )
@@ -932,7 +936,7 @@ func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(HeaderContentType, ApplicationJSON)
 	w.WriteHeader(code)
 	if response == nil {
 		return
@@ -949,32 +953,12 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-const (
-	ApplicationJSON        = "application/json"
-	ApplicationOctetStream = "application/octet-stream"
-)
-
-// RequestAcceptsJSON returns true if the Accept header is empty (defaults to JSON)
-// or application/json can be negotiated.
-func RequestAcceptsJSON(req *http.Request) bool {
-	ah := req.Header.Get("Accept")
-	if ah == "" {
-		return true
-	}
-	mh := mimeheader.ParseAcceptHeader(ah)
-	_, _, matched := mh.Negotiate(
-		[]string{ApplicationJSON},
-		ApplicationJSON,
-	)
-	return matched
-}
-
 // NegotiateRequestResponseType returns whether the request accepts
 // JSON (application/json) or SSZ (application/octet-stream) responses.
 // If accepted is false, no mime type could be negotiated and the server
 // should respond with http.StatusNotAcceptable.
 func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
-	ah := req.Header.Get("Accept")
+	ah := req.Header.Get(HeaderAccept)
 	if ah == "" {
 		return ApplicationJSON, nil
 	}
@@ -1032,7 +1016,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	// Get the request content type
-	proposerContentType := req.Header.Get("Content-Type")
+	proposerContentType := req.Header.Get(HeaderContentType)
 	log = log.WithField("proposerContentType", proposerContentType)
 
 	// Read the encoded validator registrations
@@ -1346,7 +1330,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Determine what encoding the proposer sent
-	proposerContentType := req.Header.Get("Content-Type")
+	proposerContentType := req.Header.Get(HeaderContentType)
 	parsedProposerContentType, _, err := mime.ParseMediaType(proposerContentType)
 	if err != nil {
 		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
@@ -2084,8 +2068,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
-	contentType := req.Header.Get("Content-Type")
-	if contentType == "application/octet-stream" {
+	contentType := req.Header.Get(HeaderContentType)
+	if contentType == ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
 		pf.ContentType = "ssz"
 		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {

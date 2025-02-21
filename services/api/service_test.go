@@ -1509,31 +1509,6 @@ func gzipBytes(t *testing.T, b []byte) []byte {
 	return buf.Bytes()
 }
 
-func TestRequestAcceptsJSON(t *testing.T) {
-	for _, tc := range []struct {
-		Header   string
-		Expected bool
-	}{
-		{Header: "", Expected: true},
-		{Header: "application/json", Expected: true},
-		{Header: "application/octet-stream", Expected: false},
-		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: true},
-		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: false},
-		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: true},
-		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: true},
-		{Header: "application/*;q=0.9", Expected: true},
-		{Header: "application/*", Expected: true},
-	} {
-		t.Run(tc.Header, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/eth/v1/builder/header/1/0x00/0xaa", nil)
-			require.NoError(t, err)
-			req.Header.Set("Accept", tc.Header)
-			actual := RequestAcceptsJSON(req)
-			require.Equal(t, tc.Expected, actual)
-		})
-	}
-}
-
 func TestNegotiateRequestResponseType(t *testing.T) {
 	for _, tc := range []struct {
 		Header   string
@@ -1543,6 +1518,7 @@ func TestNegotiateRequestResponseType(t *testing.T) {
 		{Header: "", Expected: ApplicationJSON},
 		{Header: "application/json", Expected: ApplicationJSON},
 		{Header: "application/octet-stream", Expected: ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1,application/json;q=0.9", Expected: ApplicationOctetStream},
 		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: ApplicationOctetStream},
 		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: ApplicationOctetStream},
 		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: ApplicationOctetStream},
