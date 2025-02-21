@@ -99,6 +99,7 @@ var (
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3_000)
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10_000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60_000)
+	apiMaxPayloadBytes     = cli.GetEnvInt("API_MAX_PAYLOAD_BYTES", 15*1024*1024) // 15 MiB
 
 	// api shutdown: wait time (to allow removal from load balancer before stopping http server)
 	apiShutdownWaitDuration = common.GetEnvDurationSec("API_SHUTDOWN_WAIT_SEC", 30)
@@ -1040,9 +1041,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
+	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
+	body, err := io.ReadAll(limitReader)
 	if err != nil {
-		log.WithError(err).WithField("contentLength", req.ContentLength).Warn("failed to read request body")
+		log.WithError(err).Warn("failed to read request body")
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
@@ -1408,7 +1410,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Read the body first, so we can decode it later
-	body, err := io.ReadAll(req.Body)
+	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
+	body, err := io.ReadAll(limitReader)
 	if err != nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
 			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
@@ -2044,7 +2047,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	limitReader := io.LimitReader(r, 10*1024*1024) // 10 MB
+	limitReader := io.LimitReader(r, int64(apiMaxPayloadBytes))
 	requestPayloadBytes, err := io.ReadAll(limitReader)
 	if err != nil {
 		log.WithError(err).Warn("could not read payload")
