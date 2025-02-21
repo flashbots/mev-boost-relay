@@ -104,17 +104,15 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	return &backend
 }
 
-func (be *testBackend) requestBytes(method, path string, payload []byte, headers map[string]string) *httptest.ResponseRecorder {
+func (be *testBackend) requestBytes(method, path string, payload []byte, header *http.Header) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
 	req, err = http.NewRequest(method, path, bytes.NewReader(payload))
 	require.NoError(be.t, err)
 
-	// Set headers
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
+	// Set header
+	req.Header = *header
 
 	// lfg
 	rr := httptest.NewRecorder()
@@ -193,14 +191,7 @@ func TestLivez(t *testing.T) {
 func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
-	t.Run("not a known validator", func(t *testing.T) {
-		backend := newTestBackend(t, 1)
-
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("known validator", func(t *testing.T) {
+	t.Run("accept validator -- json", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		msg := common.ValidPayloadRegisterValidator
@@ -220,6 +211,110 @@ func TestRegisterValidator(t *testing.T) {
 		case <-backend.relay.validatorUpdateCh:
 		default:
 		}
+	})
+
+	t.Run("accept validator -- ssz", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		regs := builderApiV1.SignedValidatorRegistrations{}
+		regs.Registrations = append(regs.Registrations, &msg)
+		regBytes, err := regs.MarshalSSZ()
+		require.NoError(t, err)
+
+		rr := backend.requestBytes(http.MethodPost, path, regBytes, &http.Header{
+			"Content-Type": []string{"application/octet-stream"},
+		})
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		// wait for the both channel notifications
+		select {
+		case val := <-backend.relay.validatorRegC:
+			require.Equal(t, val.Message.Pubkey, msg.Message.Pubkey)
+		default:
+		}
+
+		select {
+		case <-backend.relay.validatorUpdateCh:
+		default:
+		}
+	})
+
+	t.Run("reject validator -- timestamp too early", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// The minimum timestamp is genesis time, so anything less than that should always fail
+		newMessage.Timestamp = time.Unix(int64(backend.relay.genesisInfo.Data.GenesisTime-1), 0) //nolint:gosec
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "timestamp too early")
+	})
+
+	t.Run("reject validator -- timestamp too far in the future", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// The time difference limit is 10 seconds, so 11 seconds past should always fail
+		newMessage.Timestamp = time.Now().Add(11 * time.Second)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
+	})
+
+	t.Run("reject validator -- not a known validator", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+
+		// We do not call backend.datastore.SetKnownValidator()
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "not a known validator")
+	})
+
+	t.Run("reject validator -- failed to verify validator signature", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// Change the message without changing the signature
+		newMessage.Timestamp = msg.Message.Timestamp.Add(1 * time.Second)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
+	})
+
+	t.Run("accept validator -- milliseconds dont matter", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// Anything less than a second is dropped from the encoded timestamp
+		newMessage.Timestamp = newMessage.Timestamp.Add(999 * time.Millisecond)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		require.Equal(t, http.StatusOK, rr.Code)
 	})
 }
 
@@ -513,7 +608,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
-			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, new(http.Header))
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -521,31 +616,29 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqSSZBytes, err := req.MarshalSSZ()
 			require.NoError(t, err)
 			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
-				"Content-Type": "application/octet-stream",
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, &http.Header{
+				"Content-Type": []string{"application/octet-stream"},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
 			// Send JSON+GZIP encoded request
-			headers := map[string]string{
-				"Content-Encoding": "gzip",
-			}
 			jsonGzip := gzipBytes(t, reqJSONBytes)
 			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, &http.Header{
+				"Content-Type":     []string{"application/json"},
+				"Content-Encoding": []string{"gzip"},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
 			// Send SSZ+GZIP encoded request
-			headers = map[string]string{
-				"Content-Type":     "application/octet-stream",
-				"Content-Encoding": "gzip",
-			}
-
 			sszGzip := gzipBytes(t, reqSSZBytes)
 			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, &http.Header{
+				"Content-Type":     []string{"application/octet-stream"},
+				"Content-Encoding": []string{"gzip"},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 		})
