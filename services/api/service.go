@@ -27,6 +27,7 @@ import (
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/buger/jsonparser"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -68,6 +69,7 @@ var (
 	ErrRelayPubkeyMismatch        = errors.New("relay pubkey does not match existing one")
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
+	ErrNegativeTimestamp          = errors.New("timestamp cannot be negative")
 	ErrInvalidForkVersion         = errors.New("invalid fork version")
 )
 
@@ -1030,15 +1032,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	req.Body.Close()
 
 	// Parse the registrations
-	signedValidatorRegistrations := new(builderApiV1.SignedValidatorRegistrations)
-	switch proposerContentType {
-	case ApplicationOctetStream:
-		log.Debug("Parsing registrations as SSZ")
-		err = signedValidatorRegistrations.UnmarshalSSZ(regBytes)
-	default:
-		log.Debug("Parsing registrations as JSON")
-		err = json.Unmarshal(regBytes, signedValidatorRegistrations)
-	}
+	signedValidatorRegistrations, err := api.fastRegistrationParsing(regBytes, proposerContentType)
 	if err != nil {
 		handleError(log, http.StatusBadRequest, err.Error())
 		return
@@ -1142,6 +1136,117 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) fastRegistrationParsing(regBytes []byte, contentType string) (*builderApiV1.SignedValidatorRegistrations, error) {
+	signedValidatorRegistrations := new(builderApiV1.SignedValidatorRegistrations)
+
+	// Parse registrations as SSZ
+	if contentType == ApplicationOctetStream {
+		api.log.Debug("Parsing registrations as SSZ")
+		err := signedValidatorRegistrations.UnmarshalSSZ(regBytes)
+		if err != nil {
+			return nil, err
+		}
+		return signedValidatorRegistrations, nil
+	}
+
+	// Parse registrations as JSON
+	parseRegistration := func(value []byte) (reg *builderApiV1.SignedValidatorRegistration, err error) {
+		// Pubkey
+		_pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
+		}
+
+		pubkey, err := utils.HexToPubkey(_pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (pubkey): %w", err)
+		}
+
+		// Timestamp
+		_timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (timestamp): %w", err)
+		}
+
+		timestamp, err := strconv.ParseInt(_timestamp, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %w", err)
+		}
+		if timestamp < 0 {
+			return nil, ErrNegativeTimestamp
+		}
+
+		// GasLimit
+		_gasLimit, err := jsonparser.GetUnsafeString(value, "message", "gas_limit")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (gasLimit): %w", err)
+		}
+
+		gasLimit, err := strconv.ParseUint(_gasLimit, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid gasLimit: %w", err)
+		}
+
+		// FeeRecipient
+		_feeRecipient, err := jsonparser.GetUnsafeString(value, "message", "fee_recipient")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
+		}
+
+		feeRecipient, err := utils.HexToAddress(_feeRecipient)
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (fee_recipient): %w", err)
+		}
+
+		// Signature
+		_signature, err := jsonparser.GetUnsafeString(value, "signature")
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (signature): %w", err)
+		}
+
+		signature, err := utils.HexToSignature(_signature)
+		if err != nil {
+			return nil, fmt.Errorf("registration message error (signature): %w", err)
+		}
+
+		// Construct and return full registration object
+		reg = &builderApiV1.SignedValidatorRegistration{
+			Message: &builderApiV1.ValidatorRegistration{
+				FeeRecipient: feeRecipient,
+				GasLimit:     gasLimit,
+				Timestamp:    time.Unix(timestamp, 0),
+				Pubkey:       pubkey,
+			},
+			Signature: signature,
+		}
+
+		return reg, nil
+	}
+
+	var parseErr error
+	api.log.Debug("Parsing registrations as JSON")
+	_, forEachErr := jsonparser.ArrayEach(regBytes, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		if err != nil {
+			parseErr = err
+			return
+		}
+		signedValidatorRegistration, err := parseRegistration(value)
+		if err != nil {
+			parseErr = err
+			return
+		}
+		signedValidatorRegistrations.Registrations = append(signedValidatorRegistrations.Registrations, signedValidatorRegistration)
+	})
+	if forEachErr != nil {
+		return nil, forEachErr
+	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
+	return signedValidatorRegistrations, nil
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
