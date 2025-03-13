@@ -52,6 +52,17 @@ func getPayloadContents(slot uint64, proposerPubkey, blockHash, host, basePath, 
 		return nil, errors.Wrap(err, "failed to read payload contents response body")
 	}
 
+	// Try to parse pectra contents
+	electraPayloadContents := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
+	err = electraPayloadContents.UnmarshalSSZ(body)
+
+	if err == nil {
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionElectra,
+			Deneb:   electraPayloadContents,
+		}, nil
+	}
+
 	// Try to parse deneb contents
 	denebPayloadContents := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 	err = denebPayloadContents.UnmarshalSSZ(body)
