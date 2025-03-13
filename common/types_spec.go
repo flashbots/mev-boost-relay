@@ -39,7 +39,7 @@ type HTTPErrorResp struct {
 
 var NilResponse = struct{}{}
 
-func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -56,7 +56,7 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, domain)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, domain)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +128,7 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 	return nil, ErrEmptyPayload
 }
 
-func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
+func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
 	value, err := payload.Value()
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 		builderBid := builderApiCapella.BuilderBid{
 			Value:  value,
 			Header: header.Capella,
-			Pubkey: *pubkey,
+			Pubkey: payload.Capella.Message.BuilderPubkey,
 		}
 
 		sig, err := ssz.SignMessage(&builderBid, domain, sk)
@@ -159,7 +159,7 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			Header:             header.Deneb,
 			BlobKZGCommitments: payload.Deneb.BlobsBundle.Commitments,
 			Value:              value,
-			Pubkey:             *pubkey,
+			Pubkey:             payload.Deneb.Message.BuilderPubkey,
 		}
 
 		sig, err := ssz.SignMessage(&builderBid, domain, sk)

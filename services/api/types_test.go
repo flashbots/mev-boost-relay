@@ -174,13 +174,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			sk, _, err := bls.GenerateNewKeypair()
 			require.NoError(t, err)
 
-			pubkey, err := bls.PublicKeyFromSecretKey(sk)
-			require.NoError(t, err)
-
-			publicKey, err := utils.BlsPublicKeyToPublicKey(pubkey)
-			require.NoError(t, err)
-
-			signedBuilderBid, err := common.BuildGetHeaderResponse(tc.reqPayload, sk, &publicKey, ssz.DomainBuilder)
+			signedBuilderBid, err := common.BuildGetHeaderResponse(tc.reqPayload, sk, ssz.DomainBuilder)
 			require.NoError(t, err)
 
 			bidValue, err := signedBuilderBid.Value()
