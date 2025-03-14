@@ -59,7 +59,7 @@ func getPayloadContents(slot uint64, proposerPubkey, blockHash, host, basePath, 
 	if err == nil {
 		return &builderApi.VersionedSubmitBlindedBlockResponse{
 			Version: spec.DataVersionElectra,
-			Deneb:   electraPayloadContents,
+			Electra: electraPayloadContents,
 		}, nil
 	}
 
