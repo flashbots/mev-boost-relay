@@ -12,7 +12,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.2
-	github.com/flashbots/go-boost-utils v1.8.2-0.20240925223941-58709124077d
+	github.com/flashbots/go-boost-utils v1.9.0
 	github.com/flashbots/go-utils v0.8.3
 	github.com/gorilla/mux v1.8.1
 	github.com/holiman/uint256 v1.3.2
@@ -79,7 +79,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ferranbt/fastssz v0.1.4
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
