@@ -19,7 +19,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.22.0
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/sirupsen/logrus v1.9.3
@@ -53,7 +53,6 @@ require (
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
