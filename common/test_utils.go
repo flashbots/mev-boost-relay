@@ -125,7 +125,6 @@ func TestBuilderSubmitBlockRequest(sk *bls.SecretKey, bid *BidTraceV2WithBlobFie
 
 type CreateTestBlockSubmissionOpts struct {
 	relaySk bls.SecretKey
-	relayPk phase0.BLSPubKey
 	domain  phase0.Domain
 
 	Version        spec.DataVersion
@@ -140,7 +139,6 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 
 	slot := uint64(0)
 	relaySk := bls.SecretKey{}
-	relayPk := phase0.BLSPubKey{}
 	domain := phase0.Domain{}
 	proposerPk := phase0.BLSPubKey{}
 	parentHash := phase0.Hash32{}
@@ -148,7 +146,6 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 
 	if opts != nil {
 		relaySk = opts.relaySk
-		relayPk = opts.relayPk
 		domain = opts.domain
 		slot = opts.Slot
 
@@ -207,7 +204,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 		}
 	}
 
-	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
+	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, domain)
 	require.NoError(t, err)
 
 	getPayloadResponse, err = BuildGetPayloadResponse(payload)
