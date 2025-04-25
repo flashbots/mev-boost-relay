@@ -1018,7 +1018,12 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 
 	// Get the request content type
-	proposerContentType := req.Header.Get(HeaderContentType)
+	proposerContentType, _, err := getHeaderContentType(req.Header)
+	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
 	log = log.WithField("proposerContentType", proposerContentType)
 
 	// Read the encoded validator registrations

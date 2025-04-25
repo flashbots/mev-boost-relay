@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"mime"
+	"net/http"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -183,4 +185,21 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domai
 
 func getPayloadAttributesKey(parentHash string, slot uint64) string {
 	return fmt.Sprintf("%s-%d", parentHash, slot)
+}
+
+// getHeaderContentType parses the Content-Type header and returns the media type and parameters.
+// It returns an empty mediaType string and nil parameters if the header is not set or empty.
+func getHeaderContentType(header http.Header) (mediatype string, params map[string]string, err error) {
+	contentType := header.Get(HeaderContentType)
+	if contentType == "" {
+		return "", nil, nil
+	}
+
+	// Parse the content type
+	contentType, params, err = mime.ParseMediaType(contentType)
+	if err != nil {
+		return "", nil, errors.Wrap(err, "failed to parse Content-Type header")
+	}
+
+	return contentType, params, nil
 }
