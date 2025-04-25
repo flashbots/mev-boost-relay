@@ -2,7 +2,6 @@
 package api
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -10,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -24,6 +24,7 @@ import (
 	"github.com/aohorodnyk/mimeheader"
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
@@ -52,6 +53,13 @@ const (
 	ErrBlockAlreadyKnown  = "simulation failed: block already known"
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode    = "missing trie node"
+
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
+
+	HeaderAccept              = "Accept"
+	HeaderContentType         = "Content-Type"
+	HeaderEthConsensusVersion = "Eth-Consensus-Version"
 )
 
 var (
@@ -62,6 +70,7 @@ var (
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrNegativeTimestamp          = errors.New("timestamp cannot be negative")
+	ErrInvalidForkVersion         = errors.New("invalid fork version")
 )
 
 var (
@@ -929,7 +938,7 @@ func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(HeaderContentType, ApplicationJSON)
 	w.WriteHeader(code)
 	if response == nil {
 		return
@@ -946,32 +955,12 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-const (
-	ApplicationJSON        = "application/json"
-	ApplicationOctetStream = "application/octet-stream"
-)
-
-// RequestAcceptsJSON returns true if the Accept header is empty (defaults to JSON)
-// or application/json can be negotiated.
-func RequestAcceptsJSON(req *http.Request) bool {
-	ah := req.Header.Get("Accept")
-	if ah == "" {
-		return true
-	}
-	mh := mimeheader.ParseAcceptHeader(ah)
-	_, _, matched := mh.Negotiate(
-		[]string{ApplicationJSON},
-		ApplicationJSON,
-	)
-	return matched
-}
-
 // NegotiateRequestResponseType returns whether the request accepts
 // JSON (application/json) or SSZ (application/octet-stream) responses.
 // If accepted is false, no mime type could be negotiated and the server
 // should respond with http.StatusNotAcceptable.
 func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
-	ah := req.Header.Get("Accept")
+	ah := req.Header.Get(HeaderAccept)
 	if ah == "" {
 		return ApplicationJSON, nil
 	}
@@ -1005,19 +994,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"contentLength": req.ContentLength,
 	})
 
-	// If the Content-Type header is included, for now only allow JSON.
-	// TODO: support Content-Type: application/octet-stream and allow SSZ
-	// request bodies.
-	if ct := req.Header.Get("Content-Type"); ct != "" {
-		switch ct {
-		case ApplicationJSON:
-			break
-		default:
-			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
-			return
-		}
-	}
-
 	start := time.Now().UTC()
 	registrationTimestampUpperBound := start.Unix() + 10 // 10 seconds from now
 
@@ -1041,8 +1017,18 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		return
 	}
 
+	// Get the request content type
+	proposerContentType, _, err := getHeaderContentType(req.Header)
+	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+	log = log.WithField("proposerContentType", proposerContentType)
+
+	// Read the encoded validator registrations
 	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
-	body, err := io.ReadAll(limitReader)
+	regBytes, err := io.ReadAll(limitReader)
 	if err != nil {
 		log.WithError(err).Warn("failed to read request body")
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
@@ -1050,6 +1036,127 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
+	// Parse the registrations
+	signedValidatorRegistrations, err := api.fastRegistrationParsing(regBytes, proposerContentType)
+	if err != nil {
+		handleError(log, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Iterate over the registrations
+	for regIndex, signedValidatorRegistration := range signedValidatorRegistrations.Registrations {
+		numRegTotal += 1
+		if processingStoppedByError {
+			return
+		}
+		numRegProcessed += 1
+		regLog := log.WithFields(logrus.Fields{
+			"regIndex":                  regIndex,
+			"numRegistrationsSoFar":     numRegTotal,
+			"numRegistrationsProcessed": numRegProcessed,
+		})
+
+		// Add validator pubkey to logs
+		pkHex := common.PubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
+		regLog = regLog.WithFields(logrus.Fields{
+			"pubkey":       pkHex,
+			"signature":    signedValidatorRegistration.Signature.String(),
+			"feeRecipient": signedValidatorRegistration.Message.FeeRecipient.String(),
+			"gasLimit":     signedValidatorRegistration.Message.GasLimit,
+			"timestamp":    signedValidatorRegistration.Message.Timestamp,
+		})
+
+		// Ensure a valid timestamp (not too early, and not too far in the future)
+		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
+		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
+			handleError(regLog, http.StatusBadRequest, "timestamp too early")
+			return
+		} else if registrationTimestamp > registrationTimestampUpperBound {
+			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
+			return
+		}
+
+		// Check if a real validator
+		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
+		if !isKnownValidator {
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex))
+			return
+		}
+
+		// Check for a previous registration timestamp
+		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
+		if err != nil {
+			regLog.WithError(err).Error("error getting last registration timestamp")
+		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) { //nolint:gosec
+			// abort if the current registration timestamp is older or equal to the last known one
+			return
+		}
+
+		// Verify the signature
+		ok, err := ssz.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
+		if err != nil {
+			regLog.WithError(err).Error("error verifying registerValidator signature")
+			return
+		} else if !ok {
+			regLog.Info("invalid validator signature")
+			if api.ffRegValContinueOnInvalidSig {
+				return
+			} else {
+				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String())
+				return
+			}
+		}
+
+		// Now we have a new registration to process
+		numRegNew += 1
+
+		// Save to database
+		select {
+		case api.validatorRegC <- *signedValidatorRegistration:
+		default:
+			regLog.Error("validator registration channel full")
+		}
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"timeNeededSec":             time.Since(start).Seconds(),
+		"timeNeededMs":              time.Since(start).Milliseconds(),
+		"numRegistrations":          numRegTotal,
+		"numRegistrationsActive":    numRegActive,
+		"numRegistrationsProcessed": numRegProcessed,
+		"numRegistrationsNew":       numRegNew,
+		"processingStoppedByError":  processingStoppedByError,
+	})
+
+	if err != nil {
+		handleError(log, http.StatusBadRequest, "error in traversing json")
+		return
+	}
+
+	// notify that new registrations are available
+	select {
+	case api.validatorUpdateCh <- struct{}{}:
+	default:
+	}
+
+	log.Info("validator registrations call processed")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (api *RelayAPI) fastRegistrationParsing(regBytes []byte, contentType string) (*builderApiV1.SignedValidatorRegistrations, error) {
+	signedValidatorRegistrations := new(builderApiV1.SignedValidatorRegistrations)
+
+	// Parse registrations as SSZ
+	if contentType == ApplicationOctetStream {
+		api.log.Debug("Parsing registrations as SSZ")
+		err := signedValidatorRegistrations.UnmarshalSSZ(regBytes)
+		if err != nil {
+			return nil, err
+		}
+		return signedValidatorRegistrations, nil
+	}
+
+	// Parse registrations as JSON
 	parseRegistration := func(value []byte) (reg *builderApiV1.SignedValidatorRegistration, err error) {
 		// Pubkey
 		_pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
@@ -1123,110 +1230,28 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		return reg, nil
 	}
 
-	// Iterate over the registrations
-	_, err = jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, _err error) {
-		numRegTotal += 1
-		if processingStoppedByError {
+	var parseErr error
+	api.log.Debug("Parsing registrations as JSON")
+	_, forEachErr := jsonparser.ArrayEach(regBytes, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		if err != nil {
+			parseErr = err
 			return
 		}
-		numRegProcessed += 1
-		regLog := log.WithFields(logrus.Fields{
-			"numRegistrationsSoFar":     numRegTotal,
-			"numRegistrationsProcessed": numRegProcessed,
-		})
-
-		// Extract immediately necessary registration fields
 		signedValidatorRegistration, err := parseRegistration(value)
 		if err != nil {
-			handleError(regLog, http.StatusBadRequest, err.Error())
+			parseErr = err
 			return
 		}
-
-		// Add validator pubkey to logs
-		pkHex := common.PubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
-		regLog = regLog.WithFields(logrus.Fields{
-			"pubkey":       pkHex,
-			"signature":    signedValidatorRegistration.Signature.String(),
-			"feeRecipient": signedValidatorRegistration.Message.FeeRecipient.String(),
-			"gasLimit":     signedValidatorRegistration.Message.GasLimit,
-			"timestamp":    signedValidatorRegistration.Message.Timestamp,
-		})
-
-		// Ensure a valid timestamp (not too early, and not too far in the future)
-		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
-		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
-			handleError(regLog, http.StatusBadRequest, "timestamp too early")
-			return
-		} else if registrationTimestamp > registrationTimestampUpperBound {
-			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
-			return
-		}
-
-		// Check if a real validator
-		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
-		if !isKnownValidator {
-			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex))
-			return
-		}
-
-		// Check for a previous registration timestamp
-		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
-		if err != nil {
-			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) { //nolint:gosec
-			// abort if the current registration timestamp is older or equal to the last known one
-			return
-		}
-
-		// Verify the signature
-		ok, err := ssz.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
-		if err != nil {
-			regLog.WithError(err).Error("error verifying registerValidator signature")
-			return
-		} else if !ok {
-			regLog.Info("invalid validator signature")
-			if api.ffRegValContinueOnInvalidSig {
-				return
-			} else {
-				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String())
-				return
-			}
-		}
-
-		// Now we have a new registration to process
-		numRegNew += 1
-
-		// Save to database
-		select {
-		case api.validatorRegC <- *signedValidatorRegistration:
-		default:
-			regLog.Error("validator registration channel full")
-		}
+		signedValidatorRegistrations.Registrations = append(signedValidatorRegistrations.Registrations, signedValidatorRegistration)
 	})
-
-	log = log.WithFields(logrus.Fields{
-		"timeNeededSec":             time.Since(start).Seconds(),
-		"timeNeededMs":              time.Since(start).Milliseconds(),
-		"numRegistrations":          numRegTotal,
-		"numRegistrationsActive":    numRegActive,
-		"numRegistrationsProcessed": numRegProcessed,
-		"numRegistrationsNew":       numRegNew,
-		"processingStoppedByError":  processingStoppedByError,
-	})
-
-	if err != nil {
-		handleError(log, http.StatusBadRequest, "error in traversing json")
-		return
+	if forEachErr != nil {
+		return nil, forEachErr
+	}
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
-	// notify that new registrations are available
-	select {
-	case api.validatorUpdateCh <- struct{}{}:
-	default:
-	}
-
-	log.Info("validator registrations call processed")
-	w.WriteHeader(http.StatusOK)
+	return signedValidatorRegistrations, nil
 }
 
 func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
@@ -1236,6 +1261,14 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	proposerPubkeyHex := vars["pubkey"]
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
+
+	// Negotiate the response media type
+	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
+	if err != nil {
+		api.log.WithError(err).Error("failed to negotiate response type")
+		api.RespondError(w, http.StatusNotAcceptable, err.Error())
+		return
+	}
 
 	slot, err := strconv.ParseUint(slotStr, 10, 64)
 	if err != nil {
@@ -1248,16 +1281,17 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	msIntoSlot := requestTime.UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
 
 	log := api.log.WithFields(logrus.Fields{
-		"method":           "getHeader",
-		"headSlot":         headSlot,
-		"slot":             slotStr,
-		"parentHash":       parentHashHex,
-		"pubkey":           proposerPubkeyHex,
-		"ua":               ua,
-		"mevBoostV":        common.GetMevBoostVersionFromUserAgent(ua),
-		"requestTimestamp": requestTime.Unix(),
-		"slotStartSec":     slotStartTimestamp,
-		"msIntoSlot":       msIntoSlot,
+		"method":                      "getHeader",
+		"headSlot":                    headSlot,
+		"slot":                        slotStr,
+		"parentHash":                  parentHashHex,
+		"pubkey":                      proposerPubkeyHex,
+		"ua":                          ua,
+		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
+		"requestTimestamp":            requestTime.Unix(),
+		"slotStartSec":                slotStartTimestamp,
+		"msIntoSlot":                  msIntoSlot,
+		"negotiatedResponseMediaType": negotiatedResponseMediaType,
 	})
 
 	if len(proposerPubkeyHex) != 98 {
@@ -1272,12 +1306,6 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	if slot < headSlot {
 		api.RespondError(w, http.StatusBadRequest, "slot is too old")
-		return
-	}
-
-	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
-	if !RequestAcceptsJSON(req) {
-		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
 		return
 	}
 
@@ -1342,7 +1370,52 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
 
-	api.RespondOK(w, bid)
+	switch negotiatedResponseMediaType {
+	case ApplicationOctetStream:
+		log.Debug("responding with SSZ")
+		api.respondGetHeaderSSZ(w, bid)
+	default:
+		log.Debug("responding with JSON")
+		api.RespondOK(w, bid)
+	}
+}
+
+// respondGetHeaderSSZ responds to the proposer in SSZ
+func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec.VersionedSignedBuilderBid) {
+	// Serialize the response
+	var err error
+	var sszData []byte
+	switch bid.Version {
+	case spec.DataVersionBellatrix:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionBellatrix)
+		sszData, err = bid.Bellatrix.MarshalSSZ()
+	case spec.DataVersionCapella:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionCapella)
+		sszData, err = bid.Capella.MarshalSSZ()
+	case spec.DataVersionDeneb:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionDeneb)
+		sszData, err = bid.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
+		sszData, err = bid.Electra.MarshalSSZ()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
+		err = ErrInvalidForkVersion
+	}
+	if err != nil {
+		api.log.WithError(err).Error("error serializing response as SSZ")
+		http.Error(w, "failed to serialize response", http.StatusInternalServerError)
+		return
+	}
+
+	// Write the header
+	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.WriteHeader(http.StatusOK)
+
+	// Write SSZ data
+	if _, err := w.Write(sszData); err != nil {
+		api.log.WithError(err).Error("error writing SSZ response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+	}
 }
 
 func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBeaconBlock, pubKey []byte) (bool, error) {
@@ -1362,18 +1435,41 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
 
+	// Negotiate the response media type
+	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
+	if err != nil {
+		api.log.WithError(err).Error("failed to negotiate response type")
+		api.RespondError(w, http.StatusNotAcceptable, err.Error())
+		return
+	}
+
+	// Determine what encoding the proposer sent
+	proposerContentType := req.Header.Get(HeaderContentType)
+	proposerContentType, _, err = mime.ParseMediaType(proposerContentType)
+	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+
+	// Get the optional consensus version
+	proposerEthConsensusVersion := req.Header.Get("Eth-Consensus-Version")
+
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	log := api.log.WithFields(logrus.Fields{
-		"method":                "getPayload",
-		"ua":                    ua,
-		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
-		"contentLength":         req.ContentLength,
-		"headSlot":              headSlot,
-		"headSlotEpochPos":      (headSlot % common.SlotsPerEpoch) + 1,
-		"idArg":                 req.URL.Query().Get("id"),
-		"timestampRequestStart": receivedAt.UnixMilli(),
+		"method":                      "getPayload",
+		"ua":                          ua,
+		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
+		"contentLength":               req.ContentLength,
+		"headSlot":                    headSlot,
+		"headSlotEpochPos":            (headSlot % common.SlotsPerEpoch) + 1,
+		"idArg":                       req.URL.Query().Get("id"),
+		"timestampRequestStart":       receivedAt.UnixMilli(),
+		"negotiatedResponseMediaType": negotiatedResponseMediaType,
+		"proposerContentType":         proposerContentType,
+		"proposerEthConsensusVersion": proposerEthConsensusVersion,
 	})
 
 	// Log at start and end of request
@@ -1389,25 +1485,6 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 			float64(time.Since(receivedAt).Milliseconds()),
 		)
 	}()
-
-	// TODO: Use NegotiateRequestResponseType, for now we only accept JSON
-	if !RequestAcceptsJSON(req) {
-		api.RespondError(w, http.StatusNotAcceptable, "only Accept: application/json is currently supported")
-		return
-	}
-
-	// If the Content-Type header is included, for now only allow JSON.
-	// TODO: support Content-Type: application/octet-stream and allow SSZ
-	// request bodies.
-	if ct := req.Header.Get("Content-Type"); ct != "" {
-		switch ct {
-		case ApplicationJSON:
-			break
-		default:
-			api.RespondError(w, http.StatusUnsupportedMediaType, "only Content-Type: application/json is currently supported")
-			return
-		}
-	}
 
 	// Read the body first, so we can decode it later
 	limitReader := io.LimitReader(req.Body, int64(apiMaxPayloadBytes))
@@ -1426,7 +1503,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.VersionedSignedBlindedBeaconBlock)
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
+	err = payload.Unmarshal(body, proposerContentType, proposerEthConsensusVersion)
+	if err != nil {
 		log.WithError(err).Warn("failed to decode getPayload request")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
 		return
@@ -1713,8 +1791,15 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// give the beacon network some time to propagate the block
 	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
-	// respond to the HTTP request
-	api.RespondOK(w, getPayloadResp)
+	// Respond appropriately
+	switch negotiatedResponseMediaType {
+	case ApplicationOctetStream:
+		log.Debug("responding with SSZ")
+		api.respondGetPayloadSSZ(w, getPayloadResp)
+	default:
+		log.Debug("responding with JSON")
+		api.RespondOK(w, getPayloadResp)
+	}
 	blockNumber, err := payload.ExecutionBlockNumber()
 	if err != nil {
 		log.WithError(err).Info("failed to get block number")
@@ -1747,6 +1832,44 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 	log.Info("execution payload delivered")
+}
+
+// respondGetPayloadSSZ responds to the proposer in SSZ
+func (api *RelayAPI) respondGetPayloadSSZ(w http.ResponseWriter, result *builderApi.VersionedSubmitBlindedBlockResponse) {
+	// Serialize the response
+	var err error
+	var sszData []byte
+	switch result.Version {
+	case spec.DataVersionBellatrix:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionBellatrix)
+		sszData, err = result.Bellatrix.MarshalSSZ()
+	case spec.DataVersionCapella:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionCapella)
+		sszData, err = result.Capella.MarshalSSZ()
+	case spec.DataVersionDeneb:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionDeneb)
+		sszData, err = result.Deneb.MarshalSSZ()
+	case spec.DataVersionElectra:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
+		sszData, err = result.Electra.MarshalSSZ()
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
+		err = ErrInvalidForkVersion
+	}
+	if err != nil {
+		api.log.WithError(err).Error("error serializing response as SSZ")
+		http.Error(w, "failed to serialize response", http.StatusInternalServerError)
+		return
+	}
+
+	// Write the header
+	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.WriteHeader(http.StatusOK)
+
+	// Write SSZ data
+	if _, err := w.Write(sszData); err != nil {
+		api.log.WithError(err).Error("error writing SSZ response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+	}
 }
 
 // --------------------
@@ -2062,8 +2185,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
-	contentType := req.Header.Get("Content-Type")
-	if contentType == "application/octet-stream" {
+	contentType, _, err := getHeaderContentType(req.Header)
+	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+
+	if contentType == ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
 		pf.ContentType = "ssz"
 		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {

@@ -847,6 +847,6 @@ func (r *RedisCache) NewPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.Pipeline()
 }
 
-func (r *RedisCache) NewTxPipeline() redis.Pipeliner { //nolint:ireturn
+func (r *RedisCache) NewTxPipeline() redis.Pipeliner { //nolint:ireturn,nolintlint
 	return r.client.TxPipeline()
 }
