@@ -12,8 +12,8 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.10
-	github.com/flashbots/go-boost-utils v1.8.2-0.20240925223941-58709124077d
-	github.com/flashbots/go-utils v0.8.3
+	github.com/flashbots/go-boost-utils v1.9.0
+	github.com/flashbots/go-utils v0.11.0
 	github.com/gorilla/mux v1.8.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jmoiron/sqlx v1.4.0
