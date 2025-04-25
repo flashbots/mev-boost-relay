@@ -1445,7 +1445,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Determine what encoding the proposer sent
 	proposerContentType := req.Header.Get(HeaderContentType)
-	parsedProposerContentType, _, err := mime.ParseMediaType(proposerContentType)
+	proposerContentType, _, err = mime.ParseMediaType(proposerContentType)
 	if err != nil {
 		api.log.WithError(err).Error("failed to parse proposer content type")
 		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
@@ -1468,7 +1468,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		"idArg":                       req.URL.Query().Get("id"),
 		"timestampRequestStart":       receivedAt.UnixMilli(),
 		"negotiatedResponseMediaType": negotiatedResponseMediaType,
-		"parsedProposerContentType":   parsedProposerContentType,
+		"proposerContentType":         proposerContentType,
 		"proposerEthConsensusVersion": proposerEthConsensusVersion,
 	})
 
@@ -1503,7 +1503,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 
 	// Decode payload
 	payload := new(common.VersionedSignedBlindedBeaconBlock)
-	err = payload.Unmarshal(body, parsedProposerContentType, proposerEthConsensusVersion)
+	err = payload.Unmarshal(body, proposerContentType, proposerEthConsensusVersion)
 	if err != nil {
 		log.WithError(err).Warn("failed to decode getPayload request")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
@@ -2185,7 +2185,13 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	payload := new(common.VersionedSubmitBlockRequest)
 
 	// Check for SSZ encoding
-	contentType := req.Header.Get(HeaderContentType)
+	contentType, _, err := getHeaderContentType(req.Header)
+	if err != nil {
+		api.log.WithError(err).Error("failed to parse proposer content type")
+		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+
 	if contentType == ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
 		pf.ContentType = "ssz"
