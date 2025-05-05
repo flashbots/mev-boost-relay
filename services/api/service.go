@@ -1057,7 +1057,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		})
 
 		// Add validator pubkey to logs
-		pkHex := common.PubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
+		pkHex := common.NewPubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
 		regLog = regLog.WithFields(logrus.Fields{
 			"pubkey":       pkHex,
 			"signature":    signedValidatorRegistration.Signature.String(),
