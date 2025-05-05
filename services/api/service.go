@@ -1004,10 +1004,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	processingStoppedByError := false
 
 	// Setup error handling
-	handleError := func(_log *logrus.Entry, code int, msg string) {
+	handleError := func(_log *logrus.Entry, code int, userMsg string, err error) {
 		processingStoppedByError = true
-		_log.Warnf("error: %s", msg)
-		api.RespondError(w, code, msg)
+		_log.WithError(err).Warnf("error: %s", userMsg)
+		api.RespondError(w, code, userMsg)
 	}
 
 	// Start processing
@@ -1039,7 +1039,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	// Parse the registrations
 	signedValidatorRegistrations, err := api.fastRegistrationParsing(regBytes, proposerContentType)
 	if err != nil {
-		handleError(log, http.StatusBadRequest, err.Error())
+		handleError(log, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
@@ -1069,17 +1069,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		// Ensure a valid timestamp (not too early, and not too far in the future)
 		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
 		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
-			handleError(regLog, http.StatusBadRequest, "timestamp too early")
+			handleError(regLog, http.StatusBadRequest, "timestamp too early", nil)
 			return
 		} else if registrationTimestamp > registrationTimestampUpperBound {
-			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future")
+			handleError(regLog, http.StatusBadRequest, "timestamp too far in the future", nil)
 			return
 		}
 
 		// Check if a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
-			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex))
+			handleError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex), nil)
 			return
 		}
 
@@ -1102,7 +1102,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 			if api.ffRegValContinueOnInvalidSig {
 				return
 			} else {
-				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String())
+				handleError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String(), err)
 				return
 			}
 		}
@@ -1129,7 +1129,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	})
 
 	if err != nil {
-		handleError(log, http.StatusBadRequest, "error in traversing json")
+		handleError(log, http.StatusBadRequest, "error in traversing registrations", err)
 		return
 	}
 
@@ -1149,10 +1149,12 @@ func (api *RelayAPI) fastRegistrationParsing(regBytes []byte, contentType string
 	// Parse registrations as SSZ
 	if contentType == ApplicationOctetStream {
 		api.log.Debug("Parsing registrations as SSZ")
+		timeSSZStart := time.Now()
 		err := signedValidatorRegistrations.UnmarshalSSZ(regBytes)
 		if err != nil {
 			return nil, err
 		}
+		api.log.WithField("sszDecodeDurationMs", time.Since(timeSSZStart).Milliseconds()).Info("Parsed registrations as SSZ")
 		return signedValidatorRegistrations, nil
 	}
 
