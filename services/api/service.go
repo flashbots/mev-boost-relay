@@ -1090,40 +1090,48 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
 		if registrationTimestamp < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
 			logAndReturnError(regLog, http.StatusBadRequest, "timestamp too early", nil)
-			continue
+			break
 		} else if registrationTimestamp > registrationTimestampUpperBound {
 			logAndReturnError(regLog, http.StatusBadRequest, "timestamp too far in the future", nil)
-			continue
+			break
 		}
 
 		// Check if a real validator
 		isKnownValidator := api.datastore.IsKnownValidator(pkHex)
 		if !isKnownValidator {
 			logAndReturnError(regLog, http.StatusBadRequest, fmt.Sprintf("not a known validator: %s", pkHex), nil)
-			continue
+			break
 		}
 
-		// Check for a previous registration timestamp
-		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
-		isNewerRegistration := uint64(signedValidatorRegistration.Message.Timestamp.Unix()) > prevTimestamp //nolint:gosec
-		regLog.WithFields(logrus.Fields{
-			"prevTimestamp": prevTimestamp,
-			"newTimestamp":  signedValidatorRegistration.Message.Timestamp.Unix(),
-			"isNewer":       isNewerRegistration,
-		}).Debug("checking registration timestamp against cache")
+		// Check for a previous registration timestamp and see if fields changed
+		cachedRegistrationData, err := api.redis.GetValidatorRegistrationData(pkHex)
+		haveCachedRegistration := cachedRegistrationData != nil
 
 		if err != nil {
-			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if !isNewerRegistration {
-			// abort if the current registration timestamp is older or equal to the last known one
-			continue
+			regLog.WithError(err).Error("error getting last registration") // maybe a Redis error. continue to validation + processing
+		} else if haveCachedRegistration {
+			// See if we can discard (if no fields changed, or old timestamp)
+			isChangedFeeRecipient := cachedRegistrationData.FeeRecipient != signedValidatorRegistration.Message.FeeRecipient
+			isChangedGasLimit := cachedRegistrationData.GasLimit != signedValidatorRegistration.Message.GasLimit
+			isNewerTimestamp := signedValidatorRegistration.Message.Timestamp.UTC().Unix() > cachedRegistrationData.Timestamp.UTC().Unix()
+
+			// If key fields haven't changed, can just discard without signature validation
+			if !isChangedFeeRecipient && !isChangedGasLimit {
+				continue
+			}
+
+			// Ensure it's not a replay of an old registration
+			if !isNewerTimestamp {
+				continue
+			}
 		}
 
 		// Verify the signature
+		regLog.Debug("verifying BLS signature...")
 		ok, err := ssz.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
 		if err != nil {
 			regLog.WithError(err).Error("error verifying registerValidator signature")
-			continue
+			break
 		} else if !ok {
 			regLog.Info("invalid validator signature")
 			if api.ffRegValContinueOnInvalidSig {
