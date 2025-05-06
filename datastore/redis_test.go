@@ -38,52 +38,36 @@ func TestRedisValidatorRegistration(t *testing.T) {
 	cache := setupTestRedis(t)
 
 	t.Run("Can save and get validator registration from cache", func(t *testing.T) {
-		key := common.ValidPayloadRegisterValidator.Message.Pubkey
-		value := common.ValidPayloadRegisterValidator
-		pkHex := common.NewPubkeyHex(key.String())
-		err := cache.SetValidatorRegistrationTimestamp(pkHex, uint64(value.Message.Timestamp.Unix())) //nolint:gosec
+		data := common.ValidPayloadRegisterValidator.Message
+
+		err := cache.SetValidatorRegistrationData(data)
 		require.NoError(t, err)
-		result, err := cache.GetValidatorRegistrationTimestamp(common.NewPubkeyHex(key.String()))
+
+		result, err := cache.GetValidatorRegistrationData(common.NewPubkeyHex(data.Pubkey.String()))
 		require.NoError(t, err)
-		require.Equal(t, result, uint64(value.Message.Timestamp.Unix())) //nolint:gosec
+		require.NotNil(t, result)
+		require.Equal(t, result.Timestamp.UTC(), data.Timestamp.UTC())
+		require.Equal(t, result.FeeRecipient, data.FeeRecipient)
+		require.Equal(t, result.GasLimit, data.GasLimit)
 	})
 
 	t.Run("Returns nil if validator registration is not in cache", func(t *testing.T) {
 		key := phase0.BLSPubKey{}
-		result, err := cache.GetValidatorRegistrationTimestamp(common.NewPubkeyHex(key.String()))
+		result, err := cache.GetValidatorRegistrationData(common.NewPubkeyHex(key.String()))
 		require.NoError(t, err)
-		require.Equal(t, uint64(0), result)
+		require.Nil(t, result)
 	})
 
 	t.Run("test SetValidatorRegistrationTimestampIfNewer", func(t *testing.T) {
-		key := common.ValidPayloadRegisterValidator.Message.Pubkey
-		value := common.ValidPayloadRegisterValidator
+		data := *common.ValidPayloadRegisterValidator.Message
+		pkHex := common.NewPubkeyHex(data.Pubkey.String())
 
-		pkHex := common.NewPubkeyHex(key.String())
-		timestamp := uint64(value.Message.Timestamp.Unix()) //nolint:gosec
-
-		err := cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp)
+		err := cache.SetValidatorRegistrationData(&data)
 		require.NoError(t, err)
 
-		result, err := cache.GetValidatorRegistrationTimestamp(common.NewPubkeyHex(key.String()))
+		result, err := cache.GetValidatorRegistrationData(pkHex)
 		require.NoError(t, err)
-		require.Equal(t, result, timestamp)
-
-		// Try to set an older timestamp (should not work)
-		timestamp2 := timestamp - 10
-		err = cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp2)
-		require.NoError(t, err)
-		result, err = cache.GetValidatorRegistrationTimestamp(common.NewPubkeyHex(key.String()))
-		require.NoError(t, err)
-		require.Equal(t, result, timestamp)
-
-		// Try to set an older timestamp (should not work)
-		timestamp3 := timestamp + 10
-		err = cache.SetValidatorRegistrationTimestampIfNewer(pkHex, timestamp3)
-		require.NoError(t, err)
-		result, err = cache.GetValidatorRegistrationTimestamp(common.NewPubkeyHex(key.String()))
-		require.NoError(t, err)
-		require.Equal(t, result, timestamp3)
+		require.Equal(t, result.Timestamp.UTC(), common.ValidPayloadRegisterValidator.Message.Timestamp.UTC())
 	})
 }
 

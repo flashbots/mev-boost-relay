@@ -260,7 +260,15 @@ func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
 	timeStarted := time.Now()
 
 	for _, reg := range regs {
-		err = hk.redis.SetValidatorRegistrationTimestampIfNewer(common.NewPubkeyHex(reg.Pubkey), reg.Timestamp)
+		// convert DB data to original struct
+		data, err := reg.ToSignedValidatorRegistration()
+		if err != nil {
+			hk.log.WithError(err).Error("failed to convert validator registration entry to signed validator registration")
+			continue
+		}
+
+		// save to Redis
+		err = hk.redis.SetValidatorRegistrationData(data.Message)
 		if err != nil {
 			hk.log.WithError(err).Error("failed to set validator registration")
 			continue

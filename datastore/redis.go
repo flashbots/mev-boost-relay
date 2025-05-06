@@ -12,6 +12,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -95,7 +96,7 @@ type RedisCache struct {
 	prefixFloorBidValue               string
 
 	// keys
-	keyValidatorRegistrationTimestamp string
+	keyValidatorRegistrationData string
 
 	keyRelayConfig        string
 	keyStats              string
@@ -136,8 +137,8 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixFloorBid:                    fmt.Sprintf("%s/%s:bid-floor", redisPrefix, prefix),                      // prefix:slot_parentHash_proposerPubkey
 		prefixFloorBidValue:               fmt.Sprintf("%s/%s:bid-floor-value", redisPrefix, prefix),                // prefix:slot_parentHash_proposerPubkey
 
-		keyValidatorRegistrationTimestamp: fmt.Sprintf("%s/%s:validator-registration-timestamp", redisPrefix, prefix),
-		keyRelayConfig:                    fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
+		keyValidatorRegistrationData: fmt.Sprintf("%s/%s:validator-registration-data", redisPrefix, prefix),
+		keyRelayConfig:               fmt.Sprintf("%s/%s:relay-config", redisPrefix, prefix),
 
 		keyStats:              fmt.Sprintf("%s/%s:stats", redisPrefix, prefix),
 		keyProposerDuties:     fmt.Sprintf("%s/%s:proposer-duties", redisPrefix, prefix),
@@ -239,27 +240,26 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	return r.client.Expire(context.Background(), key, expiration).Err()
 }
 
-func (r *RedisCache) GetValidatorRegistrationTimestamp(proposerPubkey common.PubkeyHex) (uint64, error) {
-	timestamp, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationTimestamp, strings.ToLower(proposerPubkey.String())).Uint64()
+func (r *RedisCache) GetValidatorRegistrationData(proposerPubkey common.PubkeyHex) (*builderApiV1.ValidatorRegistration, error) {
+	data := new(builderApiV1.ValidatorRegistration)
+	pk := strings.ToLower(proposerPubkey.String())
+
+	dataRaw, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationData, pk).Result()
 	if errors.Is(err, redis.Nil) {
-		return 0, nil
+		return nil, nil
 	}
-	return timestamp, err
+	err = data.UnmarshalSSZ([]byte(dataRaw))
+	return data, err
 }
 
-func (r *RedisCache) SetValidatorRegistrationTimestampIfNewer(proposerPubkey common.PubkeyHex, timestamp uint64) error {
-	knownTimestamp, err := r.GetValidatorRegistrationTimestamp(proposerPubkey)
+func (r *RedisCache) SetValidatorRegistrationData(data *builderApiV1.ValidatorRegistration) error {
+	pk := strings.ToLower(data.Pubkey.String())
+
+	dataBytes, err := data.MarshalSSZ()
 	if err != nil {
 		return err
 	}
-	if knownTimestamp >= timestamp {
-		return nil
-	}
-	return r.SetValidatorRegistrationTimestamp(proposerPubkey, timestamp)
-}
-
-func (r *RedisCache) SetValidatorRegistrationTimestamp(proposerPubkey common.PubkeyHex, timestamp uint64) error {
-	return r.client.HSet(context.Background(), r.keyValidatorRegistrationTimestamp, proposerPubkey.String(), timestamp).Err()
+	return r.client.HSet(context.Background(), r.keyValidatorRegistrationData, pk, dataBytes).Err()
 }
 
 func (r *RedisCache) CheckAndSetLastSlotAndHashDelivered(slot uint64, hash string) (err error) {
