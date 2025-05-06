@@ -1036,11 +1036,35 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	}
 	req.Body.Close()
 
+	//
 	// Parse the registrations
-	signedValidatorRegistrations, err := api.fastRegistrationParsing(regBytes, proposerContentType)
-	if err != nil {
-		handleError(log, http.StatusBadRequest, err.Error(), err)
-		return
+	//
+	signedValidatorRegistrations := new(builderApiV1.SignedValidatorRegistrations)
+
+	if proposerContentType == ApplicationOctetStream {
+		// Registrations in SSZ
+		log = log.WithField("is_ssz", true)
+		log.Debug("Parsing registrations as SSZ")
+
+		timeStart := time.Now()
+		err := signedValidatorRegistrations.UnmarshalSSZ(regBytes)
+		if err != nil {
+			handleError(log, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		log.WithField("sszDecodeDurationMs", time.Since(timeStart).Milliseconds()).Debug("Parsed registrations as SSZ")
+	} else {
+		// Registrations in JSON
+		log = log.WithField("is_ssz", false)
+		api.log.Debug("Parsing registrations as JSON")
+
+		timeStart := time.Now()
+		signedValidatorRegistrations, err = api.parseValidatorRegistrationsJSON(regBytes)
+		if err != nil {
+			handleError(log, http.StatusBadRequest, err.Error(), err)
+			return
+		}
+		log.WithField("jsonDecodeDurationMs", time.Since(timeStart).Milliseconds()).Debug("Parsed registrations as JSON")
 	}
 
 	// Iterate over the registrations
@@ -1085,9 +1109,15 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 
 		// Check for a previous registration timestamp
 		prevTimestamp, err := api.redis.GetValidatorRegistrationTimestamp(pkHex)
+		isNewerRegistration := uint64(signedValidatorRegistration.Message.Timestamp.Unix()) > prevTimestamp //nolint:gosec
+		log.WithFields(logrus.Fields{
+			"prevTimestamp": prevTimestamp,
+			"newTimestamp":  signedValidatorRegistration.Message.Timestamp.Unix(),
+		}).Debug("checking registration timestamp")
+
 		if err != nil {
 			regLog.WithError(err).Error("error getting last registration timestamp")
-		} else if prevTimestamp >= uint64(signedValidatorRegistration.Message.Timestamp.Unix()) { //nolint:gosec
+		} else if !isNewerRegistration {
 			// abort if the current registration timestamp is older or equal to the last known one
 			return
 		}
@@ -1143,20 +1173,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api *RelayAPI) fastRegistrationParsing(regBytes []byte, contentType string) (*builderApiV1.SignedValidatorRegistrations, error) {
+func (api *RelayAPI) parseValidatorRegistrationsJSON(regBytes []byte) (*builderApiV1.SignedValidatorRegistrations, error) {
 	signedValidatorRegistrations := new(builderApiV1.SignedValidatorRegistrations)
-
-	// Parse registrations as SSZ
-	if contentType == ApplicationOctetStream {
-		api.log.Debug("Parsing registrations as SSZ")
-		timeSSZStart := time.Now()
-		err := signedValidatorRegistrations.UnmarshalSSZ(regBytes)
-		if err != nil {
-			return nil, err
-		}
-		api.log.WithField("sszDecodeDurationMs", time.Since(timeSSZStart).Milliseconds()).Info("Parsed registrations as SSZ")
-		return signedValidatorRegistrations, nil
-	}
 
 	// Parse registrations as JSON
 	parseRegistration := func(value []byte) (reg *builderApiV1.SignedValidatorRegistration, err error) {
@@ -1233,7 +1251,6 @@ func (api *RelayAPI) fastRegistrationParsing(regBytes []byte, contentType string
 	}
 
 	var parseErr error
-	api.log.Debug("Parsing registrations as JSON")
 	_, forEachErr := jsonparser.ArrayEach(regBytes, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 		if err != nil {
 			parseErr = err
