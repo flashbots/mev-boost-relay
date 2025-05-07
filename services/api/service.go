@@ -1104,7 +1104,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		}
 
 		// Check for a previous registration timestamp and see if fields changed
-		cachedRegistrationData, err := api.redis.GetValidatorRegistrationData(pkHex)
+		cachedRegistrationData, err := api.datastore.GetCachedValidatorRegistration(pkHex)
 		haveCachedRegistration := cachedRegistrationData != nil
 
 		if err != nil {
