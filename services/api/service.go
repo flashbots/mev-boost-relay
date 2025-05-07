@@ -1480,54 +1480,142 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 // We may have failed to ask whether or not our stores have the payload, which is completely unaccepable.
 // Improvement: we could ask all three in parallel. Any payload found will do.
 func getPayloadWithFallbacks(log *logrus.Entry, datastoreRef *datastore.Datastore, slot uint64, proposerPubkey common.PubkeyHex, blockHash phase0.Hash32) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
-	getPayloadResp, err := datastoreRef.LocalPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
-	if getPayloadResp != nil {
-		log.Info("payload found locally")
-		return getPayloadResp, nil
+	type result struct {
+		payload *builderApi.VersionedSubmitBlindedBlockResponse
+		err     error
 	}
 
-	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
-		log.WithError(err).Warn("payload not found in local auction API")
-	} else {
-		// We hit a bad error, this should never happen, but this is what our fallbacks are for.
-		log.WithError(err).Error("failed to get payload from local auction API")
-	}
+	// Channel that will receive the first successful payload (buffer=1 so that the first send does not block).
+	resultCh := make(chan result, 1)
+	// Channel that is closed once all goroutines completed without finding a payload.
+	doneCh := make(chan struct{})
 
-	// In case the local auction API has crashed after serving a header somehow, it may still have succeeded in storing the payload in Redis.
-	// Check there.
-	getPayloadResp, err = datastoreRef.RedisPayload(log, uint64(slot), proposerPubkey.String(), blockHash.String())
-	if getPayloadResp != nil {
-		log.Info("payload found in redis")
-		return getPayloadResp, nil
-	}
+	// Use a context to allow goroutines to stop early once we have a payload.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
-		log.WithError(err).Warn("payload not found in Redis")
-	} else {
-		// We hit a bad error, this should never happen, but this is what our fallbacks are for.
-		log.WithError(err).Error("failed to get payload from Redis")
-	}
+	var wg sync.WaitGroup
 
-	// If we're failing to check for payloads entirely, checking whether the other geo has the payload probably won't help.
-	// If payload stores are responding but simply don't have the payload, we probably didn't offer the bid either.
-	// Regardless, its possible the other geo does. Check it, so we may help out in publishing, even if it wasn't "our bid".
-	getPayloadResp, err = datastoreRef.RemotePayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
-	if getPayloadResp != nil {
-		log.Info("payload found remotely")
-		return getPayloadResp, nil
-	}
+	// local store, 5 attempts, 100 ms apart.
+	// this is where we'll usually find the payload. because its possible the payload is not here yet, we retry.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var res *builderApi.VersionedSubmitBlindedBlockResponse
+		var err error
+		for i := 0; i < 5 && ctx.Err() == nil; i++ {
+			res, err = datastoreRef.LocalPayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
+			if res != nil {
+				log.Info("payload found locally")
+				select {
+				case resultCh <- result{payload: res}:
+				default:
+				}
+				return
+			}
 
-	if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
-		// Acceptable error as long as we didn't share the bid we're asked for, warn and continue.
-		log.WithError(err).Warn("payload not found in remote auction API")
-	} else {
-		// We hit a bad error, this should never happen, and we're out of fallbacks.
-		log.WithError(err).Error("failed to get payload from remote auction API")
-	}
+			if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+				log.WithError(err).Warn("payload not found in local auction API (will retry)")
+			} else if err != nil {
+				log.WithError(err).Error("failed to get payload from local auction API")
+				// For non-not-found errors we break early – continuing is unlikely to succeed.
+				break
+			}
 
-	return nil, err
+			// Back-off before next attempt
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// Nothing found – try to report error (best-effort, ignore if channel full)
+		select {
+		case resultCh <- result{payload: nil, err: err}:
+		default:
+		}
+	}()
+
+	// redis store, single attempt.
+	// its possible the auction api went down, it tries to write every payload to redis in case this happens.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res, err := datastoreRef.RedisPayload(log, uint64(slot), proposerPubkey.String(), blockHash.String())
+		if res != nil {
+			log.Info("payload found in redis")
+			select {
+			case resultCh <- result{payload: res}:
+			default:
+			}
+			return
+		}
+
+		if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+			log.WithError(err).Warn("payload not found in Redis")
+		} else if err != nil {
+			log.WithError(err).Error("failed to get payload from Redis")
+		}
+
+		select {
+		case resultCh <- result{payload: nil, err: err}:
+		default:
+		}
+	}()
+
+	// remote store, single attempt.
+	// its possible the header we served was from the remote geo, and the payload didn't get here yet.
+	// check the remote geo.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res, err := datastoreRef.RemotePayloadContents(uint64(slot), proposerPubkey.String(), blockHash.String())
+		if res != nil {
+			log.Info("payload found remotely")
+			select {
+			case resultCh <- result{payload: res}:
+			default:
+			}
+			return
+		}
+
+		if errors.Is(err, datastore.ErrExecutionPayloadNotFound) {
+			log.WithError(err).Warn("payload not found in remote auction API")
+		} else if err != nil {
+			log.WithError(err).Error("failed to get payload from remote auction API")
+		}
+
+		select {
+		case resultCh <- result{payload: nil, err: err}:
+		default:
+		}
+	}()
+
+	// Wait in a separate goroutine so we can use select{} below.
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+
+	var lastErr error
+	for {
+		select {
+		case res := <-resultCh:
+			if res.payload != nil {
+				// Successful – cancel other goroutines and return.
+				cancel()
+				return res.payload, nil
+			}
+			// Track last error (may be nil if not-found)
+			if res.err != nil {
+				lastErr = res.err
+			}
+		case <-doneCh:
+			// All goroutines finished, no payload found.
+			if lastErr == nil {
+				// Standardise the not-found error
+				lastErr = datastore.ErrExecutionPayloadNotFound
+			}
+			return nil, lastErr
+		}
+	}
 }
 
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
