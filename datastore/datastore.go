@@ -40,14 +40,15 @@ type Datastore struct {
 	memcached *Memcached
 	db        database.IDatabaseService
 
-	knownValidatorsByPubkey   map[common.PubkeyHex]uint64
-	knownValidatorsByIndex    map[uint64]common.PubkeyHex
-	knownValidatorsLock       sync.RWMutex
+	knownValidatorsByPubkey sync.Map // map[common.PubkeyHex]uint64
+	knownValidatorsByIndex  sync.Map // map[uint64]common.PubkeyHex
+
 	knownValidatorsIsUpdating uberatomic.Bool
 	knownValidatorsLastSlot   uberatomic.Uint64
 
-	validatorRegistrations    map[common.PubkeyHex]builderApiV1.ValidatorRegistration
-	validatorRegistrationLock sync.RWMutex
+	// validatorRegistrations    map[common.PubkeyHex]builderApiV1.ValidatorRegistration
+	// validatorRegistrationLock sync.RWMutex
+	validatorRegistrations sync.Map
 
 	// Used for proposer-API readiness check
 	KnownValidatorsWasUpdated uberatomic.Bool
@@ -55,12 +56,9 @@ type Datastore struct {
 
 func NewDatastore(redisCache *RedisCache, memcached *Memcached, db database.IDatabaseService) (ds *Datastore, err error) {
 	ds = &Datastore{
-		db:                      db,
-		memcached:               memcached,
-		redis:                   redisCache,
-		validatorRegistrations:  make(map[common.PubkeyHex]builderApiV1.ValidatorRegistration),
-		knownValidatorsByPubkey: make(map[common.PubkeyHex]uint64),
-		knownValidatorsByIndex:  make(map[uint64]common.PubkeyHex),
+		db:        db,
+		memcached: memcached,
+		redis:     redisCache,
 	}
 
 	return ds, err
@@ -138,42 +136,36 @@ func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beac
 	// At this point, consider the update successful
 	ds.knownValidatorsLastSlot.Store(slot)
 
-	knownValidatorsByPubkey := make(map[common.PubkeyHex]uint64)
-	knownValidatorsByIndex := make(map[uint64]common.PubkeyHex)
+	// knownValidatorsByPubkey := make(map[common.PubkeyHex]uint64)
+	// knownValidatorsByIndex := make(map[uint64]common.PubkeyHex)
 
 	for _, valEntry := range validators.Data {
 		pk := common.NewPubkeyHex(valEntry.Validator.Pubkey)
-		knownValidatorsByPubkey[pk] = valEntry.Index
-		knownValidatorsByIndex[valEntry.Index] = pk
+		// knownValidatorsByPubkey[pk] = valEntry.Index
+		// knownValidatorsByIndex[valEntry.Index] = pk
+		ds.knownValidatorsByPubkey.Store(pk, valEntry.Index)
+		ds.knownValidatorsByIndex.Store(valEntry.Index, pk)
 	}
-
-	ds.knownValidatorsLock.Lock()
-	ds.knownValidatorsByPubkey = knownValidatorsByPubkey
-	ds.knownValidatorsByIndex = knownValidatorsByIndex
-	ds.knownValidatorsLock.Unlock()
 
 	ds.KnownValidatorsWasUpdated.Store(true)
 	log.Infof("known validators updated")
 }
 
 func (ds *Datastore) IsKnownValidator(pubkeyHex common.PubkeyHex) bool {
-	ds.knownValidatorsLock.RLock()
-	defer ds.knownValidatorsLock.RUnlock()
-	_, found := ds.knownValidatorsByPubkey[pubkeyHex]
-	return found
+	_, isKnown := ds.knownValidatorsByPubkey.Load(pubkeyHex)
+	return isKnown
 }
 
 func (ds *Datastore) GetKnownValidatorPubkeyByIndex(index uint64) (common.PubkeyHex, bool) {
-	ds.knownValidatorsLock.RLock()
-	defer ds.knownValidatorsLock.RUnlock()
-	pk, found := ds.knownValidatorsByIndex[index]
-	return pk, found
-}
-
-func (ds *Datastore) NumKnownValidators() int {
-	ds.knownValidatorsLock.RLock()
-	defer ds.knownValidatorsLock.RUnlock()
-	return len(ds.knownValidatorsByIndex)
+	// ds.knownValidatorsLock.RLock()
+	// defer ds.knownValidatorsLock.RUnlock()
+	// pk, found := ds.knownValidatorsByIndex[index]
+	pkRaw, isKnown := ds.knownValidatorsByIndex.Load(index)
+	if !isKnown {
+		return "", false
+	}
+	pk, _ := pkRaw.(common.PubkeyHex)
+	return pk, true
 }
 
 func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
@@ -181,11 +173,8 @@ func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
 }
 
 func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64) {
-	ds.knownValidatorsLock.Lock()
-	defer ds.knownValidatorsLock.Unlock()
-
-	ds.knownValidatorsByPubkey[pubkeyHex] = index
-	ds.knownValidatorsByIndex[index] = pubkeyHex
+	ds.knownValidatorsByPubkey.Store(pubkeyHex, index)
+	ds.knownValidatorsByIndex.Store(index, pubkeyHex)
 }
 
 // GetCachedValidatorRegistration returns a validator registration from local cache or Redis
@@ -194,11 +183,13 @@ func (ds *Datastore) GetCachedValidatorRegistration(proposerPubkey common.Pubkey
 	var err error
 
 	// acquire read lock and read
-	ds.validatorRegistrationLock.RLock()
-	cachedRegistration, foundInLocalCache := ds.validatorRegistrations[proposerPubkey]
-	ds.validatorRegistrationLock.RUnlock()
+	val, foundInLocalCache := ds.validatorRegistrations.Load(proposerPubkey)
 	if foundInLocalCache {
-		return &cachedRegistration, nil
+		// Convert and use the cached value
+		cachedRegistration, ok := val.(builderApiV1.ValidatorRegistration)
+		if ok {
+			return &cachedRegistration, nil
+		}
 	}
 
 	// if not, try to get it from Redis
@@ -211,9 +202,7 @@ func (ds *Datastore) GetCachedValidatorRegistration(proposerPubkey common.Pubkey
 }
 
 func (ds *Datastore) saveValidatorRegistrationInLocalCache(entry builderApiV1.ValidatorRegistration) {
-	ds.validatorRegistrationLock.Lock()
-	ds.validatorRegistrations[common.NewPubkeyHex(entry.Pubkey.String())] = entry
-	ds.validatorRegistrationLock.Unlock()
+	ds.validatorRegistrations.Store(common.NewPubkeyHex(entry.Pubkey.String()), entry)
 }
 
 // SaveValidatorRegistration saves a validator registration into local cache, Redis and the database

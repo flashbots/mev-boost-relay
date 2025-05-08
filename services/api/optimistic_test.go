@@ -73,7 +73,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 	pkStr := pubkey.String()
 
 	// Setup test backend.
-	backend := newTestBackend(t, 1)
+	backend := newTestBackend(t)
 	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{}
 	backend.relay.genesisInfo.Data.GenesisTime = 0
 	backend.relay.proposerDutiesMap = map[uint64]*common.BuilderGetValidatorsResponseEntry{
