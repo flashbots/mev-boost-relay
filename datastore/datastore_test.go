@@ -73,3 +73,32 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatorRegistrationCache(t *testing.T) {
+	ds := setupTestDatastore(t, &database.MockDB{})
+	data := common.ValidPayloadRegisterValidator.Message
+	pkHex := common.PubkeyHex(data.Pubkey.String())
+
+	// Simple set and get test
+	ds.SetKnownValidator(pkHex, 123)
+
+	isKnown := ds.IsKnownValidator(pkHex)
+	require.True(t, isKnown)
+
+	retrievedPkHex, found := ds.GetKnownValidatorPubkeyByIndex(123)
+	require.True(t, found)
+	require.Equal(t, pkHex, retrievedPkHex)
+
+	// Testing full validator registration
+	err := ds.SaveValidatorRegistration(common.ValidPayloadRegisterValidator)
+	require.NoError(t, err)
+
+	cachedRegistration, err := ds.GetCachedValidatorRegistration(pkHex)
+	require.NoError(t, err)
+	require.NotNil(t, cachedRegistration)
+	require.Equal(t, pkHex, common.NewPubkeyHex(cachedRegistration.Pubkey.String()))
+
+	cachedRegistration, err = ds.GetCachedValidatorRegistration(pkHex + "invalid")
+	require.NoError(t, err)
+	require.Nil(t, cachedRegistration)
+}
