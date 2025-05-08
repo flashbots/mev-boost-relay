@@ -42,13 +42,10 @@ type Datastore struct {
 
 	knownValidatorsByPubkey sync.Map // map[common.PubkeyHex]uint64
 	knownValidatorsByIndex  sync.Map // map[uint64]common.PubkeyHex
+	validatorRegistrations  sync.Map // map[common.PubkeyHex]builderApiV1.ValidatorRegistration
 
 	knownValidatorsIsUpdating uberatomic.Bool
 	knownValidatorsLastSlot   uberatomic.Uint64
-
-	// validatorRegistrations    map[common.PubkeyHex]builderApiV1.ValidatorRegistration
-	// validatorRegistrationLock sync.RWMutex
-	validatorRegistrations sync.Map
 
 	// Used for proposer-API readiness check
 	KnownValidatorsWasUpdated uberatomic.Bool
@@ -136,13 +133,8 @@ func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beac
 	// At this point, consider the update successful
 	ds.knownValidatorsLastSlot.Store(slot)
 
-	// knownValidatorsByPubkey := make(map[common.PubkeyHex]uint64)
-	// knownValidatorsByIndex := make(map[uint64]common.PubkeyHex)
-
 	for _, valEntry := range validators.Data {
 		pk := common.NewPubkeyHex(valEntry.Validator.Pubkey)
-		// knownValidatorsByPubkey[pk] = valEntry.Index
-		// knownValidatorsByIndex[valEntry.Index] = pk
 		ds.knownValidatorsByPubkey.Store(pk, valEntry.Index)
 		ds.knownValidatorsByIndex.Store(valEntry.Index, pk)
 	}
@@ -156,20 +148,17 @@ func (ds *Datastore) IsKnownValidator(pubkeyHex common.PubkeyHex) bool {
 	return isKnown
 }
 
+// GetKnownValidatorPubkeyByIndex returns (pubkey, found) of a known validator by its index
 func (ds *Datastore) GetKnownValidatorPubkeyByIndex(index uint64) (common.PubkeyHex, bool) {
-	// ds.knownValidatorsLock.RLock()
-	// defer ds.knownValidatorsLock.RUnlock()
-	// pk, found := ds.knownValidatorsByIndex[index]
 	pkRaw, isKnown := ds.knownValidatorsByIndex.Load(index)
 	if !isKnown {
 		return "", false
 	}
-	pk, _ := pkRaw.(common.PubkeyHex)
+	pk, ok := pkRaw.(common.PubkeyHex)
+	if !ok {
+		return "", false
+	}
 	return pk, true
-}
-
-func (ds *Datastore) NumRegisteredValidators() (uint64, error) {
-	return ds.db.NumRegisteredValidators()
 }
 
 func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64) {
