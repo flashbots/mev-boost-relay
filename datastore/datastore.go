@@ -135,8 +135,8 @@ func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beac
 
 	for _, valEntry := range validators.Data {
 		pk := common.NewPubkeyHex(valEntry.Validator.Pubkey)
-		ds.knownValidatorsByPubkey.Store(pk, valEntry.Index)
-		ds.knownValidatorsByIndex.Store(valEntry.Index, pk)
+		_, _ = ds.knownValidatorsByPubkey.LoadOrStore(pk, valEntry.Index)
+		_, _ = ds.knownValidatorsByIndex.LoadOrStore(valEntry.Index, pk)
 	}
 
 	ds.KnownValidatorsWasUpdated.Store(true)
@@ -200,16 +200,16 @@ func (ds *Datastore) SaveValidatorRegistration(entry builderApiV1.SignedValidato
 	// Save in local cache
 	ds.saveValidatorRegistrationInLocalCache(*entry.Message)
 
-	// Save in the database
-	err := ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
-	if err != nil {
-		return errors.Wrap(err, "failed saving validator registration to database")
-	}
-
 	// Save in Redis
-	err = ds.redis.SetValidatorRegistrationData(entry.Message)
+	err := ds.redis.SetValidatorRegistrationData(entry.Message)
 	if err != nil {
 		return errors.Wrap(err, "failed saving validator registration to redis")
+	}
+
+	// Save in the database
+	err = ds.db.SaveValidatorRegistration(database.SignedValidatorRegistrationToEntry(entry))
+	if err != nil {
+		return errors.Wrap(err, "failed saving validator registration to database")
 	}
 
 	return nil
