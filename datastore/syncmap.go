@@ -23,6 +23,10 @@ func (m *syncMap[K, V]) Load(key K) (V, bool) { //nolint:ireturn
 	return vv, true
 }
 
+func (m *syncMap[K, V]) LoadOrStore(key K, value V) (actual any, loaded bool) {
+	return m.m.LoadOrStore(key, value)
+}
+
 func (m *syncMap[K, V]) Store(key K, value V) {
 	m.m.Store(key, value)
 }
