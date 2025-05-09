@@ -143,11 +143,12 @@ type RelayAPIOpts struct {
 	// Network specific variables
 	EthNetDetails common.EthNetworkDetails
 
+	PprofListenAddr string
+
 	// APIs to enable
 	ProposerAPI     bool
 	BlockBuilderAPI bool
 	DataAPI         bool
-	PprofAPI        bool
 	InternalAPI     bool
 }
 
@@ -383,12 +384,6 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathDataValidatorRegistration, api.handleDataValidatorRegistration).Methods(http.MethodGet)
 	}
 
-	// Pprof
-	if api.opts.PprofAPI {
-		api.log.Info("pprof API enabled")
-		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
-	}
-
 	// /internal/...
 	if api.opts.InternalAPI {
 		api.log.Info("internal API enabled")
@@ -515,6 +510,17 @@ func (api *RelayAPI) StartServer() (err error) {
 			api.processNewSlot(headEvent.Slot)
 		}
 	}()
+
+	if api.opts.PprofListenAddr != "" {
+		api.log.Info("pprof API is listening on", api.opts.PprofListenAddr)
+		go func() {
+			//nolint:gosec // we should not expose pprof externally anyway
+			err := http.ListenAndServe(api.opts.PprofListenAddr, http.DefaultServeMux)
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				api.log.WithError(err).Fatal("failed to start pprof API")
+			}
+		}()
+	}
 
 	// create and start HTTP server
 	api.srv = &http.Server{
