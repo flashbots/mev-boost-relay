@@ -728,3 +728,56 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 
 	return
 }
+
+// SimpleValidatorRegistration is a helper type for fast JSON decoding
+type SimpleValidatorRegistration struct {
+	FeeRecipient string
+	GasLimit     string
+	Timestamp    int64
+	Pubkey       string
+	Signature    string
+}
+
+func SignedValidatorRegistrationToSimpleValidatorRegistration(
+	signedValidatorRegistration *builderApiV1.SignedValidatorRegistration,
+) *SimpleValidatorRegistration {
+	if signedValidatorRegistration == nil {
+		return nil
+	}
+
+	pubkey := strings.ToLower(signedValidatorRegistration.Message.Pubkey.String())
+	feeRecipient := strings.ToLower(signedValidatorRegistration.Message.FeeRecipient.String())
+	signature := strings.ToLower(signedValidatorRegistration.Signature.String())
+
+	gasLimit := strconv.FormatUint(signedValidatorRegistration.Message.GasLimit, 10)
+	timestamp := signedValidatorRegistration.Message.Timestamp.Unix()
+
+	return &SimpleValidatorRegistration{
+		FeeRecipient: feeRecipient,
+		GasLimit:     gasLimit,
+		Timestamp:    timestamp,
+		Pubkey:       pubkey,
+		Signature:    signature,
+	}
+}
+
+func ValidatorRegistrationToSimpleValidatorRegistration(
+	validatorRegistration *builderApiV1.ValidatorRegistration,
+) *SimpleValidatorRegistration {
+	if validatorRegistration == nil {
+		return nil
+	}
+
+	pubkey := strings.ToLower(validatorRegistration.Pubkey.String())
+	feeRecipient := strings.ToLower(validatorRegistration.FeeRecipient.String())
+
+	gasLimit := strconv.FormatUint(validatorRegistration.GasLimit, 10)
+	timestamp := validatorRegistration.Timestamp.Unix()
+
+	return &SimpleValidatorRegistration{
+		FeeRecipient: feeRecipient,
+		GasLimit:     gasLimit,
+		Timestamp:    timestamp,
+		Pubkey:       pubkey,
+	}
+}
