@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
@@ -40,9 +39,9 @@ type Datastore struct {
 	memcached *Memcached
 	db        database.IDatabaseService
 
-	knownValidatorsByPubkey sync.Map // map[common.PubkeyHex]uint64
-	knownValidatorsByIndex  sync.Map // map[uint64]common.PubkeyHex
-	validatorRegistrations  sync.Map // map[common.PubkeyHex]builderApiV1.ValidatorRegistration
+	knownValidatorsByPubkey syncMap[common.PubkeyHex, uint64]
+	knownValidatorsByIndex  syncMap[uint64, common.PubkeyHex]
+	validatorRegistrations  syncMap[common.PubkeyHex, builderApiV1.ValidatorRegistration]
 
 	knownValidatorsIsUpdating uberatomic.Bool
 	knownValidatorsLastSlot   uberatomic.Uint64
@@ -150,15 +149,7 @@ func (ds *Datastore) IsKnownValidator(pubkeyHex common.PubkeyHex) bool {
 
 // GetKnownValidatorPubkeyByIndex returns (pubkey, found) of a known validator by its index
 func (ds *Datastore) GetKnownValidatorPubkeyByIndex(index uint64) (common.PubkeyHex, bool) {
-	pkRaw, isKnown := ds.knownValidatorsByIndex.Load(index)
-	if !isKnown {
-		return "", false
-	}
-	pk, ok := pkRaw.(common.PubkeyHex)
-	if !ok {
-		return "", false
-	}
-	return pk, true
+	return ds.knownValidatorsByIndex.Load(index)
 }
 
 func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64) {
@@ -171,17 +162,12 @@ func (ds *Datastore) SetKnownValidator(pubkeyHex common.PubkeyHex, index uint64)
 func (ds *Datastore) GetCachedValidatorRegistration(proposerPubkey common.PubkeyHex) (*builderApiV1.ValidatorRegistration, error) {
 	var err error
 
-	// acquire read lock and read
-	val, foundInLocalCache := ds.validatorRegistrations.Load(proposerPubkey)
-	if foundInLocalCache {
-		// Convert and use the cached value
-		cachedRegistration, ok := val.(builderApiV1.ValidatorRegistration)
-		if ok {
-			return &cachedRegistration, nil
-		}
+	cachedRegistration, ok := ds.validatorRegistrations.Load(proposerPubkey)
+	if ok {
+		return &cachedRegistration, nil
 	}
 
-	// if not, try to get it from Redis
+	// if not found in local cache, try to get it from Redis
 	cachedRegistrationData, err := ds.redis.GetValidatorRegistrationData(proposerPubkey)
 	if err == nil && cachedRegistrationData != nil {
 		// save in local cache
