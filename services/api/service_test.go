@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -196,7 +195,7 @@ func TestRegisterValidator(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		msg := common.ValidPayloadRegisterValidator
-		backend.datastore.SetKnownValidator(msg.Message.Pubkey.String(), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
 		require.Equal(t, http.StatusOK, rr.Code)
@@ -218,7 +217,7 @@ func TestRegisterValidator(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		msg := common.ValidPayloadRegisterValidator
-		backend.datastore.SetKnownValidator(strings.ToLower(msg.Message.Pubkey.String()), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		regs := builderApiV1.SignedValidatorRegistrations{}
 		regs.Registrations = append(regs.Registrations, &msg)
@@ -252,7 +251,7 @@ func TestRegisterValidator(t *testing.T) {
 		newMessage.Timestamp = time.Unix(int64(backend.relay.genesisInfo.Data.GenesisTime-1), 0) //nolint:gosec
 		msg.Message = &newMessage
 
-		backend.datastore.SetKnownValidator(strings.ToLower(msg.Message.Pubkey.String()), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -268,7 +267,7 @@ func TestRegisterValidator(t *testing.T) {
 		newMessage.Timestamp = time.Now().Add(11 * time.Second)
 		msg.Message = &newMessage
 
-		backend.datastore.SetKnownValidator(strings.ToLower(msg.Message.Pubkey.String()), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -296,7 +295,7 @@ func TestRegisterValidator(t *testing.T) {
 		newMessage.Timestamp = msg.Message.Timestamp.Add(1 * time.Second)
 		msg.Message = &newMessage
 
-		backend.datastore.SetKnownValidator(strings.ToLower(msg.Message.Pubkey.String()), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -312,7 +311,7 @@ func TestRegisterValidator(t *testing.T) {
 		newMessage.Timestamp = newMessage.Timestamp.Add(999 * time.Millisecond)
 		msg.Message = &newMessage
 
-		backend.datastore.SetKnownValidator(strings.ToLower(msg.Message.Pubkey.String()), 1)
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
 		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
 		require.Equal(t, http.StatusOK, rr.Code)

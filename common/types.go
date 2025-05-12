@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -14,8 +15,10 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/buger/jsonparser"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
 )
 
 var (
@@ -218,6 +221,8 @@ func (e *EthNetworkDetails) String() string {
 		e.DomainBeaconProposerElectra)
 }
 
+// PubkeyHex represents a hex-encoded public key.
+// It is lowercased on creation and is not validated/parsed.
 type PubkeyHex string
 
 func NewPubkeyHex(pk string) PubkeyHex {
@@ -226,6 +231,10 @@ func NewPubkeyHex(pk string) PubkeyHex {
 
 func (p PubkeyHex) String() string {
 	return string(p)
+}
+
+func (p PubkeyHex) ToPubkey() (ret phase0.BLSPubKey, err error) {
+	return utils.HexToPubkey(string(p))
 }
 
 type BuilderGetValidatorsResponseEntry struct {
@@ -731,53 +740,65 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 
 // SimpleValidatorRegistration is a helper type for fast JSON decoding
 type SimpleValidatorRegistration struct {
-	FeeRecipient string
-	GasLimit     string
-	Timestamp    int64
-	Pubkey       string
-	Signature    string
+	FeeRecipient bellatrix.ExecutionAddress
+	GasLimit     uint64
+	Timestamp    time.Time
+
+	// These two are intentionally left unparsed due to heavy parsing maths
+	Pubkey    PubkeyHex
+	Signature string
 }
 
-func SignedValidatorRegistrationToSimpleValidatorRegistration(
-	signedValidatorRegistration *builderApiV1.SignedValidatorRegistration,
-) *SimpleValidatorRegistration {
-	if signedValidatorRegistration == nil {
-		return nil
+func (r *SimpleValidatorRegistration) UnmarshalJSON(value []byte) error {
+	_feeRecipient, err := jsonparser.GetUnsafeString(value, "message", "fee_recipient")
+	if err != nil {
+		return fmt.Errorf("registration message error (fee_recipient): %w", err)
 	}
 
-	pubkey := strings.ToLower(signedValidatorRegistration.Message.Pubkey.String())
-	feeRecipient := strings.ToLower(signedValidatorRegistration.Message.FeeRecipient.String())
-	signature := strings.ToLower(signedValidatorRegistration.Signature.String())
-
-	gasLimit := strconv.FormatUint(signedValidatorRegistration.Message.GasLimit, 10)
-	timestamp := signedValidatorRegistration.Message.Timestamp.Unix()
-
-	return &SimpleValidatorRegistration{
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-		Timestamp:    timestamp,
-		Pubkey:       pubkey,
-		Signature:    signature,
-	}
-}
-
-func ValidatorRegistrationToSimpleValidatorRegistration(
-	validatorRegistration *builderApiV1.ValidatorRegistration,
-) *SimpleValidatorRegistration {
-	if validatorRegistration == nil {
-		return nil
+	// this one is fast, it's hex decode, no fancy crypto maths
+	feeRecipient, err := utils.HexToAddress(_feeRecipient)
+	if err != nil {
+		return fmt.Errorf("registration message error (fee_recipient): %w", err)
 	}
 
-	pubkey := strings.ToLower(validatorRegistration.Pubkey.String())
-	feeRecipient := strings.ToLower(validatorRegistration.FeeRecipient.String())
-
-	gasLimit := strconv.FormatUint(validatorRegistration.GasLimit, 10)
-	timestamp := validatorRegistration.Timestamp.Unix()
-
-	return &SimpleValidatorRegistration{
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-		Timestamp:    timestamp,
-		Pubkey:       pubkey,
+	_gasLimit, err := jsonparser.GetUnsafeString(value, "message", "gas_limit")
+	if err != nil {
+		return fmt.Errorf("registration message error (gasLimit): %w", err)
 	}
+
+	gasLimit, err := strconv.ParseUint(_gasLimit, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid gasLimit: %w", err)
+	}
+
+	_timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
+	if err != nil {
+		return fmt.Errorf("registration message error (timestamp): %w", err)
+	}
+
+	timestamp, err := strconv.ParseInt(_timestamp, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp: %w", err)
+	}
+	if timestamp < 0 {
+		return ErrTimestampNegative
+	}
+
+	pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
+	if err != nil {
+		return fmt.Errorf("registration message error (pubkey): %w", err)
+	}
+
+	signature, err := jsonparser.GetUnsafeString(value, "signature")
+	if err != nil {
+		return fmt.Errorf("registration message error (signature): %w", err)
+	}
+
+	r.FeeRecipient = feeRecipient
+	r.GasLimit = gasLimit
+	r.Timestamp = time.Unix(timestamp, 0)
+	r.Pubkey = NewPubkeyHex(pubkey)
+	r.Signature = signature
+
+	return nil
 }

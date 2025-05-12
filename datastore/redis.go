@@ -240,11 +240,11 @@ func (r *RedisCache) HSetObj(key, field string, value any, expiration time.Durat
 	return r.client.Expire(context.Background(), key, expiration).Err()
 }
 
-func (r *RedisCache) GetValidatorRegistrationData(proposerPubkey string) (*builderApiV1.ValidatorRegistration, error) {
+func (r *RedisCache) GetValidatorRegistrationData(proposerPubkey common.PubkeyHex) (*builderApiV1.ValidatorRegistration, error) {
 	data := new(builderApiV1.ValidatorRegistration)
-	// pk := strings.ToLower(proposerPubkey)
 
-	dataRaw, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationData, proposerPubkey).Result()
+	// common.PubkeyHex is lowercase at the time of creation
+	dataRaw, err := r.client.HGet(context.Background(), r.keyValidatorRegistrationData, proposerPubkey.String()).Result()
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
