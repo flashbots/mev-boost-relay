@@ -135,27 +135,27 @@ func (c *ProdBeaconInstance) SubscribeToPayloadAttributesEvents(payloadAttribute
 }
 
 type GetStateValidatorsResponse struct {
-	ExecutionOptimistic bool `json:"execution_optimistic"`
-	Finalized           bool `json:"finalized"`
-	Data                []ValidatorResponseEntry
+	// ExecutionOptimistic bool `json:"execution_optimistic"`
+	// Finalized           bool `json:"finalized"`
+	Data []ValidatorResponseEntry
 }
 
 type ValidatorResponseEntry struct {
-	Index     uint64                         `json:"index,string"` // Index of validator in validator registry.
-	Balance   string                         `json:"balance"`      // Current validator balance in gwei.
-	Status    string                         `json:"status"`
+	Index uint64 `json:"index,string"` // Index of validator in validator registry.
+	// Balance   string                         `json:"balance"`      // Current validator balance in gwei.
+	// Status    string                         `json:"status"`
 	Validator ValidatorResponseValidatorData `json:"validator"`
 }
 
 type ValidatorResponseValidatorData struct {
-	Pubkey                string `json:"pubkey"`
-	WithdrawalCredentials string `json:"withdrawal_credentials"`
-	EffectiveBalance      string `json:"effective_balance"`
-	Slashed               bool   `json:"slashed"`
-	ActivationEligibility uint64 `json:"activation_eligibility_epoch,string"`
-	ActivationEpoch       uint64 `json:"activation_epoch,string"`
-	ExitEpoch             uint64 `json:"exit_epoch,string"`
-	WithdrawableEpoch     uint64 `json:"withdrawable_epoch,string"`
+	Pubkey string `json:"pubkey"`
+	// WithdrawalCredentials string `json:"withdrawal_credentials"`
+	// EffectiveBalance      string `json:"effective_balance"`
+	// Slashed               bool   `json:"slashed"`
+	// ActivationEligibility uint64 `json:"activation_eligibility_epoch,string"`
+	// ActivationEpoch       uint64 `json:"activation_epoch,string"`
+	// ExitEpoch             uint64 `json:"exit_epoch,string"`
+	// WithdrawableEpoch     uint64 `json:"withdrawable_epoch,string"`
 }
 
 // GetStateValidators loads all active and pending validators

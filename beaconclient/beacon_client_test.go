@@ -177,9 +177,7 @@ func TestFetchValidators(t *testing.T) {
 			Validator: ValidatorResponseValidatorData{
 				Pubkey: testPubKey,
 			},
-			Index:   0,
-			Balance: "0",
-			Status:  "",
+			Index: 0,
 		}
 
 		backend := newTestBackend(t, 3)
