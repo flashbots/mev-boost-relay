@@ -2,13 +2,13 @@ package tool
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 )
 

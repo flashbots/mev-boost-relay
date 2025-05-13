@@ -14,6 +14,7 @@ require (
 	github.com/ethereum/go-ethereum v1.15.10
 	github.com/flashbots/go-boost-utils v1.9.0
 	github.com/flashbots/go-utils v0.11.0
+	github.com/goccy/go-json v0.10.4
 	github.com/gorilla/mux v1.8.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jmoiron/sqlx v1.4.0

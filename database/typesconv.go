@@ -1,7 +1,6 @@
 package database
 
 import (
-	"encoding/json"
 	"errors"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
@@ -9,6 +8,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/goccy/go-json"
 )
 
 var ErrUnsupportedExecutionPayload = errors.New("unsupported execution payload version")

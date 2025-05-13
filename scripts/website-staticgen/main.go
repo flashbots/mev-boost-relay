@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/flashbots/mev-boost-relay/services/website"
+	"github.com/goccy/go-json"
 )
 
 func main() {
