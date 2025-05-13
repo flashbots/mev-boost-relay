@@ -2,10 +2,10 @@ package common
 
 import (
 	"bytes"
-	"encoding/json"
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/require"
 )
 

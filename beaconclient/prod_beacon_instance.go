@@ -1,7 +1,6 @@
 package beaconclient
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/goccy/go-json"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )

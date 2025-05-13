@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"math/big"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
@@ -137,7 +137,7 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 	}
 
 	req := common.TestBuilderSubmitBlockRequest(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue, opts.slot), opts.version)
-	rr := backend.request(http.MethodPost, pathSubmitNewBlock, &req)
+	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req)
 
 	// Let updates happen async.
 	time.Sleep(100 * time.Millisecond)
@@ -372,7 +372,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		wantStatus      common.BuilderStatus
 		simulationError error
 		expectDemotion  bool
-		httpCode        uint64
+		httpCode        int
 		blockValue      uint64
 		slot            uint64
 		version         spec.DataVersion
@@ -488,7 +488,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			}, tc.simulationError, backend)
 
 			// Check http code.
-			require.EqualValues(t, rr.Code, tc.httpCode)
+			require.EqualValues(t, tc.httpCode, rr.Code)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
@@ -499,7 +499,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			// Check demotion status is set to expected and refund is false.
 			mockDB, ok := backend.relay.db.(*database.MockDB)
 			require.True(t, ok)
-			require.Equal(t, mockDB.Demotions[pkStr], tc.expectDemotion)
+			require.Equal(t, tc.expectDemotion, mockDB.Demotions[pkStr])
 			require.False(t, mockDB.Refunds[pkStr])
 		})
 	}

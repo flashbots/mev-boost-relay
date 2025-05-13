@@ -2,7 +2,6 @@ package tool
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
+	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 )
 
