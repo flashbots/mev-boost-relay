@@ -1422,6 +1422,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	if api.isElectra(headSlot) && payload.Electra == nil {
+		log.Warn("Not an electra payload.")
+		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
+		return
+	}
+
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
 	slot, err := payload.Slot()
