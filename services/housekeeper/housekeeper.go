@@ -250,29 +250,38 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 
 // updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis
 func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
-	regs, err := hk.db.GetLatestValidatorRegistrations(true)
+	log := hk.log
+	log.Infof("updateValidatorRegistrationsInRedis: getting registrations from DB...")
+
+	timeStarted := time.Now()
+	regs, err := hk.db.GetLatestValidatorRegistrations(false)
 	if err != nil {
-		hk.log.WithError(err).Error("failed to get latest validator registrations")
+		log.WithError(err).Error("failed to get latest validator registrations")
 		return
 	}
 
-	hk.log.Infof("updating %d validator registrations in Redis...", len(regs))
-	timeStarted := time.Now()
+	log = log.WithFields(logrus.Fields{
+		"numRegistrations": len(regs),
+		"timeNeededDBSec":  time.Since(timeStarted).Seconds(),
+	})
+	log.Info("updateValidatorRegistrationsInRedis: got registrations from DB, updating Redis (this may take a while)...")
 
+	timeStarted = time.Now()
 	for _, reg := range regs {
 		// convert DB data to original struct
 		data, err := reg.ToSignedValidatorRegistration()
 		if err != nil {
-			hk.log.WithError(err).Error("failed to convert validator registration entry to signed validator registration")
+			log.WithError(err).Error("failed to convert validator registration entry to signed validator registration")
 			continue
 		}
 
 		// save to Redis
 		err = hk.redis.SetValidatorRegistrationData(data.Message)
 		if err != nil {
-			hk.log.WithError(err).Error("failed to set validator registration")
+			log.WithError(err).Error("failed to set validator registration")
 			continue
 		}
 	}
-	hk.log.Infof("updating %d validator registrations in Redis done - %f sec", len(regs), time.Since(timeStarted).Seconds())
+
+	log.WithField("timeNeededRedisSec", time.Since(timeStarted).Seconds()).Info("updateValidatorRegistrationsInRedis: updating Redis done")
 }
