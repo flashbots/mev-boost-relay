@@ -334,6 +334,15 @@ func (c *ProdBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
 	return resp, err
 }
 
+// GetSpecRaw - returns the complete beacon spec configuration as map[string]interface{}
+// This captures all fields returned by the beacon API, not just the limited ones in GetSpecResponse
+func (c *ProdBeaconInstance) GetSpecRaw() (spec map[string]interface{}, err error) {
+	uri := c.beaconURI + "/eth/v1/config/spec"
+	var rawResponse map[string]interface{}
+	_, err = fetchBeacon(http.MethodGet, uri, nil, &rawResponse, nil, http.Header{}, false)
+	return rawResponse, err
+}
+
 type GetForkScheduleResponse struct {
 	Data []struct {
 		PreviousVersion string `json:"previous_version"`

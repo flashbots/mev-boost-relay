@@ -122,6 +122,10 @@ func (c *MockBeaconInstance) GetSpec() (spec *GetSpecResponse, err error) {
 	return nil, nil
 }
 
+func (c *MockBeaconInstance) GetSpecRaw() (spec map[string]interface{}, err error) {
+	return nil, nil
+}
+
 func (c *MockBeaconInstance) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
 	return nil, nil
 }

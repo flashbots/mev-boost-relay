@@ -42,6 +42,10 @@ func (*MockMultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
 	return nil, nil
 }
 
+func (*MockMultiBeaconClient) GetSpecRaw() (spec map[string]interface{}, err error) {
+	return nil, nil
+}
+
 func (*MockMultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
 	resp := &GetForkScheduleResponse{
 		Data: []struct {
