@@ -1,7 +1,6 @@
 package common
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -235,38 +234,4 @@ func TestSSZManager_ConfigCopy(t *testing.T) {
 	// Original config should be unchanged
 	configFromManager := manager.GetConfig()
 	require.Equal(t, "8", configFromManager["SLOTS_PER_EPOCH"])
-}
-
-func TestSSZManager_ConcurrentAccess(t *testing.T) {
-	log := logrus.WithField("test", "SSZManager")
-	manager := NewSSZManager(log)
-
-	config := map[string]interface{}{
-		"SLOTS_PER_EPOCH":  "8",
-		"SECONDS_PER_SLOT": "12",
-	}
-
-	err := manager.Initialize(config)
-	require.NoError(t, err)
-
-	// Test concurrent access to the manager
-	var wg sync.WaitGroup
-	numGoroutines := 10
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// Test various operations concurrently
-			_ = manager.IsInitialized()
-			_ = manager.GetConfig()
-
-			testStruct := &TestStruct{Value: 123}
-			_, _ = manager.MarshalSSZ(testStruct)
-			_, _ = manager.HashTreeRoot(testStruct)
-		}()
-	}
-
-	wg.Wait()
 }

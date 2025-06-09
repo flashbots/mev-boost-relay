@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
@@ -25,13 +26,17 @@ import (
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
+	dynamicssz "github.com/pk910/dynamic-ssz"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
-	ErrMissingRequest   = errors.New("req is nil")
-	ErrMissingSecretKey = errors.New("secret key is nil")
-	ErrInvalidVersion   = errors.New("invalid version")
+	ErrMissingRequest           = errors.New("req is nil")
+	ErrMissingSecretKey         = errors.New("secret key is nil")
+	ErrInvalidVersion           = errors.New("invalid version")
+	ErrSSZManagerNotInitialized = errors.New("SSZ manager not initialized")
+	ErrInvalidSpecConfig        = errors.New("invalid spec config")
 )
 
 type HTTPErrorResp struct {
@@ -686,4 +691,144 @@ func (r *VersionedSignedBlindedBeaconBlock) Unmarshal(input []byte, contentType,
 		return json.NewDecoder(bytes.NewReader(input)).Decode(r)
 	}
 	return ErrInvalidContentType
+}
+
+// SSZ Manager for dynamic SSZ operations
+
+// HashRootObject represents an object that can compute its hash tree root
+type HashRootObject interface {
+	HashTreeRoot() ([32]byte, error)
+}
+
+// SSZManager manages dynamic SSZ operations with a single initialized instance
+type SSZManager struct {
+	mu     sync.RWMutex
+	dynSSZ *dynamicssz.DynSsz
+	config map[string]interface{}
+	log    *logrus.Entry
+}
+
+func NewSSZManager(log *logrus.Entry) *SSZManager {
+	return &SSZManager{
+		log: log,
+	}
+}
+
+func (s *SSZManager) Initialize(beaconConfig map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if beaconConfig == nil {
+		return ErrInvalidSpecConfig
+	}
+
+	s.config = beaconConfig
+	s.dynSSZ = dynamicssz.NewDynSsz(beaconConfig)
+
+	s.log.WithFields(logrus.Fields{
+		"configKeys": len(beaconConfig),
+	}).Info("SSZ manager initialized")
+
+	return nil
+}
+
+func (s *SSZManager) IsInitialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.dynSSZ != nil
+}
+
+func (s *SSZManager) GetConfig() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.config == nil {
+		return nil
+	}
+
+	configCopy := make(map[string]interface{})
+	for k, v := range s.config {
+		configCopy[k] = v
+	}
+	return configCopy
+}
+
+// SignMessage signs a message using the appropriate SSZ encoding
+func (s *SSZManager) SignMessage(obj HashRootObject, domain phase0.Domain, secretKey *bls.SecretKey) (phase0.BLSSignature, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dynSSZ == nil {
+		return phase0.BLSSignature{}, ErrSSZManagerNotInitialized
+	}
+
+	// Use standard SSZ for signing since dynamic SSZ doesn't provide hash tree root functionality yet
+	return ssz.SignMessage(obj, domain, secretKey)
+}
+
+// MarshalSSZ marshals an object using the appropriate SSZ encoding
+func (s *SSZManager) MarshalSSZ(obj interface{}) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dynSSZ == nil {
+		return nil, ErrSSZManagerNotInitialized
+	}
+
+	// Try dynamic SSZ first - it automatically falls back to standard SSZ for mainnet/testnet
+	data, err := s.dynSSZ.MarshalSSZ(obj)
+	if err == nil {
+		return data, nil
+	}
+
+	// If dynamic SSZ fails, fall back to standard SSZ
+	if sszObj, ok := obj.(interface{ MarshalSSZ() ([]byte, error) }); ok {
+		return sszObj.MarshalSSZ()
+	}
+
+	return nil, fmt.Errorf("object does not support SSZ marshaling")
+}
+
+// UnmarshalSSZ unmarshals data using the appropriate SSZ encoding
+func (s *SSZManager) UnmarshalSSZ(obj interface{}, data []byte) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dynSSZ == nil {
+		return ErrSSZManagerNotInitialized
+	}
+
+	// Try dynamic SSZ first - it automatically falls back to standard SSZ for mainnet/testnet
+	err := s.dynSSZ.UnmarshalSSZ(obj, data)
+	if err == nil {
+		return nil
+	}
+
+	// If dynamic SSZ fails, fall back to standard SSZ
+	if sszObj, ok := obj.(interface{ UnmarshalSSZ([]byte) error }); ok {
+		return sszObj.UnmarshalSSZ(data)
+	}
+
+	return fmt.Errorf("object does not support SSZ unmarshaling")
+}
+
+// HashTreeRoot computes hash tree root using the appropriate SSZ encoding
+func (s *SSZManager) HashTreeRoot(obj interface{}) (phase0.Root, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dynSSZ == nil {
+		return phase0.Root{}, ErrSSZManagerNotInitialized
+	}
+
+	// Use standard SSZ for hash tree root since dynamic SSZ doesn't support it yet
+	if sszObj, ok := obj.(interface{ HashTreeRoot() ([32]byte, error) }); ok {
+		root, err := sszObj.HashTreeRoot()
+		if err != nil {
+			return phase0.Root{}, err
+		}
+		return phase0.Root(root), nil
+	}
+
+	return phase0.Root{}, fmt.Errorf("object does not support HashTreeRoot")
 }
