@@ -2024,7 +2024,7 @@ type redisUpdateBidOpts struct {
 
 func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApi.VersionedSubmitBlindedBlockResponse, bool) {
 	// Prepare the response data
-	getHeaderResponse, err := common.BuildGetHeaderResponseWithSSZ(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder, api.sszManager)
+	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder, api.sszManager)
 	if err != nil {
 		opts.log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(opts.w, http.StatusBadRequest, err.Error())

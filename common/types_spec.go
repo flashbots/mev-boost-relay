@@ -49,11 +49,7 @@ type HTTPErrorResp struct {
 
 var NilResponse = struct{}{}
 
-func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
-	return BuildGetHeaderResponseWithSSZ(payload, sk, pubkey, domain, nil)
-}
-
-func BuildGetHeaderResponseWithSSZ(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain, sszManager *SSZManager) (*builderSpec.VersionedSignedBuilderBid, error) {
+func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain, sszManager *SSZManager) (*builderSpec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
