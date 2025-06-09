@@ -42,6 +42,10 @@ type HTTPErrorResp struct {
 var NilResponse = struct{}{}
 
 func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
+	return BuildGetHeaderResponseWithSSZ(payload, sk, pubkey, domain, nil)
+}
+
+func BuildGetHeaderResponseWithSSZ(payload *VersionedSubmitBlockRequest, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain, sszManager *SSZManager) (*builderSpec.VersionedSignedBuilderBid, error) {
 	if payload == nil {
 		return nil, ErrMissingRequest
 	}
@@ -58,7 +62,7 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain, sszManager)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +76,7 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain, sszManager)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +90,7 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		if err != nil {
 			return nil, err
 		}
-		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
+		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain, sszManager)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +134,7 @@ func BuildGetPayloadResponse(payload *VersionedSubmitBlockRequest) (*builderApi.
 	return nil, ErrEmptyPayload
 }
 
-func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain) (*builderSpec.VersionedSignedBuilderBid, error) {
+func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest, header *builderApi.VersionedExecutionPayloadHeader, sk *bls.SecretKey, pubkey *phase0.BLSPubKey, domain phase0.Domain, sszManager *SSZManager) (*builderSpec.VersionedSignedBuilderBid, error) {
 	value, err := payload.Value()
 	if err != nil {
 		return nil, err
@@ -144,7 +148,12 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			Pubkey: *pubkey,
 		}
 
-		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		var sig phase0.BLSSignature
+		if sszManager != nil && sszManager.IsInitialized() {
+			sig, err = sszManager.SignMessage(&builderBid, domain, sk)
+		} else {
+			sig, err = ssz.SignMessage(&builderBid, domain, sk)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +173,12 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			Pubkey:             *pubkey,
 		}
 
-		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		var sig phase0.BLSSignature
+		if sszManager != nil && sszManager.IsInitialized() {
+			sig, err = sszManager.SignMessage(&builderBid, domain, sk)
+		} else {
+			sig, err = ssz.SignMessage(&builderBid, domain, sk)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +199,12 @@ func BuilderBlockRequestToSignedBuilderBid(payload *VersionedSubmitBlockRequest,
 			Pubkey:             *pubkey,
 		}
 
-		sig, err := ssz.SignMessage(&builderBid, domain, sk)
+		var sig phase0.BLSSignature
+		if sszManager != nil && sszManager.IsInitialized() {
+			sig, err = sszManager.SignMessage(&builderBid, domain, sk)
+		} else {
+			sig, err = ssz.SignMessage(&builderBid, domain, sk)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -402,6 +421,13 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 	}
 }
 
+func (r *VersionedSubmitBlockRequest) MarshalSSZWithManager(sszManager *SSZManager) ([]byte, error) {
+	if sszManager != nil && sszManager.IsInitialized() {
+		return sszManager.MarshalSSZ(r)
+	}
+	return r.MarshalSSZ()
+}
+
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
 	electraRequest := new(builderApiElectra.SubmitBlockRequest)
@@ -425,6 +451,13 @@ func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SubmitBlockRequest SSZ")
 }
 
+func (r *VersionedSubmitBlockRequest) UnmarshalSSZWithManager(input []byte, sszManager *SSZManager) error {
+	if sszManager != nil && sszManager.IsInitialized() {
+		return sszManager.UnmarshalSSZ(r, input)
+	}
+	return r.UnmarshalSSZ(input)
+}
+
 func (r *VersionedSubmitBlockRequest) HashTreeRoot() (phase0.Root, error) {
 	switch r.Version {
 	case spec.DataVersionCapella:
@@ -437,6 +470,36 @@ func (r *VersionedSubmitBlockRequest) HashTreeRoot() (phase0.Root, error) {
 		fallthrough
 	default:
 		return phase0.Root{}, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%d is not supported", r.Version))
+	}
+}
+
+func (r *VersionedSubmitBlockRequest) HashTreeRootWithManager(sszManager *SSZManager) (phase0.Root, error) {
+	if sszManager != nil && sszManager.IsInitialized() {
+		return sszManager.HashTreeRoot(r)
+	}
+
+	// Use standard SSZ for mainnet/testnet
+	switch r.Version { //nolint:exhaustive
+	case spec.DataVersionCapella:
+		root, err := r.Capella.HashTreeRoot()
+		if err != nil {
+			return phase0.Root{}, err
+		}
+		return phase0.Root(root), nil
+	case spec.DataVersionDeneb:
+		root, err := r.Deneb.HashTreeRoot()
+		if err != nil {
+			return phase0.Root{}, err
+		}
+		return phase0.Root(root), nil
+	case spec.DataVersionElectra:
+		root, err := r.Electra.HashTreeRoot()
+		if err != nil {
+			return phase0.Root{}, err
+		}
+		return phase0.Root(root), nil
+	default:
+		return phase0.Root{}, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
 	}
 }
 
