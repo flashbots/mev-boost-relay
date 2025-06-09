@@ -32,11 +32,14 @@ import (
 )
 
 var (
-	ErrMissingRequest           = errors.New("req is nil")
-	ErrMissingSecretKey         = errors.New("secret key is nil")
-	ErrInvalidVersion           = errors.New("invalid version")
-	ErrSSZManagerNotInitialized = errors.New("SSZ manager not initialized")
-	ErrInvalidSpecConfig        = errors.New("invalid spec config")
+	ErrMissingRequest                      = errors.New("req is nil")
+	ErrMissingSecretKey                    = errors.New("secret key is nil")
+	ErrInvalidVersion                      = errors.New("invalid version")
+	ErrSSZManagerNotInitialized            = errors.New("SSZ manager not initialized")
+	ErrInvalidSpecConfig                   = errors.New("invalid spec config")
+	ErrObjectDoesNotSupportSSZMarshaling   = errors.New("object does not support SSZ marshaling")
+	ErrObjectDoesNotSupportSSZUnmarshaling = errors.New("object does not support SSZ unmarshaling")
+	ErrObjectDoesNotSupportHashTreeRoot    = errors.New("object does not support HashTreeRoot")
 )
 
 type HTTPErrorResp struct {
@@ -504,7 +507,7 @@ func (r *VersionedSubmitBlockRequest) HashTreeRootWithManager(sszManager *SSZMan
 		}
 		return phase0.Root(root), nil
 	default:
-		return phase0.Root{}, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
+		return phase0.Root{}, ErrObjectDoesNotSupportHashTreeRoot
 	}
 }
 
@@ -786,7 +789,7 @@ func (s *SSZManager) MarshalSSZ(obj interface{}) ([]byte, error) {
 		return sszObj.MarshalSSZ()
 	}
 
-	return nil, fmt.Errorf("object does not support SSZ marshaling")
+	return nil, ErrObjectDoesNotSupportSSZMarshaling
 }
 
 // UnmarshalSSZ unmarshals data using the appropriate SSZ encoding
@@ -805,11 +808,11 @@ func (s *SSZManager) UnmarshalSSZ(obj interface{}, data []byte) error {
 	}
 
 	// If dynamic SSZ fails, fall back to standard SSZ
-	if sszObj, ok := obj.(interface{ UnmarshalSSZ([]byte) error }); ok {
+	if sszObj, ok := obj.(interface{ UnmarshalSSZ(data []byte) error }); ok {
 		return sszObj.UnmarshalSSZ(data)
 	}
 
-	return fmt.Errorf("object does not support SSZ unmarshaling")
+	return ErrObjectDoesNotSupportSSZUnmarshaling
 }
 
 // HashTreeRoot computes hash tree root using the appropriate SSZ encoding
@@ -830,5 +833,5 @@ func (s *SSZManager) HashTreeRoot(obj interface{}) (phase0.Root, error) {
 		return phase0.Root(root), nil
 	}
 
-	return phase0.Root{}, fmt.Errorf("object does not support HashTreeRoot")
+	return phase0.Root{}, ErrObjectDoesNotSupportHashTreeRoot
 }

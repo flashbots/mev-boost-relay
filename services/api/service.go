@@ -441,9 +441,7 @@ func (api *RelayAPI) StartServer() (err error) {
 		specConfig := make(map[string]interface{})
 
 		// Add relevant fields from beacon spec
-		if beaconSpec.SecondsPerSlot != 0 {
-			specConfig["SECONDS_PER_SLOT"] = fmt.Sprintf("%d", beaconSpec.SecondsPerSlot)
-		}
+		specConfig["SECONDS_PER_SLOT"] = strconv.FormatUint(beaconSpec.SecondsPerSlot, 10)
 
 		// Add other configuration fields as needed - you can extend this
 		// based on what fields are available in GetSpecResponse
