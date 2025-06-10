@@ -180,7 +180,7 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 			publicKey, err := utils.BlsPublicKeyToPublicKey(pubkey)
 			require.NoError(t, err)
 
-			signedBuilderBid, err := common.BuildGetHeaderResponse(tc.reqPayload, sk, &publicKey, ssz.DomainBuilder)
+			signedBuilderBid, err := common.BuildGetHeaderResponse(tc.reqPayload, sk, &publicKey, ssz.DomainBuilder, nil)
 			require.NoError(t, err)
 
 			bidValue, err := signedBuilderBid.Value()
