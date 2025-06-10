@@ -433,26 +433,17 @@ func (api *RelayAPI) StartServer() (err error) {
 	log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
 
 	// Get beacon spec configuration and initialize SSZ manager
-	beaconSpec, err := api.beaconClient.GetSpec()
+	specConfig, err := api.beaconClient.GetSpecRaw()
 	if err != nil {
-		log.WithError(err).Warn("failed to get beacon spec config, SSZ manager will use standard SSZ")
+		api.log.WithError(err).Warn("failed to get beacon spec config, SSZ manager will use standard SSZ")
 	} else {
-		// Convert spec to map[string]interface{} for dynamic SSZ
-		specConfig := make(map[string]interface{})
-
-		// Add relevant fields from beacon spec
-		specConfig["SECONDS_PER_SLOT"] = strconv.FormatUint(beaconSpec.SecondsPerSlot, 10)
-
-		// Add other configuration fields as needed - you can extend this
-		// based on what fields are available in GetSpecResponse
-
-		// Try to initialize the SSZ manager with the beacon config
+		// Try to initialize the SSZ manager with the complete beacon config
 		if err := api.sszManager.Initialize(specConfig); err != nil {
-			log.WithError(err).Warn("failed to initialize SSZ manager with beacon config, will use standard SSZ")
+			api.log.WithError(err).Warn("failed to initialize SSZ manager with beacon config, will use standard SSZ")
 		} else {
-			log.WithFields(logrus.Fields{
+			api.log.WithFields(logrus.Fields{
 				"configKeys": len(specConfig),
-			}).Info("SSZ manager initialized with beacon config")
+			}).Info("SSZ manager initialized with complete beacon config")
 		}
 	}
 

@@ -41,7 +41,7 @@ type IMultiBeaconClient interface {
 	PublishBlock(block *common.VersionedSignedProposal) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
-	GetSpecRaw() (spec map[string]interface{}, err error)
+	GetSpecRaw() (map[string]interface{}, error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
@@ -60,7 +60,7 @@ type IBeaconInstance interface {
 	PublishBlock(block *common.VersionedSignedProposal, broadcastMode BroadcastMode) (code int, err error)
 	GetGenesis() (*GetGenesisResponse, error)
 	GetSpec() (spec *GetSpecResponse, err error)
-	GetSpecRaw() (spec map[string]interface{}, err error)
+	GetSpecRaw() (map[string]interface{}, error)
 	GetForkSchedule() (spec *GetForkScheduleResponse, err error)
 	GetRandao(slot uint64) (spec *GetRandaoResponse, err error)
 	GetWithdrawals(slot uint64) (spec *GetWithdrawalsResponse, err error)
@@ -351,21 +351,21 @@ func (c *MultiBeaconClient) GetSpec() (spec *GetSpecResponse, err error) {
 	return nil, err
 }
 
-// GetSpecRaw returns the complete beacon spec response as map[string]interface{}
-func (c *MultiBeaconClient) GetSpecRaw() (spec map[string]interface{}, err error) {
+// GetSpecRaw returns the complete beacon spec as raw JSON
+func (c *MultiBeaconClient) GetSpecRaw() (map[string]interface{}, error) {
 	clients := c.beaconInstancesByLastResponse()
 	for _, client := range clients {
 		log := c.log.WithField("uri", client.GetURI())
-		if spec, err = client.GetSpecRaw(); err != nil {
-			log.WithError(err).Warn("failed to get spec raw")
+		if spec, err := client.GetSpecRaw(); err != nil {
+			log.WithError(err).Warn("failed to get spec as raw JSON")
 			continue
+		} else {
+			return spec, nil
 		}
-
-		return spec, nil
 	}
 
-	c.log.WithError(err).Error("failed to get spec raw on any CL node")
-	return nil, err
+	c.log.Error("failed to get spec as raw JSON on any CL node")
+	return nil, ErrBeaconNodesUnavailable
 }
 
 // GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
