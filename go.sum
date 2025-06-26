@@ -11,12 +11,12 @@ github.com/alicebob/miniredis/v2 v2.34.0 h1:mBFWMaJSNL9RwdGRyEDoAAv8OQc5UlEhLDQg
 github.com/alicebob/miniredis/v2 v2.34.0/go.mod h1:kWShP4b58T1CW0Y5dViCd5ztzrDqRWqM3nksiyXk5s8=
 github.com/aohorodnyk/mimeheader v0.0.6 h1:WCV4NQjtbqnd2N3FT5MEPesan/lfvaLYmt5v4xSaX/M=
 github.com/aohorodnyk/mimeheader v0.0.6/go.mod h1:/Gd3t3vszyZYwjNJo2qDxoftZjjVzMdkQZxkiINp3vM=
-github.com/attestantio/go-builder-client v0.6.2 h1:OUaZlVBApQv5+VWiJGhpgk2fC2eeVsvPZF8ob7ibrHQ=
-github.com/attestantio/go-builder-client v0.6.2/go.mod h1:f8wi3HzuPxfJoi2PirpJK3yZhte4SavDgKJbRrKoB1Q=
-github.com/attestantio/go-eth2-client v0.25.0 h1:wLQxoteGCbTE/vKCMASx1ze+Zm9rcqtltRnblaLJup4=
-github.com/attestantio/go-eth2-client v0.25.0/go.mod h1:fvULSL9WtNskkOB4i+Yyr6BKpNHXvmpGZj9969fCrfY=
+github.com/attestantio/go-eth2-client v0.25.1-0.20250603135601-6ac0bfda7fda h1:Wc7YGICtTWKNZvMjpIN/l6HKTj9POEU9N67NIWWWOk0=
+github.com/attestantio/go-eth2-client v0.25.1-0.20250603135601-6ac0bfda7fda/go.mod h1:fvULSL9WtNskkOB4i+Yyr6BKpNHXvmpGZj9969fCrfY=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0 h1:GXOkX7tDTtfFJW0bdMXfMkMVIZElRsU+ig48J+5ZtHM=
+github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0/go.mod h1:kF22wesT/Xu6gMEQ/sjXM0N/NRfE82kIXEzgBh3+ZA8=
 github.com/bits-and-blooms/bitset v1.22.0 h1:Tquv9S8+SGaS3EhyA+up3FXzmkhxPGjQQCkcs2uw7w4=
 github.com/bits-and-blooms/bitset v1.22.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874 h1:N7oVaKyGp8bttX0bfZGmcGkjz7DLQXhAn3DNd3T0ous=

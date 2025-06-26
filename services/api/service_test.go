@@ -595,6 +595,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			backend.relay.capellaEpoch = 0
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 5
+			backend.relay.fuluEpoch = 6
 			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 				Slot: headSlot,
@@ -1028,6 +1029,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
@@ -1140,6 +1142,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()

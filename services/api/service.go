@@ -204,6 +204,7 @@ type RelayAPI struct {
 	capellaEpoch int64
 	denebEpoch   int64
 	electraEpoch int64
+	fuluEpoch    int64
 
 	proposerDutiesLock       sync.RWMutex
 	proposerDutiesResponse   *[]byte // raw http response
@@ -435,6 +436,7 @@ func (api *RelayAPI) StartServer() (err error) {
 	api.capellaEpoch = -1
 	api.denebEpoch = -1
 	api.electraEpoch = -1
+	api.fuluEpoch = -1
 	for _, fork := range forkSchedule.Data {
 		log.Infof("forkSchedule: version=%s / epoch=%d", fork.CurrentVersion, fork.Epoch)
 		switch fork.CurrentVersion {
@@ -444,6 +446,8 @@ func (api *RelayAPI) StartServer() (err error) {
 			api.denebEpoch = int64(fork.Epoch) //nolint:gosec
 		case api.opts.EthNetDetails.ElectraForkVersionHex:
 			api.electraEpoch = int64(fork.Epoch) //nolint:gosec
+		case api.opts.EthNetDetails.FuluForkVersionHex:
+			api.fuluEpoch = int64(fork.Epoch) //nolint:gosec
 		}
 	}
 
@@ -455,6 +459,10 @@ func (api *RelayAPI) StartServer() (err error) {
 		// log warning that electra epoch was not found in CL fork schedule, suggest CL upgrade
 		log.Info("Electra epoch not found in fork schedule")
 	}
+	if api.fuluEpoch == -1 {
+		// log warning that fulu epoch was not found in CL fork schedule, suggest CL upgrade
+		log.Info("Fulu epoch not found in fork schedule")
+	}
 
 	// Print fork version information
 	if hasReachedFork(currentSlot, api.electraEpoch) {
@@ -463,6 +471,8 @@ func (api *RelayAPI) StartServer() (err error) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
+	} else if hasReachedFork(currentSlot, api.fuluEpoch) {
+		log.Infof("fulu fork detected (currentEpoch: %d / fuluEpoch: %d)", common.SlotToEpoch(currentSlot), api.fuluEpoch)
 	}
 
 	// start proposer API specific things
@@ -599,6 +609,10 @@ func (api *RelayAPI) isDeneb(slot uint64) bool {
 
 func (api *RelayAPI) isElectra(slot uint64) bool {
 	return hasReachedFork(slot, api.electraEpoch)
+}
+
+func (api *RelayAPI) isFulu(slot uint64) bool {
+	return hasReachedFork(slot, api.fuluEpoch)
 }
 
 func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
@@ -1338,6 +1352,8 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerDeneb, pubKey)
 	case spec.DataVersionElectra:
 		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerElectra, pubKey)
+	case spec.DataVersionFulu:
+		return verifyBlockSignature(block, api.opts.EthNetDetails.DomainBeaconProposerFulu, pubKey)
 	default:
 		return false, errors.New("unsupported consensus data version")
 	}
@@ -1425,6 +1441,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	if api.isElectra(headSlot) && payload.Electra == nil {
 		log.Warn("Not an electra payload.")
 		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
+		return
+	}
+
+	if api.isFulu(headSlot) && payload.Fulu == nil {
+		log.Warn("Not a fulu payload.")
+		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
 		return
 	}
 
@@ -1770,6 +1792,9 @@ func (api *RelayAPI) respondGetPayloadSSZ(w http.ResponseWriter, result *builder
 	case spec.DataVersionElectra:
 		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
 		sszData, err = result.Electra.MarshalSSZ()
+	case spec.DataVersionFulu:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionFulu)
+		sszData, err = result.Fulu.MarshalSSZ()
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
 		err = ErrInvalidForkVersion
 	}
@@ -1864,6 +1889,12 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
+	if api.isFulu(submission.BidTrace.Slot) && payload.Fulu == nil {
+		fmt.Println("rejecting submission - non fulu payload for fulu fork")
+		log.Info("rejecting submission - non fulu payload for fulu fork")
+		api.RespondError(w, http.StatusBadRequest, "not fulu payload")
+		return false
+	}
 	if api.isElectra(submission.BidTrace.Slot) && payload.Electra == nil {
 		log.Info("rejecting submission - non electra payload for electra fork")
 		api.RespondError(w, http.StatusBadRequest, "not electra payload")

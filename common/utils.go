@@ -15,6 +15,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -294,6 +295,14 @@ func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest)
 			Electra: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: submission.Electra.ExecutionPayload,
 				BlobsBundle:      submission.Electra.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionFulu:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionFulu,
+			Fulu: &builderApiFulu.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: submission.Fulu.ExecutionPayload,
+				BlobsBundle:      submission.Fulu.BlobsBundle,
 			},
 		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:

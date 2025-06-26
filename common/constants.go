@@ -5,4 +5,5 @@ const (
 	EthConsensusVersionCapella   = "capella"
 	EthConsensusVersionDeneb     = "deneb"
 	EthConsensusVersionElectra   = "electra"
+	EthConsensusVersionFulu      = "fulu"
 )

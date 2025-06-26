@@ -145,6 +145,39 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
 			}
 		}
+
+	case spec.DataVersionFulu:
+		block := bb.Fulu.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Fulu = payload.Fulu.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Fulu.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+
+		if len(bb.Fulu.Message.Body.BlobKZGCommitments) != len(payload.Fulu.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
+
+		for i, commitment := range bb.Fulu.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Fulu.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+		}
+
 	default:
 		return ErrUnsupportedPayload
 	}
