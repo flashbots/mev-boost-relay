@@ -1890,7 +1890,6 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
 	if api.isFulu(submission.BidTrace.Slot) && payload.Fulu == nil {
-		fmt.Println("rejecting submission - non fulu payload for fulu fork")
 		log.Info("rejecting submission - non fulu payload for fulu fork")
 		api.RespondError(w, http.StatusBadRequest, "not fulu payload")
 		return false

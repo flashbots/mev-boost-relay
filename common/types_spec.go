@@ -52,7 +52,6 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 	}
 
 	versionedPayload := &builderApi.VersionedExecutionPayload{Version: payload.Version}
-	fmt.Println("payload.Version", payload.Version)
 	switch payload.Version {
 	case spec.DataVersionCapella:
 		versionedPayload.Capella = payload.Capella.ExecutionPayload
@@ -101,12 +100,10 @@ func BuildGetHeaderResponse(payload *VersionedSubmitBlockRequest, sk *bls.Secret
 		versionedPayload.Fulu = payload.Fulu.ExecutionPayload
 		header, err := utils.PayloadToPayloadHeader(versionedPayload)
 		if err != nil {
-			fmt.Println("error after PayloadToPayloadHeader", err)
 			return nil, err
 		}
 		signedBuilderBid, err := BuilderBlockRequestToSignedBuilderBid(payload, header, sk, pubkey, domain)
 		if err != nil {
-			fmt.Println("error after BuilderBlockRequestToSignedBuilderBid", err)
 			return nil, err
 		}
 		return &builderSpec.VersionedSignedBuilderBid{
