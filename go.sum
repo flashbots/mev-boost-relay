@@ -15,6 +15,8 @@ github.com/attestantio/go-eth2-client v0.25.1-0.20250603135601-6ac0bfda7fda h1:W
 github.com/attestantio/go-eth2-client v0.25.1-0.20250603135601-6ac0bfda7fda/go.mod h1:fvULSL9WtNskkOB4i+Yyr6BKpNHXvmpGZj9969fCrfY=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+github.com/bharath-123/go-boost-utils v0.0.0-20250627053347-04dc115155ae h1:ebSeEhecC8Xy3lK4KLZgpzAHQjEhRMAy5AZaOqOB4r0=
+github.com/bharath-123/go-boost-utils v0.0.0-20250627053347-04dc115155ae/go.mod h1:52faeojMg+vjCtjuekWpRzvYU8nlD1ZEPRvRJ2q3bv0=
 github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0 h1:GXOkX7tDTtfFJW0bdMXfMkMVIZElRsU+ig48J+5ZtHM=
 github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0/go.mod h1:kF22wesT/Xu6gMEQ/sjXM0N/NRfE82kIXEzgBh3+ZA8=
 github.com/bits-and-blooms/bitset v1.22.0 h1:Tquv9S8+SGaS3EhyA+up3FXzmkhxPGjQQCkcs2uw7w4=
@@ -88,8 +90,6 @@ github.com/ethereum/go-verkle v0.2.2 h1:I2W0WjnrFUIzzVPwm8ykY+7pL2d4VhlsePn4j7cn
 github.com/ethereum/go-verkle v0.2.2/go.mod h1:M3b90YRnzqKyyzBEWJGqj8Qff4IDeXnzFw0P9bFw3uk=
 github.com/ferranbt/fastssz v0.1.4 h1:OCDB+dYDEQDvAgtAGnTSidK1Pe2tW3nFV40XyMkTeDY=
 github.com/ferranbt/fastssz v0.1.4/go.mod h1:Ea3+oeoRGGLGm5shYAeDgu6PGUlcvQhE2fILyD9+tGg=
-github.com/flashbots/go-boost-utils v1.9.0 h1:KtTE70OYEJmIhK0GxLmXChgBTtBN6fbBK+klwP79AEM=
-github.com/flashbots/go-boost-utils v1.9.0/go.mod h1:vqZMGJCgwbS9WUVRzqfkn4ttRXiul4vKSu5iDtAKDfs=
 github.com/flashbots/go-utils v0.11.0 h1:MuI9OOl40MukSL2ucKKQG1sxxl5Cqjla41TRubGNu0w=
 github.com/flashbots/go-utils v0.11.0/go.mod h1:i4xxEB6sHDFfNWEIfh+rP6nx3LxynEn8AOZa05EYgwA=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=

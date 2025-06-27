@@ -116,3 +116,5 @@ retract (
 )
 
 replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0
+
+replace github.com/flashbots/go-boost-utils => github.com/bharath-123/go-boost-utils v0.0.0-20250627053347-04dc115155ae

@@ -6,6 +6,7 @@ import (
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
+	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -167,56 +168,56 @@ func TestBuilderBlockRequestToSignedBuilderBid(t *testing.T) {
 				},
 			},
 		},
-		// {
-		// 	name: "Fulu",
-		// 	reqPayload: &common.VersionedSubmitBlockRequest{
-		// 		VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
-		// 			Version: spec.DataVersionFulu,
-		// 			Fulu: &builderApiFulu.SubmitBlockRequest{
-		// 				ExecutionPayload: &deneb.ExecutionPayload{
-		// 					ParentHash:    phase0.Hash32{0x01},
-		// 					FeeRecipient:  bellatrix.ExecutionAddress{0x02},
-		// 					StateRoot:     phase0.Root{0x03},
-		// 					ReceiptsRoot:  phase0.Root{0x04},
-		// 					LogsBloom:     [256]byte{0x05},
-		// 					PrevRandao:    phase0.Hash32{0x06},
-		// 					BlockNumber:   5001,
-		// 					GasLimit:      5002,
-		// 					GasUsed:       5003,
-		// 					Timestamp:     5004,
-		// 					ExtraData:     []byte{0x07},
-		// 					BaseFeePerGas: uint256.NewInt(123),
-		// 					BlockHash:     phase0.Hash32{0x09},
-		// 					Transactions:  []bellatrix.Transaction{},
-		// 					BlobGasUsed:   5005,
-		// 					ExcessBlobGas: 5006,
-		// 				},
-		// 				BlobsBundle: &builderApiFulu.BlobsBundle{
-		// 					Commitments: []deneb.KZGCommitment{},
-		// 					Proofs:      []deneb.KZGProof{},
-		// 					Blobs:       []deneb.Blob{},
-		// 				},
-		// 				ExecutionRequests: &electra.ExecutionRequests{
-		// 					Deposits:       []*electra.DepositRequest{},
-		// 					Withdrawals:    []*electra.WithdrawalRequest{},
-		// 					Consolidations: []*electra.ConsolidationRequest{},
-		// 				},
-		// 				Message: &builderApiV1.BidTrace{
-		// 					Slot:                 1,
-		// 					ParentHash:           phase0.Hash32{0x01},
-		// 					BlockHash:            phase0.Hash32{0x09},
-		// 					BuilderPubkey:        builderPk,
-		// 					ProposerPubkey:       phase0.BLSPubKey{0x03},
-		// 					ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
-		// 					Value:                uint256.NewInt(123),
-		// 					GasLimit:             5002,
-		// 					GasUsed:              5003,
-		// 				},
-		// 				Signature: builderSk,
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			name: "Fulu",
+			reqPayload: &common.VersionedSubmitBlockRequest{
+				VersionedSubmitBlockRequest: builderSpec.VersionedSubmitBlockRequest{
+					Version: spec.DataVersionFulu,
+					Fulu: &builderApiFulu.SubmitBlockRequest{
+						ExecutionPayload: &deneb.ExecutionPayload{
+							ParentHash:    phase0.Hash32{0x01},
+							FeeRecipient:  bellatrix.ExecutionAddress{0x02},
+							StateRoot:     phase0.Root{0x03},
+							ReceiptsRoot:  phase0.Root{0x04},
+							LogsBloom:     [256]byte{0x05},
+							PrevRandao:    phase0.Hash32{0x06},
+							BlockNumber:   5001,
+							GasLimit:      5002,
+							GasUsed:       5003,
+							Timestamp:     5004,
+							ExtraData:     []byte{0x07},
+							BaseFeePerGas: uint256.NewInt(123),
+							BlockHash:     phase0.Hash32{0x09},
+							Transactions:  []bellatrix.Transaction{},
+							BlobGasUsed:   5005,
+							ExcessBlobGas: 5006,
+						},
+						BlobsBundle: &builderApiFulu.BlobsBundle{
+							Commitments: []deneb.KZGCommitment{},
+							Proofs:      []deneb.KZGProof{},
+							Blobs:       []deneb.Blob{},
+						},
+						ExecutionRequests: &electra.ExecutionRequests{
+							Deposits:       []*electra.DepositRequest{},
+							Withdrawals:    []*electra.WithdrawalRequest{},
+							Consolidations: []*electra.ConsolidationRequest{},
+						},
+						Message: &builderApiV1.BidTrace{
+							Slot:                 1,
+							ParentHash:           phase0.Hash32{0x01},
+							BlockHash:            phase0.Hash32{0x09},
+							BuilderPubkey:        builderPk,
+							ProposerPubkey:       phase0.BLSPubKey{0x03},
+							ProposerFeeRecipient: bellatrix.ExecutionAddress{0x04},
+							Value:                uint256.NewInt(123),
+							GasLimit:             5002,
+							GasUsed:              5003,
+						},
+						Signature: builderSk,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
