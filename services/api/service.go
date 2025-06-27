@@ -608,7 +608,7 @@ func (api *RelayAPI) isDeneb(slot uint64) bool {
 }
 
 func (api *RelayAPI) isElectra(slot uint64) bool {
-	return hasReachedFork(slot, api.electraEpoch)
+	return hasReachedFork(slot, api.electraEpoch) && !hasReachedFork(slot, api.fuluEpoch)
 }
 
 func (api *RelayAPI) isFulu(slot uint64) bool {
