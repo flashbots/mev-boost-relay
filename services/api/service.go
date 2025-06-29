@@ -1324,6 +1324,9 @@ func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec
 	case spec.DataVersionElectra:
 		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionElectra)
 		sszData, err = bid.Electra.MarshalSSZ()
+	case spec.DataVersionFulu:
+		w.Header().Set(HeaderEthConsensusVersion, common.EthConsensusVersionFulu)
+		sszData, err = bid.Fulu.MarshalSSZ()
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair:
 		err = ErrInvalidForkVersion
 	}
@@ -1401,7 +1404,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	})
 
 	// Log at start and end of request
-	log.Info("request initiated")
+	log.Info("getPayload request initiated")
 	defer func() {
 		log.WithFields(logrus.Fields{
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
