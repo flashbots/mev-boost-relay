@@ -117,8 +117,9 @@ func (b *BlockSimulationRateLimiter) Send(
 	}
 
 	// Create and fire off JSON-RPC request
-	// TODO - bharath: Does the electra flashbots_validateBuilderSubmissionV4 work for fulu?
-	if payload.Version == spec.DataVersionElectra || payload.Version == spec.DataVersionFulu {
+	if payload.Version == spec.DataVersionFulu {
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV5", payload)
+	} else if payload.Version == spec.DataVersionElectra {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV4", payload)
 	} else if payload.Version == spec.DataVersionDeneb {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
