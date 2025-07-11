@@ -1404,7 +1404,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	})
 
 	// Log at start and end of request
-	log.Info("getPayload request initiated")
+	log.Info("request initiated")
 	defer func() {
 		log.WithFields(logrus.Fields{
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
