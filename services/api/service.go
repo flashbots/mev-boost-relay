@@ -465,14 +465,14 @@ func (api *RelayAPI) StartServer() (err error) {
 	}
 
 	// Print fork version information
-	if hasReachedFork(currentSlot, api.electraEpoch) {
+	if hasReachedFork(currentSlot, api.fuluEpoch) {
+		log.Infof("fulu fork detected (currentEpoch: %d / fuluEpoch: %d)", common.SlotToEpoch(currentSlot), api.fuluEpoch)
+	} else if hasReachedFork(currentSlot, api.electraEpoch) {
 		log.Infof("electra fork detected (currentEpoch: %d / electraEpoch: %d)", common.SlotToEpoch(currentSlot), api.electraEpoch)
 	} else if hasReachedFork(currentSlot, api.denebEpoch) {
 		log.Infof("deneb fork detected (currentEpoch: %d / denebEpoch: %d)", common.SlotToEpoch(currentSlot), api.denebEpoch)
 	} else if hasReachedFork(currentSlot, api.capellaEpoch) {
 		log.Infof("capella fork detected (currentEpoch: %d / capellaEpoch: %d)", common.SlotToEpoch(currentSlot), api.capellaEpoch)
-	} else if hasReachedFork(currentSlot, api.fuluEpoch) {
-		log.Infof("fulu fork detected (currentEpoch: %d / fuluEpoch: %d)", common.SlotToEpoch(currentSlot), api.fuluEpoch)
 	}
 
 	// start proposer API specific things

@@ -510,7 +510,6 @@ func (r *VersionedSubmitBlockRequest) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZ(input []byte) error {
 	var err error
-
 	fuluRequest := new(builderApiFulu.SubmitBlockRequest)
 	if err = fuluRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionFulu
@@ -620,7 +619,6 @@ func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
 
 func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 	var err error
-
 	// The SignedBlockContents type for fulu is the same as that of electra
 	fuluRequest := new(eth2ApiV1Electra.SignedBlockContents)
 	if err = fuluRequest.UnmarshalSSZ(input); err == nil {
