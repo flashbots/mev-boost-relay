@@ -1364,7 +1364,7 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	}
 }
 
-// Depreciated: Use handleGetPayloadV2. For more info visit: https://github.com/ethereum/builder-specs/issues/119
+// Deprecated: Use handleGetPayloadV2. For more info visit: https://github.com/ethereum/builder-specs/issues/119
 func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	api.getPayloadCallsInFlight.Add(1)
 	defer api.getPayloadCallsInFlight.Done()
@@ -1856,6 +1856,12 @@ func (api *RelayAPI) handleGetPayloadV2(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	if api.isFulu(headSlot) && payload.Fulu == nil {
+		log.Warn("Not a fulu payload.")
+		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
+		return
+	}
+
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
 	slot, err := payload.Slot()
@@ -2112,32 +2118,35 @@ func (api *RelayAPI) handleGetPayloadV2(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Publish the signed beacon block via beacon-node
-	timeBeforePublish := time.Now().UTC().UnixMilli()
-	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
 	signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	if err != nil {
 		log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
 		api.RespondError(w, http.StatusInternalServerError, "failed to convert signed blinded beacon block to beacon block")
 		return
 	}
-	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
-	if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
-		log.WithError(err).WithField("code", code).Error("failed to publish block")
-		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
-		return
-	}
 
-	timeAfterPublish := time.Now().UTC().UnixMilli()
-	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
-	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
-	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
-	metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(msNeededForPublishing))
+	// Start an async block publishing process
+	go func() {
+		timeBeforePublish := time.Now().UTC().UnixMilli()
+		log := log.WithField("timestampBeforePublishing", timeBeforePublish)
 
-	// give the beacon network some time to propagate the block
-	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
+		code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
+		if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
+			log.WithError(err).WithField("code", code).Error("failed to publish block")
+			return
+		}
+		timeAfterPublish := time.Now().UTC().UnixMilli()
+		msNeededForPublishing := uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
 
-	// Respond with 202 status only
+		log = log.WithFields(logrus.Fields{
+			"timestampAfterPublishing": timeAfterPublish,
+			"msNeededForPublishing":    msNeededForPublishing,
+		})
+
+		log.Info("block published through beacon node")
+		metrics.PublishBlockLatencyHistogram.Record(context.Background(), float64(msNeededForPublishing))
+	}()
+
 	log.Debug("responding with only accepted status code")
 	w.WriteHeader(http.StatusAccepted)
 
