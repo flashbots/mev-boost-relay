@@ -1404,8 +1404,8 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
-	logFields := logrus.Fields{
-		"method":                      "getPayload",
+	log := api.log.WithFields(logrus.Fields{
+		"method":                      fmt.Sprintf("getPayload%s", version),
 		"ua":                          ua,
 		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":               req.ContentLength,
@@ -1413,15 +1413,10 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		"headSlotEpochPos":            (headSlot % common.SlotsPerEpoch) + 1,
 		"idArg":                       req.URL.Query().Get("id"),
 		"timestampRequestStart":       receivedAt.UnixMilli(),
+		"negotiatedResponseMediaType": negotiatedResponseMediaType,
 		"proposerContentType":         proposerContentType,
 		"proposerEthConsensusVersion": proposerEthConsensusVersion,
-	}
-
-	if version == HandleGetPayloadVersionV1 {
-		logFields["negotiatedResponseMediaType"] = negotiatedResponseMediaType
-	}
-
-	log := api.log.WithFields(logFields)
+	})
 
 	// Log at start and end of request
 	log.Info("request initiated")
