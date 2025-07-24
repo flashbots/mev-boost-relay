@@ -49,6 +49,8 @@ import (
 	uberatomic "go.uber.org/atomic"
 )
 
+type HandleGetPayloadVersion string
+
 const (
 	ErrBlockAlreadyKnown  = "simulation failed: block already known"
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
@@ -60,6 +62,9 @@ const (
 	HeaderAccept              = "Accept"
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
+
+	HandleGetPayloadVersionV1 HandleGetPayloadVersion = "V1"
+	HandleGetPayloadVersionV2 HandleGetPayloadVersion = "V2"
 )
 
 var (
@@ -77,7 +82,8 @@ var (
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
 	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+	pathGetPayloadV1      = "/eth/v1/builder/blinded_blocks"
+	pathGetPayloadV2      = "/eth/v2/builder/blinded_blocks"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
@@ -366,7 +372,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
-		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+		r.HandleFunc(pathGetPayloadV1, api.handleGetPayloadV1).Methods(http.MethodPost)
+		r.HandleFunc(pathGetPayloadV2, api.handleGetPayloadV2).Methods(http.MethodPost)
 	}
 
 	// Builder API
@@ -1362,10 +1369,8 @@ func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlinded
 	}
 }
 
-func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	api.getPayloadCallsInFlight.Add(1)
-	defer api.getPayloadCallsInFlight.Done()
-
+// Deprecated: Use handleGetPayloadV2. For more info visit: https://github.com/ethereum/builder-specs/issues/119
+func (api *RelayAPI) handleGetPayloadV1(w http.ResponseWriter, req *http.Request) {
 	// Negotiate the response media type
 	negotiatedResponseMediaType, err := NegotiateRequestResponseType(req)
 	if err != nil {
@@ -1373,10 +1378,20 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		api.RespondError(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
+	api.innerHandleGetPayload(w, req, HandleGetPayloadVersionV1, negotiatedResponseMediaType)
+}
+
+func (api *RelayAPI) handleGetPayloadV2(w http.ResponseWriter, req *http.Request) {
+	api.innerHandleGetPayload(w, req, HandleGetPayloadVersionV2, "")
+}
+
+func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Request, version HandleGetPayloadVersion, negotiatedResponseMediaType string) {
+	api.getPayloadCallsInFlight.Add(1)
+	defer api.getPayloadCallsInFlight.Done()
 
 	// Determine what encoding the proposer sent
 	proposerContentType := req.Header.Get(HeaderContentType)
-	proposerContentType, _, err = mime.ParseMediaType(proposerContentType)
+	proposerContentType, _, err := mime.ParseMediaType(proposerContentType)
 	if err != nil {
 		api.log.WithError(err).Error("failed to parse proposer content type")
 		api.RespondError(w, http.StatusUnsupportedMediaType, err.Error())
@@ -1390,7 +1405,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	log := api.log.WithFields(logrus.Fields{
-		"method":                      "getPayload",
+		"method":                      fmt.Sprintf("getPayload%s", version),
 		"ua":                          ua,
 		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":               req.ContentLength,
@@ -1709,40 +1724,70 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Publish the signed beacon block via beacon-node
-	timeBeforePublish := time.Now().UTC().UnixMilli()
-	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
+	// Convert to signed beacon block
 	signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	if err != nil {
 		log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
 		api.RespondError(w, http.StatusInternalServerError, "failed to convert signed blinded beacon block to beacon block")
 		return
 	}
-	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
-	if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
-		log.WithError(err).WithField("code", code).Error("failed to publish block")
-		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
-		return
+
+	if version == HandleGetPayloadVersionV1 {
+		timeBeforePublish := time.Now().UTC().UnixMilli()
+		log = log.WithField("timestampBeforePublishing", timeBeforePublish)
+
+		code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
+		if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
+			log.WithError(err).WithField("code", code).Error("failed to publish block")
+			api.RespondError(w, http.StatusBadRequest, "failed to publish block")
+			return
+		}
+
+		timeAfterPublish := time.Now().UTC().UnixMilli()
+		msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
+		log = log.WithField("timestampAfterPublishing", timeAfterPublish)
+		log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
+		metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(msNeededForPublishing))
+
+		// give the beacon network some time to propagate the block
+		time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
+
+		// Respond appropriately
+		switch negotiatedResponseMediaType {
+		case ApplicationOctetStream:
+			log.Debug("responding with SSZ")
+			api.respondGetPayloadSSZ(w, getPayloadResp)
+		default:
+			log.Debug("responding with JSON")
+			api.RespondOK(w, getPayloadResp)
+		}
+	} else {
+		// Start async block publishing process
+		go func() {
+			timeBeforePublish := time.Now().UTC().UnixMilli()
+			log := log.WithField("timestampBeforePublishing", timeBeforePublish)
+
+			code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
+			if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
+				log.WithError(err).WithField("code", code).Error("failed to publish block")
+				return
+			}
+			timeAfterPublish := time.Now().UTC().UnixMilli()
+			msNeededForPublishing := uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
+
+			log = log.WithFields(logrus.Fields{
+				"timestampAfterPublishing": timeAfterPublish,
+				"msNeededForPublishing":    msNeededForPublishing,
+			})
+
+			log.Info("block published through beacon node")
+			metrics.PublishBlockLatencyHistogram.Record(context.Background(), float64(msNeededForPublishing))
+		}()
+
+		log.Debug("responding with only accepted status code")
+		w.WriteHeader(http.StatusAccepted)
 	}
 
-	timeAfterPublish := time.Now().UTC().UnixMilli()
-	msNeededForPublishing = uint64(timeAfterPublish - timeBeforePublish) //nolint:gosec
-	log = log.WithField("timestampAfterPublishing", timeAfterPublish)
-	log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
-	metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(msNeededForPublishing))
-
-	// give the beacon network some time to propagate the block
-	time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
-
-	// Respond appropriately
-	switch negotiatedResponseMediaType {
-	case ApplicationOctetStream:
-		log.Debug("responding with SSZ")
-		api.respondGetPayloadSSZ(w, getPayloadResp)
-	default:
-		log.Debug("responding with JSON")
-		api.RespondOK(w, getPayloadResp)
-	}
 	blockNumber, err := payload.ExecutionBlockNumber()
 	if err != nil {
 		log.WithError(err).Info("failed to get block number")
