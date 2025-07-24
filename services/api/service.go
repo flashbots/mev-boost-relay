@@ -1937,6 +1937,22 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
+	// log which payload is not nil
+	if payload.Fulu != nil {
+		log.Info("fulu payload is not nil")
+	}
+	if payload.Electra != nil {
+		log.Info("electra payload is not nil")
+	}
+	if payload.Deneb != nil {
+		log.Info("deneb payload is not nil")
+	}
+	if payload.Capella != nil {
+		log.Info("capella payload is not nil")
+	}
+	if payload.Bellatrix != nil {
+		log.Info("bellatrix payload is not nil")
+	}
 	if api.isFulu(submission.BidTrace.Slot) && payload.Fulu == nil {
 		log.Info("rejecting submission - non fulu payload for fulu fork")
 		api.RespondError(w, http.StatusBadRequest, "not fulu payload")
