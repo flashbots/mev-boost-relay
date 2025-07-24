@@ -2204,32 +2204,52 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if contentType == ApplicationOctetStream {
+	if contentType == "application/octet-stream" {
 		log = log.WithField("reqContentType", "ssz")
-		pf.ContentType = "ssz"
-		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
-			log.WithError(err).Warn("could not decode payload - SSZ")
-
-			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
-				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
-				api.RespondError(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			log = log.WithField("reqContentType", "json")
-			pf.ContentType = "json"
-		} else {
-			log.Debug("received ssz-encoded payload")
-		}
 	} else {
 		log = log.WithField("reqContentType", "json")
-		pf.ContentType = "json"
-		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
-			log.WithError(err).Warn("could not decode payload - JSON")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 	}
+
+	currentFork := ""
+	if api.isFulu(headSlot) {
+		currentFork = common.EthConsensusVersionFulu
+	} else if api.isElectra(headSlot) {
+		currentFork = common.EthConsensusVersionElectra
+	} else if api.isDeneb(headSlot) {
+		currentFork = common.EthConsensusVersionDeneb
+	} else if api.isCapella(headSlot) {
+		currentFork = common.EthConsensusVersionCapella
+	}
+
+	fmt.Printf("BHARATH: currentFork: %s\n", currentFork)
+	payload.Unmarshal(requestPayloadBytes, contentType, currentFork)
+
+	// if contentType == ApplicationOctetStream {
+	// 	log = log.WithField("reqContentType", "ssz")
+	// 	pf.ContentType = "ssz"
+	// 	if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
+	// 		log.WithError(err).Warn("could not decode payload - SSZ")
+
+	// 		// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
+	// 		if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
+	// 			log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
+	// 			api.RespondError(w, http.StatusBadRequest, err.Error())
+	// 			return
+	// 		}
+	// 		log = log.WithField("reqContentType", "json")
+	// 		pf.ContentType = "json"
+	// 	} else {
+	// 		log.Debug("received ssz-encoded payload")
+	// 	}
+	// } else {
+	// 	log = log.WithField("reqContentType", "json")
+	// 	pf.ContentType = "json"
+	// 	if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
+	// 		log.WithError(err).Warn("could not decode payload - JSON")
+	// 		api.RespondError(w, http.StatusBadRequest, err.Error())
+	// 		return
+	// 	}
+	// }
 
 	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec

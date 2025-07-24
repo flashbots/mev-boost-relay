@@ -641,7 +641,9 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
-			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, new(http.Header))
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, &http.Header{
+				"Content-Type": []string{"application/json"},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
