@@ -1275,8 +1275,9 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
+	
 	if bid == nil || bid.IsEmpty() {
+		log.Info("no bid found")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1294,6 +1295,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	// Error on bid without value
 	if value.Cmp(uint256.NewInt(0)) == 0 {
+		log.Info("bid has no value")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1467,7 +1469,6 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
 		return
 	}
-
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
 	slot, err := payload.Slot()
@@ -1937,22 +1938,6 @@ func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *log
 }
 
 func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logrus.Entry, headSlot uint64, payload *common.VersionedSubmitBlockRequest, submission *common.BlockSubmissionInfo) bool {
-	// log which payload is not nil
-	if payload.Fulu != nil {
-		log.Info("fulu payload is not nil")
-	}
-	if payload.Electra != nil {
-		log.Info("electra payload is not nil")
-	}
-	if payload.Deneb != nil {
-		log.Info("deneb payload is not nil")
-	}
-	if payload.Capella != nil {
-		log.Info("capella payload is not nil")
-	}
-	if payload.Bellatrix != nil {
-		log.Info("bellatrix payload is not nil")
-	}
 	if api.isFulu(submission.BidTrace.Slot) && payload.Fulu == nil {
 		log.Info("rejecting submission - non fulu payload for fulu fork")
 		api.RespondError(w, http.StatusBadRequest, "not fulu payload")
@@ -2221,8 +2206,12 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		currentFork = common.EthConsensusVersionCapella
 	}
 
-	fmt.Printf("BHARATH: currentFork: %s\n", currentFork)
-	payload.Unmarshal(requestPayloadBytes, contentType, currentFork)
+	err = payload.Unmarshal(requestPayloadBytes, contentType, currentFork)
+	if err != nil {
+		log.WithError(err).Warn("could not decode payload")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// if contentType == ApplicationOctetStream {
 	// 	log = log.WithField("reqContentType", "ssz")
