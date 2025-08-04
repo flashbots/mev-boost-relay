@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/binary"
 	"fmt"
 	"mime"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -235,4 +237,24 @@ func getHeaderContentType(header http.Header) (mediatype string, params map[stri
 	}
 
 	return contentType, params, nil
+}
+
+func getSlotFromBuilderJSONPayload(input []byte) (uint64, error) {
+	slot := gjson.Get(string(input), "message.slot")
+	if !slot.Exists() {
+		return 0, fmt.Errorf("slot not found in payload")
+	}
+	return slot.Uint(), nil
+}
+
+func getSlotFromBuilderSSZPayload(input []byte) (uint64, error) {
+	if len(input) < 4 {
+		return 0, fmt.Errorf("payload too short to contain message offset")
+	}
+
+	messageOffset := binary.LittleEndian.Uint32(input[4:8])
+
+	slot := binary.LittleEndian.Uint64(input[messageOffset : messageOffset+8])
+
+	return slot, nil
 }

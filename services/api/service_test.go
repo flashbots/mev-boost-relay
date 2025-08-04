@@ -120,7 +120,7 @@ func (be *testBackend) requestBytes(method, path string, payload []byte, header 
 	return rr
 }
 
-func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
+func (be *testBackend) request(method, path string, payload any, header *http.Header) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -132,6 +132,12 @@ func (be *testBackend) request(method, path string, payload any) *httptest.Respo
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
 	require.NoError(be.t, err)
+
+	if header != nil {
+		req.Header = *header
+	} else {
+		req.Header = http.Header{}
+	}
 
 	// lfg
 	rr := httptest.NewRecorder()
@@ -169,21 +175,21 @@ func TestWebserver(t *testing.T) {
 
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
-	rr := backend.request(http.MethodGet, "/", nil)
+	rr := backend.request(http.MethodGet, "/", nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestStatus(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/eth/v1/builder/status"
-	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
+	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestLivez(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/livez"
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.JSONEq(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
@@ -197,7 +203,7 @@ func TestRegisterValidator(t *testing.T) {
 		msg := common.ValidPayloadRegisterValidator
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 
 		// wait for the both channel notifications
@@ -253,7 +259,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "timestamp too early")
 	})
@@ -269,7 +275,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
 	})
@@ -281,7 +287,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		// We do not call backend.datastore.SetKnownValidator()
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "not a known validator")
 	})
@@ -297,7 +303,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
 	})
@@ -313,7 +319,7 @@ func TestRegisterValidator(t *testing.T) {
 
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 }
@@ -355,7 +361,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check: JSON capella request works and returns a bid
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -394,7 +400,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check: JSON deneb request works and returns a bid
-	rr = backend.request(http.MethodGet, path, nil)
+	rr = backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -439,7 +445,7 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	require.NoError(t, err)
 	backend.relay.proposerDutiesResponse = &responseBytes
 
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	resp := []common.BuilderGetValidatorsResponseEntry{}
@@ -457,7 +463,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
@@ -476,7 +482,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		}
 
 		for _, invalidBlockHash := range invalidBlockHashes {
-			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil, nil)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
 		}
@@ -532,6 +538,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 		sszReqSize          int
 		jsonGzipReqSize     int
 		sszGzipReqSize      int
+		forkVersion         string
 	}
 
 	testCases := []struct {
@@ -553,6 +560,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				sszReqSize:          352239,
 				jsonGzipReqSize:     207788,
 				sszGzipReqSize:      195923,
+				forkVersion:         "capella",
 			},
 		},
 		{
@@ -569,6 +577,41 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				sszReqSize:          872081,
 				jsonGzipReqSize:     385043,
 				sszGzipReqSize:      363271,
+				forkVersion:         "deneb",
+			},
+		},
+		{
+			name:     "Electra",
+			filepath: "../../testdata/SubmitBlockPayloadElectra.json.gz",
+			data: testHelper{
+				headSlot:            100,
+				submissionTimestamp: 1606825235,
+				parentHash:          "0xb38ab7ef9d941e59a2f908d96a9923eef447ad12ae00daee365601aa2e6a710a",
+				feeRecipient:        "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+				withdrawalRoot:      "0x792930bbd5baac43bcc798ee49aa8185ef76bb3b44ba62b91d86ae569e4bb535",
+				prevRandao:          "0xc3bc30c5eb5161b939f9e59924fe7e12b9a008420df7ed64a830839431a80731",
+				jsonReqSize:         2366373,
+				sszReqSize:          1182950,
+				jsonGzipReqSize:     481890,
+				sszGzipReqSize:      453375,
+				forkVersion:         "electra",
+			},
+		},
+		{
+			name:     "Fulu",
+			filepath: "../../testdata/SubmitBlockPayloadFulu.json.gz",
+			data: testHelper{
+				headSlot:            130,
+				submissionTimestamp: 1606825595,
+				parentHash:          "0xfa842e1eaadf0d3eb08b727add63b07e0fbbf9a8f9b0dd10f36a952489b07125",
+				feeRecipient:        "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+				withdrawalRoot:      "0x792930bbd5baac43bcc798ee49aa8185ef76bb3b44ba62b91d86ae569e4bb535",
+				prevRandao:          "0x2792dd9c77802929cdcb19f7665f8342315a2d077c6a81e353e567fe8319f42b",
+				jsonReqSize:         2481818,
+				sszReqSize:          1237815,
+				jsonGzipReqSize:     776782,
+				sszGzipReqSize:      731316,
+				forkVersion:         "fulu",
 			},
 		},
 	}
@@ -594,8 +637,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			backend.relay.headSlot.Store(headSlot)
 			backend.relay.capellaEpoch = 0
 			backend.relay.denebEpoch = 2
-			backend.relay.electraEpoch = 5
-			backend.relay.fuluEpoch = 6
+			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 				Slot: headSlot,
@@ -630,6 +673,12 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			case spec.DataVersionDeneb:
 				req.Deneb.Message.Slot = submissionSlot
 				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
+			case spec.DataVersionElectra:
+				req.Electra.Message.Slot = submissionSlot
+				req.Electra.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
+			case spec.DataVersionFulu:
+				req.Fulu.Message.Slot = submissionSlot
+				req.Fulu.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			default:
 				require.Fail(t, "unknown data version")
 			}

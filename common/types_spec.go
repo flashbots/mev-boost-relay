@@ -569,6 +569,21 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 	}
 }
 
+func (r *VersionedSubmitBlockRequest) UnmarshalWithVersion(input []byte, contentType, ethConsensusVersion string) error {
+	if contentType == "application/octet-stream" {
+		if err := r.UnmarshalSSZWithVersion(input, ethConsensusVersion); err != nil {
+			if err2 := r.UnmarshalJSONWithVersion(input, ethConsensusVersion); err2 != nil {
+				return err2
+			}
+		}
+	} else {
+		if err := r.UnmarshalJSONWithVersion(input, ethConsensusVersion); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *VersionedSubmitBlockRequest) UnmarshalSSZWithVersion(input []byte, ethConsensusVersion string) error {
 	switch ethConsensusVersion {
 	case EthConsensusVersionBellatrix:
@@ -622,22 +637,6 @@ func (r *VersionedSubmitBlockRequest) UnmarshalJSONWithVersion(input []byte, eth
 		return ErrInvalidForkVersion
 	}
 }
-
-
-
-func (r *VersionedSubmitBlockRequest) Unmarshal(input []byte, contentType, ethConsensusVersion string) error {
-	if contentType == "application/octet-stream" {
-		err := r.UnmarshalSSZWithVersion(input, ethConsensusVersion)
-		if err != nil {
-			return r.UnmarshalJSONWithVersion(input, ethConsensusVersion)
-		}
-	} else if contentType == "application/json" {
-		return r.UnmarshalJSONWithVersion(input, ethConsensusVersion)
-	}
-
-	return ErrInvalidContentType
-}
-
 
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error

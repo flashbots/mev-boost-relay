@@ -1275,7 +1275,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	
+
 	if bid == nil || bid.IsEmpty() {
 		log.Info("no bid found")
 		w.WriteHeader(http.StatusNoContent)
@@ -1401,7 +1401,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	}
 
 	// Get the optional consensus version
-	proposerEthConsensusVersion := req.Header.Get("Eth-Consensus-Version")
+	proposerEthConsensusVersion := req.Header.Get(HeaderEthConsensusVersion)
 
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
@@ -1469,6 +1469,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
 		return
 	}
+
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
 	slot, err := payload.Slot()
@@ -2115,6 +2116,21 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	return &updateBidResult, getPayloadResponse, true
 }
 
+func (api *RelayAPI) getForkFromSlot(slot uint64) spec.DataVersion {
+	switch {
+	case api.isFulu(slot):
+		return spec.DataVersionFulu
+	case api.isElectra(slot):
+		return spec.DataVersionElectra
+	case api.isDeneb(slot):
+		return spec.DataVersionDeneb
+	case api.isCapella(slot):
+		return spec.DataVersionCapella
+	default:
+		return spec.DataVersionBellatrix
+	}
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -2189,58 +2205,41 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if contentType == "application/octet-stream" {
+	if contentType == ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
 	} else {
 		log = log.WithField("reqContentType", "json")
 	}
 
-	currentFork := ""
-	if api.isFulu(headSlot) {
-		currentFork = common.EthConsensusVersionFulu
-	} else if api.isElectra(headSlot) {
-		currentFork = common.EthConsensusVersionElectra
-	} else if api.isDeneb(headSlot) {
-		currentFork = common.EthConsensusVersionDeneb
-	} else if api.isCapella(headSlot) {
-		currentFork = common.EthConsensusVersionCapella
+	builderEthConsensusVersion := req.Header.Get(HeaderEthConsensusVersion)
+	if builderEthConsensusVersion == "" {
+		// don't reject a builder submission if the Eth-Consensus-Version header is not present
+		if contentType == ApplicationOctetStream {
+			slot, err := getSlotFromBuilderSSZPayload(requestPayloadBytes)
+			if err != nil {
+				log.WithError(err).Warn("could not get slot from builder json payload")
+				api.RespondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			builderEthConsensusVersion = api.getForkFromSlot(slot).String()
+		} else {
+			slot, err := getSlotFromBuilderJSONPayload(requestPayloadBytes)
+			if err != nil {
+				log.WithError(err).Warn("could not get slot from builder ssz payload")
+				api.RespondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			builderEthConsensusVersion = api.getForkFromSlot(slot).String()
+		}
 	}
 
-	err = payload.Unmarshal(requestPayloadBytes, contentType, currentFork)
-	if err != nil {
+	nextTime = time.Now().UTC()
+	if err := payload.UnmarshalWithVersion(requestPayloadBytes, contentType, builderEthConsensusVersion); err != nil {
 		log.WithError(err).Warn("could not decode payload")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// if contentType == ApplicationOctetStream {
-	// 	log = log.WithField("reqContentType", "ssz")
-	// 	pf.ContentType = "ssz"
-	// 	if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
-	// 		log.WithError(err).Warn("could not decode payload - SSZ")
-
-	// 		// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-	// 		if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
-	// 			log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
-	// 			api.RespondError(w, http.StatusBadRequest, err.Error())
-	// 			return
-	// 		}
-	// 		log = log.WithField("reqContentType", "json")
-	// 		pf.ContentType = "json"
-	// 	} else {
-	// 		log.Debug("received ssz-encoded payload")
-	// 	}
-	// } else {
-	// 	log = log.WithField("reqContentType", "json")
-	// 	pf.ContentType = "json"
-	// 	if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
-	// 		log.WithError(err).Warn("could not decode payload - JSON")
-	// 		api.RespondError(w, http.StatusBadRequest, err.Error())
-	// 		return
-	// 	}
-	// }
-
-	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	prevTime = nextTime
 

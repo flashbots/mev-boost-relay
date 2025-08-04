@@ -126,7 +126,6 @@ func (b *BlockSimulationRateLimiter) Send(
 	} else {
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
 	}
-
 	res, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
 	response = new(common.BuilderBlockValidationResponse)
 	if res != nil {
