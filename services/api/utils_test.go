@@ -96,6 +96,16 @@ func TestGetSlotFromBuilderSSZPayload(t *testing.T) {
 			fileName:     "submitBlockPayloadDeneb_Goerli.ssz.gz",
 			expectedSlot: 7433483,
 		},
+		{
+			name:         "submitBlockPayloadElectra_ssz",
+			fileName:     "submitBlockPayloadElectra.ssz.gz",
+			expectedSlot: 58,
+		},
+		{
+			name:         "submitBlockPayloadFulu_ssz",
+			fileName:     "submitBlockPayloadFulu.ssz.gz",
+			expectedSlot: 130,
+		},
 	}
 
 	for _, tc := range testCases {
