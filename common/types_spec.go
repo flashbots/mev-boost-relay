@@ -1,10 +1,10 @@
 package common
 
 import (
-	"bytes"
 	"fmt"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
@@ -569,6 +569,76 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 	}
 }
 
+func (r *VersionedSubmitBlockRequest) UnmarshalWithVersion(input []byte, contentType, ethConsensusVersion string) error {
+	if contentType == ApplicationOctetStream {
+		if err := r.UnmarshalSSZWithVersion(input, ethConsensusVersion); err != nil {
+			// builder might submit a json payload with the an octet-stream content type.
+			if err2 := r.UnmarshalJSONWithVersion(input, ethConsensusVersion); err2 != nil {
+				return err2
+			}
+		}
+	} else {
+		if err := r.UnmarshalJSONWithVersion(input, ethConsensusVersion); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *VersionedSubmitBlockRequest) UnmarshalSSZWithVersion(input []byte, ethConsensusVersion string) error {
+	switch ethConsensusVersion {
+	case EthConsensusVersionBellatrix:
+		r.Version = spec.DataVersionBellatrix
+		r.Bellatrix = new(builderApiBellatrix.SubmitBlockRequest)
+		return r.Bellatrix.UnmarshalSSZ(input)
+	case EthConsensusVersionCapella:
+		r.Version = spec.DataVersionCapella
+		r.Capella = new(builderApiCapella.SubmitBlockRequest)
+		return r.Capella.UnmarshalSSZ(input)
+	case EthConsensusVersionDeneb:
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = new(builderApiDeneb.SubmitBlockRequest)
+		return r.Deneb.UnmarshalSSZ(input)
+	case EthConsensusVersionElectra:
+		r.Version = spec.DataVersionElectra
+		r.Electra = new(builderApiElectra.SubmitBlockRequest)
+		return r.Electra.UnmarshalSSZ(input)
+	case EthConsensusVersionFulu:
+		r.Version = spec.DataVersionFulu
+		r.Fulu = new(builderApiFulu.SubmitBlockRequest)
+		return r.Fulu.UnmarshalSSZ(input)
+	default:
+		return ErrInvalidForkVersion
+	}
+}
+
+func (r *VersionedSubmitBlockRequest) UnmarshalJSONWithVersion(input []byte, ethConsensusVersion string) error {
+	switch ethConsensusVersion {
+	case EthConsensusVersionBellatrix:
+		r.Version = spec.DataVersionBellatrix
+		r.Bellatrix = new(builderApiBellatrix.SubmitBlockRequest)
+		return r.Bellatrix.UnmarshalJSON(input)
+	case EthConsensusVersionCapella:
+		r.Version = spec.DataVersionCapella
+		r.Capella = new(builderApiCapella.SubmitBlockRequest)
+		return r.Capella.UnmarshalJSON(input)
+	case EthConsensusVersionDeneb:
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = new(builderApiDeneb.SubmitBlockRequest)
+		return r.Deneb.UnmarshalJSON(input)
+	case EthConsensusVersionElectra:
+		r.Version = spec.DataVersionElectra
+		r.Electra = new(builderApiElectra.SubmitBlockRequest)
+		return r.Electra.UnmarshalJSON(input)
+	case EthConsensusVersionFulu:
+		r.Version = spec.DataVersionFulu
+		r.Fulu = new(builderApiFulu.SubmitBlockRequest)
+		return r.Fulu.UnmarshalJSON(input)
+	default:
+		return ErrInvalidForkVersion
+	}
+}
+
 func (r *VersionedSubmitBlockRequest) UnmarshalJSON(input []byte) error {
 	var err error
 	fuluRequest := new(builderApiFulu.SubmitBlockRequest)
@@ -741,39 +811,65 @@ func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSON(input []byte) error {
 	return errors.Wrap(err, "failed to unmarshal SignedBlindedBeaconBlock")
 }
 
+func (r *VersionedSignedBlindedBeaconBlock) UnmarshalSSZWithVersion(input []byte, ethConsensusVersion string) error {
+	switch ethConsensusVersion {
+	case EthConsensusVersionBellatrix:
+		r.Version = spec.DataVersionBellatrix
+		r.Bellatrix = new(eth2ApiV1Bellatrix.SignedBlindedBeaconBlock)
+		return r.Bellatrix.UnmarshalSSZ(input)
+	case EthConsensusVersionCapella:
+		r.Version = spec.DataVersionCapella
+		r.Capella = new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+		return r.Capella.UnmarshalSSZ(input)
+	case EthConsensusVersionDeneb:
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
+		return r.Deneb.UnmarshalSSZ(input)
+	case EthConsensusVersionElectra:
+		r.Version = spec.DataVersionElectra
+		r.Electra = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+		return r.Electra.UnmarshalSSZ(input)
+	case EthConsensusVersionFulu:
+		r.Version = spec.DataVersionFulu
+		r.Fulu = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+		return r.Fulu.UnmarshalSSZ(input)
+	default:
+		return ErrInvalidForkVersion
+	}
+}
+
+func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSONWithVersion(input []byte, ethConsensusVersion string) error {
+	switch ethConsensusVersion {
+	case EthConsensusVersionBellatrix:
+		r.Version = spec.DataVersionBellatrix
+		r.Bellatrix = new(eth2ApiV1Bellatrix.SignedBlindedBeaconBlock)
+		return r.Bellatrix.UnmarshalJSON(input)
+	case EthConsensusVersionCapella:
+		r.Version = spec.DataVersionCapella
+		r.Capella = new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+		return r.Capella.UnmarshalJSON(input)
+	case EthConsensusVersionDeneb:
+		r.Version = spec.DataVersionDeneb
+		r.Deneb = new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
+		return r.Deneb.UnmarshalJSON(input)
+	case EthConsensusVersionElectra:
+		r.Version = spec.DataVersionElectra
+		r.Electra = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+		return r.Electra.UnmarshalJSON(input)
+	case EthConsensusVersionFulu:
+		r.Version = spec.DataVersionFulu
+		r.Fulu = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
+		return r.Fulu.UnmarshalJSON(input)
+	default:
+		return ErrInvalidForkVersion
+	}
+}
+
 func (r *VersionedSignedBlindedBeaconBlock) Unmarshal(input []byte, contentType, ethConsensusVersion string) error {
-	switch contentType {
-	case "application/octet-stream":
-		if ethConsensusVersion != "" {
-			switch ethConsensusVersion {
-			case EthConsensusVersionBellatrix:
-				r.Version = spec.DataVersionBellatrix
-				r.Bellatrix = new(eth2ApiV1Bellatrix.SignedBlindedBeaconBlock)
-				return r.Bellatrix.UnmarshalSSZ(input)
-			case EthConsensusVersionCapella:
-				r.Version = spec.DataVersionCapella
-				r.Capella = new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
-				return r.Capella.UnmarshalSSZ(input)
-			case EthConsensusVersionDeneb:
-				r.Version = spec.DataVersionDeneb
-				r.Deneb = new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
-				return r.Deneb.UnmarshalSSZ(input)
-			case EthConsensusVersionElectra:
-				r.Version = spec.DataVersionElectra
-				r.Electra = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
-				return r.Electra.UnmarshalSSZ(input)
-			case EthConsensusVersionFulu:
-				r.Version = spec.DataVersionFulu
-				r.Fulu = new(eth2ApiV1Electra.SignedBlindedBeaconBlock)
-				return r.Fulu.UnmarshalSSZ(input)
-			default:
-				return ErrInvalidForkVersion
-			}
-		} else {
-			return ErrMissingEthConsensusVersion
-		}
-	case "application/json":
-		return json.NewDecoder(bytes.NewReader(input)).Decode(r)
+	if contentType == ApplicationOctetStream {
+		return r.UnmarshalSSZWithVersion(input, ethConsensusVersion)
+	} else if contentType == ApplicationJSON {
+		return r.UnmarshalJSONWithVersion(input, ethConsensusVersion)
 	}
 	return ErrInvalidContentType
 }

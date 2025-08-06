@@ -154,7 +154,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	}
 
 	// set request headers
-	httpReq.Header.Add("Content-Type", "application/json")
+	httpReq.Header.Add("Content-Type", common.ApplicationJSON)
 	for k, v := range headers {
 		httpReq.Header.Add(k, v[0])
 	}

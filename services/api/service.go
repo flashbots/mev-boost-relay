@@ -56,9 +56,6 @@ const (
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode    = "missing trie node"
 
-	ApplicationJSON        = "application/json"
-	ApplicationOctetStream = "application/octet-stream"
-
 	HeaderAccept              = "Accept"
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
@@ -964,7 +961,7 @@ func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
-	w.Header().Set(HeaderContentType, ApplicationJSON)
+	w.Header().Set(HeaderContentType, common.ApplicationJSON)
 	w.WriteHeader(code)
 	if response == nil {
 		return
@@ -988,12 +985,12 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
 	ah := req.Header.Get(HeaderAccept)
 	if ah == "" {
-		return ApplicationJSON, nil
+		return common.ApplicationJSON, nil
 	}
 	mh := mimeheader.ParseAcceptHeader(ah)
 	_, mimeType, matched := mh.Negotiate(
-		[]string{ApplicationJSON, ApplicationOctetStream},
-		ApplicationJSON,
+		[]string{common.ApplicationJSON, common.ApplicationOctetStream},
+		common.ApplicationJSON,
 	)
 	if !matched {
 		return "", ErrNotAcceptable
@@ -1064,7 +1061,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	numTotalRegistrations := 0
 	var signedValidatorRegistrations []*builderApiV1.SignedValidatorRegistration
 
-	if proposerContentType == ApplicationOctetStream {
+	if proposerContentType == common.ApplicationOctetStream {
 		// Registrations in SSZ
 		log = log.WithField("is_ssz", true)
 		log.Debug("Parsing registrations as SSZ")
@@ -1277,6 +1274,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if bid == nil || bid.IsEmpty() {
+		log.Info("no bid found")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1294,6 +1292,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	// Error on bid without value
 	if value.Cmp(uint256.NewInt(0)) == 0 {
+		log.Info("bid has no value")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1304,7 +1303,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}).Info("bid delivered")
 
 	switch negotiatedResponseMediaType {
-	case ApplicationOctetStream:
+	case common.ApplicationOctetStream:
 		log.Debug("responding with SSZ")
 		api.respondGetHeaderSSZ(w, bid)
 	default:
@@ -1344,7 +1343,7 @@ func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec
 	}
 
 	// Write the header
-	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.Header().Set(HeaderContentType, common.ApplicationOctetStream)
 	w.WriteHeader(http.StatusOK)
 
 	// Write SSZ data
@@ -1399,7 +1398,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	}
 
 	// Get the optional consensus version
-	proposerEthConsensusVersion := req.Header.Get("Eth-Consensus-Version")
+	proposerEthConsensusVersion := req.Header.Get(HeaderEthConsensusVersion)
 
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
@@ -1754,7 +1753,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 
 		// Respond appropriately
 		switch negotiatedResponseMediaType {
-		case ApplicationOctetStream:
+		case common.ApplicationOctetStream:
 			log.Debug("responding with SSZ")
 			api.respondGetPayloadSSZ(w, getPayloadResp)
 		default:
@@ -1853,7 +1852,7 @@ func (api *RelayAPI) respondGetPayloadSSZ(w http.ResponseWriter, result *builder
 	}
 
 	// Write the header
-	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.Header().Set(HeaderContentType, common.ApplicationOctetStream)
 	w.WriteHeader(http.StatusOK)
 
 	// Write SSZ data
@@ -2114,6 +2113,21 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	return &updateBidResult, getPayloadResponse, true
 }
 
+func (api *RelayAPI) getForkFromSlot(slot uint64) spec.DataVersion {
+	switch {
+	case api.isFulu(slot):
+		return spec.DataVersionFulu
+	case api.isElectra(slot):
+		return spec.DataVersionElectra
+	case api.isDeneb(slot):
+		return spec.DataVersionDeneb
+	case api.isCapella(slot):
+		return spec.DataVersionCapella
+	default:
+		return spec.DataVersionBellatrix
+	}
+}
+
 func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
@@ -2188,34 +2202,41 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if contentType == ApplicationOctetStream {
+	if contentType == common.ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
-		pf.ContentType = "ssz"
-		if err = payload.UnmarshalSSZ(requestPayloadBytes); err != nil {
-			log.WithError(err).Warn("could not decode payload - SSZ")
+	} else {
+		log = log.WithField("reqContentType", "json")
+	}
 
-			// SSZ decoding failed. try JSON as fallback (some builders used octet-stream for json before)
-			if err2 := json.Unmarshal(requestPayloadBytes, payload); err2 != nil {
-				log.WithError(fmt.Errorf("%w / %w", err, err2)).Warn("could not decode payload - SSZ or JSON")
+	builderEthConsensusVersion := req.Header.Get(HeaderEthConsensusVersion)
+	if builderEthConsensusVersion == "" {
+		// don't reject a builder submission if the Eth-Consensus-Version header is not present
+		if contentType == common.ApplicationOctetStream {
+			slot, err := getSlotFromBuilderSSZPayload(requestPayloadBytes)
+			if err != nil {
+				log.WithError(err).Warn("could not get slot from builder ssz payload")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			log = log.WithField("reqContentType", "json")
-			pf.ContentType = "json"
+			builderEthConsensusVersion = api.getForkFromSlot(slot).String()
 		} else {
-			log.Debug("received ssz-encoded payload")
-		}
-	} else {
-		log = log.WithField("reqContentType", "json")
-		pf.ContentType = "json"
-		if err := json.Unmarshal(requestPayloadBytes, payload); err != nil {
-			log.WithError(err).Warn("could not decode payload - JSON")
-			api.RespondError(w, http.StatusBadRequest, err.Error())
-			return
+			slot, err := getSlotFromBuilderJSONPayload(requestPayloadBytes)
+			if err != nil {
+				log.WithError(err).Warn("could not get slot from builder json payload")
+				api.RespondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			builderEthConsensusVersion = api.getForkFromSlot(slot).String()
 		}
 	}
 
 	nextTime = time.Now().UTC()
+	if err := payload.UnmarshalWithVersion(requestPayloadBytes, contentType, builderEthConsensusVersion); err != nil {
+		log.WithError(err).Warn("could not decode payload")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds()) //nolint:gosec
 	prevTime = nextTime
 
