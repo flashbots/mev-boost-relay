@@ -32,6 +32,9 @@ var (
 	ErrIncorrectLength            = errors.New("incorrect length")
 	ErrMissingEthConsensusVersion = errors.New("missing eth-consensus-version")
 	ErrInvalidContentType         = errors.New("invalid content type")
+
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
 )
 
 // SlotPos returns the slot's position in the epoch (1-based, i.e. 1..32)
@@ -56,7 +59,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 		return nil, err
 	}
 
-	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Content-Type", ApplicationJSON)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -231,7 +231,7 @@ func TestRegisterValidator(t *testing.T) {
 		require.NoError(t, err)
 
 		rr := backend.requestBytes(http.MethodPost, path, regBytes, &http.Header{
-			"Content-Type": []string{"application/octet-stream"},
+			"Content-Type": []string{common.ApplicationOctetStream},
 		})
 		require.Equal(t, http.StatusOK, rr.Code)
 
@@ -373,10 +373,10 @@ func TestGetHeader(t *testing.T) {
 
 	// Check: SSZ capella request works and returns a bid
 	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
-		"Accept": []string{"application/octet-stream"},
+		"Accept": []string{common.ApplicationOctetStream},
 	})
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, common.ApplicationOctetStream, rr.Header().Get("Content-Type"))
 	require.Equal(t, common.EthConsensusVersionCapella, rr.Header().Get("Eth-Consensus-Version"))
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	resp.Version = spec.DataVersionCapella
@@ -412,10 +412,10 @@ func TestGetHeader(t *testing.T) {
 
 	// Check: SSZ deneb request works and returns a bid
 	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
-		"Accept": []string{"application/octet-stream"},
+		"Accept": []string{common.ApplicationOctetStream},
 	})
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, common.ApplicationOctetStream, rr.Header().Get("Content-Type"))
 	require.Equal(t, common.EthConsensusVersionDeneb, rr.Header().Get("Eth-Consensus-Version"))
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	resp.Version = spec.DataVersionDeneb
@@ -691,7 +691,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.NoError(t, err)
 			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
 			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, &http.Header{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": []string{common.ApplicationJSON},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -701,7 +701,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, &http.Header{
-				"Content-Type": []string{"application/octet-stream"},
+				"Content-Type": []string{common.ApplicationOctetStream},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -710,7 +710,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			jsonGzip := gzipBytes(t, reqJSONBytes)
 			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, &http.Header{
-				"Content-Type":     []string{"application/json"},
+				"Content-Type":     []string{common.ApplicationJSON},
 				"Content-Encoding": []string{"gzip"},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
@@ -720,7 +720,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			sszGzip := gzipBytes(t, reqSSZBytes)
 			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
 			rr = backend.requestBytes(http.MethodPost, path, sszGzip, &http.Header{
-				"Content-Type":     []string{"application/octet-stream"},
+				"Content-Type":     []string{common.ApplicationOctetStream},
 				"Content-Encoding": []string{"gzip"},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
@@ -1569,17 +1569,17 @@ func TestNegotiateRequestResponseType(t *testing.T) {
 		Expected string
 		Error    error
 	}{
-		{Header: "", Expected: ApplicationJSON},
-		{Header: "application/json", Expected: ApplicationJSON},
-		{Header: "application/octet-stream", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1,application/json;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=0.9,*/*;q=1.0", Expected: ApplicationJSON},
-		{Header: "application/*;q=0.9", Expected: ApplicationJSON, Error: nil},
-		{Header: "application/*", Expected: ApplicationJSON, Error: nil},
+		{Header: "", Expected: common.ApplicationJSON},
+		{Header: "application/json", Expected: common.ApplicationJSON},
+		{Header: "application/octet-stream", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1,application/json;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=0.9,*/*;q=1.0", Expected: common.ApplicationJSON},
+		{Header: "application/*;q=0.9", Expected: common.ApplicationJSON, Error: nil},
+		{Header: "application/*", Expected: common.ApplicationJSON, Error: nil},
 		{Header: "text/html", Error: ErrNotAcceptable},
 	} {
 		t.Run(tc.Header, func(t *testing.T) {

@@ -138,7 +138,7 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 
 	req := common.TestBuilderSubmitBlockRequest(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue, opts.slot), opts.version)
 	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req, &http.Header{
-		"Content-Type": []string{"application/json"},
+		"Content-Type": []string{common.ApplicationJSON},
 	})
 
 	// Let updates happen async.

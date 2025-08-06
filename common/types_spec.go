@@ -570,8 +570,9 @@ func (r *VersionedSubmitBlockRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (r *VersionedSubmitBlockRequest) UnmarshalWithVersion(input []byte, contentType, ethConsensusVersion string) error {
-	if contentType == "application/octet-stream" {
+	if contentType == ApplicationOctetStream {
 		if err := r.UnmarshalSSZWithVersion(input, ethConsensusVersion); err != nil {
+			// builder might submit a json payload with the an octet-stream content type.
 			if err2 := r.UnmarshalJSONWithVersion(input, ethConsensusVersion); err2 != nil {
 				return err2
 			}
@@ -865,9 +866,9 @@ func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSONWithVersion(input []byt
 }
 
 func (r *VersionedSignedBlindedBeaconBlock) Unmarshal(input []byte, contentType, ethConsensusVersion string) error {
-	if contentType == "application/octet-stream" {
+	if contentType == ApplicationOctetStream {
 		return r.UnmarshalSSZWithVersion(input, ethConsensusVersion)
-	} else if contentType == "application/json" {
+	} else if contentType == ApplicationJSON {
 		return r.UnmarshalJSONWithVersion(input, ethConsensusVersion)
 	}
 	return ErrInvalidContentType

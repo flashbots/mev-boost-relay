@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,11 +15,11 @@ func TestGetHeaderContentType(t *testing.T) {
 	}{
 		{
 			header:   http.Header{"Content-Type": []string{"application/json"}},
-			expected: ApplicationJSON,
+			expected: common.ApplicationJSON,
 		},
 		{
 			header:   http.Header{"Content-Type": []string{"application/json; charset=utf-8"}},
-			expected: ApplicationJSON,
+			expected: common.ApplicationJSON,
 		},
 		{
 			header:   http.Header{"Content-Type": []string{""}},

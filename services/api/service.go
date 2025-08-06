@@ -56,9 +56,6 @@ const (
 	ErrBlockRequiresReorg = "simulation failed: block requires a reorg"
 	ErrMissingTrieNode    = "missing trie node"
 
-	ApplicationJSON        = "application/json"
-	ApplicationOctetStream = "application/octet-stream"
-
 	HeaderAccept              = "Accept"
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
@@ -964,7 +961,7 @@ func (api *RelayAPI) RespondMsg(w http.ResponseWriter, code int, msg string) {
 }
 
 func (api *RelayAPI) Respond(w http.ResponseWriter, code int, response any) {
-	w.Header().Set(HeaderContentType, ApplicationJSON)
+	w.Header().Set(HeaderContentType, common.ApplicationJSON)
 	w.WriteHeader(code)
 	if response == nil {
 		return
@@ -988,12 +985,12 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error) {
 	ah := req.Header.Get(HeaderAccept)
 	if ah == "" {
-		return ApplicationJSON, nil
+		return common.ApplicationJSON, nil
 	}
 	mh := mimeheader.ParseAcceptHeader(ah)
 	_, mimeType, matched := mh.Negotiate(
-		[]string{ApplicationJSON, ApplicationOctetStream},
-		ApplicationJSON,
+		[]string{common.ApplicationJSON, common.ApplicationOctetStream},
+		common.ApplicationJSON,
 	)
 	if !matched {
 		return "", ErrNotAcceptable
@@ -1064,7 +1061,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	numTotalRegistrations := 0
 	var signedValidatorRegistrations []*builderApiV1.SignedValidatorRegistration
 
-	if proposerContentType == ApplicationOctetStream {
+	if proposerContentType == common.ApplicationOctetStream {
 		// Registrations in SSZ
 		log = log.WithField("is_ssz", true)
 		log.Debug("Parsing registrations as SSZ")
@@ -1306,7 +1303,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}).Info("bid delivered")
 
 	switch negotiatedResponseMediaType {
-	case ApplicationOctetStream:
+	case common.ApplicationOctetStream:
 		log.Debug("responding with SSZ")
 		api.respondGetHeaderSSZ(w, bid)
 	default:
@@ -1346,7 +1343,7 @@ func (api *RelayAPI) respondGetHeaderSSZ(w http.ResponseWriter, bid *builderSpec
 	}
 
 	// Write the header
-	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.Header().Set(HeaderContentType, common.ApplicationOctetStream)
 	w.WriteHeader(http.StatusOK)
 
 	// Write SSZ data
@@ -1756,7 +1753,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 
 		// Respond appropriately
 		switch negotiatedResponseMediaType {
-		case ApplicationOctetStream:
+		case common.ApplicationOctetStream:
 			log.Debug("responding with SSZ")
 			api.respondGetPayloadSSZ(w, getPayloadResp)
 		default:
@@ -1855,7 +1852,7 @@ func (api *RelayAPI) respondGetPayloadSSZ(w http.ResponseWriter, result *builder
 	}
 
 	// Write the header
-	w.Header().Set(HeaderContentType, ApplicationOctetStream)
+	w.Header().Set(HeaderContentType, common.ApplicationOctetStream)
 	w.WriteHeader(http.StatusOK)
 
 	// Write SSZ data
@@ -2205,7 +2202,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if contentType == ApplicationOctetStream {
+	if contentType == common.ApplicationOctetStream {
 		log = log.WithField("reqContentType", "ssz")
 	} else {
 		log = log.WithField("reqContentType", "json")
@@ -2214,7 +2211,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	builderEthConsensusVersion := req.Header.Get(HeaderEthConsensusVersion)
 	if builderEthConsensusVersion == "" {
 		// don't reject a builder submission if the Eth-Consensus-Version header is not present
-		if contentType == ApplicationOctetStream {
+		if contentType == common.ApplicationOctetStream {
 			slot, err := getSlotFromBuilderSSZPayload(requestPayloadBytes)
 			if err != nil {
 				log.WithError(err).Warn("could not get slot from builder json payload")
