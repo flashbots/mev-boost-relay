@@ -30,6 +30,16 @@ func TestSSZBuilderSubmission(t *testing.T) {
 			filepath:     "../testdata/submitBlockPayloadDeneb_Goerli",
 			hashTreeRoot: "0x258007ab62465df2b5d798571d3ba0554302b7569eb1ca99405485d32723d63f",
 		},
+		{
+			name:         "Electra",
+			filepath:     "../testdata/submitBlockPayloadElectra",
+			hashTreeRoot: "0xb8616dd72528dea999474715a46e74e5c695792e2d1c1556ad18d623129ff3b8",
+		},
+		{
+			name:         "Fulu",
+			filepath:     "../testdata/submitBlockPayloadFulu",
+			hashTreeRoot: "0x0e298120f364a7319654285e375c3afd73bb3daa008d922ce30ea8d6dbf30c35",
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -115,6 +115,18 @@ func TestBuildGetPayloadResponse(t *testing.T) {
 			version:   spec.DataVersionDeneb,
 			blockHash: "0x195e2aac0a52cf26428336142e74eafd55d9228f315c2f2fe9253406ef9ef544",
 		},
+		{
+			name:      "Electra",
+			filepath:  "../testdata/submitBlockPayloadElectra.json.gz",
+			version:   spec.DataVersionElectra,
+			blockHash: "0xf9ee426bc307d0e8b2b6b35d43c9f3a36d098fbe0b784f0fe883fec2df480e32",
+		},
+		{
+			name:      "Fulu",
+			filepath:  "../testdata/submitBlockPayloadFulu.json.gz",
+			version:   spec.DataVersionFulu,
+			blockHash: "0x3bc3be25c8e3e8ebd2f3a225af0f5b27f0e028ed0b497691f929eaf7e164112a",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -122,7 +134,7 @@ func TestBuildGetPayloadResponse(t *testing.T) {
 			jsonBytes := LoadGzippedBytes(t, testCase.filepath)
 
 			submitBlockData := new(VersionedSubmitBlockRequest)
-			err := json.Unmarshal(jsonBytes, &submitBlockData)
+			err := submitBlockData.UnmarshalJSONWithVersion(jsonBytes, testCase.version.String())
 			require.NoError(t, err)
 
 			resp, err := BuildGetPayloadResponse(submitBlockData)

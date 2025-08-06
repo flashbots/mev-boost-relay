@@ -505,6 +505,16 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 			filepath:  "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
 			sszLength: 872081,
 		},
+		{
+			name:      "Electra",
+			filepath:  "../../testdata/submitBlockPayloadElectra.json.gz",
+			sszLength: 1182950,
+		},
+		{
+			name:      "Fulu",
+			filepath:  "../../testdata/submitBlockPayloadFulu.json.gz",
+			sszLength: 1237815,
+		},
 	}
 
 	for _, testCase := range testCases {
