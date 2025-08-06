@@ -19,6 +19,12 @@ import (
 )
 
 var (
+	ErrSlotNotFound                    = errors.New("slot not found in payload")
+	ErrPayloadTooShortForMessageOffset = errors.New("payload too short to contain message offset")
+	ErrPayloadTooShortForSlot          = errors.New("payload too short to contain slot at message offset")
+)
+
+var (
 	ErrBlockHashMismatch  = errors.New("blockHash mismatch")
 	ErrParentHashMismatch = errors.New("parentHash mismatch")
 
@@ -242,20 +248,20 @@ func getHeaderContentType(header http.Header) (mediatype string, params map[stri
 func getSlotFromBuilderJSONPayload(input []byte) (uint64, error) {
 	slot := gjson.Get(string(input), "message.slot")
 	if !slot.Exists() {
-		return 0, fmt.Errorf("slot not found in payload")
+		return 0, ErrSlotNotFound
 	}
 	return slot.Uint(), nil
 }
 
 func getSlotFromBuilderSSZPayload(input []byte) (uint64, error) {
 	if len(input) < 8 {
-		return 0, fmt.Errorf("payload too short to contain message offset")
+		return 0, ErrPayloadTooShortForMessageOffset
 	}
 
 	messageOffset := binary.LittleEndian.Uint32(input[4:8])
 
-	if messageOffset+8 > uint32(len(input)) {
-		return 0, fmt.Errorf("payload too short to contain slot at message offset %d", messageOffset)
+	if int(messageOffset+8) > len(input) {
+		return 0, errors.Wrapf(ErrPayloadTooShortForSlot, "offset %d", messageOffset)
 	}
 	slot := binary.LittleEndian.Uint64(input[messageOffset : messageOffset+8])
 

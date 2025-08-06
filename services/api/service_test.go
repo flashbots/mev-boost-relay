@@ -592,7 +592,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 		},
 		{
 			name:     "Electra",
-			filepath: "../../testdata/SubmitBlockPayloadElectra.json.gz",
+			filepath: "../../testdata/submitBlockPayloadElectra.json.gz",
 			data: testHelper{
 				headSlot:            100,
 				submissionTimestamp: 1606825235,
@@ -609,7 +609,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 		},
 		{
 			name:     "Fulu",
-			filepath: "../../testdata/SubmitBlockPayloadFulu.json.gz",
+			filepath: "../../testdata/submitBlockPayloadFulu.json.gz",
 			data: testHelper{
 				headSlot:            130,
 				submissionTimestamp: 1606825595,

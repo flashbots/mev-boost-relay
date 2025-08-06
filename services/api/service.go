@@ -2214,7 +2214,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		if contentType == common.ApplicationOctetStream {
 			slot, err := getSlotFromBuilderSSZPayload(requestPayloadBytes)
 			if err != nil {
-				log.WithError(err).Warn("could not get slot from builder json payload")
+				log.WithError(err).Warn("could not get slot from builder ssz payload")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
 			}
@@ -2222,7 +2222,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		} else {
 			slot, err := getSlotFromBuilderJSONPayload(requestPayloadBytes)
 			if err != nil {
-				log.WithError(err).Warn("could not get slot from builder ssz payload")
+				log.WithError(err).Warn("could not get slot from builder json payload")
 				api.RespondError(w, http.StatusBadRequest, err.Error())
 				return
 			}

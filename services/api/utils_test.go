@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -70,7 +69,7 @@ func TestGetSlotFromBuilderJSONPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			jsonPayload := common.LoadGzippedBytes(t, fmt.Sprintf("./../../testdata/%s", tc.fileName))
+			jsonPayload := common.LoadGzippedBytes(t, "./../../testdata/"+tc.fileName)
 
 			// get the slot from the payload
 			slot, err := getSlotFromBuilderJSONPayload(jsonPayload)
@@ -111,7 +110,7 @@ func TestGetSlotFromBuilderSSZPayload(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Load the SSZ payload
-			sszPayload := common.LoadGzippedBytes(t, fmt.Sprintf("./../../testdata/%s", tc.fileName))
+			sszPayload := common.LoadGzippedBytes(t, "./../../testdata/"+tc.fileName)
 
 			// get the slot from the payload
 			slot, err := getSlotFromBuilderSSZPayload(sszPayload)
