@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -30,6 +31,82 @@ func TestGetHeaderContentType(t *testing.T) {
 			contentType, _, err := getHeaderContentType(tc.header)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, contentType)
+		})
+	}
+}
+
+func TestGetSlotFromBuilderJSONPayload(t *testing.T) {
+	testCases := []struct {
+		name         string
+		fileName     string
+		expectedSlot uint64
+	}{
+		{
+			name:         "submitBlockPayload",
+			fileName:     "submitBlockPayload.json.gz",
+			expectedSlot: 123,
+		},
+		{
+			name:         "submitBlockPayloadCapella_Goerli_gzipped",
+			fileName:     "submitBlockPayloadCapella_Goerli.json.gz",
+			expectedSlot: 5552306,
+		},
+		{
+			name:         "submitBlockPayloadDeneb_Goerli",
+			fileName:     "submitBlockPayloadDeneb_Goerli.json.gz",
+			expectedSlot: 7433483,
+		},
+		{
+			name:         "submitBlockPayloadElectra",
+			fileName:     "submitBlockPayloadElectra.json.gz",
+			expectedSlot: 58,
+		},
+		{
+			name:         "submitBlockPayloadFulu",
+			fileName:     "submitBlockPayloadFulu.json.gz",
+			expectedSlot: 130,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jsonPayload := common.LoadGzippedBytes(t, fmt.Sprintf("./../../testdata/%s", tc.fileName))
+
+			// get the slot from the payload
+			slot, err := getSlotFromBuilderJSONPayload(jsonPayload)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedSlot, slot)
+		})
+	}
+}
+
+func TestGetSlotFromBuilderSSZPayload(t *testing.T) {
+	testCases := []struct {
+		name         string
+		fileName     string
+		expectedSlot uint64
+	}{
+		{
+			name:         "submitBlockPayloadCapella_Goerli_ssz",
+			fileName:     "submitBlockPayloadCapella_Goerli.ssz.gz",
+			expectedSlot: 5552306,
+		},
+		{
+			name:         "submitBlockPayloadDeneb_Goerli_ssz",
+			fileName:     "submitBlockPayloadDeneb_Goerli.ssz.gz",
+			expectedSlot: 7433483,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Load the SSZ payload
+			sszPayload := common.LoadGzippedBytes(t, fmt.Sprintf("./../../testdata/%s", tc.fileName))
+
+			// get the slot from the payload
+			slot, err := getSlotFromBuilderSSZPayload(sszPayload)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedSlot, slot)
 		})
 	}
 }
