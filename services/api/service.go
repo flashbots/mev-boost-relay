@@ -1461,15 +1461,10 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	if api.isFulu(uint64(slot)) && payload.Fulu == nil {
-		log.Warn("Not a fulu payload.")
-		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
-		return
-	}
-
-	if api.isElectra(uint64(slot)) && payload.Electra == nil {
-		log.Warn("Not an electra payload.")
-		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
+	err = api.checkPayloadAndHeaderVersion(payload, uint64(slot), proposerEthConsensusVersion)
+	if err != nil {
+		log.WithError(err).Warn("error checking payload and header version")
+		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("error checking payload and header version: %s", err.Error()))
 		return
 	}
 
@@ -1819,6 +1814,51 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		})
 	}
 	log.Info("execution payload delivered")
+}
+
+func (api *RelayAPI) checkPayloadAndHeaderVersion(payload *common.VersionedSignedBlindedBeaconBlock, slot uint64, proposerEthConsensusVersion string) error {
+	switch api.getForkFromSlot(slot) {
+	case spec.DataVersionFulu:
+		if proposerEthConsensusVersion != common.EthConsensusVersionFulu {
+			return errors.Errorf("Fulu payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionFulu, proposerEthConsensusVersion)
+		}
+		if payload.Fulu == nil {
+			return errors.New("Non-Fulu payload detected and rejected. You need to update mev-boost!")
+		}
+
+	case spec.DataVersionElectra:
+		if proposerEthConsensusVersion != common.EthConsensusVersionElectra {
+			return errors.Errorf("Electra payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionElectra, proposerEthConsensusVersion)
+		}
+		if payload.Electra == nil {
+			return errors.New("Non-Electra payload detected and rejected. You need to update mev-boost!")
+		}
+
+	case spec.DataVersionDeneb:
+		if proposerEthConsensusVersion != common.EthConsensusVersionDeneb {
+			return errors.Errorf("Deneb payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionDeneb, proposerEthConsensusVersion)
+		}
+		if payload.Deneb == nil {
+			return errors.New("Non-Deneb payload detected and rejected. You need to update mev-boost!")
+		}
+
+	case spec.DataVersionCapella:
+		if proposerEthConsensusVersion != common.EthConsensusVersionCapella {
+			return errors.Errorf("Capella payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionCapella, proposerEthConsensusVersion)
+		}
+		if payload.Capella == nil {
+			return errors.New("Non-Capella payload detected and rejected. You need to update mev-boost!")
+		}
+
+	case spec.DataVersionBellatrix:
+		if proposerEthConsensusVersion != common.EthConsensusVersionBellatrix {
+			return errors.Errorf("Bellatrix payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionBellatrix, proposerEthConsensusVersion)
+		}
+		if payload.Bellatrix == nil {
+			return errors.New("Non-Bellatrix payload detected and rejected. You need to update mev-boost!")
+		}
+	}
+	return nil
 }
 
 // respondGetPayloadSSZ responds to the proposer in SSZ
