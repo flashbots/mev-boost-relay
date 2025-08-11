@@ -1464,7 +1464,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	err = api.checkPayloadAndHeaderVersion(payload, uint64(slot), proposerEthConsensusVersion)
 	if err != nil {
 		log.WithError(err).Warn("error checking payload and header version")
-		api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("error checking payload and header version: %s", err.Error()))
+		api.RespondError(w, http.StatusBadRequest, errors.Wrap(err, "error checking payload and header version").Error())
 		return
 	}
 
