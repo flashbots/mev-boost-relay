@@ -1472,7 +1472,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
 		return
 	}
-	
+
 	// Take time after the decoding, and add to logging
 	decodeTime := time.Now().UTC()
 	blockHash, err := payload.ExecutionBlockHash()
