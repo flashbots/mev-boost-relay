@@ -1454,27 +1454,27 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
 		return
 	}
-
-	if api.isElectra(headSlot) && payload.Electra == nil {
-		log.Warn("Not an electra payload.")
-		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
-		return
-	}
-
-	if api.isFulu(headSlot) && payload.Fulu == nil {
-		log.Warn("Not a fulu payload.")
-		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
-		return
-	}
-
-	// Take time after the decoding, and add to logging
-	decodeTime := time.Now().UTC()
 	slot, err := payload.Slot()
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload slot")
 		api.RespondError(w, http.StatusBadRequest, "failed to get payload slot")
 		return
 	}
+
+	if api.isFulu(uint64(slot)) && payload.Fulu == nil {
+		log.Warn("Not a fulu payload.")
+		api.RespondError(w, http.StatusBadRequest, "Non-Fulu payload detected and rejected. You need to update mev-boost!")
+		return
+	}
+
+	if api.isElectra(uint64(slot)) && payload.Electra == nil {
+		log.Warn("Not an electra payload.")
+		api.RespondError(w, http.StatusBadRequest, "Non-Electra payload detected and rejected. You need to update mev-boost!")
+		return
+	}
+	
+	// Take time after the decoding, and add to logging
+	decodeTime := time.Now().UTC()
 	blockHash, err := payload.ExecutionBlockHash()
 	if err != nil {
 		log.WithError(err).Warn("failed to get payload block hash")
