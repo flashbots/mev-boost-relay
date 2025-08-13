@@ -1404,7 +1404,8 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	log := api.log.WithFields(logrus.Fields{
-		"method":                      fmt.Sprintf("getPayload%s", version),
+		"method":                      "getPayload",
+		"version":                     version,
 		"ua":                          ua,
 		"mevBoostV":                   common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":               req.ContentLength,
