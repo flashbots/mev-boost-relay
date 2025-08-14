@@ -1818,7 +1818,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 }
 
 func (api *RelayAPI) checkPayloadAndHeaderVersion(payload *common.VersionedSignedBlindedBeaconBlock, slot uint64, proposerEthConsensusVersion string) error {
-	switch api.getForkFromSlot(slot) {
+	switch api.getForkFromSlot(slot) { //nolint:exhaustive
 	case spec.DataVersionFulu:
 		if proposerEthConsensusVersion != common.EthConsensusVersionFulu {
 			return errors.Errorf("Fulu payload with wrong consensus version. Expected: %s, Got: %s", common.EthConsensusVersionFulu, proposerEthConsensusVersion)
@@ -1858,6 +1858,8 @@ func (api *RelayAPI) checkPayloadAndHeaderVersion(payload *common.VersionedSigne
 		if payload.Bellatrix == nil {
 			return errors.New("Non-Bellatrix payload detected and rejected. You need to update mev-boost!")
 		}
+	case spec.DataVersionUnknown:
+		return errors.New("unknown payload version")
 	}
 	return nil
 }
@@ -2165,7 +2167,7 @@ func (api *RelayAPI) getForkFromSlot(slot uint64) spec.DataVersion {
 	case api.isCapella(slot):
 		return spec.DataVersionCapella
 	default:
-		return spec.DataVersionBellatrix
+		return spec.DataVersionUnknown
 	}
 }
 
