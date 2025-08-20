@@ -12,7 +12,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.10
-	github.com/flashbots/go-boost-utils v1.9.0
+	github.com/flashbots/go-boost-utils v1.9.1-0.20250819134059-e5294cb450c9
 	github.com/flashbots/go-utils v0.11.0
 	github.com/goccy/go-json v0.10.4
 	github.com/gorilla/mux v1.8.1
@@ -119,5 +119,3 @@ retract (
 )
 
 replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0
-
-replace github.com/flashbots/go-boost-utils => github.com/bharath-123/go-boost-utils v0.0.0-20250627053347-04dc115155ae
