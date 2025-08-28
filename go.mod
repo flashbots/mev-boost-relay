@@ -118,4 +118,4 @@ retract (
 	v1.0.0-alpha1
 )
 
-replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250626135301-b3bfa7d447a0
+replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250828153109-4ed681eac0ec
