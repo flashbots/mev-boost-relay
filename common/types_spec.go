@@ -16,6 +16,7 @@ import (
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	eth2ApiV1Electra "github.com/attestantio/go-eth2-client/api/v1/electra"
+	eth2ApiV1Fulu "github.com/attestantio/go-eth2-client/api/v1/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -369,8 +370,8 @@ func ElectraUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaco
 	}
 }
 
-func FuluUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiFulu.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Electra.SignedBlockContents {
-	return &eth2ApiV1Electra.SignedBlockContents{
+func FuluUnblindSignedBlock(blindedBlock *eth2ApiV1Electra.SignedBlindedBeaconBlock, blockPayload *builderApiFulu.ExecutionPayloadAndBlobsBundle) *eth2ApiV1Fulu.SignedBlockContents {
+	return &eth2ApiV1Fulu.SignedBlockContents{
 		SignedBlock: &electra.SignedBeaconBlock{
 			Message: &electra.BeaconBlock{
 				Slot:          blindedBlock.Message.Slot,
@@ -690,7 +691,7 @@ func (r *VersionedSignedProposal) MarshalSSZ() ([]byte, error) {
 func (r *VersionedSignedProposal) UnmarshalSSZ(input []byte) error {
 	var err error
 	// The SignedBlockContents type for fulu is the same as that of electra
-	fuluRequest := new(eth2ApiV1Electra.SignedBlockContents)
+	fuluRequest := new(eth2ApiV1Fulu.SignedBlockContents)
 	if err = fuluRequest.UnmarshalSSZ(input); err == nil {
 		r.Version = spec.DataVersionFulu
 		r.Fulu = fuluRequest
@@ -735,7 +736,7 @@ func (r *VersionedSignedProposal) MarshalJSON() ([]byte, error) {
 func (r *VersionedSignedProposal) UnmarshalJSON(input []byte) error {
 	var err error
 	// The SignedBlockContents type for fulu is the same as that of electra
-	fuluContents := new(eth2ApiV1Electra.SignedBlockContents)
+	fuluContents := new(eth2ApiV1Fulu.SignedBlockContents)
 	if err = json.Unmarshal(input, fuluContents); err == nil {
 		r.Version = spec.DataVersionFulu
 		r.Fulu = fuluContents

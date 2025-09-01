@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/aohorodnyk/mimeheader v0.0.6
 	github.com/attestantio/go-builder-client v0.6.2
-	github.com/attestantio/go-eth2-client v0.25.1-0.20250603135601-6ac0bfda7fda
+	github.com/attestantio/go-eth2-client v0.26.1-0.20250829122455-ff89a2135a43
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
@@ -118,4 +118,4 @@ retract (
 	v1.0.0-alpha1
 )
 
-replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250828153109-4ed681eac0ec
+replace github.com/attestantio/go-builder-client => github.com/bharath-123/go-builder-client v0.0.0-20250901044045-53612cd2535c
