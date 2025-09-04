@@ -68,10 +68,17 @@ var (
 	ElectraForkVersionHoodi   = "0x60000910"
 	ElectraForkVersionMainnet = "0x05000000"
 
+	FuluForkVersionHolesky = "0x07017000"
+	FuluForkVersionSepolia = "0x90000075"
+	FuluForkVersionGoerli  = "0x06001020"
+	FuluForkVersionHoodi   = "0x70000910"
+	FuluForkVersionMainnet = "0x06000000"
+
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
 	ForkVersionStringDeneb     = "deneb"
 	ForkVersionStringElectra   = "electra"
+	ForkVersionStringFulu      = "fulu"
 )
 
 type EthNetworkDetails struct {
@@ -82,12 +89,14 @@ type EthNetworkDetails struct {
 	CapellaForkVersionHex    string
 	DenebForkVersionHex      string
 	ElectraForkVersionHex    string
+	FuluForkVersionHex       string
 
 	DomainBuilder                 phase0.Domain
 	DomainBeaconProposerBellatrix phase0.Domain
 	DomainBeaconProposerCapella   phase0.Domain
 	DomainBeaconProposerDeneb     phase0.Domain
 	DomainBeaconProposerElectra   phase0.Domain
+	DomainBeaconProposerFulu      phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -97,11 +106,13 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var capellaForkVersion string
 	var denebForkVersion string
 	var electraForkVersion string
+	var fuluForkVersion string
 	var domainBuilder phase0.Domain
 	var domainBeaconProposerBellatrix phase0.Domain
 	var domainBeaconProposerCapella phase0.Domain
 	var domainBeaconProposerDeneb phase0.Domain
 	var domainBeaconProposerElectra phase0.Domain
+	var domainBeaconProposerFulu phase0.Domain
 
 	switch networkName {
 	case EthNetworkHolesky:
@@ -111,6 +122,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionHolesky
 		denebForkVersion = DenebForkVersionHolesky
 		electraForkVersion = ElectraForkVersionHolesky
+		fuluForkVersion = FuluForkVersionHolesky
 	case EthNetworkSepolia:
 		genesisForkVersion = GenesisForkVersionSepolia
 		genesisValidatorsRoot = GenesisValidatorsRootSepolia
@@ -118,6 +130,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionSepolia
 		denebForkVersion = DenebForkVersionSepolia
 		electraForkVersion = ElectraForkVersionSepolia
+		fuluForkVersion = FuluForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = GenesisForkVersionGoerli
 		genesisValidatorsRoot = GenesisValidatorsRootGoerli
@@ -125,6 +138,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionGoerli
 		denebForkVersion = DenebForkVersionGoerli
 		electraForkVersion = ElectraForkVersionGoerli
+		fuluForkVersion = FuluForkVersionGoerli
 	case EthNetworkHoodi:
 		genesisForkVersion = GenesisForkVersionHoodi
 		genesisValidatorsRoot = GenesisValidatorsRootHoodi
@@ -132,6 +146,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionHoodi
 		denebForkVersion = DenebForkVersionHoodi
 		electraForkVersion = ElectraForkVersionHoodi
+		fuluForkVersion = FuluForkVersionHoodi
 	case EthNetworkMainnet:
 		genesisForkVersion = GenesisForkVersionMainnet
 		genesisValidatorsRoot = GenesisValidatorsRootMainnet
@@ -139,6 +154,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionMainnet
 		denebForkVersion = DenebForkVersionMainnet
 		electraForkVersion = ElectraForkVersionMainnet
+		fuluForkVersion = FuluForkVersionMainnet
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
@@ -146,6 +162,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
 		denebForkVersion = os.Getenv("DENEB_FORK_VERSION")
 		electraForkVersion = os.Getenv("ELECTRA_FORK_VERSION")
+		fuluForkVersion = os.Getenv("FULU_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
@@ -175,6 +192,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBeaconProposerFulu, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, fuluForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
@@ -183,11 +205,13 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		CapellaForkVersionHex:         capellaForkVersion,
 		DenebForkVersionHex:           denebForkVersion,
 		ElectraForkVersionHex:         electraForkVersion,
+		FuluForkVersionHex:            fuluForkVersion,
 		DomainBuilder:                 domainBuilder,
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
 		DomainBeaconProposerElectra:   domainBeaconProposerElectra,
+		DomainBeaconProposerFulu:      domainBeaconProposerFulu,
 	}, nil
 }
 
@@ -206,6 +230,7 @@ func (e *EthNetworkDetails) String() string {
 	DomainBeaconProposerCapella: %x,
 	DomainBeaconProposerDeneb: %x
 	DomainBeaconProposerElectra: %x
+	DomainBeaconProposerFulu: %x
 }`,
 		e.Name,
 		e.GenesisForkVersionHex,
@@ -218,7 +243,8 @@ func (e *EthNetworkDetails) String() string {
 		e.DomainBeaconProposerBellatrix,
 		e.DomainBeaconProposerCapella,
 		e.DomainBeaconProposerDeneb,
-		e.DomainBeaconProposerElectra)
+		e.DomainBeaconProposerElectra,
+		e.DomainBeaconProposerFulu)
 }
 
 // PubkeyHex represents a hex-encoded public key.

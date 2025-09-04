@@ -11,6 +11,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -87,6 +88,7 @@ type RedisCache struct {
 	prefixExecPayloadCapella          string
 	prefixPayloadContentsDeneb        string
 	prefixPayloadContentsElectra      string
+	prefixPayloadContentsFulu         string
 	prefixBidTrace                    string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
@@ -128,6 +130,7 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		prefixExecPayloadCapella:     fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
 		prefixPayloadContentsDeneb:   fmt.Sprintf("%s/%s:cache-payloadcontents-deneb", redisPrefix, prefix),
 		prefixPayloadContentsElectra: fmt.Sprintf("%s/%s:cache-payloadcontents-electra", redisPrefix, prefix),
+		prefixPayloadContentsFulu:    fmt.Sprintf("%s/%s:cache-payloadcontents-fulu", redisPrefix, prefix),
 		prefixBidTrace:               fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -162,6 +165,10 @@ func (r *RedisCache) keyPayloadContentsDeneb(slot uint64, proposerPubkey, blockH
 
 func (r *RedisCache) keyPayloadContentsElectra(slot uint64, proposerPubkey, blockHash string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixPayloadContentsElectra, slot, proposerPubkey, blockHash)
+}
+
+func (r *RedisCache) keyPayloadContentsFulu(slot uint64, proposerPubkey, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixPayloadContentsFulu, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash string) string {
@@ -369,14 +376,46 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 }
 
 func (r *RedisCache) GetPayloadContents(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
-	resp, err := r.GetPayloadContentsElectra(slot, proposerPubkey, blockHash)
+	resp, err := r.GetPayloadContentsFulu(slot, proposerPubkey, blockHash)
 	if errors.Is(err, redis.Nil) {
-		resp, err = r.GetPayloadContentsDeneb(slot, proposerPubkey, blockHash)
+		resp, err = r.GetPayloadContentsElectra(slot, proposerPubkey, blockHash)
 		if errors.Is(err, redis.Nil) {
-			return r.GetExecutionPayloadCapella(slot, proposerPubkey, blockHash)
+			resp, err = r.GetPayloadContentsDeneb(slot, proposerPubkey, blockHash)
+			if errors.Is(err, redis.Nil) {
+				return r.GetExecutionPayloadCapella(slot, proposerPubkey, blockHash)
+			}
 		}
 	}
 	return resp, err
+}
+
+func (r *RedisCache) SavePayloadContentsFulu(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiFulu.ExecutionPayloadAndBlobsBundle) (err error) {
+	key := r.keyPayloadContentsFulu(slot, proposerPubkey, blockHash)
+	b, err := execPayload.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	return tx.Set(ctx, key, b, expiryBidCache).Err()
+}
+
+func (r *RedisCache) GetPayloadContentsFulu(slot uint64, proposerPubkey, blockHash string) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
+	fuluPayloadContents := new(builderApiFulu.ExecutionPayloadAndBlobsBundle)
+
+	key := r.keyPayloadContentsFulu(slot, proposerPubkey, blockHash)
+	val, err := r.client.Get(context.Background(), key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	err = fuluPayloadContents.UnmarshalSSZ([]byte(val))
+	if err != nil {
+		return nil, err
+	}
+
+	return &builderApi.VersionedSubmitBlindedBlockResponse{
+		Version: spec.DataVersionFulu,
+		Fulu:    fuluPayloadContents,
+	}, nil
 }
 
 func (r *RedisCache) SavePayloadContentsElectra(ctx context.Context, tx redis.Pipeliner, slot uint64, proposerPubkey, blockHash string, execPayload *builderApiDeneb.ExecutionPayloadAndBlobsBundle) (err error) {
@@ -598,6 +637,11 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 		}
 	case spec.DataVersionElectra:
 		err = r.SavePayloadContentsElectra(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Electra)
+		if err != nil {
+			return state, err
+		}
+	case spec.DataVersionFulu:
+		err = r.SavePayloadContentsFulu(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), getPayloadResponse.Fulu)
 		if err != nil {
 			return state, err
 		}

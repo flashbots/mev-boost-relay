@@ -6,13 +6,13 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/aohorodnyk/mimeheader v0.0.6
-	github.com/attestantio/go-builder-client v0.6.2
-	github.com/attestantio/go-eth2-client v0.25.0
+	github.com/attestantio/go-builder-client v0.6.5-0.20250901141559-94d1ecfeeb53
+	github.com/attestantio/go-eth2-client v0.26.1-0.20250829122455-ff89a2135a43
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.15.10
-	github.com/flashbots/go-boost-utils v1.9.0
+	github.com/flashbots/go-boost-utils v1.9.1-0.20250819134059-e5294cb450c9
 	github.com/flashbots/go-utils v0.11.0
 	github.com/goccy/go-json v0.10.4
 	github.com/gorilla/mux v1.8.1
@@ -27,6 +27,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify v2.3.6+incompatible
+	github.com/tidwall/gjson v1.18.0
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.56.0
 	go.opentelemetry.io/otel/metric v1.34.0
@@ -65,6 +66,8 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/supranational/blst v0.3.14 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect

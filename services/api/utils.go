@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/binary"
 	"fmt"
 	"mime"
 	"net/http"
@@ -14,6 +15,13 @@ import (
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
+)
+
+var (
+	ErrSlotNotFound                    = errors.New("slot not found in payload")
+	ErrPayloadTooShortForMessageOffset = errors.New("payload too short to contain message offset")
+	ErrPayloadTooShortForSlot          = errors.New("payload too short to contain slot at message offset")
 )
 
 var (
@@ -145,6 +153,39 @@ func EqBlindedBlockContentsToBlockContents(bb *common.VersionedSignedBlindedBeac
 				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
 			}
 		}
+
+	case spec.DataVersionFulu:
+		block := bb.Fulu.Message
+		bbHeaderHtr, err := block.Body.ExecutionPayloadHeader.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		versionedPayload.Fulu = payload.Fulu.ExecutionPayload
+		payloadHeader, err := utils.PayloadToPayloadHeader(versionedPayload)
+		if err != nil {
+			return err
+		}
+
+		payloadHeaderHtr, err := payloadHeader.Fulu.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		if bbHeaderHtr != payloadHeaderHtr {
+			return ErrHeaderHTRMismatch
+		}
+
+		if len(bb.Fulu.Message.Body.BlobKZGCommitments) != len(payload.Fulu.BlobsBundle.Commitments) {
+			return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+		}
+
+		for i, commitment := range bb.Fulu.Message.Body.BlobKZGCommitments {
+			if commitment != payload.Fulu.BlobsBundle.Commitments[i] {
+				return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+			}
+		}
+
 	default:
 		return ErrUnsupportedPayload
 	}
@@ -202,4 +243,27 @@ func getHeaderContentType(header http.Header) (mediatype string, params map[stri
 	}
 
 	return contentType, params, nil
+}
+
+func getSlotFromBuilderJSONPayload(input []byte) (uint64, error) {
+	slot := gjson.Get(string(input), "message.slot")
+	if !slot.Exists() {
+		return 0, ErrSlotNotFound
+	}
+	return slot.Uint(), nil
+}
+
+func getSlotFromBuilderSSZPayload(input []byte) (uint64, error) {
+	if len(input) < 8 {
+		return 0, ErrPayloadTooShortForMessageOffset
+	}
+
+	messageOffset := binary.LittleEndian.Uint32(input[4:8])
+
+	if int(messageOffset+8) > len(input) {
+		return 0, errors.Wrapf(ErrPayloadTooShortForSlot, "offset %d", messageOffset)
+	}
+	slot := binary.LittleEndian.Uint64(input[messageOffset : messageOffset+8])
+
+	return slot, nil
 }

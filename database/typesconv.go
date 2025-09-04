@@ -5,6 +5,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
@@ -43,6 +44,15 @@ func PayloadToExecPayloadEntry(payload *common.VersionedSubmitBlockRequest) (*Ex
 			return nil, err
 		}
 		version = common.ForkVersionStringElectra
+	case spec.DataVersionFulu:
+		_payload, err = json.Marshal(builderApiFulu.ExecutionPayloadAndBlobsBundle{
+			ExecutionPayload: payload.Fulu.ExecutionPayload,
+			BlobsBundle:      payload.Fulu.BlobsBundle,
+		})
+		if err != nil {
+			return nil, err
+		}
+		version = common.ForkVersionStringFulu
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
 		return nil, ErrUnsupportedExecutionPayload
 	}
@@ -106,6 +116,18 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 
 func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *builderApi.VersionedSubmitBlindedBlockResponse, err error) {
 	payloadVersion := executionPayloadEntry.Version
+	if payloadVersion == common.ForkVersionStringFulu {
+		executionPayload := new(builderApiFulu.ExecutionPayloadAndBlobsBundle)
+		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
+		if err != nil {
+			return nil, err
+		}
+
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionFulu,
+			Fulu:    executionPayload,
+		}, nil
+	}
 	if payloadVersion == common.ForkVersionStringElectra {
 		executionPayload := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)

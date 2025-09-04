@@ -15,6 +15,7 @@ import (
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,9 @@ var (
 	ErrIncorrectLength            = errors.New("incorrect length")
 	ErrMissingEthConsensusVersion = errors.New("missing eth-consensus-version")
 	ErrInvalidContentType         = errors.New("invalid content type")
+
+	ApplicationJSON        = "application/json"
+	ApplicationOctetStream = "application/octet-stream"
 )
 
 // SlotPos returns the slot's position in the epoch (1-based, i.e. 1..32)
@@ -55,7 +59,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 		return nil, err
 	}
 
-	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Content-Type", ApplicationJSON)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -294,6 +298,14 @@ func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest)
 			Electra: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
 				ExecutionPayload: submission.Electra.ExecutionPayload,
 				BlobsBundle:      submission.Electra.BlobsBundle,
+			},
+		}, nil
+	case spec.DataVersionFulu:
+		return &builderApi.VersionedSubmitBlindedBlockResponse{
+			Version: spec.DataVersionFulu,
+			Fulu: &builderApiFulu.ExecutionPayloadAndBlobsBundle{
+				ExecutionPayload: submission.Fulu.ExecutionPayload,
+				BlobsBundle:      submission.Fulu.BlobsBundle,
 			},
 		}, nil
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:

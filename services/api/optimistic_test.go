@@ -137,7 +137,9 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 	}
 
 	req := common.TestBuilderSubmitBlockRequest(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue, opts.slot), opts.version)
-	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req)
+	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req, &http.Header{
+		"Content-Type": []string{common.ApplicationJSON},
+	})
 
 	// Let updates happen async.
 	time.Sleep(100 * time.Millisecond)
@@ -329,6 +331,22 @@ func TestDemoteBuilder(t *testing.T) {
 			},
 			version: spec.DataVersionDeneb,
 		},
+		{
+			description: "electra",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: false,
+				IsHighPrio:   true,
+			},
+			version: spec.DataVersionElectra,
+		},
+		{
+			description: "fulu",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: false,
+				IsHighPrio:   true,
+			},
+			version: spec.DataVersionFulu,
+		},
 	}
 
 	for _, tc := range cases {
@@ -464,6 +482,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.proposerDutiesMap[tc.slot] = backend.relay.proposerDutiesMap[slot]
 
 			randaoHash, err := utils.HexToHash(randao)
@@ -514,10 +533,10 @@ func TestInternalBuilderStatus(t *testing.T) {
 
 	setAndGetStatus := func(arg string, expected common.BuilderStatus) {
 		// Set & Get.
-		rr := backend.request(http.MethodPost, path+arg, nil)
+		rr := backend.request(http.MethodPost, path+arg, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 
-		rr = backend.request(http.MethodGet, path, nil)
+		rr = backend.request(http.MethodGet, path, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 		resp := &database.BlockBuilderEntry{}
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -537,10 +556,10 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	path := "/internal/v1/builder/collateral/" + pubkey.String()
 
 	// Set & Get.
-	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil)
+	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil)
+	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := &database.BlockBuilderEntry{}
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)
