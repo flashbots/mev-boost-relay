@@ -192,4 +192,15 @@ func BenchmarkDecoding(b *testing.B) {
 			require.NoError(b, err)
 		}
 	})
+
+	jsonBytes, err = os.ReadFile("../testdata/getHeaderResponseElectra_Goerli.json")
+	require.NoError(b, err)
+
+	payload = new(builderSpec.VersionedSignedBuilderBid)
+	b.Run("electra json", func(b *testing.B) {
+		for range b.N {
+			err = json.Unmarshal(jsonBytes, &payload)
+			require.NoError(b, err)
+		}
+	})
 }
