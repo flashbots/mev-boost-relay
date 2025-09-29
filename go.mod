@@ -19,6 +19,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
+	github.com/pk910/dynamic-ssz v0.0.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.0
 	github.com/r3labs/sse/v2 v2.10.0
@@ -73,6 +74,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
+	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
