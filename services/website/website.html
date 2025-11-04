@@ -233,6 +233,7 @@
             <table class="pure-table pure-table-horizontal" style="width:100%;">
                 <thead>
                     <tr>
+                        <th style="text-align: right;">Time</th>
                         <th>Epoch</th>
                         <th>Slot</th>
                         <th>Block number</th>
@@ -257,6 +258,9 @@
                     {{$linkDataAPI := .LinkDataAPI}}
                     {{ range .Payloads }}
                     <tr>
+                        <td style="text-align: right;">
+                            <span title="{{.InsertedAt | formatUTC}}">{{.InsertedAt | relativeTime}}</span>
+                        </td>
                         <td>{{.Epoch | prettyInt}}</td>
                         <td>
                             <a href="{{$linkDataAPI}}/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot | prettyInt}}</a>
