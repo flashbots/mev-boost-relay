@@ -18,10 +18,10 @@ services:
       - '11211:11211'
 
   db:
-    image: postgres
+    image: postgres:18
     restart: always
     volumes:
-      - 'psql_data:/var/lib/postgresql/data'
+      - 'psql_data:/var/lib/postgresql'
     ports:
       - '5432:5432'
     environment:
