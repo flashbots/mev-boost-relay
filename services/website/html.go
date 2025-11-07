@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"math/big"
 	"text/template"
+	"time"
 
 	"github.com/flashbots/mev-boost-relay/database"
 	"golang.org/x/text/cases"
@@ -67,10 +68,39 @@ func caseIt(s string) string {
 	return caser.String(s)
 }
 
+func relativeTime(t time.Time) string {
+	diff := time.Since(t)
+	if diff < 0 {
+		// should be unreachable, but just in case
+		return diff.String()
+	}
+
+	seconds := int(diff.Seconds())
+	minutes := int(diff.Minutes())
+	hours := int(diff.Hours())
+	days := hours / 24
+
+	if seconds < 60 {
+		return printer.Sprintf("%ds ago", seconds)
+	} else if minutes < 60 {
+		return printer.Sprintf("%dm ago", minutes)
+	} else if hours < 24 {
+		return printer.Sprintf("%dh ago", hours)
+	} else {
+		return printer.Sprintf("%dd ago", days)
+	}
+}
+
+func formatUTC(t time.Time) string {
+	return t.UTC().Format("2006-01-02 15:04:05 UTC")
+}
+
 var funcMap = template.FuncMap{
-	"weiToEth":  weiToEth,
-	"prettyInt": prettyInt,
-	"caseIt":    caseIt,
+	"weiToEth":     weiToEth,
+	"prettyInt":    prettyInt,
+	"caseIt":       caseIt,
+	"relativeTime": relativeTime,
+	"formatUTC":    formatUTC,
 }
 
 //go:embed website.html
