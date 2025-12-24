@@ -375,7 +375,7 @@ func TestPrepareBuildersForSlot(t *testing.T) {
 	pkStr := pubkey.String()
 	// Clear cache.
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{}
-	backend.relay.prepareBuildersForSlot(slot + 1)
+	backend.relay.prepareBuildersForSlot(slot+1, slot)
 	entry, ok := backend.relay.blockBuildersCache[pkStr]
 	require.True(t, ok)
 	require.True(t, entry.status.IsHighPrio)

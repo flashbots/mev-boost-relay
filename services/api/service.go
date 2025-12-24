@@ -573,6 +573,7 @@ func (api *RelayAPI) IsReady() bool {
 // - Stop returning bids
 // - Set ready /readyz to negative status
 // - Wait a bit to allow removal of service from load balancer and draining of requests
+// - If in the middle of processing optimistic blocks, wait for those to finish and release redis lock
 func (api *RelayAPI) StopServer() (err error) {
 	// avoid running this twice. setting srvShutdown to true makes /readyz switch to negative status
 	if wasStopping := api.srvShutdown.Swap(true); wasStopping {
@@ -594,6 +595,13 @@ func (api *RelayAPI) StopServer() (err error) {
 
 	// wait for any active getPayload call to finish
 	api.getPayloadCallsInFlight.Wait()
+
+	// wait for optimistic blocks
+	api.optimisticBlocksWG.Wait()
+	err = api.redis.EndProcessingSlot(context.Background())
+	if err != nil {
+		api.log.WithError(err).Error("failed to update redis optimistic processing slot")
+	}
 
 	// shutdown
 	return api.srv.Shutdown(context.Background())
@@ -838,15 +846,19 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	// store the head slot
 	api.headSlot.Store(headSlot)
 
-	// only for builder-api
+	// for both apis
 	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {
 		// update proposer duties in the background
 		go api.updateProposerDuties(headSlot)
-
-		// update the optimistic slot
-		go api.prepareBuildersForSlot(headSlot)
 	}
 
+	// for block builder api
+	if api.opts.BlockBuilderAPI {
+		// update the optimistic slot
+		go api.prepareBuildersForSlot(headSlot, prevHeadSlot)
+	}
+
+	// for proposer api
 	if api.opts.ProposerAPI {
 		go api.datastore.RefreshKnownValidators(api.log, api.beaconClient, headSlot)
 	}
@@ -913,11 +925,32 @@ func (api *RelayAPI) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 	api.log.Infof("proposer duties updated: %s", strings.Join(_duties, ", "))
 }
 
-func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
-	// Wait until there are no optimistic blocks being processed. Then we can
-	// safely update the slot.
+func (api *RelayAPI) prepareBuildersForSlot(headSlot, prevHeadSlot uint64) {
+	// First wait for this process to finish processing optimistic blocks
 	api.optimisticBlocksWG.Wait()
+
+	// Now we release our lock and wait for all other builder processes to wrap up
+	err := api.redis.EndProcessingSlot(context.Background())
+	if err != nil {
+		api.log.WithError(err).Error("failed to unlock redis optimistic processing slot")
+	}
+	err = api.redis.WaitForSlotComplete(context.Background(), prevHeadSlot+1)
+	if err != nil {
+		api.log.WithError(err).Error("failed to get redis optimistic processing slot")
+	}
+
+	// Prevent race with StopServer, make sure we don't lock up redis if the server is shutting down
+	if api.srvShutdown.Load() {
+		return
+	}
+
+	// Update the optimistic slot and signal processing of the next slot
 	api.optimisticSlot.Store(headSlot + 1)
+	err = api.redis.BeginProcessingSlot(context.Background(), headSlot+1)
+	if err != nil {
+		api.log.WithError(err).Error("failed to lock redis optimistic processing slot")
+		api.optimisticSlot.Store(0)
+	}
 
 	builders, err := api.db.GetBlockBuilders()
 	if err != nil {
@@ -1570,8 +1603,11 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 			log.WithError(err).Error("failed to increment builder-stats after getPayload")
 		}
 
-		// Wait until optimistic blocks are complete.
-		api.optimisticBlocksWG.Wait()
+		// Wait until optimistic blocks are complete using the redis waitgroup
+		err = api.redis.WaitForSlotComplete(context.Background(), uint64(slot))
+		if err != nil {
+			api.log.WithError(err).Error("failed to get redis optimistic processing slot")
+		}
 
 		// Check if there is a demotion for the winning block.
 		_, err = api.db.GetBuilderDemotion(bidTrace)
