@@ -15,6 +15,7 @@ type InmemoryDB struct {
 
 	validatorRegistryEntriesLock sync.Mutex
 	validatorRegistryEntries     map[string]*ValidatorRegistrationEntry
+	validatorRegistrationRows    uint64
 
 	deliveredPayloadsLock sync.Mutex
 	deliveredPayloads     []*DeliveredPayloadEntry
@@ -35,14 +36,27 @@ func (i *InmemoryDB) NumRegisteredValidators() (count uint64, err error) {
 }
 
 func (i *InmemoryDB) NumValidatorRegistrationRows() (count uint64, err error) {
-	return uint64(len(i.validatorRegistryEntries)), nil
+	return i.validatorRegistrationRows, nil
 }
 
 func (i *InmemoryDB) SaveValidatorRegistration(entry ValidatorRegistrationEntry) error {
 	i.validatorRegistryEntriesLock.Lock()
 	defer i.validatorRegistryEntriesLock.Unlock()
 
-	i.validatorRegistryEntries[entry.Pubkey] = &entry
+	existing, exists := i.validatorRegistryEntries[entry.Pubkey]
+
+	// Only insert if:
+	// 1. No existing entry, OR
+	// 2. New entry has newer timestamp, AND
+	// 3. Fee recipient or gas limit has changed
+	shouldInsert := !exists ||
+		(entry.Timestamp > existing.Timestamp &&
+			(entry.FeeRecipient != existing.FeeRecipient || entry.GasLimit != existing.GasLimit))
+
+	if shouldInsert {
+		i.validatorRegistrationRows++
+		i.validatorRegistryEntries[entry.Pubkey] = &entry
+	}
 	return nil
 }
 
