@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -90,13 +91,6 @@ var apiCmd = &cobra.Command{
 		}
 		log.Infof("boost-relay %s", Version)
 
-		networkInfo, err := common.NewEthNetworkDetails(network)
-		if err != nil {
-			log.WithError(err).Fatalf("error getting network details")
-		}
-		log.Infof("Using network: %s", networkInfo.Name)
-		log.Debug(networkInfo.String())
-
 		// Connect to beacon clients and ensure it's synced
 		if len(beaconNodeURIs) == 0 {
 			log.Fatalf("no beacon endpoints specified")
@@ -116,6 +110,19 @@ var apiCmd = &cobra.Command{
 			beaconInstances = append(beaconInstances, beaconclient.NewProdBeaconInstance(log, uri, beaconNodePublishURIs[i]))
 		}
 		beaconClient := beaconclient.NewMultiBeaconClient(log, beaconInstances)
+
+		if network == "" {
+			if err := loadSpecFromBeaconClient(beaconClient); err != nil {
+				log.WithError(err).Fatalf("error loading spec from beacon client")
+			}
+		}
+
+		networkInfo, err := common.NewEthNetworkDetails(network)
+		if err != nil {
+			log.WithError(err).Fatalf("error getting network details")
+		}
+		log.Infof("Using network: %s", networkInfo.Name)
+		log.Debug(networkInfo.String())
 
 		// Connect to Redis
 		if redisReadonlyURI == "" {
@@ -216,4 +223,35 @@ var apiCmd = &cobra.Command{
 		}
 		log.Info("bye")
 	},
+}
+
+// loadSpecFromBeaconClient fetches the chain spec and genesis data from the beacon client
+// and sets the corresponding environment variables for fork versions and genesis info.
+// This allows the relay to automatically configure network parameters without manual specification.
+func loadSpecFromBeaconClient(beaconClient *beaconclient.MultiBeaconClient) error {
+	spec, err := beaconClient.GetSpec()
+	if err != nil {
+		return err
+	}
+
+	genesis, err := beaconClient.GetGenesis()
+	if err != nil {
+		return err
+	}
+
+	envs := map[string]string{
+		"GENESIS_FORK_VERSION":    genesis.Data.GenesisForkVersion,
+		"GENESIS_VALIDATORS_ROOT": genesis.Data.GenesisValidatorsRoot,
+		"BELLATRIX_FORK_VERSION":  spec.BellatrixForkVersion,
+		"CAPELLA_FORK_VERSION":    spec.CapellaForkVersion,
+		"DENEB_FORK_VERSION":      spec.DenebForkVersion,
+		"ELECTRA_FORK_VERSION":    spec.ElectraForkVersion,
+		"FULU_FORK_VERSION":       spec.FuluForkVersion,
+	}
+	for k, v := range envs {
+		if err := os.Setenv(k, v); err != nil {
+			return fmt.Errorf("failed to set env var %s: %w", k, err)
+		}
+	}
+	return nil
 }
