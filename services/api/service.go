@@ -837,7 +837,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	// store the head slot
 	api.headSlot.Store(headSlot)
-	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot))
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {
@@ -1153,6 +1153,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	default:
 	}
 
+	metrics.RegisterValidatorLatencyHistogram.Record(req.Context(), float64(time.Since(start).Milliseconds()))
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
 }

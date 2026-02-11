@@ -34,6 +34,8 @@ var (
 	SubmitNewBlockRedisTopBidLatencyHistogram  otelapi.Float64Histogram
 	SubmitNewBlockRedisFloorLatencyHistogram   otelapi.Float64Histogram
 
+	RegisterValidatorLatencyHistogram otelapi.Float64Histogram
+
 	CurrentHeadSlotGauge otelapi.Int64Gauge
 
 	BuilderDemotionCount otelapi.Int64Counter
@@ -67,6 +69,7 @@ func Setup(ctx context.Context) error {
 		setupSubmitNewBlockRedisPayloadLatency,
 		setupSubmitNewBlockRedisTopBidLatency,
 		setupSubmitNewBlockRedisFloorLatency,
+		setupRegisterValidatorLatency,
 		setupCurrentHeadSlot,
 		setupBuilderDemotionCount,
 	} {
@@ -265,6 +268,20 @@ func setupSubmitNewBlockRedisFloorLatency(_ context.Context) error {
 		latencyBoundariesMs,
 	)
 	SubmitNewBlockRedisFloorLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupRegisterValidatorLatency(_ context.Context) error {
+	latency, err := meter.Float64Histogram(
+		"register_validator_latency",
+		otelapi.WithDescription("statistics on the duration of registerValidator requests execution"),
+		otelapi.WithUnit("ms"),
+		latencyBoundariesMs,
+	)
+	RegisterValidatorLatencyHistogram = latency
 	if err != nil {
 		return err
 	}

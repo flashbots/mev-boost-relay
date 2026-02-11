@@ -128,7 +128,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		return
 	}
 	hk.headSlot.Store(headSlot)
-	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot))
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	log := hk.log.WithFields(logrus.Fields{
 		"headSlot":     headSlot,
