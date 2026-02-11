@@ -19,9 +19,10 @@ const (
 var (
 	meter otelapi.Meter
 
-	GetHeaderLatencyHistogram    otelapi.Float64Histogram
-	GetPayloadLatencyHistogram   otelapi.Float64Histogram
-	PublishBlockLatencyHistogram otelapi.Float64Histogram
+	GetHeaderLatencyHistogram         otelapi.Float64Histogram
+	GetPayloadLatencyHistogram        otelapi.Float64Histogram
+	PublishBlockLatencyHistogram      otelapi.Float64Histogram
+	RegisterValidatorLatencyHistogram otelapi.Float64Histogram
 
 	SubmitNewBlockLatencyHistogram           otelapi.Float64Histogram
 	SubmitNewBlockReadLatencyHistogram       otelapi.Float64Histogram
@@ -34,9 +35,9 @@ var (
 	SubmitNewBlockRedisTopBidLatencyHistogram  otelapi.Float64Histogram
 	SubmitNewBlockRedisFloorLatencyHistogram   otelapi.Float64Histogram
 
-	RegisterValidatorLatencyHistogram otelapi.Float64Histogram
-
 	CurrentHeadSlotGauge otelapi.Int64Gauge
+
+	SubmitNewBlockCount otelapi.Int64Counter
 
 	BuilderDemotionCount otelapi.Int64Counter
 
@@ -70,6 +71,7 @@ func Setup(ctx context.Context) error {
 		setupSubmitNewBlockRedisTopBidLatency,
 		setupSubmitNewBlockRedisFloorLatency,
 		setupRegisterValidatorLatency,
+		setupSubmitNewBlockCount,
 		setupCurrentHeadSlot,
 		setupBuilderDemotionCount,
 	} {
@@ -282,6 +284,18 @@ func setupRegisterValidatorLatency(_ context.Context) error {
 		latencyBoundariesMs,
 	)
 	RegisterValidatorLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"submit_new_block_count",
+		otelapi.WithDescription("number of builder block submissions by status"),
+	)
+	SubmitNewBlockCount = counter
 	if err != nil {
 		return err
 	}
