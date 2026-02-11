@@ -837,6 +837,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	// store the head slot
 	api.headSlot.Store(headSlot)
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {
@@ -1152,6 +1153,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	default:
 	}
 
+	metrics.RegisterValidatorLatencyHistogram.Record(req.Context(), float64(time.Since(start).Milliseconds()))
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
 }
@@ -2178,6 +2180,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	prevTime = receivedAt
+	submissionSuccess := false
 
 	args := req.URL.Query()
 	isCancellationEnabled := args.Get("cancellations") == "1"
@@ -2199,7 +2202,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}).Info("request finished")
 
 		// metrics
-		api.saveBlockSubmissionMetrics(pf, receivedAt)
+		api.saveBlockSubmissionMetrics(pf, receivedAt, submissionSuccess)
 	}()
 
 	// If cancellations are disabled but builder requested it, return error
@@ -2591,10 +2594,19 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"profileRedisUs":     pf.RedisUpdate,
 		"profileTotalUs":     pf.Total,
 	}).Info("received block from builder")
+	submissionSuccess = true
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time) {
+func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time, success bool) {
+	status := "error"
+	if success {
+		status = "success"
+	}
+	metrics.SubmitNewBlockCount.Add(context.Background(), 1,
+		otelapi.WithAttributes(attribute.String("status", status)),
+	)
+
 	if pf.PayloadLoad > 0 {
 		metrics.SubmitNewBlockReadLatencyHistogram.Record(
 			context.Background(),
@@ -2664,6 +2676,7 @@ func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime 
 			attribute.Bool("simulationSuccess", pf.SimulationSuccess),
 			attribute.Bool("wasBidSaved", pf.WasBidSaved),
 			attribute.Bool("optimistic", pf.Optimistic),
+			attribute.String("status", status),
 		),
 	)
 }
