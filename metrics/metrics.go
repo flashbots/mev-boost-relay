@@ -37,9 +37,18 @@ var (
 
 	CurrentHeadSlotGauge otelapi.Int64Gauge
 
-	SubmitNewBlockCount otelapi.Int64Counter
+	SubmitNewBlockCount    otelapi.Int64Counter
+	GetHeaderCount         otelapi.Int64Counter
+	GetPayloadCount        otelapi.Int64Counter
+	RegisterValidatorCount otelapi.Int64Counter
+	MissedSlotCount        otelapi.Int64Counter
 
 	BuilderDemotionCount otelapi.Int64Counter
+
+	SubmitNewBlockBidValueHistogram    otelapi.Float64Histogram
+	SubmitNewBlockPayloadSizeHistogram otelapi.Float64Histogram
+	SubmitNewBlockSlotAgeHistogram     otelapi.Float64Histogram
+	DatabaseSaveLatencyHistogram       otelapi.Float64Histogram
 
 	// latencyBoundariesMs is the set of buckets of exponentially growing
 	// latencies that are ranging from 5ms up to 12s
@@ -72,6 +81,14 @@ func Setup(ctx context.Context) error {
 		setupSubmitNewBlockRedisFloorLatency,
 		setupRegisterValidatorLatency,
 		setupSubmitNewBlockCount,
+		setupGetHeaderCount,
+		setupGetPayloadCount,
+		setupRegisterValidatorCount,
+		setupMissedSlotCount,
+		setupSubmitNewBlockBidValue,
+		setupSubmitNewBlockPayloadSize,
+		setupSubmitNewBlockSlotAge,
+		setupDatabaseSaveLatency,
 		setupCurrentHeadSlot,
 		setupBuilderDemotionCount,
 	} {
@@ -284,6 +301,108 @@ func setupRegisterValidatorLatency(_ context.Context) error {
 		latencyBoundariesMs,
 	)
 	RegisterValidatorLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupGetHeaderCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"get_header_count",
+		otelapi.WithDescription("number of getHeader requests by status"),
+	)
+	GetHeaderCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupGetPayloadCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"get_payload_count",
+		otelapi.WithDescription("number of getPayload requests by status"),
+	)
+	GetPayloadCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupRegisterValidatorCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"register_validator_count",
+		otelapi.WithDescription("number of registerValidator requests by status"),
+	)
+	RegisterValidatorCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupMissedSlotCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"missed_slot_count",
+		otelapi.WithDescription("number of missed slots"),
+	)
+	MissedSlotCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockBidValue(_ context.Context) error {
+	hist, err := meter.Float64Histogram(
+		"submit_new_block_bid_value",
+		otelapi.WithDescription("bid values of builder block submissions in ETH (float)"),
+		otelapi.WithUnit("ETH"),
+	)
+	SubmitNewBlockBidValueHistogram = hist
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockPayloadSize(_ context.Context) error {
+	hist, err := meter.Float64Histogram(
+		"submit_new_block_payload_size",
+		otelapi.WithDescription("payload size of builder block submissions"),
+		otelapi.WithUnit("By"),
+	)
+	SubmitNewBlockPayloadSizeHistogram = hist
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupSubmitNewBlockSlotAge(_ context.Context) error {
+	hist, err := meter.Float64Histogram(
+		"submit_new_block_slot_age",
+		otelapi.WithDescription("time into the slot when builder block submission was received"),
+		otelapi.WithUnit("ms"),
+		latencyBoundariesMs,
+	)
+	SubmitNewBlockSlotAgeHistogram = hist
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupDatabaseSaveLatency(_ context.Context) error {
+	hist, err := meter.Float64Histogram(
+		"database_save_latency",
+		otelapi.WithDescription("latency of SaveBuilderBlockSubmission database calls"),
+		otelapi.WithUnit("ms"),
+		latencyBoundariesMs,
+	)
+	DatabaseSaveLatencyHistogram = hist
 	if err != nil {
 		return err
 	}
