@@ -837,6 +837,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 
 	// store the head slot
 	api.headSlot.Store(headSlot)
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot))
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {

@@ -34,6 +34,8 @@ var (
 	SubmitNewBlockRedisTopBidLatencyHistogram  otelapi.Float64Histogram
 	SubmitNewBlockRedisFloorLatencyHistogram   otelapi.Float64Histogram
 
+	CurrentHeadSlotGauge otelapi.Int64Gauge
+
 	BuilderDemotionCount otelapi.Int64Counter
 
 	// latencyBoundariesMs is the set of buckets of exponentially growing
@@ -65,6 +67,7 @@ func Setup(ctx context.Context) error {
 		setupSubmitNewBlockRedisPayloadLatency,
 		setupSubmitNewBlockRedisTopBidLatency,
 		setupSubmitNewBlockRedisFloorLatency,
+		setupCurrentHeadSlot,
 		setupBuilderDemotionCount,
 	} {
 		if err := setup(ctx); err != nil {
@@ -262,6 +265,18 @@ func setupSubmitNewBlockRedisFloorLatency(_ context.Context) error {
 		latencyBoundariesMs,
 	)
 	SubmitNewBlockRedisFloorLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupCurrentHeadSlot(_ context.Context) error {
+	gauge, err := meter.Int64Gauge(
+		"current_head_slot",
+		otelapi.WithDescription("the current head slot"),
+	)
+	CurrentHeadSlotGauge = gauge
 	if err != nil {
 		return err
 	}
