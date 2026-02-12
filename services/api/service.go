@@ -832,11 +832,13 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	if prevHeadSlot > 0 {
 		for s := prevHeadSlot + 1; s < headSlot; s++ {
 			api.log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
+			metrics.MissedSlotCount.Add(context.Background(), 1)
 		}
 	}
 
 	// store the head slot
 	api.headSlot.Store(headSlot)
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	// only for builder-api
 	if api.opts.BlockBuilderAPI || api.opts.ProposerAPI {
@@ -1004,7 +1006,7 @@ func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "MEV-Boost Relay API")
+	_, _ = fmt.Fprintf(w, "MEV-Boost Relay API")
 }
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
@@ -1022,6 +1024,17 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		"headSlot":      api.headSlot.Load(),
 		"contentLength": req.ContentLength,
 	})
+
+	registerSuccess := false
+	defer func() {
+		status := "error"
+		if registerSuccess {
+			status = "success"
+		}
+		metrics.RegisterValidatorCount.Add(req.Context(), 1,
+			otelapi.WithAttributes(attribute.String("status", status)),
+		)
+	}()
 
 	// Setup error handling
 	logAndReturnError := func(_log *logrus.Entry, code int, userMsg string, err error) {
@@ -1053,7 +1066,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
-	req.Body.Close()
+	_ = req.Body.Close()
 
 	//
 	// Parse the registrations request body, and check for cached entries
@@ -1152,6 +1165,8 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	default:
 	}
 
+	metrics.RegisterValidatorLatencyHistogram.Record(req.Context(), float64(time.Since(start).Milliseconds()))
+	registerSuccess = true
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
 }
@@ -1240,10 +1255,18 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Debug("getHeader request received")
+	getHeaderSuccess := false
 	defer func() {
 		metrics.GetHeaderLatencyHistogram.Record(
 			req.Context(),
 			float64(time.Since(requestTime).Milliseconds()),
+		)
+		status := "error"
+		if getHeaderSuccess {
+			status = "success"
+		}
+		metrics.GetHeaderCount.Add(req.Context(), 1,
+			otelapi.WithAttributes(attribute.String("status", status)),
 		)
 	}()
 
@@ -1301,6 +1324,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		"value":     value.String(),
 		"blockHash": blockHash.String(),
 	}).Info("bid delivered")
+	getHeaderSuccess = true
 
 	switch negotiatedResponseMediaType {
 	case common.ApplicationOctetStream:
@@ -1420,6 +1444,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 
 	// Log at start and end of request
 	log.Info("request initiated")
+	getPayloadSuccess := false
 	defer func() {
 		log.WithFields(logrus.Fields{
 			"timestampRequestFin": time.Now().UTC().UnixMilli(),
@@ -1429,6 +1454,13 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		metrics.GetPayloadLatencyHistogram.Record(
 			req.Context(),
 			float64(time.Since(receivedAt).Milliseconds()),
+		)
+		status := "error"
+		if getPayloadSuccess {
+			status = "success"
+		}
+		metrics.GetPayloadCount.Add(req.Context(), 1,
+			otelapi.WithAttributes(attribute.String("status", status)),
 		)
 	}()
 
@@ -1748,6 +1780,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
 
 		// Respond appropriately
+		getPayloadSuccess = true
 		switch negotiatedResponseMediaType {
 		case common.ApplicationOctetStream:
 			log.Debug("responding with SSZ")
@@ -1780,6 +1813,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		}()
 
 		log.Debug("responding with only accepted status code")
+		getPayloadSuccess = true
 		w.WriteHeader(http.StatusAccepted)
 	}
 
@@ -2178,6 +2212,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
 	prevTime = receivedAt
+	submissionSuccess := false
 
 	args := req.URL.Query()
 	isCancellationEnabled := args.Get("cancellations") == "1"
@@ -2199,7 +2234,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}).Info("request finished")
 
 		// metrics
-		api.saveBlockSubmissionMetrics(pf, receivedAt)
+		api.saveBlockSubmissionMetrics(pf, receivedAt, submissionSuccess)
 	}()
 
 	// If cancellations are disabled but builder requested it, return error
@@ -2291,6 +2326,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		api.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Populate profile metadata for metrics
+	bidValueWei := submission.BidTrace.Value.ToBig()
+	bidValueEth := new(big.Float).Quo(new(big.Float).SetInt(bidValueWei), new(big.Float).SetFloat64(1e18))
+	pf.BidValueEth, _ = bidValueEth.Float64()
+	pf.PayloadBytes = len(requestPayloadBytes)
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (submission.BidTrace.Slot * common.SecondsPerSlot)
+	pf.MsIntoSlot = receivedAt.UnixMilli() - int64(slotStartTimestamp*1000) //nolint:gosec
+
 	log = log.WithFields(logrus.Fields{
 		"timestampAfterDecoding": time.Now().UTC().UnixMilli(),
 		"slot":                   submission.BidTrace.Slot,
@@ -2415,7 +2458,9 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			simResult = &blockSimResult{false, nil, false, nil, nil}
 		}
 
+		dbStart := time.Now()
 		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission, simResult.blockValue)
+		metrics.DatabaseSaveLatencyHistogram.Record(context.Background(), float64(time.Since(dbStart).Milliseconds()))
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"payload":   payload,
@@ -2591,10 +2636,19 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		"profileRedisUs":     pf.RedisUpdate,
 		"profileTotalUs":     pf.Total,
 	}).Info("received block from builder")
+	submissionSuccess = true
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time) {
+func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime time.Time, success bool) {
+	status := "error"
+	if success {
+		status = "success"
+	}
+	metrics.SubmitNewBlockCount.Add(context.Background(), 1,
+		otelapi.WithAttributes(attribute.String("status", status)),
+	)
+
 	if pf.PayloadLoad > 0 {
 		metrics.SubmitNewBlockReadLatencyHistogram.Record(
 			context.Background(),
@@ -2654,6 +2708,27 @@ func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime 
 		)
 	}
 
+	if pf.BidValueEth > 0 {
+		metrics.SubmitNewBlockBidValueHistogram.Record(
+			context.Background(),
+			pf.BidValueEth,
+		)
+	}
+
+	if pf.PayloadBytes > 0 {
+		metrics.SubmitNewBlockPayloadSizeHistogram.Record(
+			context.Background(),
+			float64(pf.PayloadBytes),
+		)
+	}
+
+	if pf.MsIntoSlot > 0 {
+		metrics.SubmitNewBlockSlotAgeHistogram.Record(
+			context.Background(),
+			float64(pf.MsIntoSlot),
+		)
+	}
+
 	metrics.SubmitNewBlockLatencyHistogram.Record(
 		context.Background(),
 		float64(time.Since(receivedTime).Milliseconds()),
@@ -2664,6 +2739,7 @@ func (api *RelayAPI) saveBlockSubmissionMetrics(pf common.Profile, receivedTime 
 			attribute.Bool("simulationSuccess", pf.SimulationSuccess),
 			attribute.Bool("wasBidSaved", pf.WasBidSaved),
 			attribute.Bool("optimistic", pf.Optimistic),
+			attribute.String("status", status),
 		),
 	)
 }
@@ -2687,10 +2763,11 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if req.Method == http.MethodGet {
+	switch req.Method {
+	case http.MethodGet:
 		api.RespondOK(w, builderEntry)
 		return
-	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
 		st := common.BuilderStatus{
 			IsHighPrio:    builderEntry.IsHighPrio,
 			IsBlacklisted: builderEntry.IsBlacklisted,

@@ -117,13 +117,14 @@ func (b *BlockSimulationRateLimiter) Send(
 	}
 
 	// Create and fire off JSON-RPC request
-	if payload.Version == spec.DataVersionFulu {
+	switch payload.Version {
+	case spec.DataVersionFulu:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV5", payload)
-	} else if payload.Version == spec.DataVersionElectra {
+	case spec.DataVersionElectra:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV4", payload)
-	} else if payload.Version == spec.DataVersionDeneb {
+	case spec.DataVersionDeneb:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
-	} else {
+	default:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
 	}
 	res, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
@@ -164,7 +165,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	if err != nil {
 		return nil, err, nil
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// read all resp bytes
 	rawResp, err := io.ReadAll(resp.Body)

@@ -220,10 +220,10 @@ func LoadGzippedBytes(t *testing.T, filename string) []byte {
 	t.Helper()
 	fi, err := os.Open(filename)
 	require.NoError(t, err)
-	defer fi.Close()
+	defer fi.Close() //nolint:errcheck
 	fz, err := gzip.NewReader(fi)
 	require.NoError(t, err)
-	defer fz.Close()
+	defer fz.Close() //nolint:errcheck
 	val, err := io.ReadAll(fz)
 	require.NoError(t, err)
 	return val

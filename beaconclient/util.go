@@ -65,7 +65,7 @@ func fetchBeacon(method, url string, payload []byte, dst any, httpClient *http.C
 	if err != nil {
 		return 0, fmt.Errorf("client refused for %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

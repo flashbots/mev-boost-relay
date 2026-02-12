@@ -83,7 +83,7 @@ var ArchiveExecutionPayloads = &cobra.Command{
 			if err != nil {
 				log.WithError(err).Fatal("failed to open file")
 			}
-			defer f.Close()
+			defer f.Close() //nolint:errcheck
 
 			if strings.HasSuffix(outFile, ".csv") {
 				// write CSV

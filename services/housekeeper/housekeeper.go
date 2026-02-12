@@ -8,6 +8,7 @@
 package housekeeper
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	_ "net/http/pprof"
@@ -21,6 +22,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/metrics"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -126,6 +128,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		return
 	}
 	hk.headSlot.Store(headSlot)
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	log := hk.log.WithFields(logrus.Fields{
 		"headSlot":     headSlot,
@@ -137,6 +140,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	if prevHeadSlot > 0 {
 		for s := prevHeadSlot + 1; s < headSlot; s++ {
 			log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
+			metrics.MissedSlotCount.Add(context.Background(), 1)
 		}
 	}
 
