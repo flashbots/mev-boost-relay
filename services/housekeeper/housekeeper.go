@@ -88,6 +88,11 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
+	// Setup metrics
+	if err := metrics.Setup(context.Background()); err != nil {
+		return err
+	}
+
 	// Start pprof API, if requested
 	if hk.pprofAPI {
 		go hk.startPprofAPI()
