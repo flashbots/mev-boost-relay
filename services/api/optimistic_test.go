@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"math/big"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
@@ -137,7 +137,9 @@ func runOptimisticBlockSubmission(t *testing.T, opts blockRequestOpts, simErr er
 	}
 
 	req := common.TestBuilderSubmitBlockRequest(opts.secretkey, getTestBidTrace(opts.pubkey, opts.blockValue, opts.slot), opts.version)
-	rr := backend.request(http.MethodPost, pathSubmitNewBlock, &req)
+	rr := backend.request(http.MethodPost, pathSubmitNewBlock, req, &http.Header{
+		"Content-Type": []string{common.ApplicationJSON},
+	})
 
 	// Let updates happen async.
 	time.Sleep(100 * time.Millisecond)
@@ -165,12 +167,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:err113
 		},
 		{
 			description:     "missing_trie_node_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:err113
 		},
 		{
 			description: "success_deneb",
@@ -185,12 +187,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:err113
 		},
 		{
 			description:     "missing_trie_node_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:err113
 		},
 	}
 	for _, tc := range cases {
@@ -329,6 +331,22 @@ func TestDemoteBuilder(t *testing.T) {
 			},
 			version: spec.DataVersionDeneb,
 		},
+		{
+			description: "electra",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: false,
+				IsHighPrio:   true,
+			},
+			version: spec.DataVersionElectra,
+		},
+		{
+			description: "fulu",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: false,
+				IsHighPrio:   true,
+			},
+			version: spec.DataVersionFulu,
+		},
 	}
 
 	for _, tc := range cases {
@@ -372,7 +390,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 		wantStatus      common.BuilderStatus
 		simulationError error
 		expectDemotion  bool
-		httpCode        uint64
+		httpCode        int
 		blockValue      uint64
 		slot            uint64
 		version         spec.DataVersion
@@ -464,6 +482,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.proposerDutiesMap[tc.slot] = backend.relay.proposerDutiesMap[slot]
 
 			randaoHash, err := utils.HexToHash(randao)
@@ -488,7 +507,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			}, tc.simulationError, backend)
 
 			// Check http code.
-			require.EqualValues(t, rr.Code, tc.httpCode)
+			require.EqualValues(t, tc.httpCode, rr.Code)
 
 			// Check status in db.
 			builder, err := backend.relay.db.GetBlockBuilderByPubkey(pkStr)
@@ -499,7 +518,7 @@ func TestBuilderApiSubmitNewBlockOptimistic(t *testing.T) {
 			// Check demotion status is set to expected and refund is false.
 			mockDB, ok := backend.relay.db.(*database.MockDB)
 			require.True(t, ok)
-			require.Equal(t, mockDB.Demotions[pkStr], tc.expectDemotion)
+			require.Equal(t, tc.expectDemotion, mockDB.Demotions[pkStr])
 			require.False(t, mockDB.Refunds[pkStr])
 		})
 	}
@@ -514,10 +533,10 @@ func TestInternalBuilderStatus(t *testing.T) {
 
 	setAndGetStatus := func(arg string, expected common.BuilderStatus) {
 		// Set & Get.
-		rr := backend.request(http.MethodPost, path+arg, nil)
+		rr := backend.request(http.MethodPost, path+arg, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 
-		rr = backend.request(http.MethodGet, path, nil)
+		rr = backend.request(http.MethodGet, path, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 		resp := &database.BlockBuilderEntry{}
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -537,10 +556,10 @@ func TestInternalBuilderCollateral(t *testing.T) {
 	path := "/internal/v1/builder/collateral/" + pubkey.String()
 
 	// Set & Get.
-	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil)
+	rr := backend.request(http.MethodPost, path+"?collateral=builder0x69&value=10000", nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil)
+	rr = backend.request(http.MethodGet, "/internal/v1/builder/"+pubkey.String(), nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := &database.BlockBuilderEntry{}
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)

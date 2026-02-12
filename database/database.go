@@ -4,7 +4,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database/migrations"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -70,9 +70,9 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 		return nil, err
 	}
 
-	db.DB.SetMaxOpenConns(50)
-	db.DB.SetMaxIdleConns(10)
-	db.DB.SetConnMaxIdleTime(0)
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(0)
 
 	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
 		migrate.SetTable(vars.TableMigrations)
@@ -256,7 +256,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(payload *common.VersionedSu
 }
 
 func (s *DatabaseService) GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error) {
-	query := `SELECT id, inserted_at, received_at, eligible_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission 
+	query := `SELECT id, inserted_at, received_at, eligible_at, execution_payload_id, sim_success, sim_error, signature, slot, parent_hash, block_hash, builder_pubkey, proposer_pubkey, proposer_fee_recipient, gas_used, gas_limit, num_tx, value, epoch, block_number, decode_duration, prechecks_duration, simulation_duration, redis_update_duration, total_duration, optimistic_submission
 	FROM ` + vars.TableBuilderBlockSubmission + `
 	WHERE slot=$1 AND proposer_pubkey=$2 AND block_hash=$3
 	ORDER BY builder_pubkey ASC
@@ -362,9 +362,10 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 	}
 
 	orderBy := "slot DESC"
-	if queryArgs.OrderByValue == 1 {
+	switch queryArgs.OrderByValue {
+	case 1:
 		orderBy = "value ASC"
-	} else if queryArgs.OrderByValue == -1 {
+	case -1:
 		orderBy = "value DESC"
 	}
 
@@ -522,7 +523,7 @@ func (s *DatabaseService) SetBlockBuilderIDStatusIsOptimistic(pubkey string, isO
 		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
 	if builder.BuilderID == "" {
-		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:goerr113
+		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:err113
 	}
 	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_optimistic=$1 WHERE builder_id=$2;`
 	_, err = s.DB.Exec(query, isOptimistic, builder.BuilderID)

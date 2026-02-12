@@ -1,12 +1,12 @@
 package common
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -14,8 +14,11 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/buger/jsonparser"
 	ssz "github.com/ferranbt/fastssz"
 	boostSsz "github.com/flashbots/go-boost-utils/ssz"
+	"github.com/flashbots/go-boost-utils/utils"
+	"github.com/goccy/go-json"
 )
 
 var (
@@ -25,43 +28,57 @@ var (
 	EthNetworkHolesky = "holesky"
 	EthNetworkSepolia = "sepolia"
 	EthNetworkGoerli  = "goerli"
+	EthNetworkHoodi   = "hoodi"
 	EthNetworkMainnet = "mainnet"
 	EthNetworkCustom  = "custom"
 
 	GenesisForkVersionHolesky = "0x01017000"
 	GenesisForkVersionSepolia = "0x90000069"
 	GenesisForkVersionGoerli  = "0x00001020"
+	GenesisForkVersionHoodi   = "0x10000910"
 	GenesisForkVersionMainnet = "0x00000000"
 
 	GenesisValidatorsRootHolesky = "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"
 	GenesisValidatorsRootSepolia = "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"
 	GenesisValidatorsRootGoerli  = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
+	GenesisValidatorsRootHoodi   = "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"
 	GenesisValidatorsRootMainnet = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
 
 	BellatrixForkVersionHolesky = "0x03017000"
 	BellatrixForkVersionSepolia = "0x90000071"
 	BellatrixForkVersionGoerli  = "0x02001020"
+	BellatrixForkVersionHoodi   = "0x30000910"
 	BellatrixForkVersionMainnet = "0x02000000"
 
 	CapellaForkVersionHolesky = "0x04017000"
 	CapellaForkVersionSepolia = "0x90000072"
 	CapellaForkVersionGoerli  = "0x03001020"
+	CapellaForkVersionHoodi   = "0x40000910"
 	CapellaForkVersionMainnet = "0x03000000"
 
 	DenebForkVersionHolesky = "0x05017000"
 	DenebForkVersionSepolia = "0x90000073"
 	DenebForkVersionGoerli  = "0x04001020"
+	DenebForkVersionHoodi   = "0x50000910"
 	DenebForkVersionMainnet = "0x04000000"
 
 	ElectraForkVersionHolesky = "0x06017000"
 	ElectraForkVersionSepolia = "0x90000074"
 	ElectraForkVersionGoerli  = "0x05001020"
+	ElectraForkVersionHoodi   = "0x60000910"
 	ElectraForkVersionMainnet = "0x05000000"
+
+	FuluForkVersionHolesky = "0x07017000"
+	FuluForkVersionSepolia = "0x90000075"
+	FuluForkVersionGoerli  = "0x06001020"
+	FuluForkVersionHoodi   = "0x70000910"
+	FuluForkVersionMainnet = "0x06000000"
 
 	ForkVersionStringBellatrix = "bellatrix"
 	ForkVersionStringCapella   = "capella"
 	ForkVersionStringDeneb     = "deneb"
 	ForkVersionStringElectra   = "electra"
+	ForkVersionStringFulu      = "fulu"
 )
 
 type EthNetworkDetails struct {
@@ -72,12 +89,14 @@ type EthNetworkDetails struct {
 	CapellaForkVersionHex    string
 	DenebForkVersionHex      string
 	ElectraForkVersionHex    string
+	FuluForkVersionHex       string
 
 	DomainBuilder                 phase0.Domain
 	DomainBeaconProposerBellatrix phase0.Domain
 	DomainBeaconProposerCapella   phase0.Domain
 	DomainBeaconProposerDeneb     phase0.Domain
 	DomainBeaconProposerElectra   phase0.Domain
+	DomainBeaconProposerFulu      phase0.Domain
 }
 
 func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error) {
@@ -87,11 +106,13 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 	var capellaForkVersion string
 	var denebForkVersion string
 	var electraForkVersion string
+	var fuluForkVersion string
 	var domainBuilder phase0.Domain
 	var domainBeaconProposerBellatrix phase0.Domain
 	var domainBeaconProposerCapella phase0.Domain
 	var domainBeaconProposerDeneb phase0.Domain
 	var domainBeaconProposerElectra phase0.Domain
+	var domainBeaconProposerFulu phase0.Domain
 
 	switch networkName {
 	case EthNetworkHolesky:
@@ -101,6 +122,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionHolesky
 		denebForkVersion = DenebForkVersionHolesky
 		electraForkVersion = ElectraForkVersionHolesky
+		fuluForkVersion = FuluForkVersionHolesky
 	case EthNetworkSepolia:
 		genesisForkVersion = GenesisForkVersionSepolia
 		genesisValidatorsRoot = GenesisValidatorsRootSepolia
@@ -108,6 +130,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionSepolia
 		denebForkVersion = DenebForkVersionSepolia
 		electraForkVersion = ElectraForkVersionSepolia
+		fuluForkVersion = FuluForkVersionSepolia
 	case EthNetworkGoerli:
 		genesisForkVersion = GenesisForkVersionGoerli
 		genesisValidatorsRoot = GenesisValidatorsRootGoerli
@@ -115,6 +138,15 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionGoerli
 		denebForkVersion = DenebForkVersionGoerli
 		electraForkVersion = ElectraForkVersionGoerli
+		fuluForkVersion = FuluForkVersionGoerli
+	case EthNetworkHoodi:
+		genesisForkVersion = GenesisForkVersionHoodi
+		genesisValidatorsRoot = GenesisValidatorsRootHoodi
+		bellatrixForkVersion = BellatrixForkVersionHoodi
+		capellaForkVersion = CapellaForkVersionHoodi
+		denebForkVersion = DenebForkVersionHoodi
+		electraForkVersion = ElectraForkVersionHoodi
+		fuluForkVersion = FuluForkVersionHoodi
 	case EthNetworkMainnet:
 		genesisForkVersion = GenesisForkVersionMainnet
 		genesisValidatorsRoot = GenesisValidatorsRootMainnet
@@ -122,6 +154,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = CapellaForkVersionMainnet
 		denebForkVersion = DenebForkVersionMainnet
 		electraForkVersion = ElectraForkVersionMainnet
+		fuluForkVersion = FuluForkVersionMainnet
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
@@ -129,6 +162,7 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		capellaForkVersion = os.Getenv("CAPELLA_FORK_VERSION")
 		denebForkVersion = os.Getenv("DENEB_FORK_VERSION")
 		electraForkVersion = os.Getenv("ELECTRA_FORK_VERSION")
+		fuluForkVersion = os.Getenv("FULU_FORK_VERSION")
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNetwork, networkName)
 	}
@@ -158,6 +192,11 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		return nil, err
 	}
 
+	domainBeaconProposerFulu, err = ComputeDomain(boostSsz.DomainTypeBeaconProposer, fuluForkVersion, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &EthNetworkDetails{
 		Name:                          networkName,
 		GenesisForkVersionHex:         genesisForkVersion,
@@ -166,11 +205,13 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		CapellaForkVersionHex:         capellaForkVersion,
 		DenebForkVersionHex:           denebForkVersion,
 		ElectraForkVersionHex:         electraForkVersion,
+		FuluForkVersionHex:            fuluForkVersion,
 		DomainBuilder:                 domainBuilder,
 		DomainBeaconProposerBellatrix: domainBeaconProposerBellatrix,
 		DomainBeaconProposerCapella:   domainBeaconProposerCapella,
 		DomainBeaconProposerDeneb:     domainBeaconProposerDeneb,
 		DomainBeaconProposerElectra:   domainBeaconProposerElectra,
+		DomainBeaconProposerFulu:      domainBeaconProposerFulu,
 	}, nil
 }
 
@@ -189,6 +230,7 @@ func (e *EthNetworkDetails) String() string {
 	DomainBeaconProposerCapella: %x,
 	DomainBeaconProposerDeneb: %x
 	DomainBeaconProposerElectra: %x
+	DomainBeaconProposerFulu: %x
 }`,
 		e.Name,
 		e.GenesisForkVersionHex,
@@ -201,9 +243,12 @@ func (e *EthNetworkDetails) String() string {
 		e.DomainBeaconProposerBellatrix,
 		e.DomainBeaconProposerCapella,
 		e.DomainBeaconProposerDeneb,
-		e.DomainBeaconProposerElectra)
+		e.DomainBeaconProposerElectra,
+		e.DomainBeaconProposerFulu)
 }
 
+// PubkeyHex represents a hex-encoded public key.
+// It is lowercased on creation and is not validated/parsed.
 type PubkeyHex string
 
 func NewPubkeyHex(pk string) PubkeyHex {
@@ -212,6 +257,10 @@ func NewPubkeyHex(pk string) PubkeyHex {
 
 func (p PubkeyHex) String() string {
 	return string(p)
+}
+
+func (p PubkeyHex) ToPubkey() (ret phase0.BLSPubKey, err error) {
+	return utils.HexToPubkey(string(p))
 }
 
 type BuilderGetValidatorsResponseEntry struct {
@@ -713,4 +762,69 @@ func (s *SubmitBlockRequestV2Optimistic) SizeSSZ() (size int) {
 	size += len(s.Withdrawals) * 44
 
 	return
+}
+
+// SimpleValidatorRegistration is a helper type for fast JSON decoding
+type SimpleValidatorRegistration struct {
+	FeeRecipient bellatrix.ExecutionAddress
+	GasLimit     uint64
+	Timestamp    time.Time
+
+	// These two are intentionally left unparsed due to heavy parsing maths
+	Pubkey    PubkeyHex
+	Signature string
+}
+
+func (r *SimpleValidatorRegistration) UnmarshalJSON(value []byte) error {
+	_feeRecipient, err := jsonparser.GetUnsafeString(value, "message", "fee_recipient")
+	if err != nil {
+		return fmt.Errorf("registration message error (fee_recipient): %w", err)
+	}
+
+	// this one is fast, it's hex decode, no fancy crypto maths
+	feeRecipient, err := utils.HexToAddress(_feeRecipient)
+	if err != nil {
+		return fmt.Errorf("registration message error (fee_recipient): %w", err)
+	}
+
+	_gasLimit, err := jsonparser.GetUnsafeString(value, "message", "gas_limit")
+	if err != nil {
+		return fmt.Errorf("registration message error (gasLimit): %w", err)
+	}
+
+	gasLimit, err := strconv.ParseUint(_gasLimit, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid gasLimit: %w", err)
+	}
+
+	_timestamp, err := jsonparser.GetUnsafeString(value, "message", "timestamp")
+	if err != nil {
+		return fmt.Errorf("registration message error (timestamp): %w", err)
+	}
+
+	timestamp, err := strconv.ParseInt(_timestamp, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp: %w", err)
+	}
+	if timestamp < 0 {
+		return ErrTimestampNegative
+	}
+
+	pubkey, err := jsonparser.GetUnsafeString(value, "message", "pubkey")
+	if err != nil {
+		return fmt.Errorf("registration message error (pubkey): %w", err)
+	}
+
+	signature, err := jsonparser.GetUnsafeString(value, "signature")
+	if err != nil {
+		return fmt.Errorf("registration message error (signature): %w", err)
+	}
+
+	r.FeeRecipient = feeRecipient
+	r.GasLimit = gasLimit
+	r.Timestamp = time.Unix(timestamp, 0)
+	r.Pubkey = NewPubkeyHex(pubkey)
+	r.Signature = signature
+
+	return nil
 }

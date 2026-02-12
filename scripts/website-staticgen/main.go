@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/flashbots/mev-boost-relay/services/website"
+	"github.com/goccy/go-json"
 )
 
 func main() {
@@ -17,12 +18,20 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer jsonFile.Close()
+	defer jsonFile.Close() //nolint:errcheck
 
 	byteValue, _ := io.ReadAll(jsonFile)
 	err = json.Unmarshal(byteValue, &data)
 	if err != nil {
 		panic(err)
+	}
+
+	// add fake times for some variability in rendered template
+	diff := time.Second
+	for i, v := range data.Payloads {
+		v.InsertedAt = time.Now().Add(-diff)
+		data.Payloads[i] = v
+		diff = diff * 5 / 3
 	}
 
 	indexTemplate, err := website.ParseIndexTemplate()

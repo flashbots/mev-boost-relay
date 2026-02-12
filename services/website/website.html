@@ -75,6 +75,15 @@
             background: #129fea1f !important;
         }
 
+        .pure-table tr td.cell-time {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .pure-table tr td.cell-hash {
+            font-family: monospace;
+        }
+
         .relay-url-container {
             background: #ffffff;
             width: auto;
@@ -233,6 +242,7 @@
             <table class="pure-table pure-table-horizontal" style="width:100%;">
                 <thead>
                     <tr>
+                        <th style="text-align: right;">Time</th>
                         <th>Epoch</th>
                         <th>Slot</th>
                         <th>Block number</th>
@@ -257,6 +267,9 @@
                     {{$linkDataAPI := .LinkDataAPI}}
                     {{ range .Payloads }}
                     <tr>
+                        <td class="cell-time">
+                            <span title="{{.InsertedAt | formatUTC}}">{{.InsertedAt | relativeTime}}</span>
+                        </td>
                         <td>{{.Epoch | prettyInt}}</td>
                         <td>
                             <a href="{{$linkDataAPI}}/relay/v1/data/bidtraces/proposer_payload_delivered?slot={{.Slot}}">{{.Slot | prettyInt}}</a>
@@ -267,7 +280,7 @@
                         <td>
                             <div title="Blob Gas Used: {{.BlobGasUsed}}">{{.NumBlobs }}</div>
                         </td>
-                        <td>{{.BlockHash}}</td>
+                        <td class="cell-hash">{{.BlockHash}}</td>
                         <td>
                             <div class="icons-container">
                                 {{ if ne $linkBeaconchain "" }}

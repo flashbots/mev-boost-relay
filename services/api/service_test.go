@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -27,6 +26,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -104,17 +104,15 @@ func newTestBackend(t require.TestingT, numBeaconNodes int) *testBackend {
 	return &backend
 }
 
-func (be *testBackend) requestBytes(method, path string, payload []byte, headers map[string]string) *httptest.ResponseRecorder {
+func (be *testBackend) requestBytes(method, path string, payload []byte, header *http.Header) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
 	req, err = http.NewRequest(method, path, bytes.NewReader(payload))
 	require.NoError(be.t, err)
 
-	// Set headers
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
+	// Set header
+	req.Header = *header
 
 	// lfg
 	rr := httptest.NewRecorder()
@@ -122,7 +120,7 @@ func (be *testBackend) requestBytes(method, path string, payload []byte, headers
 	return rr
 }
 
-func (be *testBackend) request(method, path string, payload any) *httptest.ResponseRecorder {
+func (be *testBackend) request(method, path string, payload any, header *http.Header) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -134,6 +132,12 @@ func (be *testBackend) request(method, path string, payload any) *httptest.Respo
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
 	require.NoError(be.t, err)
+
+	if header != nil {
+		req.Header = *header
+	} else {
+		req.Header = http.Header{}
+	}
 
 	// lfg
 	rr := httptest.NewRecorder()
@@ -171,21 +175,21 @@ func TestWebserver(t *testing.T) {
 
 func TestWebserverRootHandler(t *testing.T) {
 	backend := newTestBackend(t, 1)
-	rr := backend.request(http.MethodGet, "/", nil)
+	rr := backend.request(http.MethodGet, "/", nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestStatus(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/eth/v1/builder/status"
-	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator)
+	rr := backend.request(http.MethodGet, path, common.ValidPayloadRegisterValidator, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestLivez(t *testing.T) {
 	backend := newTestBackend(t, 1)
 	path := "/livez"
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.JSONEq(t, "{\"message\":\"live\"}\n", rr.Body.String())
 }
@@ -193,20 +197,13 @@ func TestLivez(t *testing.T) {
 func TestRegisterValidator(t *testing.T) {
 	path := "/eth/v1/builder/validators"
 
-	t.Run("not a known validator", func(t *testing.T) {
-		backend := newTestBackend(t, 1)
-
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("known validator", func(t *testing.T) {
+	t.Run("accept validator -- json", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		msg := common.ValidPayloadRegisterValidator
 		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
 
-		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator})
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{common.ValidPayloadRegisterValidator}, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 
 		// wait for the both channel notifications
@@ -220,6 +217,110 @@ func TestRegisterValidator(t *testing.T) {
 		case <-backend.relay.validatorUpdateCh:
 		default:
 		}
+	})
+
+	t.Run("accept validator -- ssz", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		regs := builderApiV1.SignedValidatorRegistrations{}
+		regs.Registrations = append(regs.Registrations, &msg)
+		regBytes, err := regs.MarshalSSZ()
+		require.NoError(t, err)
+
+		rr := backend.requestBytes(http.MethodPost, path, regBytes, &http.Header{
+			"Content-Type": []string{common.ApplicationOctetStream},
+		})
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		// wait for the both channel notifications
+		select {
+		case val := <-backend.relay.validatorRegC:
+			require.Equal(t, val.Message.Pubkey, msg.Message.Pubkey)
+		default:
+		}
+
+		select {
+		case <-backend.relay.validatorUpdateCh:
+		default:
+		}
+	})
+
+	t.Run("reject validator -- timestamp too early", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// The minimum timestamp is genesis time, so anything less than that should always fail
+		newMessage.Timestamp = time.Unix(int64(backend.relay.genesisInfo.Data.GenesisTime-1), 0) //nolint:gosec
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "timestamp too early")
+	})
+
+	t.Run("reject validator -- timestamp too far in the future", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// The time difference limit is 10 seconds, so 11 seconds past should always fail
+		newMessage.Timestamp = time.Now().Add(11 * time.Second)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "timestamp too far in the future")
+	})
+
+	t.Run("reject validator -- not a known validator", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+
+		// We do not call backend.datastore.SetKnownValidator()
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "not a known validator")
+	})
+
+	t.Run("reject validator -- failed to verify validator signature", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// Change the message without changing the signature
+		newMessage.Timestamp = msg.Message.Timestamp.Add(1 * time.Second)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
+	})
+
+	t.Run("accept validator -- milliseconds dont matter", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		newMessage := *msg.Message
+		// Anything less than a second is dropped from the encoded timestamp
+		newMessage.Timestamp = newMessage.Timestamp.Add(999 * time.Millisecond)
+		msg.Message = &newMessage
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
 	})
 }
 
@@ -259,8 +360,8 @@ func TestGetHeader(t *testing.T) {
 	_, err := backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 1: regular capella request works and returns a bid
-	rr := backend.request(http.MethodGet, path, nil)
+	// Check: JSON capella request works and returns a bid
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp := builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -268,6 +369,22 @@ func TestGetHeader(t *testing.T) {
 	value, err := resp.Value()
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionCapella, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check: SSZ capella request works and returns a bid
+	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
+		"Accept": []string{common.ApplicationOctetStream},
+	})
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, common.ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, common.EthConsensusVersionCapella, rr.Header().Get("Eth-Consensus-Version"))
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	resp.Version = spec.DataVersionCapella
+	resp.Capella = new(builderApiCapella.SignedBuilderBid)
+	err = resp.Capella.UnmarshalSSZ(rr.Body.Bytes())
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
 	require.Equal(t, bidValue.String(), value.String())
 
 	// Create a deneb bid
@@ -282,8 +399,8 @@ func TestGetHeader(t *testing.T) {
 	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
 	require.NoError(t, err)
 
-	// Check 2: regular deneb request works and returns a bid
-	rr = backend.request(http.MethodGet, path, nil)
+	// Check: JSON deneb request works and returns a bid
+	rr = backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 	resp = builderSpec.VersionedSignedBuilderBid{}
 	err = json.Unmarshal(rr.Body.Bytes(), &resp)
@@ -293,7 +410,23 @@ func TestGetHeader(t *testing.T) {
 	require.Equal(t, spec.DataVersionDeneb, resp.Version)
 	require.Equal(t, bidValue.String(), value.String())
 
-	// Check 3: Request returns 204 if sending a filtered user agent
+	// Check: SSZ deneb request works and returns a bid
+	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
+		"Accept": []string{common.ApplicationOctetStream},
+	})
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, common.ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, common.EthConsensusVersionDeneb, rr.Header().Get("Eth-Consensus-Version"))
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	resp.Version = spec.DataVersionDeneb
+	resp.Deneb = new(builderApiDeneb.SignedBuilderBid)
+	err = resp.Deneb.UnmarshalSSZ(rr.Body.Bytes())
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
 	require.Equal(t, http.StatusNoContent, rr.Code)
 }
@@ -312,7 +445,7 @@ func TestBuilderApiGetValidators(t *testing.T) {
 	require.NoError(t, err)
 	backend.relay.proposerDutiesResponse = &responseBytes
 
-	rr := backend.request(http.MethodGet, path, nil)
+	rr := backend.request(http.MethodGet, path, nil, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	resp := []common.BuilderGetValidatorsResponseEntry{}
@@ -330,7 +463,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		validBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil)
+		rr := backend.request(http.MethodGet, path+"?block_hash="+validBlockHash, nil, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
@@ -349,7 +482,7 @@ func TestDataApiGetDataProposerPayloadDelivered(t *testing.T) {
 		}
 
 		for _, invalidBlockHash := range invalidBlockHashes {
-			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil)
+			rr := backend.request(http.MethodGet, path+"?block_hash="+invalidBlockHash, nil, nil)
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 			require.Contains(t, rr.Body.String(), "invalid block_hash argument")
 		}
@@ -371,6 +504,16 @@ func TestBuilderSubmitBlockSSZ(t *testing.T) {
 			name:      "Deneb",
 			filepath:  "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
 			sszLength: 872081,
+		},
+		{
+			name:      "Electra",
+			filepath:  "../../testdata/submitBlockPayloadElectra.json.gz",
+			sszLength: 1182950,
+		},
+		{
+			name:      "Fulu",
+			filepath:  "../../testdata/submitBlockPayloadFulu.json.gz",
+			sszLength: 1237815,
 		},
 	}
 
@@ -405,6 +548,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 		sszReqSize          int
 		jsonGzipReqSize     int
 		sszGzipReqSize      int
+		forkVersion         string
 	}
 
 	testCases := []struct {
@@ -426,6 +570,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				sszReqSize:          352239,
 				jsonGzipReqSize:     207788,
 				sszGzipReqSize:      195923,
+				forkVersion:         "capella",
 			},
 		},
 		{
@@ -442,6 +587,41 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				sszReqSize:          872081,
 				jsonGzipReqSize:     385043,
 				sszGzipReqSize:      363271,
+				forkVersion:         "deneb",
+			},
+		},
+		{
+			name:     "Electra",
+			filepath: "../../testdata/submitBlockPayloadElectra.json.gz",
+			data: testHelper{
+				headSlot:            100,
+				submissionTimestamp: 1606825235,
+				parentHash:          "0xb38ab7ef9d941e59a2f908d96a9923eef447ad12ae00daee365601aa2e6a710a",
+				feeRecipient:        "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+				withdrawalRoot:      "0x792930bbd5baac43bcc798ee49aa8185ef76bb3b44ba62b91d86ae569e4bb535",
+				prevRandao:          "0xc3bc30c5eb5161b939f9e59924fe7e12b9a008420df7ed64a830839431a80731",
+				jsonReqSize:         2366373,
+				sszReqSize:          1182950,
+				jsonGzipReqSize:     481890,
+				sszGzipReqSize:      453375,
+				forkVersion:         "electra",
+			},
+		},
+		{
+			name:     "Fulu",
+			filepath: "../../testdata/submitBlockPayloadFulu.json.gz",
+			data: testHelper{
+				headSlot:            130,
+				submissionTimestamp: 1606825595,
+				parentHash:          "0xfa842e1eaadf0d3eb08b727add63b07e0fbbf9a8f9b0dd10f36a952489b07125",
+				feeRecipient:        "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+				withdrawalRoot:      "0x792930bbd5baac43bcc798ee49aa8185ef76bb3b44ba62b91d86ae569e4bb535",
+				prevRandao:          "0x2792dd9c77802929cdcb19f7665f8342315a2d077c6a81e353e567fe8319f42b",
+				jsonReqSize:         2481818,
+				sszReqSize:          1237815,
+				jsonGzipReqSize:     776782,
+				sszGzipReqSize:      731316,
+				forkVersion:         "fulu",
 			},
 		},
 	}
@@ -467,7 +647,8 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			backend.relay.headSlot.Store(headSlot)
 			backend.relay.capellaEpoch = 0
 			backend.relay.denebEpoch = 2
-			backend.relay.electraEpoch = 5
+			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
 			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
 				Slot: headSlot,
@@ -502,6 +683,12 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			case spec.DataVersionDeneb:
 				req.Deneb.Message.Slot = submissionSlot
 				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
+			case spec.DataVersionElectra:
+				req.Electra.Message.Slot = submissionSlot
+				req.Electra.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
+			case spec.DataVersionFulu:
+				req.Fulu.Message.Slot = submissionSlot
+				req.Fulu.ExecutionPayload.Timestamp = uint64(submissionTimestamp) //nolint:gosec
 			default:
 				require.Fail(t, "unknown data version")
 			}
@@ -513,7 +700,9 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqJSONBytes2, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.JSONEq(t, string(reqJSONBytes), string(reqJSONBytes2))
-			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, &http.Header{
+				"Content-Type": []string{common.ApplicationJSON},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
@@ -521,31 +710,29 @@ func TestBuilderSubmitBlock(t *testing.T) {
 			reqSSZBytes, err := req.MarshalSSZ()
 			require.NoError(t, err)
 			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
-				"Content-Type": "application/octet-stream",
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, &http.Header{
+				"Content-Type": []string{common.ApplicationOctetStream},
 			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
 			// Send JSON+GZIP encoded request
-			headers := map[string]string{
-				"Content-Encoding": "gzip",
-			}
 			jsonGzip := gzipBytes(t, reqJSONBytes)
 			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, &http.Header{
+				"Content-Type":     []string{common.ApplicationJSON},
+				"Content-Encoding": []string{"gzip"},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 
 			// Send SSZ+GZIP encoded request
-			headers = map[string]string{
-				"Content-Type":     "application/octet-stream",
-				"Content-Encoding": "gzip",
-			}
-
 			sszGzip := gzipBytes(t, reqSSZBytes)
 			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
-			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, &http.Header{
+				"Content-Type":     []string{common.ApplicationOctetStream},
+				"Content-Encoding": []string{"gzip"},
+			})
 			require.Contains(t, rr.Body.String(), "invalid signature")
 			require.Equal(t, http.StatusBadRequest, rr.Code)
 		})
@@ -903,6 +1090,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			backend.relay.payloadAttributesLock.RLock()
 			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
@@ -1015,6 +1203,7 @@ func TestCheckSubmissionSlotDetails(t *testing.T) {
 			backend.relay.capellaEpoch = 1
 			backend.relay.denebEpoch = 2
 			backend.relay.electraEpoch = 3
+			backend.relay.fuluEpoch = 4
 			headSlot := testSlot - 1
 			w := httptest.NewRecorder()
 			logger := logrus.New()
@@ -1384,47 +1573,23 @@ func gzipBytes(t *testing.T, b []byte) []byte {
 	return buf.Bytes()
 }
 
-func TestRequestAcceptsJSON(t *testing.T) {
-	for _, tc := range []struct {
-		Header   string
-		Expected bool
-	}{
-		{Header: "", Expected: true},
-		{Header: "application/json", Expected: true},
-		{Header: "application/octet-stream", Expected: false},
-		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: true},
-		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: false},
-		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: true},
-		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: true},
-		{Header: "application/*;q=0.9", Expected: true},
-		{Header: "application/*", Expected: true},
-	} {
-		t.Run(tc.Header, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/eth/v1/builder/header/1/0x00/0xaa", nil)
-			require.NoError(t, err)
-			req.Header.Set("Accept", tc.Header)
-			actual := RequestAcceptsJSON(req)
-			require.Equal(t, tc.Expected, actual)
-		})
-	}
-}
-
 func TestNegotiateRequestResponseType(t *testing.T) {
 	for _, tc := range []struct {
 		Header   string
 		Expected string
 		Error    error
 	}{
-		{Header: "", Expected: ApplicationJSON},
-		{Header: "application/json", Expected: ApplicationJSON},
-		{Header: "application/octet-stream", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: ApplicationOctetStream},
-		{Header: "application/octet-stream;q=0.9,*/*;q=1.0", Expected: ApplicationJSON},
-		{Header: "application/*;q=0.9", Expected: ApplicationJSON, Error: nil},
-		{Header: "application/*", Expected: ApplicationJSON, Error: nil},
+		{Header: "", Expected: common.ApplicationJSON},
+		{Header: "application/json", Expected: common.ApplicationJSON},
+		{Header: "application/octet-stream", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1,application/json;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/json;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/something-else;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,application/*;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=1.0,*/*;q=0.9", Expected: common.ApplicationOctetStream},
+		{Header: "application/octet-stream;q=0.9,*/*;q=1.0", Expected: common.ApplicationJSON},
+		{Header: "application/*;q=0.9", Expected: common.ApplicationJSON, Error: nil},
+		{Header: "application/*", Expected: common.ApplicationJSON, Error: nil},
 		{Header: "text/html", Error: ErrNotAcceptable},
 	} {
 		t.Run(tc.Header, func(t *testing.T) {

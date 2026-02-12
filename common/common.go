@@ -61,6 +61,11 @@ type Profile struct {
 	SimulationSuccess bool
 	WasBidSaved       bool
 	Optimistic        bool
+
+	// Submission metadata
+	BidValueEth  float64 // bid value in ETH
+	PayloadBytes int     // request payload size in bytes
+	MsIntoSlot   int64   // milliseconds into slot when received
 }
 
 func (p *Profile) String() string {

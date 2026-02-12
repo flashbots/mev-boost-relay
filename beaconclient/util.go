@@ -2,12 +2,14 @@ package beaconclient
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/goccy/go-json"
 )
 
 var (
@@ -44,15 +46,15 @@ func fetchBeacon(method, url string, payload []byte, dst any, httpClient *http.C
 	}
 
 	if ssz {
-		req.Header.Add("Content-Type", "application/octet-stream")
+		req.Header.Add("Content-Type", common.ApplicationOctetStream)
 	} else {
-		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Content-Type", common.ApplicationJSON)
 	}
 
 	for k, v := range headers {
 		req.Header.Add(k, v[0])
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", common.ApplicationJSON)
 
 	client := http.DefaultClient
 	if httpClient != nil {
@@ -63,7 +65,7 @@ func fetchBeacon(method, url string, payload []byte, dst any, httpClient *http.C
 	if err != nil {
 		return 0, fmt.Errorf("client refused for %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

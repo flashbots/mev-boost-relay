@@ -8,7 +8,7 @@ MEV-Boost Relay for Ethereum proposer/builder separation (PBS).
 
 Currently live at:
 
-* [boost-relay.flashbots.net](https://boost-relay.flashbots.net) (also on [Goerli](https://boost-relay-goerli.flashbots.net),  [Sepolia](https://boost-relay-sepolia.flashbots.net) and [Holesky](https://boost-relay-holesky.flashbots.net))
+* [boost-relay.flashbots.net](https://boost-relay.flashbots.net) (also on [Sepolia](https://boost-relay-sepolia.flashbots.net), [Holesky](https://boost-relay-holesky.flashbots.net) and [Hoodi](https://boost-relay-hoodi.flashbots.net))
 * [relay.ultrasound.money](https://relay.ultrasound.money), [agnostic-relay.net](https://agnostic-relay.net), bloXroute relays ([light fork](https://github.com/bloXroute-Labs/mev-relay))
 * [mainnet.aestus.live](https://mainnet.aestus.live), [relay.edennetwork.io/info](https://relay.edennetwork.io/info), [mainnet-relay.securerpc.com](https://mainnet-relay.securerpc.com)
 
@@ -123,6 +123,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 
 * `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: `3`)
 * `API_MAX_HEADER_BYTES` - http maximum header bytes (default: `60_000`)
+* `API_MAX_PAYLOAD_BYTES` - http maximum payload bytes (default: `15_728_640`)
 * `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: `1_500`)
 * `API_TIMEOUT_READHEADER_MS` - http read header timeout in milliseconds (default: `600`)
 * `API_TIMEOUT_WRITE_MS` - http write timeout in milliseconds (default: `10_000`)

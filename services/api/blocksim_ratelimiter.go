@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"github.com/flashbots/go-utils/cli"
 	"github.com/flashbots/go-utils/jsonrpc"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/goccy/go-json"
 )
 
 var (
@@ -25,6 +25,7 @@ var (
 	ErrNoCapellaPayload = errors.New("capella payload is nil")
 	ErrNoDenebPayload   = errors.New("deneb payload is nil")
 	ErrNoElectraPayload = errors.New("electra payload is nil")
+	ErrNoFuluPayload    = errors.New("fulu payload is nil")
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 10000)) * time.Millisecond
@@ -96,6 +97,10 @@ func (b *BlockSimulationRateLimiter) Send(
 		return nil, ErrNoElectraPayload, nil
 	}
 
+	if payload.Version == spec.DataVersionFulu && payload.Fulu == nil {
+		return nil, ErrNoFuluPayload, nil
+	}
+
 	submission, err := common.GetBlockSubmissionInfo(payload.VersionedSubmitBlockRequest)
 	if err != nil {
 		return nil, err, nil
@@ -112,11 +117,14 @@ func (b *BlockSimulationRateLimiter) Send(
 	}
 
 	// Create and fire off JSON-RPC request
-	if payload.Version == spec.DataVersionElectra {
+	switch payload.Version {
+	case spec.DataVersionFulu:
+		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV5", payload)
+	case spec.DataVersionElectra:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV4", payload)
-	} else if payload.Version == spec.DataVersionDeneb {
+	case spec.DataVersionDeneb:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
-	} else {
+	default:
 		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
 	}
 	res, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
@@ -147,7 +155,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	}
 
 	// set request headers
-	httpReq.Header.Add("Content-Type", "application/json")
+	httpReq.Header.Add("Content-Type", common.ApplicationJSON)
 	for k, v := range headers {
 		httpReq.Header.Add(k, v[0])
 	}
@@ -157,7 +165,7 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	if err != nil {
 		return nil, err, nil
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// read all resp bytes
 	rawResp, err := io.ReadAll(resp.Body)
@@ -172,6 +180,9 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	}
 
 	if res.Error != nil {
+		if res.Error.Data != nil {
+			return res, nil, fmt.Errorf("%w: %s (%v)", ErrSimulationFailed, res.Error.Message, res.Error.Data)
+		}
 		return res, nil, fmt.Errorf("%w: %s", ErrSimulationFailed, res.Error.Message)
 	}
 	return res, nil, nil

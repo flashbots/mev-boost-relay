@@ -2,7 +2,6 @@ package tool
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"net/url"
 	"os"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/database/vars"
+	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +86,7 @@ var DataAPIExportPayloads = &cobra.Command{
 			if err != nil {
 				log.WithError(err).Fatal("failed to open file")
 			}
-			defer f.Close()
+			defer f.Close() //nolint:errcheck
 
 			if strings.HasSuffix(outFile, ".csv") {
 				// write CSV

@@ -8,6 +8,7 @@
 package housekeeper
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	_ "net/http/pprof"
@@ -21,6 +22,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/flashbots/mev-boost-relay/metrics"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -126,6 +128,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 		return
 	}
 	hk.headSlot.Store(headSlot)
+	metrics.CurrentHeadSlotGauge.Record(context.Background(), int64(headSlot)) //nolint:gosec
 
 	log := hk.log.WithFields(logrus.Fields{
 		"headSlot":     headSlot,
@@ -137,6 +140,7 @@ func (hk *Housekeeper) processNewSlot(headSlot uint64) {
 	if prevHeadSlot > 0 {
 		for s := prevHeadSlot + 1; s < headSlot; s++ {
 			log.WithField("missedSlot", s).Warnf("missed slot: %d", s)
+			metrics.MissedSlotCount.Add(context.Background(), 1)
 		}
 	}
 
@@ -250,21 +254,38 @@ func (hk *Housekeeper) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 
 // updateValidatorRegistrationsInRedis saves all latest validator registrations from the database to Redis
 func (hk *Housekeeper) updateValidatorRegistrationsInRedis() {
-	regs, err := hk.db.GetLatestValidatorRegistrations(true)
+	log := hk.log
+	log.Infof("updateValidatorRegistrationsInRedis: getting registrations from DB...")
+
+	timeStarted := time.Now()
+	regs, err := hk.db.GetLatestValidatorRegistrations(false)
 	if err != nil {
-		hk.log.WithError(err).Error("failed to get latest validator registrations")
+		log.WithError(err).Error("failed to get latest validator registrations")
 		return
 	}
 
-	hk.log.Infof("updating %d validator registrations in Redis...", len(regs))
-	timeStarted := time.Now()
+	log = log.WithFields(logrus.Fields{
+		"numRegistrations": len(regs),
+		"timeNeededDBSec":  time.Since(timeStarted).Seconds(),
+	})
+	log.Info("updateValidatorRegistrationsInRedis: got registrations from DB, updating Redis (this may take a while)...")
 
+	timeStarted = time.Now()
 	for _, reg := range regs {
-		err = hk.redis.SetValidatorRegistrationTimestampIfNewer(common.NewPubkeyHex(reg.Pubkey), reg.Timestamp)
+		// convert DB data to original struct
+		data, err := reg.ToSignedValidatorRegistration()
 		if err != nil {
-			hk.log.WithError(err).Error("failed to set validator registration")
+			log.WithError(err).Error("failed to convert validator registration entry to signed validator registration")
+			continue
+		}
+
+		// save to Redis
+		err = hk.redis.SetValidatorRegistrationData(data.Message)
+		if err != nil {
+			log.WithError(err).Error("failed to set validator registration")
 			continue
 		}
 	}
-	hk.log.Infof("updating %d validator registrations in Redis done - %f sec", len(regs), time.Since(timeStarted).Seconds())
+
+	log.WithField("timeNeededRedisSec", time.Since(timeStarted).Seconds()).Info("updateValidatorRegistrationsInRedis: updating Redis done")
 }
