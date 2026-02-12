@@ -27,7 +27,7 @@ func TestMakePostRequest(t *testing.T) {
 
 	// To satisfy the bodyclose linter.
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -88,7 +88,7 @@ func TestU256StrToUint256(t *testing.T) {
 
 func TestGetEnvStrSlice(t *testing.T) {
 	testEnvVar := "TESTENV_TestGetEnvStrSlice"
-	os.Unsetenv(testEnvVar)
+	_ = os.Unsetenv(testEnvVar)
 	r := GetEnvStrSlice(testEnvVar, nil)
 	require.Empty(t, r)
 
@@ -102,7 +102,7 @@ func TestGetEnvStrSlice(t *testing.T) {
 	require.Len(t, r, 2)
 	require.Equal(t, "str1", r[0])
 	require.Equal(t, "str2", r[1])
-	os.Unsetenv(testEnvVar)
+	_ = os.Unsetenv(testEnvVar)
 }
 
 func TestGetBlockSubmissionInfo(t *testing.T) {

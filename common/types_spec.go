@@ -867,10 +867,12 @@ func (r *VersionedSignedBlindedBeaconBlock) UnmarshalJSONWithVersion(input []byt
 }
 
 func (r *VersionedSignedBlindedBeaconBlock) Unmarshal(input []byte, contentType, ethConsensusVersion string) error {
-	if contentType == ApplicationOctetStream {
+	switch contentType {
+	case ApplicationOctetStream:
 		return r.UnmarshalSSZWithVersion(input, ethConsensusVersion)
-	} else if contentType == ApplicationJSON {
+	case ApplicationJSON:
 		return r.UnmarshalJSONWithVersion(input, ethConsensusVersion)
+	default:
+		return ErrInvalidContentType
 	}
-	return ErrInvalidContentType
 }

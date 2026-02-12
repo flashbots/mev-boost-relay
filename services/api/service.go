@@ -1005,7 +1005,7 @@ func NegotiateRequestResponseType(req *http.Request) (mimeType string, err error
 
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "MEV-Boost Relay API")
+	_, _ = fmt.Fprintf(w, "MEV-Boost Relay API")
 }
 
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
@@ -1054,7 +1054,7 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 		api.RespondError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
-	req.Body.Close()
+	_ = req.Body.Close()
 
 	//
 	// Parse the registrations request body, and check for cached entries
@@ -2700,10 +2700,11 @@ func (api *RelayAPI) handleInternalBuilderStatus(w http.ResponseWriter, req *htt
 		api.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if req.Method == http.MethodGet {
+	switch req.Method {
+	case http.MethodGet:
 		api.RespondOK(w, builderEntry)
 		return
-	} else if req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
 		st := common.BuilderStatus{
 			IsHighPrio:    builderEntry.IsHighPrio,
 			IsBlacklisted: builderEntry.IsBlacklisted,

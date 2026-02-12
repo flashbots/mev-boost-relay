@@ -70,9 +70,9 @@ func NewDatabaseService(dsn string) (*DatabaseService, error) {
 		return nil, err
 	}
 
-	db.DB.SetMaxOpenConns(50)
-	db.DB.SetMaxIdleConns(10)
-	db.DB.SetConnMaxIdleTime(0)
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(0)
 
 	if os.Getenv("DB_DONT_APPLY_SCHEMA") == "" {
 		migrate.SetTable(vars.TableMigrations)
@@ -362,9 +362,10 @@ func (s *DatabaseService) GetRecentDeliveredPayloads(queryArgs GetPayloadsFilter
 	}
 
 	orderBy := "slot DESC"
-	if queryArgs.OrderByValue == 1 {
+	switch queryArgs.OrderByValue {
+	case 1:
 		orderBy = "value ASC"
-	} else if queryArgs.OrderByValue == -1 {
+	case -1:
 		orderBy = "value DESC"
 	}
 
@@ -522,7 +523,7 @@ func (s *DatabaseService) SetBlockBuilderIDStatusIsOptimistic(pubkey string, isO
 		return fmt.Errorf("unable to read block builder: %v, %w", pubkey, err)
 	}
 	if builder.BuilderID == "" {
-		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:goerr113
+		return fmt.Errorf("unable update optimistic status of a builder with no builder id: %v", pubkey) //nolint:err113
 	}
 	query := `UPDATE ` + vars.TableBlockBuilder + ` SET is_optimistic=$1 WHERE builder_id=$2;`
 	_, err = s.DB.Exec(query, isOptimistic, builder.BuilderID)
