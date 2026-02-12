@@ -1,3 +1,5 @@
+version: "2"
+
 # https://golangci-lint.run/usage/linters
 linters:
   enable-all: true
@@ -28,7 +30,6 @@ linters:
     - wsl
     - interfacebloat
     - exhaustruct
-    - tenv
     - gocognit
     - dupl
 
@@ -119,3 +120,19 @@ issues:
     - path: cmd/tool/.*.go
       linters:
         - goconst
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

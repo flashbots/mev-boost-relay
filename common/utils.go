@@ -66,7 +66,7 @@ func makeRequest(ctx context.Context, client http.Client, method, url string, pa
 	}
 
 	if resp.StatusCode > 299 {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err

@@ -167,12 +167,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:err113
 		},
 		{
 			description:     "missing_trie_node_capella",
 			version:         spec.DataVersionCapella,
-			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:err113
 		},
 		{
 			description: "success_deneb",
@@ -187,12 +187,12 @@ func TestSimulateBlock(t *testing.T) {
 		{
 			description:     "block_already_known_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:goerr113
+			simulationError: errors.New(ErrBlockAlreadyKnown), //nolint:err113
 		},
 		{
 			description:     "missing_trie_node_deneb",
 			version:         spec.DataVersionDeneb,
-			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:goerr113
+			simulationError: errors.New(ErrMissingTrieNode + "23e21f94cd97b3b27ae5c758277639dd387a6e3da5923c5485f24ec6c71e16b8 (path ) <nil>"), //nolint:err113
 		},
 	}
 	for _, tc := range cases {

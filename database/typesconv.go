@@ -116,19 +116,18 @@ func BuilderSubmissionEntryToBidTraceV2WithTimestampJSON(payload *BuilderBlockSu
 
 func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPayloadEntry) (payload *builderApi.VersionedSubmitBlindedBlockResponse, err error) {
 	payloadVersion := executionPayloadEntry.Version
-	if payloadVersion == common.ForkVersionStringFulu {
+	switch payloadVersion {
+	case common.ForkVersionStringFulu:
 		executionPayload := new(builderApiFulu.ExecutionPayloadAndBlobsBundle)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
 			return nil, err
 		}
-
 		return &builderApi.VersionedSubmitBlindedBlockResponse{
 			Version: spec.DataVersionFulu,
 			Fulu:    executionPayload,
 		}, nil
-	}
-	if payloadVersion == common.ForkVersionStringElectra {
+	case common.ForkVersionStringElectra:
 		executionPayload := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
@@ -138,7 +137,7 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 			Version: spec.DataVersionElectra,
 			Electra: executionPayload,
 		}, nil
-	} else if payloadVersion == common.ForkVersionStringDeneb {
+	case common.ForkVersionStringDeneb:
 		executionPayload := new(builderApiDeneb.ExecutionPayloadAndBlobsBundle)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
@@ -148,7 +147,7 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 			Version: spec.DataVersionDeneb,
 			Deneb:   executionPayload,
 		}, nil
-	} else if payloadVersion == common.ForkVersionStringCapella {
+	case common.ForkVersionStringCapella:
 		executionPayload := new(capella.ExecutionPayload)
 		err = json.Unmarshal([]byte(executionPayloadEntry.Payload), executionPayload)
 		if err != nil {
@@ -158,7 +157,7 @@ func ExecutionPayloadEntryToExecutionPayload(executionPayloadEntry *ExecutionPay
 			Version: spec.DataVersionCapella,
 			Capella: executionPayload,
 		}, nil
-	} else {
+	default:
 		return nil, ErrUnsupportedExecutionPayload
 	}
 }

@@ -646,7 +646,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 			return state, err
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
-		return state, fmt.Errorf("unsupported payload version: %s", payload.Version) //nolint:goerr113
+		return state, fmt.Errorf("unsupported payload version: %s", payload.Version) //nolint:err113
 	}
 
 	// Record time needed to save payload
@@ -713,7 +713,7 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(ctx context.Context, pipeliner redis
 	if copyErr != nil {
 		return state, copyErr
 	} else if wasCopied == 0 {
-		return state, fmt.Errorf("could not copy floor bid from %s to %s", keyBidSource, keyFloorBid) //nolint:goerr113
+		return state, fmt.Errorf("could not copy floor bid from %s to %s", keyBidSource, keyFloorBid) //nolint:err113
 	}
 	err = pipeliner.Expire(ctx, keyFloorBid, expiryBidCache).Err()
 	if err != nil {
@@ -777,7 +777,7 @@ func (r *RedisCache) _updateTopBid(ctx context.Context, pipeliner redis.Pipeline
 	if err != nil {
 		return state, err
 	} else if wasCopied == 0 {
-		return state, fmt.Errorf("could not copy top bid from %s to %s", keyBidSource, keyTopBid) //nolint:goerr113
+		return state, fmt.Errorf("could not copy top bid from %s to %s", keyBidSource, keyTopBid) //nolint:err113
 	}
 	err = pipeliner.Expire(context.Background(), keyTopBid, expiryBidCache).Err()
 	if err != nil {
@@ -815,7 +815,7 @@ func (r *RedisCache) GetTopBidValue(ctx context.Context, pipeliner redis.Pipelin
 	topBidValue = new(big.Int)
 	topBidValue, ok := topBidValue.SetString(topBidValueStr, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not set top bid value from %s", topBidValueStr) //nolint:goerr113
+		return nil, fmt.Errorf("could not set top bid value from %s", topBidValueStr) //nolint:err113
 	}
 	return topBidValue, nil
 }
@@ -832,7 +832,7 @@ func (r *RedisCache) GetBuilderLatestValue(slot uint64, parentHash, proposerPubk
 	topBidValue = new(big.Int)
 	topBidValue, ok := topBidValue.SetString(topBidValueStr, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not set top bid value from %s", topBidValueStr) //nolint:goerr113
+		return nil, fmt.Errorf("could not set top bid value from %s", topBidValueStr) //nolint:err113
 	}
 	return topBidValue, nil
 }

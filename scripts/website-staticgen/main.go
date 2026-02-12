@@ -18,7 +18,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer jsonFile.Close()
+	defer jsonFile.Close() //nolint:errcheck
 
 	byteValue, _ := io.ReadAll(jsonFile)
 	err = json.Unmarshal(byteValue, &data)
