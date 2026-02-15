@@ -13,6 +13,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiElectra "github.com/attestantio/go-builder-client/api/electra"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -421,6 +422,45 @@ func TestGetHeader(t *testing.T) {
 	resp.Version = spec.DataVersionDeneb
 	resp.Deneb = new(builderApiDeneb.SignedBuilderBid)
 	err = resp.Deneb.UnmarshalSSZ(rr.Body.Bytes())
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Create an electra bid
+	path = fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot+2, parentHash, proposerPubkey)
+	opts = common.CreateTestBlockSubmissionOpts{
+		Slot:           slot + 2,
+		ParentHash:     parentHash,
+		ProposerPubkey: proposerPubkey,
+		Version:        spec.DataVersionElectra,
+	}
+	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(t.Context(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	require.NoError(t, err)
+
+	// Check: JSON electra request works and returns a bid
+	rr = backend.request(http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	err = json.Unmarshal(rr.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	value, err = resp.Value()
+	require.NoError(t, err)
+	require.Equal(t, spec.DataVersionElectra, resp.Version)
+	require.Equal(t, bidValue.String(), value.String())
+
+	// Check: SSZ electra request works and returns a bid
+	rr = backend.requestBytes(http.MethodGet, path, nil, &http.Header{
+		"Accept": []string{"application/octet-stream"},
+	})
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, ApplicationOctetStream, rr.Header().Get("Content-Type"))
+	require.Equal(t, common.EthConsensusVersionElectra, rr.Header().Get("Eth-Consensus-Version"))
+	resp = builderSpec.VersionedSignedBuilderBid{}
+	resp.Version = spec.DataVersionElectra
+	resp.Electra = new(builderApiElectra.SignedBuilderBid)
+	err = resp.Electra.UnmarshalSSZ(rr.Body.Bytes())
 	require.NoError(t, err)
 	value, err = resp.Value()
 	require.NoError(t, err)
@@ -1561,6 +1601,31 @@ func TestCheckProposerSignature(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
+
+	t.Run("Invalid Electra Signature", func(t *testing.T) {
+		jsonBytes := common.LoadGzippedBytes(t, "../../testdata/signedBlindedBeaconBlockElectra.json.gz")
+		payload := new(common.VersionedSignedBlindedBeaconBlock)
+		err := json.Unmarshal(jsonBytes, payload)
+		require.NoError(t, err)
+		// change signature
+		signature, err := utils.HexToSignature(
+			"0x942d85822e86a182b0a535361b379015a03e5ce4416863d3baa46b42eef06f070462742b79fbc77c0802699ba6d2ab00" +
+				"11740dad6bfcf05b1f15c5a11687ae2aa6a08c03ad1ff749d7a48e953d13b5d7c2bd1da4cfcf30ba6d918b587d6525f0",
+		)
+		require.NoError(t, err)
+		payload.Electra.Signature = signature
+		// start backend with goerli network
+		_, _, backend := startTestBackend(t)
+		goerli, err := common.NewEthNetworkDetails(common.EthNetworkGoerli)
+		require.NoError(t, err)
+		backend.relay.opts.EthNetDetails = *goerli
+		// check signature
+		pubkey, err := utils.HexToPubkey("0x8322b8af5c6d97e855cc75ad19d59b381a880630cded89268c14acb058cf3c5720ebcde5fa6087dcbb64dbd826936148")
+		require.NoError(t, err)
+		ok, err := backend.relay.checkProposerSignature(payload, pubkey[:])
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
 }
 
 func gzipBytes(t *testing.T, b []byte) []byte {
@@ -1605,4 +1670,79 @@ func TestNegotiateRequestResponseType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetHeaderErrorCases(t *testing.T) {
+	backend := newTestBackend(t, 1)
+	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
+		Data: beaconclient.GetGenesisResponseData{
+			GenesisTime: uint64(time.Now().UTC().Unix()), //nolint:gosec
+		},
+	}
+
+	currentSlot := uint64(100)
+	backend.relay.headSlot.Store(currentSlot)
+
+	testCases := []struct {
+		name           string
+		path           string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "too short proposer pubkey",
+			path:           "/eth/v1/builder/header/101/0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747/0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid pubkey",
+		},
+		{
+			name:           "too short parent hash",
+			path:           "/eth/v1/builder/header/101/0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b/0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid hash",
+		},
+		{
+			name:           "past slot",
+			path:           "/eth/v1/builder/header/50/0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747/0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "slot is too old",
+		},
+		{
+			name:           "no bid available",
+			path:           "/eth/v1/builder/header/101/0x13e606c7b3d1faad7e83503ce3dedce4c6bb89b0c28ffb240d713c7b110b9747/0x6ae5932d1e248d987d51b58665b81848814202d7b23b343d20f2a167d12f07dcb01ca41c42fdd60b7fca9c4b90890792",
+			expectedStatus: http.StatusNoContent,
+			expectedError:  "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := backend.request(http.MethodGet, tc.path, nil)
+			require.Equal(t, tc.expectedStatus, rr.Code)
+
+			if tc.expectedError != "" {
+				require.Contains(t, rr.Body.String(), tc.expectedError)
+			}
+		})
+	}
+}
+
+func TestDataAPIValidation(t *testing.T) {
+	backend := newTestBackend(t, 1)
+	backend.relay.opts.DataAPI = true
+
+	t.Run("invalid block hash", func(t *testing.T) {
+		invalidBlockHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab" // invalid block hash
+		path := fmt.Sprintf("/relay/v1/data/bidtraces/proposer_payload_delivered?block_hash=%s", invalidBlockHash)
+		rr := backend.request(http.MethodGet, path, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "invalid block_hash argument")
+	})
+
+	t.Run("no query args passed", func(t *testing.T) {
+		path := "/relay/v1/data/bidtraces/builder_blocks_received"
+		rr := backend.request(http.MethodGet, path, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "need to query for specific")
+	})
 }
