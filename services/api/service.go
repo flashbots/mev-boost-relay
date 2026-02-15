@@ -202,6 +202,9 @@ type RelayAPI struct {
 	memcached    *datastore.Memcached
 	db           database.IDatabaseService
 
+	// SSZ manager for dynamic SSZ operations
+	sszManager *common.SSZManager
+
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
 	capellaEpoch int64
@@ -307,6 +310,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		redis:        opts.Redis,
 		memcached:    opts.Memcached,
 		db:           opts.DB,
+
+		// Initialize SSZ manager
+		sszManager: common.NewSSZManager(opts.Log.WithField("component", "sszManager")),
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
@@ -430,6 +436,21 @@ func (api *RelayAPI) StartServer() (err error) {
 		return err
 	}
 	log.Infof("genesis info: %d", api.genesisInfo.Data.GenesisTime)
+
+	// Get beacon spec configuration and initialize SSZ manager
+	specConfig, err := api.beaconClient.GetSpecRaw()
+	if err != nil {
+		api.log.WithError(err).Warn("failed to get beacon spec config, SSZ manager will use standard SSZ")
+	} else {
+		// Try to initialize the SSZ manager with the complete beacon config
+		if err := api.sszManager.Initialize(specConfig); err != nil {
+			api.log.WithError(err).Warn("failed to initialize SSZ manager with beacon config, will use standard SSZ")
+		} else {
+			api.log.WithFields(logrus.Fields{
+				"configKeys": len(specConfig),
+			}).Info("SSZ manager initialized with complete beacon config")
+		}
+	}
 
 	// Get and prepare fork schedule
 	forkSchedule, err := api.beaconClient.GetForkSchedule()
@@ -2148,7 +2169,7 @@ type redisUpdateBidOpts struct {
 
 func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApi.VersionedSubmitBlindedBlockResponse, bool) {
 	// Prepare the response data
-	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder, api.sszManager)
 	if err != nil {
 		opts.log.WithError(err).Error("could not sign builder bid")
 		api.RespondError(opts.w, http.StatusBadRequest, err.Error())

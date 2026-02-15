@@ -207,7 +207,7 @@ func CreateTestBlockSubmission(t *testing.T, builderPubkey string, value *uint25
 		}
 	}
 
-	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain)
+	getHeaderResponse, err = BuildGetHeaderResponse(payload, &relaySk, &relayPk, domain, nil)
 	require.NoError(t, err)
 
 	getPayloadResponse, err = BuildGetPayloadResponse(payload)
