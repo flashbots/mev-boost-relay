@@ -801,9 +801,9 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 	defer api.payloadAttributesLock.Unlock()
 
 	// Step 1: clean up old ones
-	for parentBlockHash, attr := range api.payloadAttributes {
+	for key, attr := range api.payloadAttributes {
 		if attr.slot < apiHeadSlot {
-			delete(api.payloadAttributes, getPayloadAttributesKey(parentBlockHash, attr.slot))
+			delete(api.payloadAttributes, key)
 		}
 	}
 
@@ -2250,12 +2250,14 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	pf.IsGzip = isGzip
 	log = log.WithField("reqIsGzip", isGzip)
 	if isGzip {
-		r, err = gzip.NewReader(req.Body)
+		gzipReader, err := gzip.NewReader(req.Body)
 		if err != nil {
 			log.WithError(err).Warn("could not create gzip reader")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		defer gzipReader.Close() //nolint:errcheck
+		r = gzipReader
 	}
 
 	limitReader := io.LimitReader(r, int64(apiMaxPayloadBytes))
