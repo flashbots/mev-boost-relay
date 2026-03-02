@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	hkDefaultPprofEnabled    = os.Getenv("PPROF") == "1"
-	hkDefaultPprofListenAddr = common.GetEnv("PPROF_LISTEN_ADDR", "localhost:9064")
+	hkDefaultListenAddr   = common.GetEnv("LISTEN_ADDR", "localhost:9064")
+	hkDefaultPprofEnabled = os.Getenv("PPROF") == "1"
 
-	hkPprofEnabled    bool
-	hkPprofListenAddr string
+	hkListenAddr   string
+	hkPprofEnabled bool
 )
 
 func init() {
@@ -33,8 +33,15 @@ func init() {
 
 	housekeeperCmd.Flags().StringVar(&network, "network", defaultNetwork, "Which network to use")
 
-	housekeeperCmd.Flags().BoolVar(&hkPprofEnabled, "pprof", hkDefaultPprofEnabled, "enable pprof API")
-	housekeeperCmd.Flags().StringVar(&hkPprofListenAddr, "pprof-listen-addr", hkDefaultPprofListenAddr, "listen address for pprof server")
+	// env for backward compatibility
+	addrLegacy := common.GetEnv("PPROF_LISTEN_ADDR", "")
+	if addrLegacy != "" {
+		logrus.Warn("Using legacy PPROF_LISTEN_ADDR, please update to LISTEN_ADDR")
+		hkDefaultListenAddr = addrLegacy
+	}
+
+	housekeeperCmd.Flags().StringVar(&hkListenAddr, "listen-addr", hkDefaultListenAddr, "listen address for metrics and debug server")
+	housekeeperCmd.Flags().BoolVar(&hkPprofEnabled, "pprof", hkDefaultPprofEnabled, "enable pprof debug endpoints")
 }
 
 var housekeeperCmd = &cobra.Command{
@@ -90,8 +97,8 @@ var housekeeperCmd = &cobra.Command{
 			DB:           db,
 			BeaconClient: beaconClient,
 
-			PprofAPI:           hkPprofEnabled,
-			PprofListenAddress: hkPprofListenAddr,
+			ListenAddr: hkListenAddr,
+			PprofAPI:   hkPprofEnabled,
 		}
 		service := housekeeper.NewHousekeeper(opts)
 		log.Info("Starting housekeeper service...")

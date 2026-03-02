@@ -24,6 +24,7 @@ import (
 	"github.com/flashbots/mev-boost-relay/datastore"
 	"github.com/flashbots/mev-boost-relay/metrics"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
 )
@@ -34,8 +35,8 @@ type HousekeeperOpts struct {
 	DB           database.IDatabaseService
 	BeaconClient beaconclient.IMultiBeaconClient
 
-	PprofAPI           bool
-	PprofListenAddress string
+	ListenAddr string
+	PprofAPI   bool
 }
 
 type Housekeeper struct {
@@ -46,8 +47,8 @@ type Housekeeper struct {
 	db           database.IDatabaseService
 	beaconClient beaconclient.IMultiBeaconClient
 
-	pprofAPI           bool
-	pprofListenAddress string
+	listenAddr string
+	pprofAPI   bool
 
 	isStarted                uberatomic.Bool
 	isUpdatingProposerDuties uberatomic.Bool
@@ -67,8 +68,8 @@ func NewHousekeeper(opts *HousekeeperOpts) *Housekeeper {
 		redis:                 opts.Redis,
 		db:                    opts.DB,
 		beaconClient:          opts.BeaconClient,
+		listenAddr:            opts.ListenAddr,
 		pprofAPI:              opts.PprofAPI,
-		pprofListenAddress:    opts.PprofListenAddress,
 		proposersAlreadySaved: make(map[uint64]string),
 	}
 
@@ -93,9 +94,9 @@ func (hk *Housekeeper) Start() (err error) {
 		return err
 	}
 
-	// Start pprof API, if requested
-	if hk.pprofAPI {
-		go hk.startPprofAPI()
+	// Start HTTP server (metrics + optional pprof)
+	if hk.listenAddr != "" {
+		go hk.startHTTPServer()
 	}
 
 	// Start initial tasks
@@ -113,17 +114,22 @@ func (hk *Housekeeper) Start() (err error) {
 	}
 }
 
-func (hk *Housekeeper) startPprofAPI() {
+func (hk *Housekeeper) startHTTPServer() {
 	r := mux.NewRouter()
-	hk.log.Infof("Starting pprof API at %s", hk.pprofListenAddress)
-	r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	r.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	if hk.pprofAPI {
+		hk.log.Info("pprof API enabled")
+		r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	}
+
+	hk.log.Infof("HTTP server listening on %s", hk.listenAddr)
 	srv := http.Server{ //nolint:gosec
-		Addr:    hk.pprofListenAddress,
+		Addr:    hk.listenAddr,
 		Handler: r,
 	}
 	err := srv.ListenAndServe()
-	if err != nil {
-		hk.log.WithError(err).Error("failed to start pprof API")
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		hk.log.WithError(err).Error("failed to start HTTP server")
 	}
 }
 
