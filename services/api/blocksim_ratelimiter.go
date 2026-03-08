@@ -187,3 +187,19 @@ func SendJSONRPCRequest(client *http.Client, req jsonrpc.JSONRPCRequest, url str
 	}
 	return res, nil, nil
 }
+
+var _ IBlockSimRateLimiter = (*NoopBlockSim)(nil)
+
+type NoopBlockSim struct{}
+
+func newNoopBlockSim() *NoopBlockSim {
+	return &NoopBlockSim{}
+}
+
+func (n *NoopBlockSim) Send(context context.Context, payload *common.BuilderBlockValidationRequest, isHighPrio, fastTrack bool) (*common.BuilderBlockValidationResponse, error, error) {
+	return nil, nil, nil
+}
+
+func (n *NoopBlockSim) CurrentCounter() int64 {
+	return 0
+}

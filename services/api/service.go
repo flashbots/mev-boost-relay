@@ -27,6 +27,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -297,6 +298,14 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		}
 	}
 
+	var blockSim IBlockSimRateLimiter
+	if opts.BlockSimURL != "" {
+		blockSim = NewBlockSimulationRateLimiter(opts.BlockSimURL)
+	} else {
+		log.Warn("Running without block simulator")
+		blockSim = newNoopBlockSim()
+	}
+
 	api = &RelayAPI{
 		opts:         opts,
 		log:          opts.Log,
@@ -311,7 +320,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
 		proposerDutiesResponse: &[]byte{},
-		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
+		blockSimRateLimiter:    blockSim,
 
 		validatorRegC:     make(chan builderApiV1.SignedValidatorRegistration, 450_000),
 		validatorUpdateCh: make(chan struct{}),
