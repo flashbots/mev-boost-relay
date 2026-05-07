@@ -20,6 +20,7 @@ var (
 	meter otelapi.Meter
 
 	GetHeaderLatencyHistogram         otelapi.Float64Histogram
+	GetHeaderDelayHistogram           otelapi.Float64Histogram
 	GetPayloadLatencyHistogram        otelapi.Float64Histogram
 	PublishBlockLatencyHistogram      otelapi.Float64Histogram
 	RegisterValidatorLatencyHistogram otelapi.Float64Histogram
@@ -68,6 +69,7 @@ func Setup(ctx context.Context) error {
 	for _, setup := range []func(context.Context) error{
 		setupMeter, // must come first
 		setupGetHeaderLatency,
+		setupGetHeaderDelay,
 		setupGetPayloadLatency,
 		setupPublishBlockLatency,
 		setupSubmitNewBlockLatency,
@@ -133,6 +135,20 @@ func setupGetHeaderLatency(_ context.Context) error {
 		latencyBoundariesMs,
 	)
 	GetHeaderLatencyHistogram = latency
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupGetHeaderDelay(_ context.Context) error {
+	hist, err := meter.Float64Histogram(
+		"get_header_delay",
+		otelapi.WithDescription("duration of artificial delay applied to getHeader responses for delay-eligible user agents"),
+		otelapi.WithUnit("ms"),
+		latencyBoundariesMs,
+	)
+	GetHeaderDelayHistogram = hist
 	if err != nil {
 		return err
 	}

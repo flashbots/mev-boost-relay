@@ -59,6 +59,8 @@ const (
 	HeaderAccept              = "Accept"
 	HeaderContentType         = "Content-Type"
 	HeaderEthConsensusVersion = "Eth-Consensus-Version"
+	HeaderDateMilliseconds    = "Date-Milliseconds"
+	HeaderTimeoutMs           = "X-Timeout-Ms"
 
 	HandleGetPayloadVersionV1 HandleGetPayloadVersion = "V1"
 	HandleGetPayloadVersionV2 HandleGetPayloadVersion = "V2"
@@ -103,6 +105,17 @@ var (
 	getHeaderRequestCutoffMs  = cli.GetEnvInt("GETHEADER_REQUEST_CUTOFF_MS", 3000)
 	getPayloadRequestCutoffMs = cli.GetEnvInt("GETPAYLOAD_REQUEST_CUTOFF_MS", 4000)
 	getPayloadResponseDelayMs = cli.GetEnvInt("GETPAYLOAD_RESPONSE_DELAY_MS", 1000)
+	// Latest point in the slot (ms after slot start) to which getHeader responses
+	// for delay-eligible user agents are deferred. Disabled with 0 by default.
+	getHeaderResponseDelayTargetMs = cli.GetEnvInt("GETHEADER_RESPONSE_DELAY_TARGET_MS", 0)
+	// Safety margin subtracted from the target return time to leave room for
+	// response serialization and network egress.
+	getHeaderResponseDelaySafetyMs = cli.GetEnvInt("GETHEADER_RESPONSE_DELAY_SAFETY_MS", 5)
+	// Comma-separated user-agent substrings that opt the client into the
+	// getHeader response delay. A request is delayed if its User-Agent contains
+	// any of these substrings. Unset (empty) by default, which disables the
+	// delay regardless of GETHEADER_RESPONSE_DELAY_TARGET_MS.
+	getHeaderDelayUserAgents = common.GetEnvStrSlice("GETHEADER_DELAY_USERAGENTS", nil)
 
 	// api settings
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
@@ -1287,6 +1300,24 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		log.Info("getHeader sent too late")
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+
+	// For delay-eligible user agents, defer the response so it can include
+	// later (and potentially higher-value) bids.
+	slotStartMs := int64(slotStartTimestamp * 1000) //nolint:gosec
+	if delay := computeGetHeaderDelay(ua, slotStartMs, time.Now().UnixMilli(), req.Header,
+		int64(getHeaderResponseDelayTargetMs), int64(getHeaderResponseDelaySafetyMs), getHeaderDelayUserAgents); delay > 0 {
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+			metrics.GetHeaderDelayHistogram.Record(
+				req.Context(),
+				float64(delay.Milliseconds()),
+			)
+		case <-req.Context().Done():
+			timer.Stop()
+			return
+		}
 	}
 
 	bid, err := api.redis.GetBestBid(slot, parentHashHex, proposerPubkeyHex)

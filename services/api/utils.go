@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -226,6 +229,55 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domai
 
 func getPayloadAttributesKey(parentHash string, slot uint64) string {
 	return fmt.Sprintf("%s-%d", parentHash, slot)
+}
+
+// parseClientDeadlineMs returns the unix-millisecond deadline communicated by
+// the client via the Date-Milliseconds and X-Timeout-Ms headers, if both are
+// present and parseable.
+func parseClientDeadlineMs(header http.Header) (int64, bool) {
+	dateMs, err := strconv.ParseInt(header.Get(HeaderDateMilliseconds), 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	timeoutMs, err := strconv.ParseInt(header.Get(HeaderTimeoutMs), 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return dateMs + timeoutMs, true
+}
+
+// computeGetHeaderDelay returns how long handleGetHeader should sleep before
+// responding so that delay-eligible user agents receive their bid as late as
+// possible (and thus with the freshest, potentially highest-value bid).
+//
+// A request is delay-eligible when its user agent contains any of the
+// delayUserAgents substrings. The sleep target is capped at
+// min(slotStartMs+targetMs, clientDeadlineMs) where clientDeadlineMs comes
+// from the timing headers on the request, then reduced by safetyMs to leave
+// room for response serialization and network egress. A zero return value
+// means no delay.
+func computeGetHeaderDelay(ua string, slotStartMs, nowMs int64, header http.Header, targetMs, safetyMs int64, delayUserAgents []string) time.Duration {
+	if targetMs <= 0 || !uaMatchesAny(ua, delayUserAgents) {
+		return 0
+	}
+	capMs := slotStartMs + targetMs
+	if clientCapMs, ok := parseClientDeadlineMs(header); ok && clientCapMs < capMs {
+		capMs = clientCapMs
+	}
+	sleepUntilMs := capMs - safetyMs
+	if sleepUntilMs <= nowMs {
+		return 0
+	}
+	return time.Duration(sleepUntilMs-nowMs) * time.Millisecond
+}
+
+func uaMatchesAny(ua string, substrings []string) bool {
+	for _, s := range substrings {
+		if s != "" && strings.Contains(ua, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // getHeaderContentType parses the Content-Type header and returns the media type and parameters.
