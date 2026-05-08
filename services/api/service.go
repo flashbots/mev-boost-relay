@@ -1305,15 +1305,21 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	// For delay-eligible user agents, defer the response so it can include
 	// later (and potentially higher-value) bids.
 	slotStartMs := int64(slotStartTimestamp * 1000) //nolint:gosec
-	if delay := computeGetHeaderDelay(ua, slotStartMs, time.Now().UnixMilli(), req.Header,
-		int64(getHeaderResponseDelayTargetMs), int64(getHeaderResponseDelaySafetyMs), getHeaderDelayUserAgents); delay > 0 {
+	delay := computeGetHeaderDelay(
+		ua, slotStartMs, time.Now().UnixMilli(), req.Header,
+		int64(getHeaderResponseDelayTargetMs),
+		int64(getHeaderResponseDelaySafetyMs),
+		getHeaderDelayUserAgents,
+	)
+	log = logrus.WithField("delayMs", delay.Milliseconds())
+	if delay > 0 {
 		timer := time.NewTimer(delay)
+		metrics.GetHeaderDelayHistogram.Record(
+			req.Context(),
+			float64(delay.Milliseconds()),
+		)
 		select {
 		case <-timer.C:
-			metrics.GetHeaderDelayHistogram.Record(
-				req.Context(),
-				float64(delay.Milliseconds()),
-			)
 		case <-req.Context().Done():
 			timer.Stop()
 			return
