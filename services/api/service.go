@@ -152,6 +152,10 @@ type RelayAPIOpts struct {
 	BlockBuilderAPI bool
 	DataAPI         bool
 	InternalAPI     bool
+
+	// InitialKnownValidators seeds the known-validators cache at startup so the
+	// relay accepts registrations before the first beacon-driven refresh.
+	InitialKnownValidators []string
 }
 
 type payloadAttributesHelper struct {
@@ -481,6 +485,17 @@ func (api *RelayAPI) StartServer() (err error) {
 
 	// start proposer API specific things
 	if api.opts.ProposerAPI {
+		// Optionally seed the known-validators cache so registrations are accepted
+		// before the first beacon-driven refresh (which can be many minutes away
+		// on a fresh devnet because the natural triggers gate on slot positions
+		// 4 and 20 of each epoch).
+		if len(api.opts.InitialKnownValidators) > 0 {
+			if err := api.datastore.SetInitialKnownValidators(api.opts.InitialKnownValidators, currentSlot); err != nil {
+				return fmt.Errorf("seed known validators: %w", err)
+			}
+			api.log.Infof("seeded %d known validators from --known-validators", len(api.opts.InitialKnownValidators))
+		}
+
 		// Update known validators (which can take 10-30 sec). This is a requirement for service readiness, because without them,
 		// getPayload() doesn't have the information it needs (known validators), which could lead to missed slots.
 		go api.datastore.RefreshKnownValidators(api.log, api.beaconClient, currentSlot)
@@ -870,7 +885,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	defer api.isUpdatingProposerDuties.Store(false)
 
 	// Update once every 8 slots (or more, if a slot was missed)
-	if headSlot%8 != 0 && headSlot-api.proposerDutiesSlot < 8 {
+	if api.proposerDutiesSlot > 0 && headSlot%8 != 0 && headSlot-api.proposerDutiesSlot < 8 {
 		return
 	}
 
@@ -903,7 +918,11 @@ func (api *RelayAPI) UpdateProposerDutiesWithoutChecks(headSlot uint64) {
 		api.proposerDutiesResponse = &respBytes
 	}
 	api.proposerDutiesMap = dutiesMap
-	api.proposerDutiesSlot = headSlot
+	// Only advance the gate slot when we actually got duties; otherwise let
+	// the next head event retry (Redis may not be populated yet by the housekeeper).
+	if len(duties) > 0 {
+		api.proposerDutiesSlot = headSlot
+	}
 	api.proposerDutiesLock.Unlock()
 
 	// pretty-print

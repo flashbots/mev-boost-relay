@@ -3,6 +3,7 @@ package datastore
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,6 +155,32 @@ func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beac
 
 	ds.KnownValidatorsWasUpdated.Store(true)
 	log.Infof("known validators updated")
+}
+
+// SetInitialKnownValidators seeds the known-validators cache directly from a
+// caller-provided list of pubkeys. Intended for devnets to skip the multi-minute
+// cold start while the api waits for the first natural RefreshKnownValidators
+// trigger. Assigns synthetic incrementing indices since the real validator
+// indices are only known after the first beacon query.
+func (ds *Datastore) SetInitialKnownValidators(pubkeys []string, slot uint64) error {
+	byPubkey := make(map[common.PubkeyHex]uint64, len(pubkeys))
+	byIndex := make(map[uint64]common.PubkeyHex, len(pubkeys))
+	for i, p := range pubkeys {
+		pk := common.NewPubkeyHex(strings.TrimSpace(p))
+		if len(pk.String()) != 98 {
+			return fmt.Errorf("invalid pubkey at index %d: %q", i, p)
+		}
+		idx := uint64(i)
+		byPubkey[pk] = idx
+		byIndex[idx] = pk
+	}
+	ds.knownValidatorsLock.Lock()
+	ds.knownValidatorsByPubkey = byPubkey
+	ds.knownValidatorsByIndex = byIndex
+	ds.knownValidatorsLock.Unlock()
+	ds.knownValidatorsLastSlot.Store(slot)
+	ds.KnownValidatorsWasUpdated.Store(true)
+	return nil
 }
 
 func (ds *Datastore) IsKnownValidator(pubkeyHex common.PubkeyHex) bool {
