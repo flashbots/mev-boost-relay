@@ -179,7 +179,7 @@ func (hk *Housekeeper) updateProposerDuties(headSlot uint64) {
 	defer hk.isUpdatingProposerDuties.Store(false)
 
 	slotsForHalfAnEpoch := common.SlotsPerEpoch / 2
-	if headSlot%slotsForHalfAnEpoch != 0 && headSlot-hk.proposerDutiesSlot < slotsForHalfAnEpoch {
+	if hk.proposerDutiesSlot > 0 && headSlot%slotsForHalfAnEpoch != 0 && headSlot-hk.proposerDutiesSlot < slotsForHalfAnEpoch {
 		return
 	}
 

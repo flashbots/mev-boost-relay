@@ -42,6 +42,8 @@ var (
 	apiInternalAPI     bool
 	apiProposerAPI     bool
 	apiLogTag          string
+
+	apiKnownValidators []string
 )
 
 func init() {
@@ -69,6 +71,9 @@ func init() {
 	apiCmd.Flags().BoolVar(&apiDataAPI, "data-api", apiDefaultDataAPIEnabled, "enable data API (/data/...)")
 	apiCmd.Flags().BoolVar(&apiInternalAPI, "internal-api", apiDefaultInternalAPIEnabled, "enable internal API (/internal/...)")
 	apiCmd.Flags().BoolVar(&apiProposerAPI, "proposer-api", apiDefaultProposerAPIEnabled, "enable proposer API (/proposer/...)")
+
+	apiCmd.Flags().StringSliceVar(&apiKnownValidators, "known-validators", nil,
+		"comma-separated validator pubkeys to seed the known-validators cache at startup")
 }
 
 var apiCmd = &cobra.Command{
@@ -172,6 +177,8 @@ var apiCmd = &cobra.Command{
 			DataAPI:         apiDataAPI,
 			InternalAPI:     apiInternalAPI,
 			ProposerAPI:     apiProposerAPI,
+
+			InitialKnownValidators: apiKnownValidators,
 		}
 
 		// Decode the private key
