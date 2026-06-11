@@ -1318,7 +1318,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		int64(getHeaderResponseDelaySafetyMs),
 		getHeaderDelayUserAgents,
 	)
-	log = logrus.WithField("delayMs", delay.Milliseconds())
+	log = log.WithField("delayMs", delay.Milliseconds())
 	if delay > 0 {
 		timer := time.NewTimer(delay)
 		metrics.GetHeaderDelayHistogram.Record(
