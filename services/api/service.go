@@ -744,6 +744,13 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 	blockValue, reqErr, simErr := api.simulateBlock(ctx, opts)
 	simResultC <- &blockSimResult{reqErr == nil, blockValue, true, reqErr, simErr}
 	if reqErr != nil || simErr != nil {
+		// Skip demotion for transient sim failures that aren't the builder's fault:
+		// the block raced past the simulator's validation window before it could be checked.
+		if simErr != nil && (strings.Contains(simErr.Error(), "block is too old") || strings.Contains(simErr.Error(), "outside validation window")) {
+			opts.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, skipping demotion (outside validation window)")
+			return
+		}
+
 		// Mark builder as non-optimistic.
 		opts.builder.status.IsOptimistic = false
 		api.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, demoting builder")
