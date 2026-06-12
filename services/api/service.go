@@ -719,6 +719,26 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlo
 	}
 }
 
+// transientSimErrors are substrings of block simulation errors caused by the
+// simulation node's state and not by the builders which submit such block.
+var transientSimErrors = []string{
+	"block is too old",
+	"outside validation window",
+	"parent block not found",
+}
+
+func isTransientSimError(simErr error) bool {
+	if simErr == nil {
+		return false
+	}
+	for _, substr := range transientSimErrors {
+		if strings.Contains(simErr.Error(), substr) {
+			return true
+		}
+	}
+	return false
+}
+
 // processOptimisticBlock is called on a new goroutine when a optimistic block
 // needs to be simulated.
 func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC chan *blockSimResult) {
@@ -745,9 +765,8 @@ func (api *RelayAPI) processOptimisticBlock(opts blockSimOptions, simResultC cha
 	simResultC <- &blockSimResult{reqErr == nil, blockValue, true, reqErr, simErr}
 	if reqErr != nil || simErr != nil {
 		// Skip demotion for transient sim failures that aren't the builder's fault:
-		// the block raced past the simulator's validation window before it could be checked.
-		if simErr != nil && (strings.Contains(simErr.Error(), "block is too old") || strings.Contains(simErr.Error(), "outside validation window")) {
-			opts.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, skipping demotion (outside validation window)")
+		if isTransientSimError(simErr) {
+			opts.log.WithError(simErr).Warn("block simulation failed in processOptimisticBlock, skipping demotion (transient sim error)")
 			return
 		}
 
