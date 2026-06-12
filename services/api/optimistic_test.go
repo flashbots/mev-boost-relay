@@ -227,6 +227,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 		wantStatus      common.BuilderStatus
 		version         spec.DataVersion
 		simulationError error
+		expectDemotion  bool
 	}{
 		{
 			description: "success_capella",
@@ -244,6 +245,7 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			},
 			version:         spec.DataVersionCapella,
 			simulationError: errFake,
+			expectDemotion:  true,
 		},
 		{
 			description: "success_deneb",
@@ -261,6 +263,34 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			},
 			version:         spec.DataVersionDeneb,
 			simulationError: errFake,
+			expectDemotion:  true,
+		},
+		{
+			description: "transient_simulation_error_block_too_old",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: true,
+				IsHighPrio:   true,
+			},
+			version:         spec.DataVersionDeneb,
+			simulationError: errors.New("simulation failed: block is too old"),
+		},
+		{
+			description: "transient_simulation_error_validation_window",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: true,
+				IsHighPrio:   true,
+			},
+			version:         spec.DataVersionDeneb,
+			simulationError: errors.New("simulation failed: block is outside validation window"),
+		},
+		{
+			description: "transient_simulation_error_parent_block_not_found",
+			wantStatus: common.BuilderStatus{
+				IsOptimistic: true,
+				IsHighPrio:   true,
+			},
+			version:         spec.DataVersionDeneb,
+			simulationError: errors.New("simulation failed: parent block not found"),
 		},
 	}
 	for _, tc := range cases {
@@ -298,11 +328,11 @@ func TestProcessOptimisticBlock(t *testing.T) {
 			require.NoError(t, simResult.requestErr)
 			require.True(t, simResult.wasSimulated)
 
-			// Check demotion but no refund.
+			// Check demotion status but no refund.
 			if tc.simulationError != nil {
 				mockDB, ok := backend.relay.db.(*database.MockDB)
 				require.True(t, ok)
-				require.True(t, mockDB.Demotions[pkStr])
+				require.Equal(t, tc.expectDemotion, mockDB.Demotions[pkStr])
 				require.False(t, mockDB.Refunds[pkStr])
 			}
 		})
