@@ -1498,6 +1498,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
+	requestStartSlot := CurrentSlot(api.genesisInfo.Data.GenesisTime, receivedAt.UnixMilli())
 	log := api.log.WithFields(logrus.Fields{
 		"method":                      "getPayload",
 		"version":                     version,
@@ -1507,6 +1508,7 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		"headSlot":                    headSlot,
 		"headSlotEpochPos":            (headSlot % common.SlotsPerEpoch) + 1,
 		"idArg":                       req.URL.Query().Get("id"),
+		"requestStartSlot":            requestStartSlot,
 		"timestampRequestStart":       receivedAt.UnixMilli(),
 		"negotiatedResponseMediaType": negotiatedResponseMediaType,
 		"proposerContentType":         proposerContentType,
@@ -1839,6 +1841,11 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	// For the payload_delivery_exceeded_slot metric: if the request started within
+	// the payload's slot but the block was published in a later slot, the delivery
+	// exceeded the slot.
+	requestStartedInSlot := requestStartSlot == uint64(slot)
+
 	if version == HandleGetPayloadVersionV1 {
 		timeBeforePublish := time.Now().UTC().UnixMilli()
 		log = log.WithField("timestampBeforePublishing", timeBeforePublish)
@@ -1858,6 +1865,10 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		log = log.WithField("timestampAfterPublishing", timeAfterPublish)
 		log.WithField("msNeededForPublishing", msNeededForPublishing).Info("block published through beacon node")
 		metrics.PublishBlockLatencyHistogram.Record(req.Context(), float64(msNeededForPublishing))
+		if requestStartedInSlot && CurrentSlot(api.genesisInfo.Data.GenesisTime, timeAfterPublish) > requestStartSlot {
+			log.Warn("payload delivery exceeded slot")
+			metrics.PayloadDeliveryExceededSlotCount.Add(req.Context(), 1)
+		}
 
 		// give the beacon network some time to propagate the block
 		time.Sleep(time.Duration(getPayloadResponseDelayMs) * time.Millisecond)
@@ -1896,6 +1907,10 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 
 			log.Info("block published through beacon node")
 			metrics.PublishBlockLatencyHistogram.Record(context.Background(), float64(msNeededForPublishing))
+			if requestStartedInSlot && CurrentSlot(api.genesisInfo.Data.GenesisTime, timeAfterPublish) > requestStartSlot {
+				log.Warn("payload delivery exceeded slot")
+				metrics.PayloadDeliveryExceededSlotCount.Add(context.Background(), 1)
+			}
 		}()
 
 		log.Debug("responding with only accepted status code")

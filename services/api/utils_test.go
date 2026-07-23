@@ -268,3 +268,45 @@ func TestGetSlotFromBuilderSSZPayload(t *testing.T) {
 		})
 	}
 }
+
+func TestCurrentSlot(t *testing.T) {
+	const genesisTime = uint64(1_606_824_023) // mainnet genesis
+	genesisMs := int64(genesisTime * 1000)
+	slotMs := int64(common.SecondsPerSlot * 1000)
+
+	for _, tc := range []struct {
+		name        string
+		timestampMs int64
+		expected    uint64
+	}{
+		{
+			name:        "before genesis",
+			timestampMs: genesisMs - 1,
+			expected:    0,
+		},
+		{
+			name:        "at genesis",
+			timestampMs: genesisMs,
+			expected:    0,
+		},
+		{
+			name:        "last ms of slot 0",
+			timestampMs: genesisMs + slotMs - 1,
+			expected:    0,
+		},
+		{
+			name:        "start of slot 1",
+			timestampMs: genesisMs + slotMs,
+			expected:    1,
+		},
+		{
+			name:        "middle of slot 100",
+			timestampMs: genesisMs + 100*slotMs + slotMs/2,
+			expected:    100,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expected, CurrentSlot(genesisTime, tc.timestampMs))
+		})
+	}
+}

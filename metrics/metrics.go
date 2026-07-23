@@ -39,12 +39,13 @@ var (
 
 	CurrentHeadSlotGauge otelapi.Int64Gauge
 
-	SubmitNewBlockCount            otelapi.Int64Counter
-	GetHeaderCount                 otelapi.Int64Counter
-	GetPayloadCount                otelapi.Int64Counter
-	GetPayloadDeliveryFailureCount otelapi.Int64Counter
-	RegisterValidatorCount         otelapi.Int64Counter
-	MissedSlotCount                otelapi.Int64Counter
+	SubmitNewBlockCount              otelapi.Int64Counter
+	GetHeaderCount                   otelapi.Int64Counter
+	GetPayloadCount                  otelapi.Int64Counter
+	GetPayloadDeliveryFailureCount   otelapi.Int64Counter
+	PayloadDeliveryExceededSlotCount otelapi.Int64Counter
+	RegisterValidatorCount           otelapi.Int64Counter
+	MissedSlotCount                  otelapi.Int64Counter
 
 	BuilderDemotionCount otelapi.Int64Counter
 
@@ -100,6 +101,7 @@ func Setup(ctx context.Context) error {
 			setupGetHeaderCount,
 			setupGetPayloadCount,
 			setupGetPayloadDeliveryFailureCount,
+			setupPayloadDeliveryExceededSlotCount,
 			setupRegisterValidatorCount,
 			setupMissedSlotCount,
 			setupSubmitNewBlockBidValue,
@@ -369,6 +371,18 @@ func setupGetPayloadDeliveryFailureCount(_ context.Context) error {
 		otelapi.WithDescription("number of getPayload requests the relay failed to fulfill despite having committed a bid, by reason"),
 	)
 	GetPayloadDeliveryFailureCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupPayloadDeliveryExceededSlotCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"payload_delivery_exceeded_slot",
+		otelapi.WithDescription("number of getPayload requests that started within the slot but whose block was published only after the slot ended"),
+	)
+	PayloadDeliveryExceededSlotCount = counter
 	if err != nil {
 		return err
 	}

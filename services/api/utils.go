@@ -231,6 +231,16 @@ func getPayloadAttributesKey(parentHash string, slot uint64) string {
 	return fmt.Sprintf("%s-%d", parentHash, slot)
 }
 
+// CurrentSlot returns the slot that the given unix millisecond timestamp falls
+// into. Timestamps before genesis return slot 0.
+func CurrentSlot(genesisTime uint64, timestampMs int64) uint64 {
+	genesisMs := int64(genesisTime * 1000) //nolint:gosec
+	if timestampMs < genesisMs {
+		return 0
+	}
+	return uint64(timestampMs-genesisMs) / (common.SecondsPerSlot * 1000)
+}
+
 // parseClientDeadlineMs returns the unix-millisecond deadline communicated by
 // the client via the Date-Milliseconds and X-Timeout-Ms headers, if both are
 // present and parseable.
