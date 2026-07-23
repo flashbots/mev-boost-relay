@@ -39,11 +39,12 @@ var (
 
 	CurrentHeadSlotGauge otelapi.Int64Gauge
 
-	SubmitNewBlockCount    otelapi.Int64Counter
-	GetHeaderCount         otelapi.Int64Counter
-	GetPayloadCount        otelapi.Int64Counter
-	RegisterValidatorCount otelapi.Int64Counter
-	MissedSlotCount        otelapi.Int64Counter
+	SubmitNewBlockCount            otelapi.Int64Counter
+	GetHeaderCount                 otelapi.Int64Counter
+	GetPayloadCount                otelapi.Int64Counter
+	GetPayloadDeliveryFailureCount otelapi.Int64Counter
+	RegisterValidatorCount         otelapi.Int64Counter
+	MissedSlotCount                otelapi.Int64Counter
 
 	BuilderDemotionCount otelapi.Int64Counter
 
@@ -98,6 +99,7 @@ func Setup(ctx context.Context) error {
 			setupSubmitNewBlockCount,
 			setupGetHeaderCount,
 			setupGetPayloadCount,
+			setupGetPayloadDeliveryFailureCount,
 			setupRegisterValidatorCount,
 			setupMissedSlotCount,
 			setupSubmitNewBlockBidValue,
@@ -355,6 +357,18 @@ func setupGetPayloadCount(_ context.Context) error {
 		otelapi.WithDescription("number of getPayload requests by status"),
 	)
 	GetPayloadCount = counter
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupGetPayloadDeliveryFailureCount(_ context.Context) error {
+	counter, err := meter.Int64Counter(
+		"get_payload_delivery_failure",
+		otelapi.WithDescription("number of getPayload requests the relay failed to fulfill despite having committed a bid, by reason"),
+	)
+	GetPayloadDeliveryFailureCount = counter
 	if err != nil {
 		return err
 	}

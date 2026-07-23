@@ -64,6 +64,14 @@ const (
 
 	HandleGetPayloadVersionV1 HandleGetPayloadVersion = "V1"
 	HandleGetPayloadVersionV2 HandleGetPayloadVersion = "V2"
+
+	// Reasons for the get_payload_delivery_failure metric. Only cases where the
+	// relay committed a bid (via getHeader) but then failed to fulfill the
+	// payload are counted; proposer-side faults (bad signature, too late,
+	// duplicate/already-delivered, wrong relay) are deliberately excluded.
+	getPayloadFailurePayloadNotFound = "payload_not_found" // had an eligible bid but the execution payload was gone / unreadable
+	getPayloadFailurePublishFailed   = "publish_failed"    // all beacon nodes failed to publish the block
+	getPayloadFailureInternalError   = "internal_error"    // could not build the beacon block from our own payload
 )
 
 var (
@@ -1745,11 +1753,17 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 					log.WithError(err).Error("failed getting execution payload (2/2) - payload not found, and error on checking bids")
 				} else if bid.EligibleAt.Valid {
 					log.Error("failed getting execution payload (2/2) - payload not found, but found bid in database")
+					metrics.GetPayloadDeliveryFailureCount.Add(req.Context(), 1,
+						otelapi.WithAttributes(attribute.String("reason", getPayloadFailurePayloadNotFound)),
+					)
 				} else {
 					log.Info("found bid but payload was never saved as bid was ineligible being below floor value")
 				}
 			} else { // some other error
 				log.WithError(err).Error("failed getting execution payload (2/2) - error")
+				metrics.GetPayloadDeliveryFailureCount.Add(req.Context(), 1,
+					otelapi.WithAttributes(attribute.String("reason", getPayloadFailurePayloadNotFound)),
+				)
 			}
 			api.RespondError(w, http.StatusBadRequest, "no execution payload for this request")
 			return
@@ -1818,6 +1832,9 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	if err != nil {
 		log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
+		metrics.GetPayloadDeliveryFailureCount.Add(req.Context(), 1,
+			otelapi.WithAttributes(attribute.String("reason", getPayloadFailureInternalError)),
+		)
 		api.RespondError(w, http.StatusInternalServerError, "failed to convert signed blinded beacon block to beacon block")
 		return
 	}
@@ -1829,6 +1846,9 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 		code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 		if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
 			log.WithError(err).WithField("code", code).Error("failed to publish block")
+			metrics.GetPayloadDeliveryFailureCount.Add(req.Context(), 1,
+				otelapi.WithAttributes(attribute.String("reason", getPayloadFailurePublishFailed)),
+			)
 			api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 			return
 		}
@@ -1861,6 +1881,9 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 			code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 			if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
 				log.WithError(err).WithField("code", code).Error("failed to publish block")
+				metrics.GetPayloadDeliveryFailureCount.Add(context.Background(), 1,
+					otelapi.WithAttributes(attribute.String("reason", getPayloadFailurePublishFailed)),
+				)
 				return
 			}
 			timeAfterPublish := time.Now().UTC().UnixMilli()
