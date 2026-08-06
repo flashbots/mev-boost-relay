@@ -163,7 +163,9 @@ type ValidatorResponseValidatorData struct {
 func (c *ProdBeaconInstance) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
 	uri := fmt.Sprintf("%s/eth/v1/beacon/states/%s/validators?status=active,pending", c.beaconURI, stateID)
 	vd := new(GetStateValidatorsResponse)
-	_, err := fetchBeacon(http.MethodGet, uri, nil, vd, nil, http.Header{}, false)
+	// Passing a nil client here would fall back to http.DefaultClient, which has no
+	// timeout - see stateValidatorsClient.
+	_, err := fetchBeacon(http.MethodGet, uri, nil, vd, stateValidatorsClient, http.Header{}, false)
 	return vd, err
 }
 

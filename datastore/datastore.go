@@ -117,13 +117,13 @@ func (ds *Datastore) RefreshKnownValidators(log *logrus.Entry, beaconClient beac
 func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beaconClient beaconclient.IMultiBeaconClient, slot uint64) {
 	log.Info("Querying validators from beacon node... (this may take a while)")
 	timeStartFetching := time.Now()
-	validators, err := beaconClient.GetStateValidators(beaconclient.StateIDHead) // head is fastest
+	knownValidatorsByPubkey, knownValidatorsByIndex, err := fetchKnownValidators(log, beaconClient)
 	if err != nil {
 		log.WithError(err).Error("failed to fetch validators from all beacon nodes")
 		return
 	}
 
-	numValidators := len(validators.Data)
+	numValidators := len(knownValidatorsByIndex)
 	log = log.WithFields(logrus.Fields{
 		"numKnownValidators":        numValidators,
 		"durationFetchValidatorsMs": time.Since(timeStartFetching).Milliseconds(),
@@ -137,15 +137,6 @@ func (ds *Datastore) RefreshKnownValidatorsWithoutChecks(log *logrus.Entry, beac
 
 	// At this point, consider the update successful
 	ds.knownValidatorsLastSlot.Store(slot)
-
-	knownValidatorsByPubkey := make(map[common.PubkeyHex]uint64)
-	knownValidatorsByIndex := make(map[uint64]common.PubkeyHex)
-
-	for _, valEntry := range validators.Data {
-		pk := common.NewPubkeyHex(valEntry.Validator.Pubkey)
-		knownValidatorsByPubkey[pk] = valEntry.Index
-		knownValidatorsByIndex[valEntry.Index] = pk
-	}
 
 	ds.knownValidatorsLock.Lock()
 	ds.knownValidatorsByPubkey = knownValidatorsByPubkey
