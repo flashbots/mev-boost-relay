@@ -25,9 +25,9 @@ var ErrNoKnownValidators = errors.New("beacon node returned no validators")
 
 // ffStreamDecodeKnownValidators selects how the validator set is read from the
 // beacon node. Streaming keeps peak memory far lower, but buffering is what this
-// has shipped with, so it stays the default: set KNOWN_VALIDATORS_STREAM_DECODE=1
+// has shipped with, so it stays the default: set USE_STREAM_DECODING_GET_VALIDATORS=1
 // to opt in, and unset it to revert without a rollback.
-var ffStreamDecodeKnownValidators = os.Getenv("KNOWN_VALIDATORS_STREAM_DECODE") == "1"
+var ffStreamDecodeKnownValidators = os.Getenv("USE_STREAM_DECODING_GET_VALIDATORS") == "1"
 
 // knownValidatorsStreamer is the streaming refresh, reached by assertion rather
 // than through beaconclient.IMultiBeaconClient so that the streaming path stays

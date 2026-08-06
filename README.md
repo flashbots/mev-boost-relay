@@ -136,6 +136,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
 * `GETPAYLOAD_RETRY_TIMEOUT_MS` - getPayload retry getting a payload if first try failed (default: `100`)
+* `GETVALIDATORS_TIMEOUT_SEC` - timeout for the beacon node getStateValidators request used to refresh known validators (default: `60`)
 * `MEMCACHED_URIS` - optional comma separated list of memcached endpoints, typically used as secondary storage alongside Redis
 * `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: `45`)
 * `MEMCACHED_CLIENT_TIMEOUT_MS` - client timeout in milliseconds (default: `250`)
@@ -155,6 +156,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `ENABLE_IGNORABLE_VALIDATION_ERRORS` - enable ignorable validation errors
 * `USE_V1_PUBLISH_BLOCK_ENDPOINT` - uses the v1 publish block endpoint on the beacon node
 * `USE_SSZ_ENCODING_PUBLISH_BLOCK` - uses the SSZ encoding for the publish block endpoint
+* `USE_STREAM_DECODING_GET_VALIDATORS` - decodes the getStateValidators response as a stream instead of buffering it, which substantially lowers peak memory during the known-validator refresh
 
 #### Development Environment Variables
 

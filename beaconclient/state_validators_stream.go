@@ -33,7 +33,7 @@ var ErrStreamStateValidatorsUnsupported = errors.New("no beacon instance support
 // knownValidatorsIsUpdating for the duration, no later refresh can start either. The
 // timeout has to stay well below the refresh interval so the next one runs cleanly.
 var stateValidatorsClient = &http.Client{
-	Timeout: time.Duration(cli.GetEnvInt("GET_VALIDATORS_TIMEOUT_SEC", 60)) * time.Second,
+	Timeout: time.Duration(cli.GetEnvInt("GETVALIDATORS_TIMEOUT_SEC", 60)) * time.Second,
 }
 
 // ValidatorCollector accumulates validators as they are decoded, so the validator set
