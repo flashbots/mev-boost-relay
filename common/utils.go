@@ -180,7 +180,7 @@ func StrToPhase0Hash(s string) (ret phase0.Hash32, err error) {
 func GetEnvDurationSec(key string, defaultValueSec int) time.Duration {
 	if value, ok := os.LookupEnv(key); ok {
 		val, err := strconv.Atoi(value)
-		if err != nil {
+		if err == nil {
 			return time.Duration(val) * time.Second
 		}
 	}

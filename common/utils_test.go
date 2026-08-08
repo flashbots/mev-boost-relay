@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
 	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
@@ -190,4 +191,15 @@ func TestGetBlockSubmissionInfo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetEnvDurationSec(t *testing.T) {
+	t.Setenv("TEST_ENV_DURATION_SEC", "7")
+	require.Equal(t, 7*time.Second, GetEnvDurationSec("TEST_ENV_DURATION_SEC", 3))
+
+	t.Setenv("TEST_ENV_DURATION_SEC", "not-an-int")
+	require.Equal(t, 3*time.Second, GetEnvDurationSec("TEST_ENV_DURATION_SEC", 3))
+
+	os.Unsetenv("TEST_ENV_DURATION_SEC")
+	require.Equal(t, 3*time.Second, GetEnvDurationSec("TEST_ENV_DURATION_SEC", 3))
 }
