@@ -29,6 +29,7 @@ var (
 
 	maxConcurrentBlocks = int64(cli.GetEnvInt("BLOCKSIM_MAX_CONCURRENT", 4)) // 0 for no maximum
 	simRequestTimeout   = time.Duration(cli.GetEnvInt("BLOCKSIM_TIMEOUT_MS", 10000)) * time.Millisecond
+	simRPCNamespace     = common.GetEnv("BLOCKSIM_RPC_NAMESPACE", "flashbots")
 )
 
 type IBlockSimRateLimiter interface {
@@ -119,13 +120,13 @@ func (b *BlockSimulationRateLimiter) Send(
 	// Create and fire off JSON-RPC request
 	switch payload.Version {
 	case spec.DataVersionFulu:
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV5", payload)
+		simReq = jsonrpc.NewJSONRPCRequest("1", simRPCNamespace+"_validateBuilderSubmissionV5", payload)
 	case spec.DataVersionElectra:
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV4", payload)
+		simReq = jsonrpc.NewJSONRPCRequest("1", simRPCNamespace+"_validateBuilderSubmissionV4", payload)
 	case spec.DataVersionDeneb:
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV3", payload)
+		simReq = jsonrpc.NewJSONRPCRequest("1", simRPCNamespace+"_validateBuilderSubmissionV3", payload)
 	default:
-		simReq = jsonrpc.NewJSONRPCRequest("1", "flashbots_validateBuilderSubmissionV2", payload)
+		simReq = jsonrpc.NewJSONRPCRequest("1", simRPCNamespace+"_validateBuilderSubmissionV2", payload)
 	}
 	res, requestErr, validationErr := SendJSONRPCRequest(&b.client, *simReq, b.blockSimURL, headers)
 	response = new(common.BuilderBlockValidationResponse)

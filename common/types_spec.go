@@ -412,6 +412,7 @@ type capellaBuilderBlockValidationRequestJSON struct {
 	ExecutionPayload   *capella.ExecutionPayload `json:"execution_payload"`
 	Signature          string                    `json:"signature"`
 	RegisteredGasLimit uint64                    `json:"registered_gas_limit,string"`
+	ApplyBlacklist     bool                      `json:"apply_blacklist"`
 }
 
 type denebBuilderBlockValidationRequestJSON struct {
@@ -421,6 +422,7 @@ type denebBuilderBlockValidationRequestJSON struct {
 	Signature             string                       `json:"signature"`
 	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
 	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
+	ApplyBlacklist        bool                         `json:"apply_blacklist"`
 }
 
 type electraBuilderBlockValidationRequestJSON struct {
@@ -431,6 +433,7 @@ type electraBuilderBlockValidationRequestJSON struct {
 	Signature             string                       `json:"signature"`
 	RegisteredGasLimit    uint64                       `json:"registered_gas_limit,string"`
 	ParentBeaconBlockRoot string                       `json:"parent_beacon_block_root"`
+	ApplyBlacklist        bool                         `json:"apply_blacklist"`
 }
 
 type fuluBuilderBlockValidationRequestJSON struct {
@@ -441,6 +444,7 @@ type fuluBuilderBlockValidationRequestJSON struct {
 	Signature             string                      `json:"signature"`
 	RegisteredGasLimit    uint64                      `json:"registered_gas_limit,string"`
 	ParentBeaconBlockRoot string                      `json:"parent_beacon_block_root"`
+	ApplyBlacklist        bool                        `json:"apply_blacklist"`
 }
 
 func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
@@ -451,6 +455,7 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			ExecutionPayload:   r.Capella.ExecutionPayload,
 			Signature:          r.Capella.Signature.String(),
 			RegisteredGasLimit: r.RegisteredGasLimit,
+			ApplyBlacklist:     true,
 		})
 	case spec.DataVersionDeneb:
 		return json.Marshal(&denebBuilderBlockValidationRequestJSON{
@@ -460,6 +465,7 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			Signature:             r.Deneb.Signature.String(),
 			RegisteredGasLimit:    r.RegisteredGasLimit,
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
+			ApplyBlacklist:        true,
 		})
 	case spec.DataVersionElectra:
 		return json.Marshal(&electraBuilderBlockValidationRequestJSON{
@@ -470,6 +476,7 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			Signature:             r.Electra.Signature.String(),
 			RegisteredGasLimit:    r.RegisteredGasLimit,
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
+			ApplyBlacklist:        true,
 		})
 	case spec.DataVersionFulu:
 		return json.Marshal(&fuluBuilderBlockValidationRequestJSON{
@@ -480,6 +487,7 @@ func (r *BuilderBlockValidationRequest) MarshalJSON() ([]byte, error) {
 			Signature:             r.Fulu.Signature.String(),
 			RegisteredGasLimit:    r.RegisteredGasLimit,
 			ParentBeaconBlockRoot: r.ParentBeaconBlockRoot.String(),
+			ApplyBlacklist:        true,
 		})
 	default:
 		return nil, errors.Wrap(ErrInvalidVersion, fmt.Sprintf("%s is not supported", r.Version))
