@@ -1812,24 +1812,23 @@ func (api *RelayAPI) innerHandleGetPayload(w http.ResponseWriter, req *http.Requ
 	// Check whether getPayload has already been called -- TODO: do we need to allow multiple submissions of one blinded block?
 	err = api.redis.CheckAndSetLastSlotAndHashDelivered(uint64(slot), blockHash.String())
 	log = log.WithField("timestampAfterAlreadyDeliveredCheck", time.Now().UTC().UnixMilli())
-	if err != nil {
+	if status, msg, abort := getPayloadDeliveryCheckAbort(err); abort {
 		if errors.Is(err, datastore.ErrAnotherPayloadAlreadyDeliveredForSlot) {
 			// BAD VALIDATOR, 2x GETPAYLOAD FOR DIFFERENT PAYLOADS
 			log.Warn("validator called getPayload twice for different payload hashes")
-			api.RespondError(w, http.StatusBadRequest, "another payload for this slot was already delivered")
-			return
 		} else if errors.Is(err, datastore.ErrPastSlotAlreadyDelivered) {
 			// BAD VALIDATOR, 2x GETPAYLOAD FOR PAST SLOT
 			log.Warn("validator called getPayload for past slot")
-			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered")
-			return
 		} else if errors.Is(err, redis.TxFailedErr) {
 			// BAD VALIDATOR, 2x GETPAYLOAD + RACE
 			log.Warn("validator called getPayload twice (race)")
-			api.RespondError(w, http.StatusBadRequest, "payload for this slot was already delivered (race)")
-			return
+		} else {
+			// Unexpected Redis/Watch failure: previously logged and continued into
+			// payload delivery without a successful last-slot/hash record.
+			log.WithError(err).Error("redis.CheckAndSetLastSlotAndHashDelivered failed")
 		}
-		log.WithError(err).Error("redis.CheckAndSetLastSlotAndHashDelivered failed")
+		api.RespondError(w, status, msg)
+		return
 	}
 
 	// Handle early/late requests
@@ -3305,4 +3304,23 @@ func (api *RelayAPI) processValidatorRegistrationsSSZ(regs []*builderApiV1.Signe
 	}
 
 	return newRegistrations, nil, nil
+}
+
+// getPayloadDeliveryCheckAbort maps CheckAndSetLastSlotAndHashDelivered errors
+// to an HTTP response. Unexpected Redis failures must abort delivery (fail closed)
+// so getPayload cannot proceed without a successful last-slot/hash record.
+func getPayloadDeliveryCheckAbort(err error) (status int, msg string, abort bool) {
+	if err == nil {
+		return 0, "", false
+	}
+	if errors.Is(err, datastore.ErrAnotherPayloadAlreadyDeliveredForSlot) {
+		return http.StatusBadRequest, "another payload for this slot was already delivered", true
+	}
+	if errors.Is(err, datastore.ErrPastSlotAlreadyDelivered) {
+		return http.StatusBadRequest, "payload for this slot was already delivered", true
+	}
+	if errors.Is(err, redis.TxFailedErr) {
+		return http.StatusBadRequest, "payload for this slot was already delivered (race)", true
+	}
+	return http.StatusInternalServerError, "failed to check payload delivery status", true
 }
