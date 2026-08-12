@@ -99,8 +99,12 @@ func insertTestBuilder(t *testing.T, db IDatabaseService) string {
 	return builderPubkey.String()
 }
 
-func resetDatabase(t *testing.T) *DatabaseService {
+func resetDatabase(t *testing.T) IDatabaseService {
 	t.Helper()
+
+	if os.Getenv("USE_LOCAL_DB") == "1" {
+		return NewInmemoryDB()
+	}
 	if !runDBTests {
 		t.Skip("Skipping database tests")
 	}
@@ -206,7 +210,7 @@ func TestMigrations(t *testing.T) {
 	db := resetDatabase(t)
 	query := `SELECT COUNT(*) FROM ` + vars.TableMigrations + `;`
 	rowCount := 0
-	err := db.DB.QueryRow(query).Scan(&rowCount)
+	err := db.(*DatabaseService).DB.QueryRow(query).Scan(&rowCount)
 	require.NoError(t, err)
 	require.Len(t, migrations.Migrations.Migrations, rowCount)
 }
