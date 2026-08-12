@@ -74,6 +74,10 @@ func TestSignedBlindedBlockJSON(t *testing.T) {
 			name:     "Deneb",
 			filepath: "../testdata/signedBlindedBeaconBlockDeneb_Goerli.json.gz",
 		},
+		{
+			name:     "Electra",
+			filepath: "../testdata/signedBlindedBeaconBlockElectra.json.gz",
+		},
 	}
 
 	for _, testCase := range testCases {

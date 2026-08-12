@@ -48,6 +48,11 @@ func TestGetPayloadDatabaseFallback(t *testing.T) {
 			filename:    "../testdata/executionPayloadAndBlobsBundleDeneb_Goerli.json.gz",
 			version:     common.ForkVersionStringDeneb,
 			blockHash:   "0xbd1ae4f7edb2315d2df70a8d9881fab8d6763fb1c00533ae729050928c38d05a",
+		}, {
+			description: "Good Electra Payload",
+			filename:    "../testdata/executionPayloadAndBlobsBundleElectra_Goerli.json.gz",
+			version:     common.ForkVersionStringElectra,
+			blockHash:   "0x8bc5ee08e27659360187285be156c31daa8e37513a5df7e006322e1268f6b4e1",
 		},
 	}
 
