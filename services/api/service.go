@@ -12,6 +12,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -82,6 +83,7 @@ var (
 	ErrServerAlreadyStarted       = errors.New("server was already started")
 	ErrBuilderAPIWithoutSecretKey = errors.New("cannot start builder API without secret key")
 	ErrInvalidForkVersion         = errors.New("invalid fork version")
+	ErrInvalidValidatorSignature  = errors.New("failed to verify validator signature")
 )
 
 var (
@@ -132,6 +134,11 @@ var (
 	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10_000)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60_000)
 	apiMaxPayloadBytes     = cli.GetEnvInt("API_MAX_PAYLOAD_BYTES", 15*1024*1024) // 15 MiB
+
+	// registerValidator BLS verification runs in chunks gated by a global
+	// semaphore, to bound total CPU spent across concurrent requests
+	regValVerifyConcurrency = max(cli.GetEnvInt("REGISTER_VALIDATOR_VERIFY_CONCURRENCY", runtime.NumCPU()/2), 1)
+	regValVerifyChunkSize   = max(cli.GetEnvInt("REGISTER_VALIDATOR_VERIFY_CHUNK_SIZE", 500), 1)
 
 	// api shutdown: wait time (to allow removal from load balancer before stopping http server)
 	apiShutdownWaitDuration = common.GetEnvDurationSec("API_SHUTDOWN_WAIT_SEC", 30)
@@ -244,6 +251,9 @@ type RelayAPI struct {
 
 	validatorRegC chan builderApiV1.SignedValidatorRegistration
 
+	// bounds concurrent BLS verification of registrations across all requests
+	regValVerifySem chan struct{}
+
 	// used to notify when a new validator has been registered
 	validatorUpdateCh chan struct{}
 
@@ -341,6 +351,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		blockSimRateLimiter:    NewBlockSimulationRateLimiter(opts.BlockSimURL),
 
 		validatorRegC:     make(chan builderApiV1.SignedValidatorRegistration, 450_000),
+		regValVerifySem:   make(chan struct{}, regValVerifyConcurrency),
 		validatorUpdateCh: make(chan struct{}),
 	}
 
@@ -1094,8 +1105,6 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	var err, userErr error
 
 	start := time.Now().UTC()
-	numRegProcessed := 0
-	numRegNew := 0
 
 	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
@@ -1202,35 +1211,10 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	//
 	// All remaining registrations are uncached and need to get checked
 	//
-	for _, signedValidatorRegistration := range signedValidatorRegistrations {
-		regLog := log.WithField("pubkey", signedValidatorRegistration.Message.Pubkey.String())
-		numRegProcessed += 1
-
-		// Verify the signature
-		regLog.Debug("verifying BLS signature...")
-		ok, err := ssz.VerifySignature(signedValidatorRegistration.Message, api.opts.EthNetDetails.DomainBuilder, signedValidatorRegistration.Message.Pubkey[:], signedValidatorRegistration.Signature[:])
-		if err != nil {
-			regLog.WithError(err).Error("error verifying registerValidator signature")
-			break
-		} else if !ok {
-			regLog.Info("invalid validator signature")
-			if api.ffRegValContinueOnInvalidSig {
-				continue
-			} else {
-				logAndReturnError(regLog, http.StatusBadRequest, "failed to verify validator signature for "+signedValidatorRegistration.Message.Pubkey.String(), err)
-				break
-			}
-		}
-
-		// Now we have a new registration to process (store in DB + Cache)
-		numRegNew += 1
-
-		// Save to database
-		select {
-		case api.validatorRegC <- *signedValidatorRegistration:
-		default:
-			regLog.Error("validator registration channel full")
-		}
+	numRegProcessed, numRegNew, err := api.verifyAndQueueRegistrations(req.Context(), log, signedValidatorRegistrations)
+	if err != nil {
+		logAndReturnError(log, http.StatusBadRequest, err.Error(), err)
+		return
 	}
 
 	log = log.WithFields(logrus.Fields{
@@ -1250,6 +1234,68 @@ func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Re
 	registerSuccess = true
 	log.Info("validator registrations call processed")
 	w.WriteHeader(http.StatusOK)
+}
+
+// verifyAndQueueRegistrations verifies registration signatures and queues the valid ones for
+// storage. Work is split into chunks so that a single large request neither holds the
+// verification semaphore for its whole duration nor keeps burning CPU after the client is gone.
+func (api *RelayAPI) verifyAndQueueRegistrations(ctx context.Context, log *logrus.Entry, regs []*builderApiV1.SignedValidatorRegistration) (int, int, error) {
+	var numProcessed, numNew int
+
+	for chunk := range slices.Chunk(regs, regValVerifyChunkSize) {
+		if ctx.Err() != nil {
+			log.Info("client disconnected, stopping registration processing")
+			return numProcessed, numNew, nil
+		}
+
+		n, nNew, err := api.verifyAndQueueChunk(ctx, log, chunk)
+		numProcessed, numNew = numProcessed+n, numNew+nNew
+		if err != nil {
+			return numProcessed, numNew, err
+		}
+	}
+	return numProcessed, numNew, nil
+}
+
+// verifyAndQueueChunk processes one chunk while holding the global verification semaphore,
+// which bounds the CPU spent on BLS verification across all concurrent requests.
+func (api *RelayAPI) verifyAndQueueChunk(ctx context.Context, log *logrus.Entry, chunk []*builderApiV1.SignedValidatorRegistration) (int, int, error) {
+	var numProcessed, numNew int
+
+	select {
+	case api.regValVerifySem <- struct{}{}:
+		defer func() { <-api.regValVerifySem }()
+	case <-ctx.Done():
+		return 0, 0, nil
+	}
+
+	for _, reg := range chunk {
+		numProcessed++
+		regLog := log.WithField("pubkey", reg.Message.Pubkey.String())
+
+		regLog.Debug("verifying BLS signature...")
+		ok, err := ssz.VerifySignature(reg.Message, api.opts.EthNetDetails.DomainBuilder, reg.Message.Pubkey[:], reg.Signature[:])
+		if err != nil {
+			regLog.WithError(err).Error("error verifying registerValidator signature")
+			return numProcessed, numNew, fmt.Errorf("%w for %s: %w", ErrInvalidValidatorSignature, reg.Message.Pubkey.String(), err)
+		}
+		if !ok {
+			regLog.Info("invalid validator signature")
+			if api.ffRegValContinueOnInvalidSig {
+				continue
+			}
+			return numProcessed, numNew, fmt.Errorf("%w for %s", ErrInvalidValidatorSignature, reg.Message.Pubkey.String())
+		}
+
+		// Now we have a new registration to process (store in DB + Cache)
+		numNew++
+		select {
+		case api.validatorRegC <- *reg:
+		default:
+			regLog.Error("validator registration channel full")
+		}
+	}
+	return numProcessed, numNew, nil
 }
 
 func (api *RelayAPI) parseValidatorRegistrationsJSON(regBytes []byte) ([]*common.SimpleValidatorRegistration, error) {
@@ -3200,8 +3246,15 @@ func (api *RelayAPI) handleReadyz(w http.ResponseWriter, req *http.Request) {
 func (api *RelayAPI) processValidatorRegistrationJSON(regs []*common.SimpleValidatorRegistration) (newRegistrations []*builderApiV1.SignedValidatorRegistration, userErr, err error) {
 	newRegistrations = make([]*builderApiV1.SignedValidatorRegistration, 0)
 	registrationTimestampUpperBound := time.Now().UTC().Unix() + 10 // 10 seconds from now
+	seenPubkeys := make(map[common.PubkeyHex]struct{}, len(regs))
 
 	for _, reg := range regs {
+		pubkeyHex := common.NewPubkeyHex(reg.Pubkey.String())
+		if _, seen := seenPubkeys[pubkeyHex]; seen {
+			continue
+		}
+		seenPubkeys[pubkeyHex] = struct{}{}
+
 		// Ensure a valid timestamp (not too early, and not too far in the future)
 		regTS := reg.Timestamp.Unix()
 		if regTS < int64(api.genesisInfo.Data.GenesisTime) { //nolint:gosec
@@ -3261,8 +3314,14 @@ func (api *RelayAPI) processValidatorRegistrationsSSZ(regs []*builderApiV1.Signe
 	newRegistrations = make([]*builderApiV1.SignedValidatorRegistration, 0)
 	registrationTimestampUpperBound := time.Now().UTC().Unix() + 10 // 10 seconds from now
 
+	seenPubkeys := make(map[common.PubkeyHex]struct{}, len(regs))
+
 	for _, signedValidatorRegistration := range regs {
 		pk := common.NewPubkeyHex(signedValidatorRegistration.Message.Pubkey.String())
+		if _, seen := seenPubkeys[pk]; seen {
+			continue
+		}
+		seenPubkeys[pk] = struct{}{}
 
 		// Ensure a valid timestamp (not too early, and not too far in the future)
 		registrationTimestamp := signedValidatorRegistration.Message.Timestamp.Unix()
