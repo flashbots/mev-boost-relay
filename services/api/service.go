@@ -12,7 +12,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -136,8 +135,8 @@ var (
 	apiMaxPayloadBytes     = cli.GetEnvInt("API_MAX_PAYLOAD_BYTES", 15*1024*1024) // 15 MiB
 
 	// registerValidator BLS verification runs in chunks gated by a global
-	// semaphore, to bound total CPU spent across concurrent requests
-	regValVerifyConcurrency = max(cli.GetEnvInt("REGISTER_VALIDATOR_VERIFY_CONCURRENCY", runtime.NumCPU()/2), 1)
+	// semaphore, to bound the verification work in flight across all requests
+	regValVerifyConcurrency = max(cli.GetEnvInt("REGISTER_VALIDATOR_VERIFY_CONCURRENCY", 10), 1)
 	regValVerifyChunkSize   = max(cli.GetEnvInt("REGISTER_VALIDATOR_VERIFY_CHUNK_SIZE", 500), 1)
 
 	// api shutdown: wait time (to allow removal from load balancer before stopping http server)
