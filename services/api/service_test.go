@@ -308,7 +308,7 @@ func TestRegisterValidator(t *testing.T) {
 		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
 	})
 
-	t.Run("accept validator -- milliseconds dont matter", func(t *testing.T) {
+	t.Run("accept validator -- milliseconds don't matter", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
 		msg := common.ValidPayloadRegisterValidator
