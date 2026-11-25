@@ -308,6 +308,23 @@ func TestRegisterValidator(t *testing.T) {
 		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
 	})
 
+	t.Run("reject validator -- malformed signature encoding", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		// All-0xff is invalid BLS point encoding: VerifySignature returns err
+		// (not just ok=false). Previously this path fell through to HTTP 200.
+		for i := range msg.Signature {
+			msg.Signature[i] = 0xff
+		}
+
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		rr := backend.request(http.MethodPost, path, []builderApiV1.SignedValidatorRegistration{msg}, nil)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
+	})
+
 	t.Run("accept validator -- milliseconds dont matter", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
