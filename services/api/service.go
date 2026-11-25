@@ -271,7 +271,8 @@ type RelayAPI struct {
 	// Wait group used to monitor status of per-slot optimistic processing.
 	optimisticBlocksWG sync.WaitGroup
 	// Cache for builder statuses and collaterals.
-	blockBuildersCache map[string]*blockBuilderCacheEntry
+	blockBuildersCacheLock sync.RWMutex
+	blockBuildersCache     map[string]*blockBuilderCacheEntry
 }
 
 // NewRelayAPI creates a new service. if builders is nil, allow any builder
@@ -723,7 +724,9 @@ func (api *RelayAPI) demoteBuilder(pubkey string, req *common.VersionedSubmitBlo
 		1,
 	)
 
+	api.blockBuildersCacheLock.RLock()
 	builderEntry, ok := api.blockBuildersCache[pubkey]
+	api.blockBuildersCacheLock.RUnlock()
 	if !ok {
 		api.log.Warnf("builder %v not in the builder cache", pubkey)
 		builderEntry = &blockBuilderCacheEntry{} //nolint:exhaustruct
@@ -1028,7 +1031,9 @@ func (api *RelayAPI) prepareBuildersForSlot(headSlot uint64) {
 		}
 		newCache[v.BuilderPubkey] = entry
 	}
+	api.blockBuildersCacheLock.Lock()
 	api.blockBuildersCache = newCache
+	api.blockBuildersCacheLock.Unlock()
 }
 
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
@@ -1411,11 +1416,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.WithError(err).Info("could not get bid value")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	blockHash, err := bid.BlockHash()
 	if err != nil {
 		log.WithError(err).Info("could not get bid block hash")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Error on bid without value
@@ -2187,7 +2194,9 @@ func (api *RelayAPI) checkSubmissionSlotDetails(w http.ResponseWriter, log *logr
 }
 
 func (api *RelayAPI) checkBuilderEntry(w http.ResponseWriter, log *logrus.Entry, builderPubkey phase0.BLSPubKey) (*blockBuilderCacheEntry, bool) {
+	api.blockBuildersCacheLock.RLock()
 	builderEntry, ok := api.blockBuildersCache[builderPubkey.String()]
+	api.blockBuildersCacheLock.RUnlock()
 	if !ok {
 		log.Infof("unable to read builder: %s from the builder cache, using low-prio and no collateral", builderPubkey.String())
 		builderEntry = &blockBuilderCacheEntry{
