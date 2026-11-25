@@ -1411,11 +1411,13 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.WithError(err).Info("could not get bid value")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	blockHash, err := bid.BlockHash()
 	if err != nil {
 		log.WithError(err).Info("could not get bid block hash")
 		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Error on bid without value
