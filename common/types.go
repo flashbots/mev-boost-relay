@@ -31,6 +31,7 @@ var (
 	EthNetworkHoodi   = "hoodi"
 	EthNetworkMainnet = "mainnet"
 	EthNetworkCustom  = "custom"
+	EthNetworkBeacon  = ""
 
 	GenesisForkVersionHolesky = "0x01017000"
 	GenesisForkVersionSepolia = "0x90000069"
@@ -155,6 +156,8 @@ func NewEthNetworkDetails(networkName string) (ret *EthNetworkDetails, err error
 		denebForkVersion = DenebForkVersionMainnet
 		electraForkVersion = ElectraForkVersionMainnet
 		fuluForkVersion = FuluForkVersionMainnet
+	case EthNetworkBeacon:
+		fallthrough
 	case EthNetworkCustom:
 		genesisForkVersion = os.Getenv("GENESIS_FORK_VERSION")
 		genesisValidatorsRoot = os.Getenv("GENESIS_VALIDATORS_ROOT")
