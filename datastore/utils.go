@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/redis/go-redis/v9"
@@ -25,18 +26,21 @@ func NewBuilderBidsFromRedis(ctx context.Context, r *RedisCache, pipeliner redis
 	if err != nil {
 		return nil, err
 	}
-	return NewBuilderBids(bidValueMap), nil
+	return NewBuilderBids(bidValueMap)
 }
 
-func NewBuilderBids(bidValueMap map[string]string) *BuilderBids {
+func NewBuilderBids(bidValueMap map[string]string) (*BuilderBids, error) {
 	b := BuilderBids{
 		bidValues: make(map[string]*big.Int),
 	}
 	for builderPubkey, bidValue := range bidValueMap {
-		b.bidValues[builderPubkey] = new(big.Int)
-		b.bidValues[builderPubkey].SetString(bidValue, 10)
+		v, ok := new(big.Int).SetString(bidValue, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid bid value for builder %s: %q", builderPubkey, bidValue)
+		}
+		b.bidValues[builderPubkey] = v
 	}
-	return &b
+	return &b, nil
 }
 
 func (b *BuilderBids) getTopBid() (string, *big.Int) {
