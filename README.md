@@ -121,7 +121,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 
 #### General
 
-* `ACTIVE_VALIDATOR_HOURS` - number of hours to track active proposers in redis (default: `3`)
 * `API_MAX_HEADER_BYTES` - http maximum header bytes (default: `60_000`)
 * `API_MAX_PAYLOAD_BYTES` - http maximum payload bytes (default: `15_728_640`)
 * `API_TIMEOUT_READ_MS` - http read timeout in milliseconds (default: `1_500`)
@@ -131,7 +130,7 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `API_SHUTDOWN_WAIT_SEC` - how long to wait on shutdown before stopping server, to allow draining of requests (default: `30`)
 * `API_SHUTDOWN_STOP_SENDING_BIDS` - whether API should stop sending bids during shutdown (nly useful in single-instance/testnet setups, default: `false`)
 * `BLOCKSIM_MAX_CONCURRENT` - maximum number of concurrent block-sim requests (0 for no maximum, default: `4`)
-* `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: `3000`)
+* `BLOCKSIM_TIMEOUT_MS` - builder block submission validation request timeout (default: `10000`)
 * `BROADCAST_MODE` - which broadcast mode to use for block publishing (default: `consensus_and_equivocation`)
 * `DB_DONT_APPLY_SCHEMA` - disable applying DB schema on startup (useful for connecting data API to read-only replica)
 * `DB_TABLE_PREFIX` - prefix to use for db tables (default uses `dev`)
@@ -141,7 +140,6 @@ redis-cli DEL boost-relay/sepolia:validators-registration boost-relay/sepolia:va
 * `MEMCACHED_EXPIRY_SECONDS` - item expiry timeout when using memcache (default: `45`)
 * `MEMCACHED_CLIENT_TIMEOUT_MS` - client timeout in milliseconds (default: `250`)
 * `MEMCACHED_MAX_IDLE_CONNS` - client max idle conns (default: `10`)
-* `NUM_ACTIVE_VALIDATOR_PROCESSORS` - proposer API - number of goroutines to listen to the active validators channel
 * `NUM_VALIDATOR_REG_PROCESSORS` - proposer API - number of goroutines to listen to the validator registration channel
 * `NO_HEADER_USERAGENTS` - proposer API - comma separated list of user agents for which no bids should be returned
 * `ENABLE_BUILDER_CANCELLATIONS` - whether to enable block builder cancellations
