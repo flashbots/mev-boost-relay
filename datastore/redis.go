@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiFulu "github.com/attestantio/go-builder-client/api/fulu"
@@ -45,6 +46,14 @@ var (
 )
 
 func connectRedis(redisURI string) (*redis.Client, error) {
+	if redisURI == ":memory:" {
+		redisInMemoryServer, err := miniredis.Run()
+		if err != nil {
+			return nil, fmt.Errorf("failed to start miniredis: %w", err)
+		}
+		redisURI = redisInMemoryServer.Addr()
+	}
+
 	// Handle both URIs and full URLs, assume unencrypted connections
 	if !strings.HasPrefix(redisURI, redisScheme) && !strings.HasPrefix(redisURI, "rediss://") {
 		redisURI = redisScheme + redisURI
