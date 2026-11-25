@@ -1,14 +1,47 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/flashbots/mev-boost-relay/datastore"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGetPayloadDeliveryCheckAbort(t *testing.T) {
+	t.Parallel()
+
+	status, msg, abort := getPayloadDeliveryCheckAbort(nil)
+	require.False(t, abort)
+	require.Equal(t, 0, status)
+	require.Empty(t, msg)
+
+	status, msg, abort = getPayloadDeliveryCheckAbort(datastore.ErrAnotherPayloadAlreadyDeliveredForSlot)
+	require.True(t, abort)
+	require.Equal(t, http.StatusBadRequest, status)
+	require.Contains(t, msg, "another payload")
+
+	status, msg, abort = getPayloadDeliveryCheckAbort(datastore.ErrPastSlotAlreadyDelivered)
+	require.True(t, abort)
+	require.Equal(t, http.StatusBadRequest, status)
+	require.Contains(t, msg, "already delivered")
+
+	status, msg, abort = getPayloadDeliveryCheckAbort(redis.TxFailedErr)
+	require.True(t, abort)
+	require.Equal(t, http.StatusBadRequest, status)
+	require.Contains(t, msg, "race")
+
+	// Unexpected Redis/Watch errors must fail closed (previously logged and continued).
+	status, msg, abort = getPayloadDeliveryCheckAbort(fmt.Errorf("redis: connection refused"))
+	require.True(t, abort)
+	require.Equal(t, http.StatusInternalServerError, status)
+	require.Equal(t, "failed to check payload delivery status", msg)
+}
 
 func TestGetHeaderContentType(t *testing.T) {
 	for _, tc := range []struct {
