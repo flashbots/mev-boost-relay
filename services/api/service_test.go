@@ -308,6 +308,34 @@ func TestRegisterValidator(t *testing.T) {
 		require.Contains(t, rr.Body.String(), "failed to verify validator signature")
 	})
 
+	t.Run("duplicate registrations are collapsed", func(t *testing.T) {
+		backend := newTestBackend(t, 1)
+
+		msg := common.ValidPayloadRegisterValidator
+		backend.datastore.SetKnownValidator(common.PubkeyHex(msg.Message.Pubkey.String()), 1)
+
+		payload := make([]builderApiV1.SignedValidatorRegistration, 100)
+		for i := range payload {
+			payload[i] = msg
+		}
+
+		rr := backend.request(http.MethodPost, path, payload, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		numReceived := 0
+	drain:
+		for {
+			select {
+			case <-backend.relay.validatorRegC:
+				numReceived++
+			default:
+				break drain
+			}
+		}
+		require.Equal(t, 1, numReceived)
+		require.Empty(t, backend.relay.regValVerifySem, "verification slots must be released")
+	})
+
 	t.Run("accept validator -- milliseconds dont matter", func(t *testing.T) {
 		backend := newTestBackend(t, 1)
 
